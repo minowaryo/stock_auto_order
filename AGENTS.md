@@ -37,8 +37,10 @@ Laravel + MySQL web application
 | Gate 1 | `docs/product/requirements.md` approved | use-cases.md drafting + mock generation |
 | Gate 2 ★ | `docs/product/use-cases.md` final approval | **Code generation** + data-model drafting |
 | Gate 3 | `docs/architecture/data-model.md` approved | DB implementation + migrations |
+| Gate 4 | Failing test case(s) reviewed and approved by a human (per-feature, repeats every cycle — unlike Gate 0-3 which pass once) | Implementation (Green phase) |
 
 **Do not generate code before Gate 2 is passed.**
+**Do not write implementation code before Gate 4 is passed**: write a failing test first, stop, and wait for human approval before implementing. See `.claude/rules/30-testing.md`.
 
 ## Rules
 
@@ -53,6 +55,7 @@ Laravel + MySQL web application
 - Do not edit unrelated files
 - `docs/original-docs/` is read-only — never edit, delete, or create files in it
 - Test case names must be derived from use-cases.md UC titles
+- Follow Red → Gate 4 approval → Green → Refactor for new features, not just bug fixes (`.claude/rules/30-testing.md`)
 
 ## Output expectations
 
@@ -65,6 +68,7 @@ For every non-trivial change:
 ## Prohibited actions
 
 - Code generation before Gate 2 approval
+- Implementation before Gate 4 (test case) approval
 - Committing secrets or credentials
 - Bypassing Gate / Policy for authorization
 - Schema-breaking migrations without migration plan
