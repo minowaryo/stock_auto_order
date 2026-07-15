@@ -16,6 +16,51 @@ php artisan test --coverage
 php artisan test --parallel
 ```
 
+## E2Eテスト（Playwright）
+
+> 詳細は `.claude/rules/30-testing.md` の「E2E Test（Playwright）」を参照。
+
+```bash
+# 初回セットアップ
+npm install -D @playwright/test
+npx playwright install
+
+# 全E2Eテスト実行
+npx playwright test
+
+# 特定ファイルのみ
+npx playwright test tests/e2e/uc01-user-registration.spec.ts
+
+# UIモード（デバッグ用）
+npx playwright test --ui
+
+# 直近の失敗レポート表示
+npx playwright show-report
+```
+
+## Playwright MCP（ブラウザ操作ツール・任意導入）
+
+> `.mcp.json` に定義済み。詳細は `docs/adr/ADR-0008-tdd-e2e-harness-tooling.md` を参照。
+> ローカル開発環境限定で使用し、本番URL・実データ環境には接続しない。
+
+```bash
+# 初回利用時、Claude Codeが .mcp.json の承認プロンプトを表示するので許可する
+# （手動で個別に追加する場合）
+claude mcp add playwright npx @playwright/mcp@latest
+```
+
+## TDD強制ツール（Probity・任意導入）
+
+> 詳細は `docs/adr/ADR-0007-tdd-enforcement-probity.md` を参照。
+
+```bash
+# 初回セットアップ
+npm install -D @nizos/probity
+
+# ルール違反チェック（probity.config.ts に基づく）
+npx probity check
+```
+
 ## コードスタイル
 
 ```bash

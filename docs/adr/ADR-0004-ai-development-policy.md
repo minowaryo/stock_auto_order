@@ -24,6 +24,9 @@ AIツールの利用方法・責任範囲・禁止事項を定めないと、品
 
 ### 開発ワークフロー
 
+> 2026-07-15 更新: TDD運用の明文化（[[ADR-0007-tdd-enforcement-probity]] / [[ADR-0008-tdd-e2e-harness-tooling]]）に伴い、
+> テスト生成をコード生成より先に行う順序に修正した（Gate 4: テストケース承認を追加）。
+
 ```
 requirements.md（人間定義）
       ↓
@@ -31,9 +34,13 @@ use-cases.md（人間レビュー・承認 ← 品質ゲート）
       ↓
 data-model.md / openapi.yaml
       ↓
-AI code generation（Claude Code / Codex）
+AI テストケース生成（Red・/tdd コマンド）
       ↓
-AI test generation
+Gate 4: テストケース承認（人間レビュー）
+      ↓
+AI 実装コード生成（Green、Claude Code / Codex）
+      ↓
+Refactor
       ↓
 人間レビュー・マージ
 ```
@@ -75,3 +82,5 @@ AI test generation
 - `AGENTS.md`
 - `.claude/rules/00-global.md`
 - `docs/development/ai-workflow.md`
+- ADR-0007-tdd-enforcement-probity
+- ADR-0008-tdd-e2e-harness-tooling

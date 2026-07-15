@@ -57,6 +57,15 @@ docs/adr/ADR-xxxx-[title].md     ← 技術選定の都度作成
 
 ### Step 4 — コード生成・実装（Gate 2・3 通過後のみ）
 
+実装は `/tdd` コマンドで **TDD（Red → Green → Refactor）** で進める。
+
+```
+Red → [Gate 4: テストケース承認 ★実装(Green)着手禁止] → Green → Refactor → /review
+```
+
+> Gate 4 は Gate 0〜3（プロジェクトで1度だけ通過）と異なり、機能・UC単位でTDDサイクルのたびに繰り返す。
+> フェーズごとの手順・サブエージェント構成・スキル実行タイミングは `.claude/rules/30-testing.md` を参照。
+
 ---
 
 ## Read first (every session)
@@ -88,6 +97,7 @@ docs/adr/ADR-xxxx-[title].md     ← 技術選定の都度作成
 - **Workflow**: Explore → Plan → Implement → Test の順で進める
 - セッション開始時は必ず `docs/ai-context/` を読む
 - **Gate 2（use-cases.md 承認）が完了するまでコード生成を行わない**
+- **Gate 4（テストケース承認）が完了するまで実装（Greenフェーズ）に着手しない**（`.claude/rules/30-testing.md`）
 - `docs/original-docs/` は参照のみ（編集・削除・ファイル作成禁止）
 - 先にドキュメントを確認してからコードに触る
 - 大規模変更の前は必ず `docs/adr/` を確認する

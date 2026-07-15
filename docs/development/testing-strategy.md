@@ -18,6 +18,12 @@
 - **PestPHP**（推奨）または PHPUnit
 - Feature Test: HTTPクライアントを使ったエンドツーエンドテスト
 - Unit Test: クラス単体のロジックテスト
+- E2E Test: **Playwright**（`ADR-0006-e2e-testing-playwright.md` 参照）。クリティカルフローのみが対象
+
+## TDD（Red-Green-Refactor）
+
+- 通常の機能開発でもRed→Green→Refactorのサイクルを明示的に指示する（詳細手順・プロンプト例は `.claude/rules/30-testing.md`）
+- 機械的に強制したい場合は `@nizos/probity` の導入を検討する（`ADR-0007-tdd-enforcement-probity.md` 参照、任意導入）
 
 ## 優先度
 
@@ -31,10 +37,11 @@
    - 状態機械
    - データ変換処理
 
-3. **E2E Test（最小限）**
+3. **E2E Test（最小限・Playwright）**
    - ユーザー登録フロー
    - 決済フロー
    - クリティカルな業務フロー
+   - 配置・実行コマンドは `.claude/rules/30-testing.md` の「E2E Test（Playwright）」を参照
 
 ## テストデータ管理
 

@@ -40,12 +40,18 @@ use-cases.md 作成（AIたたき台 → 人間修正）
     ↓  ※ AIによる acceptance-criteria.md / data-model.md 叩き台生成可
 [Gate 3] docs/architecture/data-model.md — レビュアー承認済み
     ↓
-AI コード生成（Claude Code）
+AI テストケース生成（Red・`/tdd` コマンド、test-writerサブエージェント）
     ↓
-AI テスト生成
+[Gate 4] テストケース承認 — レビュアーが失敗テストの内容を確認 ★
+    ↓  ここを通過するまで実装（Green）着手禁止
+AI 実装コード生成（Green・tdd-implementerサブエージェント）→ verify確認 → （UI変更時）E2E追加
     ↓
-人間レビュー・マージ
+Refactor（テストをGreenに保ったまま整理）
+    ↓
+人間レビュー・マージ（/review）
 ```
+
+> フェーズごとの手順・スキル実行タイミングの詳細は `.claude/rules/30-testing.md` を参照。この図は全体位置づけの把握用。
 
 ---
 
@@ -57,12 +63,17 @@ AI テスト生成
 | Gate 1 | `docs/product/requirements.md` レビュアー承認済み | use-cases.md 叩き台生成・モック生成 |
 | Gate 2 ★ | `docs/product/use-cases.md` レビュアー最終承認済み | コード生成・acceptance-criteria / data-model 叩き台生成 |
 | Gate 3 | `docs/architecture/data-model.md` レビュアー承認済み | DB実装・マイグレーション作成 |
+| Gate 4 | TDD Redフェーズのテストケース（Feature/Unit）がレビュアー承認済み | 実装（Greenフェーズ）着手 |
+
+> **Gateの性質の違い**: Gate 0〜3 はプロジェクト単位で1度だけ通過するドキュメント承認ゲート。Gate 4 は機能・UC単位で、TDDサイクル（`/tdd`）を回すたびに繰り返す実装ゲート。
+> **モックレビューはGate番号を持たない**: `docs/product/mockups/` のビジネス側レビューは独立したGateではなく、Gate 2（use-cases.md最終承認）の前提条件として扱う（フィードバックをuse-cases.mdに反映してからGate 2承認を行う設計）。
 
 ---
 
 ## 絶対禁止
 
 - Gate 2 通過前のコード生成
+- Gate 4 通過前の実装（Greenフェーズ）着手（テストケース承認前の実装コード生成）
 - コード先行（ドキュメント未確認での実装）
 - 大規模変更の一括コミット
 - テストなし実装（バグ修正には再発防止テストを必ず追加）
@@ -76,6 +87,7 @@ AI テスト生成
 
 - [ ] 関連ADRを確認したか
 - [ ] use-cases.md に変更の影響はないか
+- [ ] Gate 4（テストケース承認）を得てから実装（Green）に着手したか
 - [ ] CR（Change Request）の場合、traceability-matrix.md を更新したか
 - [ ] マイグレーション計画はあるか（DB変更の場合）
 - [ ] テストを追加したか

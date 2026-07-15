@@ -6,7 +6,9 @@ PRを出す前に自分で確認する:
 
 - [ ] `docs/product/use-cases.md` の要件に紐づいているか
 - [ ] Feature Testがあるか
+- [ ] TDD（Red→Green→Refactor）で進めたか（テストが実装より先に存在していたか）
 - [ ] `php artisan test` が通るか
+- [ ] クリティカルフローに変更がある場合、Playwright E2Eテストを追加し `npx playwright test` が通るか
 - [ ] `./vendor/bin/pint` でコードスタイルを整えたか
 - [ ] マイグレーションに危険な操作がないか
 - [ ] secrets・PII がコードに含まれていないか
@@ -36,6 +38,7 @@ PRを出す前に自分で確認する:
 ### テスト
 - [ ] テストが正常系・異常系をカバーしているか
 - [ ] テスト名が日本語で分かりやすいか
+- [ ] E2Eテストが「クリティカルフローのみ」の範囲に収まっているか（網羅目的の乱用がないか）
 
 ### フロントエンド（Vue.js / Inertia.js）
 - [ ] Page コンポーネントが `Pages/` に、共通コンポーネントが `Components/` にあるか

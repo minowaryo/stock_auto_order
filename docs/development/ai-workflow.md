@@ -24,13 +24,16 @@
    - 変更の影響範囲を整理
    - 実装方針を提示・合意を得る
 
-3. Implement（実装）
-   - 計画に従って実装
-   - 脱線しない
+3. Implement（実装、`/tdd` コマンド）
+   - Red → Gate 4（テストケース承認） → Green → Refactor のサイクルで進める
+   - 計画外のスコープに脱線しない
 
-4. Test（テスト）
-   - Feature Testを追加・実行
+4. Test（テスト・検証）
+   - テスト実行に加え `verify` スキルで実挙動を確認する（テストGreen＝機能OKとは限らないため）
+   - マージ前に `/review` を実行する
 ```
+
+サブエージェント構成・スキル実行タイミング・`@nizos/probity` 導入判断など詳細は `.claude/rules/30-testing.md` を参照。
 
 ### 効果的なプロンプト
 
@@ -72,4 +75,5 @@ AIが生成したコードは以下を満たすこと:
 1. `php artisan test` が通る
 2. `./vendor/bin/pint --test` がパス
 3. `./vendor/bin/phpstan analyse` がパス
-4. `docs/development/review-checklist.md` のレビューが完了
+4. クリティカルフローに変更がある場合、`npx playwright test` が通る
+5. `docs/development/review-checklist.md` のレビューが完了

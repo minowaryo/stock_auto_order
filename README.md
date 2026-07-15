@@ -28,19 +28,26 @@ AI向け要約層      → docs/ai-context/
 ├── AGENTS.md                          # Codex エントリポイント
 │
 ├── PLAN.md                            # 開発計画（進行中タスク管理）
+├── .mcp.json                          # プロジェクトスコープMCP（Playwright等）
 ├── .claude/
 │   ├── rules/
 │   │   ├── 00-global.md               # 全体方針・開発フロー・品質ゲート
 │   │   ├── 10-laravel.md              # Laravel固有ルール
+│   │   ├── 15-vue.md                  # Vue.js + Inertia.js固有ルール
 │   │   ├── 20-mysql.md                # MySQL固有ルール
-│   │   ├── 30-testing.md              # テスト方針
+│   │   ├── 30-testing.md              # テスト方針（TDD・Playwright E2E）
 │   │   ├── 40-security.md             # セキュリティルール
 │   │   ├── 50-review.md               # レビュー観点
 │   │   └── 60-docs.md                 # ドキュメント更新ルール
+│   ├── agents/
+│   │   ├── test-writer.md             # TDD Redフェーズ専用サブエージェント
+│   │   └── tdd-implementer.md         # TDD Greenフェーズ専用サブエージェント
 │   └── commands/
 │       ├── review.md                  # /review コマンド
 │       ├── adr.md                     # /adr コマンド
-│       └── generate-mock.md           # /generate-mock コマンド
+│       ├── generate-mock.md           # /generate-mock コマンド
+│       ├── tdd.md                     # /tdd コマンド（Red→Green→Refactor）
+│       └── generate-e2e-test.md       # /generate-e2e-test コマンド
 │
 └── docs/
     ├── ai-context/                    # AI向け要約層（最重要）
@@ -67,7 +74,11 @@ AI向け要約層      → docs/ai-context/
     │   ├── ADR-0001-use-laravel.md
     │   ├── ADR-0002-use-mysql.md
     │   ├── ADR-0003-auth-strategy.md
-    │   └── ADR-0004-ai-development-policy.md
+    │   ├── ADR-0004-ai-development-policy.md
+    │   ├── ADR-0005-frontend-stack.md
+    │   ├── ADR-0006-e2e-testing-playwright.md
+    │   ├── ADR-0007-tdd-enforcement-probity.md
+    │   └── ADR-0008-tdd-e2e-harness-tooling.md
     ├── development/                   # 開発プロセス
     │   ├── coding-standards.md
     │   ├── testing-strategy.md
@@ -89,6 +100,7 @@ AI向け要約層      → docs/ai-context/
 6. `/generate-mock` でHTMLモックを生成し、ビジネス側にレビューしてもらう
 7. フィードバックを `use-cases.md` に反映し、人間が最終承認する（Gate 2）
 8. `docs/architecture/data-model.md` を設計・承認してからAIコード生成を開始する（Gate 3）
+9. `/tdd` コマンドでRed（失敗するテスト作成）→ テストケース承認（Gate 4）→ Green（実装）→ Refactor の順で進める
 
 ## AI駆動開発パイプライン
 
@@ -105,9 +117,13 @@ use-cases.md 作成・修正
       ↓  AIによる data-model.md 叩き台生成可
 [Gate 3] data-model.md — レビュアー承認
       ↓
-AI コード生成（Claude Code / Codex）
+AI テストケース生成（Red・/tdd コマンド）
       ↓
-AI テスト生成
+[Gate 4] テストケース承認 ★実装（Green）着手前にレビュアーが確認
+      ↓
+AI 実装コード生成（Green・Claude Code / Codex）
+      ↓
+Refactor
       ↓
 人間レビュー・マージ
 ```
