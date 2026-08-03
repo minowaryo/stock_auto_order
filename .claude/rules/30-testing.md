@@ -144,15 +144,16 @@ test('ユーザーは会員登録フォームからアカウントを作成で�
 });
 ```
 
-### Inertia.js 特有の注意点
+### Inertia.js 特有の注意点（`docs/adr/ADR-0005-frontend-stack.md` で Vue/React + Inertia.js を選定した場合）
 
 - Inertiaはフルリロードなしで画面遷移するため、`page.click()` 直後に要素を検証すると描画前に評価してしまうことがある。**遷移後は必ず `page.waitForURL()` または遷移先の要素の可視化待ち（`toBeVisible()` の自動リトライ）を使う**
-- `document.querySelector` 等のDOM直接操作はテストコードでも避け、Playwrightの `getByRole` / `getByLabel` 等のロールベースセレクタを使う（`.claude/rules/15-vue.md` のDOM直接操作禁止と方針を揃える）
+- `document.querySelector` 等のDOM直接操作はテストコードでも避け、Playwrightの `getByRole` / `getByLabel` 等のロールベースセレクタを使う（`.claude/rules/15-frontend.md` のDOM直接操作禁止と方針を揃える）
 - バリデーションエラー表示は `useForm()` の `errors` に依存するため、フォーム送信後は該当メッセージの表示を明示的に待つ
+- Blade / Livewire 等、Inertia を使わないスタックを選定した場合はこの節は対象外（通常のフルリロード遷移として `page.waitForURL()` / 要素の可視化待ちを使う）
 
 ### 実行環境
 
-- 対象アプリは `php artisan serve` で起動したLaravel（Inertia経由でVueを描画）
+- 対象アプリは `php artisan serve` で起動したLaravelアプリ（画面描画は選定したフロントエンドスタックによる。Vue+Inertia選定時は Inertia 経由で Vue を描画）
 - `playwright.config.ts` の `webServer` オプションでLaravelサーバーの自動起動・待受けを設定する
 
 ### コマンド

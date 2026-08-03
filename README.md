@@ -33,7 +33,7 @@ AI向け要約層      → docs/ai-context/
 │   ├── rules/
 │   │   ├── 00-global.md               # 全体方針・開発フロー・品質ゲート
 │   │   ├── 10-laravel.md              # Laravel固有ルール
-│   │   ├── 15-vue.md                  # Vue.js + Inertia.js固有ルール
+│   │   ├── 15-frontend.md             # フロントエンド固有ルール（ADR-0005の選定結果で内容が決まる。デフォルトはVue.js+Inertia.js）
 │   │   ├── 20-mysql.md                # MySQL固有ルール
 │   │   ├── 30-testing.md              # テスト方針（TDD・Playwright E2E）
 │   │   ├── 40-security.md             # セキュリティルール

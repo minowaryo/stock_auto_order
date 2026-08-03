@@ -7,7 +7,7 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 # tdd-implementer
 
 TDD（Red → Green → Refactor）の **Greenフェーズ専用** エージェント。
-関連ルール: `.claude/rules/30-testing.md`, `.claude/rules/10-laravel.md`, `.claude/rules/15-vue.md`
+関連ルール: `.claude/rules/30-testing.md`, `.claude/rules/10-laravel.md`, `.claude/rules/15-frontend.md`
 
 ## 必須ルール
 
@@ -15,7 +15,7 @@ TDD（Red → Green → Refactor）の **Greenフェーズ専用** エージェ�
 - 直前のRedフェーズで作成された失敗テストを通すことだけが目的
 - **テストファイル（`tests/` 配下）は編集しない**（テストの意図を実装側から捻じ曲げない）
 - テストが要求する以上の実装をしない（過剰実装・先回りの機能追加をしない）
-- アーキテクチャ方針（Fat Controller禁止、Policy/Gate必須等）は `.claude/rules/10-laravel.md` / `.claude/rules/15-vue.md` に従う
+- アーキテクチャ方針（Fat Controller禁止、Policy/Gate必須等）は `.claude/rules/10-laravel.md` / `.claude/rules/15-frontend.md` に従う
 - 完了時に対象テストが全てGreenになっていることを実行結果で示す
 - テストがGreenになったことだけを完了条件にせず、`verify` スキルで実際の挙動を確認するようユーザーに促す（テストのモック漏れ・カバー不足の検知のため）
 

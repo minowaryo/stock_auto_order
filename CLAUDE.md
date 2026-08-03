@@ -15,10 +15,23 @@
 このリポジトリをクローンしたら、コードに触れる前に以下を順番に埋めること。
 AIはこれらのファイルが埋まっていない状態では正確な支援ができない。
 
-### Step 1 — ai-context を埋める（最初に必ずやること）
+### Step 1 — フロントエンド技術選定 → ai-context を埋める（最初に必ずやること）
+
+**1a. フロントエンド技術選定**
+
+- `docs/adr/ADR-0005-frontend-stack.md` の選定基準・比較表を確認し、このプロジェクトのフロントエンドスタックを決定する
+- `/adr` コマンドで選定結果を `docs/adr/ADR-XXXX-frontend-stack-selection.md` として記録する（デフォルト推奨〔Vue 3 + Inertia.js + Pinia〕以外を選ぶ場合、または複数候補で迷った場合は理由と却下案を明記する）
+
+**1b. 選定確定後のルールファイル反映**
+
+- `.claude/rules/15-frontend.md` の内容を選定結果に合わせて書き換える（Vue 3 + Inertia.js + Pinia を選定した場合はデフォルト内容のまま利用可）
+- `docs/ai-context/module-map.md` の Frontend セクションを実際のディレクトリ構成に書き換える（例示のままにしない）
+
+**1c. ai-context を埋める**
 
 > 作成にあたっては `docs/original-docs/` に一次資料（要件メモ・画面スケッチ等）を置いてから参照すること。
 > Step 1 完了後は `docs/original-docs/` をデフォルト参照先としない。
+> `project-summary.md` の Frontend 行には 1a の選定結果を転記する。
 
 | ファイル | 内容 | 優先度 |
 |---|---|---|
@@ -83,7 +96,7 @@ Red → [Gate 4: テストケース承認 ★実装(Green)着手禁止] → Gree
 | 要件確認・UC参照 | `docs/product/requirements.md` + `docs/product/use-cases.md` |
 | コード実装（機能開発） | `docs/product/use-cases.md` + `docs/architecture/data-model.md` + `docs/product/mockups/` |
 | UI実装・モックベースの開発 | `docs/product/ui-guidelines.md` + `docs/product/mockups/` |
-| Frontend / Vue component changes | `.claude/rules/15-vue.md` |
+| Frontend component changes | `.claude/rules/15-frontend.md`（選定したフロントエンドスタックの実装ルール。`docs/adr/ADR-0005-frontend-stack.md` 参照） |
 | Auth / authorization changes | `docs/architecture/authz-authn.md` |
 | DB schema changes | `docs/architecture/data-model.md` + `docs/adr/` |
 | Architecture / core design changes | `docs/adr/` |
@@ -112,7 +125,7 @@ Red → [Gate 4: テストケース承認 ★実装(Green)着手禁止] → Gree
 
 - `.claude/rules/00-global.md` - 全体方針・開発フロー・品質ゲート
 - `.claude/rules/10-laravel.md` - Laravel固有ルール
-- `.claude/rules/15-vue.md` - Vue.js + Inertia.js 固有ルール
+- `.claude/rules/15-frontend.md` - フロントエンド固有ルール（内容は `docs/adr/ADR-0005-frontend-stack.md` の選定結果に応じてプロジェクトごとに書き換わる。デフォルト内容は Vue.js + Inertia.js）
 - `.claude/rules/20-mysql.md` - MySQL固有ルール
 - `.claude/rules/30-testing.md` - テスト方針
 - `.claude/rules/40-security.md` - セキュリティ

@@ -6,6 +6,7 @@
 
 - [ ] `docs/ai-context/project-summary.md` が記入済みか
 - [ ] `docs/ai-context/glossary.md` が記入済みか
+- [ ] `docs/adr/` にフロントエンド技術選定のADRが存在するか（`docs/adr/ADR-0005-frontend-stack.md` の選定プロセスを経ているか）
 - [ ] `docs/product/use-cases.md` の承認状況はどうか
 
 ---
@@ -59,7 +60,7 @@ Refactor（テストをGreenに保ったまま整理）
 
 | Gate | 条件 | 解禁されること |
 |---|---|---|
-| Gate 0 | `docs/ai-context/` の必須ファイルが記入済み | AI支援の開始 |
+| Gate 0 | `docs/ai-context/` の必須ファイルが記入済み、かつフロントエンド技術選定ADRが作成済み | AI支援の開始 |
 | Gate 1 | `docs/product/requirements.md` レビュアー承認済み | use-cases.md 叩き台生成・モック生成 |
 | Gate 2 ★ | `docs/product/use-cases.md` レビュアー最終承認済み | コード生成・acceptance-criteria / data-model 叩き台生成 |
 | Gate 3 | `docs/architecture/data-model.md` レビュアー承認済み | DB実装・マイグレーション作成 |
