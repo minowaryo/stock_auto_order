@@ -1,3 +1,10 @@
 # Local development credentials (see docs/credentials/README.md and .claude/rules/40-security.md)
 docs/credentials/*
 !docs/credentials/README.md
+
+# Local Claude Code permission overrides (machine-specific, not shared)
+.claude/settings.local.json
+
+# Personal financial data (real asset balances) — reference-only, not for a public repo
+docs/original-docs/*.csv
+docs/original-docs/*.pdf
