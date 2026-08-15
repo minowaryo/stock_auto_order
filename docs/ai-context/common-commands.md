@@ -18,7 +18,7 @@ php artisan test --parallel
 
 ## E2Eテスト（Playwright）
 
-> 詳細は `.claude/rules/30-testing.md` の「E2E Test（Playwright）」を参照。
+> 詳細は `.claude/rules/31-e2e-testing.md` を参照。
 
 ```bash
 # 初回セットアップ
@@ -40,7 +40,7 @@ npx playwright show-report
 
 ## Playwright MCP（ブラウザ操作ツール・任意導入）
 
-> `.mcp.json` に定義済み。詳細は `docs/adr/ADR-0008-tdd-e2e-harness-tooling.md` を参照。
+> `.mcp.json` に定義済み。詳細は `meta/adr/ADR-0008-tdd-e2e-harness-tooling.md` を参照。
 > ローカル開発環境限定で使用し、本番URL・実データ環境には接続しない。
 
 ```bash
@@ -51,7 +51,7 @@ claude mcp add playwright npx @playwright/mcp@latest
 
 ## TDD強制ツール（Probity・任意導入）
 
-> 詳細は `docs/adr/ADR-0007-tdd-enforcement-probity.md` を参照。
+> 詳細は `meta/adr/ADR-0007-tdd-enforcement-probity.md` を参照。
 
 ```bash
 # 初回セットアップ

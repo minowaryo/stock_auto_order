@@ -1,7 +1,7 @@
 # 15-frontend.md — フロントエンド固有ルール
 
 > **このファイルの位置づけ**: フロントエンド実装ルールの正本（canonical）。
-> `docs/adr/ADR-0005-frontend-stack.md` の選定プロセスでこのプロジェクトが選定した
+> `meta/adr/ADR-0005-frontend-stack.md` の選定プロセスでこのプロジェクトが選定した
 > フロントエンドスタックの実装ルールをここに記載する。
 > 以下はデフォルト推奨である **Vue 3 + Inertia.js + Pinia** を選定した場合の内容。
 > Blade / Livewire / React 等、他のスタックを選定した場合は、このファイル自体の内容を

@@ -1,7 +1,7 @@
 # authz-authn.md — 認証・認可方針
 
 > 認証・認可に関わる変更前に必ず参照すること。
-> 関連ADR: `docs/adr/ADR-0003-auth-strategy.md`
+> 関連ADR: `meta/adr/ADR-0003-auth-strategy.md`
 
 ## 認証（Authentication）
 

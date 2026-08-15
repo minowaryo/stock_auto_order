@@ -15,7 +15,7 @@
 | `app/Listeners/` | イベントハンドラ | 重い処理はQueueに |
 | `app/Jobs/` | 非同期ジョブ | Horizon経由で実行 |
 
-## Frontend（`docs/adr/ADR-0005-frontend-stack.md` で選定したスタックに応じて記載する）
+## Frontend（`meta/adr/ADR-0005-frontend-stack.md` で選定したスタックに応じて記載する）
 
 > 以下は選定結果が **Vue 3 + Inertia.js + Pinia**（デフォルト推奨）の場合の例。
 > Blade / Livewire / React 等を選定した場合は、そのスタックのディレクトリ構成に置き換えること。

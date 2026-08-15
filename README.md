@@ -10,14 +10,16 @@ Laravel + MySQL を前提とした AI駆動開発（Claude Code / Codex 併用�
 - **AI向け要約ドキュメント** (`docs/ai-context/`)
 - **設計ドキュメントテンプレート** (`docs/product/`, `docs/architecture/`, `docs/adr/`)
 - **開発プロセスドキュメント** (`docs/development/`, `docs/security/`)
+- **テンプレート自身のメタADR** (`meta/adr/`) — このテンプレート/AI開発ハーネス自体の設計判断の記録。プロジェクト側の意思決定（`docs/adr/`）とは別管理
 
 ## 4層構造
 
 ```
-AIルール層        → CLAUDE.md, AGENTS.md, .claude/rules/
-人間の設計知識層   → docs/architecture/, docs/product/, docs/adr/
-AI向け要約層      → docs/ai-context/
-一次資料層        → docs/original-docs/（人間入力・AI編集禁止・Step1〜Step2のみ参照）
+AIルール層          → CLAUDE.md, AGENTS.md, .claude/rules/
+人間の設計知識層     → docs/architecture/, docs/product/, docs/adr/
+AI向け要約層        → docs/ai-context/
+一次資料層          → docs/original-docs/（人間入力・AI編集禁止・Step1〜Step2のみ参照）
+テンプレート自身の層 → meta/adr/（プロジェクトの意思決定サイクルには属さない。編集・リナンバリング不要）
 ```
 
 ## ファイル構成
@@ -49,6 +51,19 @@ AI向け要約層      → docs/ai-context/
 │       ├── tdd.md                     # /tdd コマンド（Red→Green→Refactor）
 │       └── generate-e2e-test.md       # /generate-e2e-test コマンド
 │
+├── meta/
+│   └── adr/                           # テンプレート/ハーネス自身のADR（プロジェクトのADRとは別管理。編集・リナンバリング不要）
+│       ├── README.md
+│       ├── ADR-0001-use-laravel.md
+│       ├── ADR-0002-use-mysql.md
+│       ├── ADR-0003-auth-strategy.md
+│       ├── ADR-0004-ai-development-policy.md
+│       ├── ADR-0005-frontend-stack.md
+│       ├── ADR-0006-e2e-testing-playwright.md
+│       ├── ADR-0007-tdd-enforcement-probity.md
+│       ├── ADR-0008-tdd-e2e-harness-tooling.md
+│       └── ADR-0009-review-escalation-mechanism.md
+│
 └── docs/
     ├── ai-context/                    # AI向け要約層（最重要）
     │   ├── project-summary.md         # プロジェクト全体要約
@@ -70,15 +85,8 @@ AI向け要約層      → docs/ai-context/
     │   ├── overview.md
     │   ├── data-model.md
     │   └── authz-authn.md
-    ├── adr/                           # 意思決定記録
-    │   ├── ADR-0001-use-laravel.md
-    │   ├── ADR-0002-use-mysql.md
-    │   ├── ADR-0003-auth-strategy.md
-    │   ├── ADR-0004-ai-development-policy.md
-    │   ├── ADR-0005-frontend-stack.md
-    │   ├── ADR-0006-e2e-testing-playwright.md
-    │   ├── ADR-0007-tdd-enforcement-probity.md
-    │   └── ADR-0008-tdd-e2e-harness-tooling.md
+    ├── adr/                           # 意思決定記録（プロジェクト自身のADR。テンプレート適用直後は空 = ADR-0001から採番開始）
+    │   └── README.md                  # 役割メモ（meta/adr/ との違い）
     ├── development/                   # 開発プロセス
     │   ├── coding-standards.md
     │   ├── testing-strategy.md

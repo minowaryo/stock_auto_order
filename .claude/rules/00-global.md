@@ -6,7 +6,7 @@
 
 - [ ] `docs/ai-context/project-summary.md` が記入済みか
 - [ ] `docs/ai-context/glossary.md` が記入済みか
-- [ ] `docs/adr/` にフロントエンド技術選定のADRが存在するか（`docs/adr/ADR-0005-frontend-stack.md` の選定プロセスを経ているか）
+- [ ] `docs/adr/` にフロントエンド技術選定のADRが存在するか（`meta/adr/ADR-0005-frontend-stack.md` の選定プロセスを経ているか）
 - [ ] `docs/product/use-cases.md` の承認状況はどうか
 
 ---
@@ -28,31 +28,9 @@ Explore → Plan → Implement → Test
 
 ## AI開発パイプライン
 
-```
-[Gate 0] docs/ai-context/ 記入完了
-    ↓
-[Gate 1] docs/product/requirements.md — レビュアー承認済み
-    ↓  ※ AIによる use-cases.md 叩き台生成可
-use-cases.md 作成（AIたたき台 → 人間修正）
-    ↓  ※ AIによるモック生成可（/generate-mock）
-モック作成・ビジネス側レビュー（docs/product/mockups/）
-    ↓  モックフィードバックを use-cases.md に反映
-[Gate 2] docs/product/use-cases.md   — レビュアー最終承認済み ★
-    ↓  ※ AIによる acceptance-criteria.md / data-model.md 叩き台生成可
-[Gate 3] docs/architecture/data-model.md — レビュアー承認済み
-    ↓
-AI テストケース生成（Red・`/tdd` コマンド、test-writerサブエージェント）
-    ↓
-[Gate 4] テストケース承認 — レビュアーが失敗テストの内容を確認 ★
-    ↓  ここを通過するまで実装（Green）着手禁止
-AI 実装コード生成（Green・tdd-implementerサブエージェント）→ verify確認 → （UI変更時）E2E追加
-    ↓
-Refactor（テストをGreenに保ったまま整理）
-    ↓
-人間レビュー・マージ（/review）
-```
-
-> フェーズごとの手順・スキル実行タイミングの詳細は `.claude/rules/30-testing.md` を参照。この図は全体位置づけの把握用。
+> パイプライン全体図（ドキュメント作成 → Gate承認 → TDD実装）は `CLAUDE.md` の Step 1〜4 を参照（このファイルでの図の重複記載はしない。図を変更する場合は `CLAUDE.md` 側のみ更新する）。
+> Gate 0〜4 それぞれの条件・解禁内容は次の「品質ゲート詳細」表を参照。
+> フェーズごとの手順・スキル実行タイミングの詳細は `.claude/rules/30-testing.md` を参照。
 
 ---
 

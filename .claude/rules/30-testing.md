@@ -24,7 +24,7 @@
 
 ## TDDワークフロー（Claude Code / Codex 共通）
 
-> 関連ADR: `docs/adr/ADR-0007-tdd-enforcement-probity.md`
+> 関連ADR: `meta/adr/ADR-0007-tdd-enforcement-probity.md`
 
 Claude Code / Codex は「実装を先に書いてからテストを後付けする」挙動を取りやすい。
 バグ修正に限らず、**通常の機能開発でもRed → Green → Refactorのサイクルを明示的に指示する**こと。
@@ -54,7 +54,7 @@ Claude Code / Codex は「実装を先に書いてからテストを後付けす
 - Redフェーズでテストを書かせた後、**Greenフェーズ（実装）に進む前に必ず人間がテスト内容をレビュー・承認する**（`.claude/rules/00-global.md` の Gate 4）
   - 確認観点: 意図した仕様どおりにテストが失敗しているか、テストケースが `use-cases.md` の正常系/異常系/権限を網羅しているか
   - `/tdd` コマンドはこの承認を得るまでGreenフェーズに自動で進まない
-- 機械的に強制したい場合は `@nizos/probity`（`docs/adr/ADR-0007-tdd-enforcement-probity.md` 参照）の導入を検討する。ただし導入有無に関わらずこのガイドラインは適用する
+- 機械的に強制したい場合は `@nizos/probity`（`meta/adr/ADR-0007-tdd-enforcement-probity.md` 参照）の導入を検討する。ただし導入有無に関わらずこのガイドラインは適用する
 
 ### Greenフェーズ完了後のスキル実行
 
@@ -113,7 +113,7 @@ php artisan test --coverage
 
 ## E2E Test（Playwright）
 
-> 関連ADR: `docs/adr/ADR-0006-e2e-testing-playwright.md`
+> 関連ADR: `meta/adr/ADR-0006-e2e-testing-playwright.md`
 
 ### 対象範囲
 
@@ -144,7 +144,7 @@ test('ユーザーは会員登録フォームからアカウントを作成で�
 });
 ```
 
-### Inertia.js 特有の注意点（`docs/adr/ADR-0005-frontend-stack.md` で Vue/React + Inertia.js を選定した場合）
+### Inertia.js 特有の注意点（`meta/adr/ADR-0005-frontend-stack.md` で Vue/React + Inertia.js を選定した場合）
 
 - Inertiaはフルリロードなしで画面遷移するため、`page.click()` 直後に要素を検証すると描画前に評価してしまうことがある。**遷移後は必ず `page.waitForURL()` または遷移先の要素の可視化待ち（`toBeVisible()` の自動リトライ）を使う**
 - `document.querySelector` 等のDOM直接操作はテストコードでも避け、Playwrightの `getByRole` / `getByLabel` 等のロールベースセレクタを使う（`.claude/rules/15-frontend.md` のDOM直接操作禁止と方針を揃える）

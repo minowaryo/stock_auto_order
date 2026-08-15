@@ -1,7 +1,7 @@
 # ai-workflow.md — AI開発ワークフロー
 
 > Claude Code / Codex の使い方ルールです。
-> 関連ADR: `docs/adr/ADR-0004-ai-development-policy.md`
+> 関連ADR: `meta/adr/ADR-0004-ai-development-policy.md`
 
 ## 役割分担
 
@@ -29,7 +29,7 @@
    - 計画外のスコープに脱線しない
 
 4. Test（テスト・検証）
-   - テスト実行に加え `verify` スキルで実挙動を確認する（テストGreen＝機能OKとは限らないため）
+   - テスト実行に加え `run` スキルで実挙動を確認する（テストGreen＝機能OKとは限らないため）
    - マージ前に `/review` を実行する
 ```
 
@@ -41,11 +41,15 @@
 
 ### Claude Code に読ませる文脈
 
+> 正式な一覧は `CLAUDE.md` の「Read first」「Read when relevant」を参照（本節はその要約であり、内容が食い違う場合は `CLAUDE.md` を正とする）。
+
 **毎回（必須）:**
 - `docs/ai-context/project-summary.md`
-- `docs/ai-context/common-commands.md`
+- `docs/ai-context/glossary.md`
+- `docs/ai-context/module-map.md`
 
 **タスクに応じて:**
+- コマンド操作（テスト実行・マイグレーション等） → `docs/ai-context/common-commands.md`
 - DB変更 → `docs/architecture/data-model.md`
 - 認証変更 → `docs/architecture/authz-authn.md`
 - アーキテクチャ変更 → `docs/adr/`

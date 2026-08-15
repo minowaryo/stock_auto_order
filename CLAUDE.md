@@ -19,7 +19,7 @@ AIはこれらのファイルが埋まっていない状態では正確な支援
 
 **1a. フロントエンド技術選定**
 
-- `docs/adr/ADR-0005-frontend-stack.md` の選定基準・比較表を確認し、このプロジェクトのフロントエンドスタックを決定する
+- `meta/adr/ADR-0005-frontend-stack.md` の選定基準・比較表を確認し、このプロジェクトのフロントエンドスタックを決定する
 - `/adr` コマンドで選定結果を `docs/adr/ADR-XXXX-frontend-stack-selection.md` として記録する（デフォルト推奨〔Vue 3 + Inertia.js + Pinia〕以外を選ぶ場合、または複数候補で迷った場合は理由と却下案を明記する）
 
 **1b. 選定確定後のルールファイル反映**
@@ -86,24 +86,28 @@ Red → [Gate 4: テストケース承認 ★実装(Green)着手禁止] → Gree
 - `docs/ai-context/project-summary.md`
 - `docs/ai-context/glossary.md`
 - `docs/ai-context/module-map.md`
-- `docs/ai-context/common-commands.md`
 
 ## Read when relevant (task-based)
 
 | Task type | Read this |
 |---|---|
 | requirements.md / use-cases.md 作成・更新 | `docs/original-docs/`（一次資料参照） + `docs/product/requirements.md` |
+| テスト実行・マイグレーション・ビルド等のコマンド操作 | `docs/ai-context/common-commands.md` |
 | 要件確認・UC参照 | `docs/product/requirements.md` + `docs/product/use-cases.md` |
 | コード実装（機能開発） | `docs/product/use-cases.md` + `docs/architecture/data-model.md` + `docs/product/mockups/` |
 | UI実装・モックベースの開発 | `docs/product/ui-guidelines.md` + `docs/product/mockups/` |
-| Frontend component changes | `.claude/rules/15-frontend.md`（選定したフロントエンドスタックの実装ルール。`docs/adr/ADR-0005-frontend-stack.md` 参照） |
-| Auth / authorization changes | `docs/architecture/authz-authn.md` |
+| Frontend component changes | `.claude/rules/15-frontend.md`（選定したフロントエンドスタックの実装ルール。`meta/adr/ADR-0005-frontend-stack.md` 参照） |
+| Auth / authorization changes | `docs/architecture/authz-authn.md` + `docs/product/org-permission-philosophy.md`（権限・ロールのビジネス方針） |
 | DB schema changes | `docs/architecture/data-model.md` + `docs/adr/` |
 | Architecture / core design changes | `docs/adr/` |
 | Adding / modifying tests | `docs/development/testing-strategy.md` + `docs/product/use-cases.md` + `docs/architecture/data-model.md` |
 | Security-related changes | `docs/security/secrets-handling.md` |
+| 認証情報・APIキー等の作成 | `docs/credentials/`（`.claude/rules/40-security.md` の取り扱いルールに従う） |
 | Release / deployment | `docs/operations/deployment.md` |
 | Change request (CR) 発生時 | `docs/rcid/traceability-matrix.md` |
+| ユーザー向け機能・操作方法の変更 | `docs/product/user-guide.md` |
+| UAT（受け入れテスト）実施時（任意） | `docs/product/uat-scenarios.md` + `docs/product/uat-results/`（`.claude/rules/00-global.md` のUAT節を参照。非ブロッキング） |
+| エラー・ライブラリ固有の詰まりに遭遇した時 | `docs/ai-context/known-pitfalls.md`（既知の事象がないか先に確認し、解決したら追記） |
 
 ## Global rules
 
@@ -125,9 +129,10 @@ Red → [Gate 4: テストケース承認 ★実装(Green)着手禁止] → Gree
 
 - `.claude/rules/00-global.md` - 全体方針・開発フロー・品質ゲート
 - `.claude/rules/10-laravel.md` - Laravel固有ルール
-- `.claude/rules/15-frontend.md` - フロントエンド固有ルール（内容は `docs/adr/ADR-0005-frontend-stack.md` の選定結果に応じてプロジェクトごとに書き換わる。デフォルト内容は Vue.js + Inertia.js）
+- `.claude/rules/15-frontend.md` - フロントエンド固有ルール（内容は `meta/adr/ADR-0005-frontend-stack.md` の選定結果に応じてプロジェクトごとに書き換わる。デフォルト内容は Vue.js + Inertia.js）
 - `.claude/rules/20-mysql.md` - MySQL固有ルール
-- `.claude/rules/30-testing.md` - テスト方針
+- `.claude/rules/30-testing.md` - テスト方針（Feature/Unit・TDD）
+- `.claude/rules/31-e2e-testing.md` - E2Eテスト方針（Playwright。`/generate-e2e-test` 実行時のみ参照）
 - `.claude/rules/40-security.md` - セキュリティ
 - `.claude/rules/50-review.md` - レビュー観点
 - `.claude/rules/60-docs.md` - ドキュメント更新ルール
