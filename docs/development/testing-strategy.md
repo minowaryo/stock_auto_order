@@ -41,7 +41,7 @@
    - ユーザー登録フロー
    - 決済フロー
    - クリティカルな業務フロー
-   - 配置・実行コマンドは `.claude/rules/30-testing.md` の「E2E Test（Playwright）」を参照
+   - 配置・実行コマンドは `.claude/rules/31-e2e-testing.md` を参照
 
 ## テストデータ管理
 
