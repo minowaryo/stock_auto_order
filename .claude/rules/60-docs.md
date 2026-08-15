@@ -20,6 +20,11 @@
 | フロントエンド画面・コンポーネント追加 | `docs/ai-context/module-map.md` |
 | 状態管理（Pinia/Vuex/Redux等、選定したスタックのStore）の追加・変更 | `docs/architecture/overview.md` |
 | フロントエンド技術選定（ライブラリ変更等） | `docs/adr/ADR-XXXX-xxx.md`（新規作成） |
+| 権限・ロールのビジネス方針変更 | `docs/product/org-permission-philosophy.md` + `docs/architecture/authz-authn.md` |
+| ユーザー向け機能・操作方法の変更 | `docs/product/user-guide.md` |
+| UATシナリオ・結果の追加（任意） | `docs/product/uat-scenarios.md` / `docs/product/uat-results/`（`.claude/rules/00-global.md` のUAT節を参照。非ブロッキング） |
+| ライブラリ/フレームワーク固有のハマりどころを解決した | `docs/ai-context/known-pitfalls.md`（常時読込ではないため、コード変更と同一PRである必要はない。解決した都度追記） |
+| Gate条件・品質ゲート運用の変更 | `.claude/rules/00-global.md`（詳細表・絶対禁止）+ `CLAUDE.md`（Step手順）+ `AGENTS.md`（Codex用。Gate定義を複製しているため3ファイル同期が必要） |
 
 ## ドキュメント更新の原則
 
