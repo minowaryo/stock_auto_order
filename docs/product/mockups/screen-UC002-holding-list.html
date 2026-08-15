@@ -13,7 +13,7 @@
     <a href="screen-UC002-holding-list.html" class="active">保有一覧</a>
     <a href="screen-UC004-signal-list.html">利確シグナル</a>
     <a href="screen-UC005-sector-dashboard.html">セクター配分</a>
-    <a href="screen-UC006-candidate-check.html">新規候補チェック</a>
+    <a href="screen-UC006-candidate-check.html">新規投資候補</a>
     <a href="screen-UC001-csv-import.html">CSV取込</a>
   </nav>
 </header>
@@ -80,6 +80,7 @@
           <th>取得単価</th>
           <th>現在値</th>
           <th>含み益率</th>
+          <th>主要指標</th>
           <th>シグナル</th>
         </tr>
       </thead>
@@ -93,6 +94,13 @@
           <td>￥4,120</td>
           <td>￥5,440</td>
           <td class="text-success">+32.0%</td>
+          <td>
+            <div style="display:flex; gap:4px; flex-wrap:wrap;">
+              <span class="badge badge-neutral" style="font-size:11px;">RSI 65</span>
+              <span class="badge badge-neutral" style="font-size:11px;">PER 24.3倍</span>
+              <span class="badge badge-success" style="font-size:11px;">売上 +12.4%</span>
+            </div>
+          </td>
           <td><span class="badge badge-warning">利確検討</span></td>
         </tr>
         <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
@@ -104,6 +112,13 @@
           <td>￥1,980</td>
           <td>￥2,455</td>
           <td class="text-success">+24.0%</td>
+          <td>
+            <div style="display:flex; gap:4px; flex-wrap:wrap;">
+              <span class="badge badge-neutral" style="font-size:11px;">RSI 71</span>
+              <span class="badge badge-neutral" style="font-size:11px;">PER 31.5倍</span>
+              <span class="badge badge-success" style="font-size:11px;">売上 +18.0%</span>
+            </div>
+          </td>
           <td><span class="badge badge-warning">MACD注意</span></td>
         </tr>
         <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
@@ -115,6 +130,13 @@
           <td>$180.00</td>
           <td>$212.30</td>
           <td class="text-success">+18.0%</td>
+          <td>
+            <div style="display:flex; gap:4px; flex-wrap:wrap;">
+              <span class="badge badge-neutral" style="font-size:11px;">RSI 58</span>
+              <span class="badge badge-neutral" style="font-size:11px;">PER 22.1倍</span>
+              <span class="badge badge-success" style="font-size:11px;">売上 +9.5%</span>
+            </div>
+          </td>
           <td><span class="badge badge-neutral">-</span></td>
         </tr>
         <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
@@ -126,6 +148,35 @@
           <td>￥2,300</td>
           <td>￥2,415</td>
           <td class="text-success">+5.0%</td>
+          <td>
+            <div style="display:flex; gap:4px; flex-wrap:wrap;">
+              <span class="badge badge-neutral" style="font-size:11px;">RSI 50</span>
+              <span class="badge badge-neutral" style="font-size:11px;">PER 15.2倍</span>
+              <span class="badge badge-success" style="font-size:11px;">売上 +3.1%</span>
+            </div>
+          </td>
+          <td><span class="badge badge-neutral">-</span></td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
+          <td>
+            <strong>サンプル新興半導体</strong>
+            <span class="badge badge-warning" style="font-size:11px; margin-left:4px;" title="今回のCSV取込で新規検出された銘柄です。クリックすると新規投資候補の重複チェック（UC-006）に遷移します" onclick="event.stopPropagation(); location.href='screen-UC006-candidate-check.html?symbol_code=4568'">NEW</span>
+            <br><span class="text-secondary" style="font-size:12px;">4568</span>
+          </td>
+          <td>JP</td>
+          <td>個別株</td>
+          <td>半導体</td>
+          <td>20</td>
+          <td>￥3,050</td>
+          <td>￥3,110</td>
+          <td class="text-success">+2.0%</td>
+          <td>
+            <div style="display:flex; gap:4px; flex-wrap:wrap;">
+              <span class="badge badge-neutral" style="font-size:11px;">RSI 55</span>
+              <span class="badge badge-neutral" style="font-size:11px;">PER 28.0倍</span>
+              <span class="badge badge-success" style="font-size:11px;">売上 +7.2%</span>
+            </div>
+          </td>
           <td><span class="badge badge-neutral">-</span></td>
         </tr>
         <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
@@ -137,6 +188,13 @@
           <td>￥1,650</td>
           <td>￥1,590</td>
           <td class="text-danger">-3.6%</td>
+          <td>
+            <div style="display:flex; gap:4px; flex-wrap:wrap;">
+              <span class="badge badge-neutral" style="font-size:11px;">RSI 42</span>
+              <span class="badge badge-neutral" style="font-size:11px;">PER 12.8倍</span>
+              <span class="badge badge-danger" style="font-size:11px;">売上 -1.5%</span>
+            </div>
+          </td>
           <td><span class="badge badge-neutral">-</span></td>
         </tr>
         <tr>
@@ -148,11 +206,14 @@
           <td>￥11,200 / 万口</td>
           <td>￥12,450 / 万口</td>
           <td class="text-success">+11.2%</td>
+          <td class="text-secondary" style="font-size:12px;">対象外</td>
           <td><span class="badge badge-neutral">対象外</span></td>
         </tr>
       </tbody>
     </table>
-    <p class="text-secondary" style="font-size:12px; margin-top:8px;">※ ETF・投資信託は一覧に表示されますが、テクニカル/ファンダメンタルズ指標・利確シグナルの計算対象外です（UC-002業務ルール）</p>
+    <p class="text-secondary" style="font-size:12px; margin-top:8px;">※ 主要指標はRSI（テクニカル代表）・PER（ファンダメンタルズ代表）・売上高成長率（会社業績代表）の3点のみを簡易表示しています。詳細は銘柄をクリックして銘柄詳細（UC-003）でご確認ください</p>
+    <p class="text-secondary" style="font-size:12px; margin-top:4px;">※ ETF・投資信託は一覧に表示されますが、テクニカル/ファンダメンタルズ指標・利確シグナルの計算対象外です（UC-002業務ルール）</p>
+    <p class="text-secondary" style="font-size:12px; margin-top:4px;">※ 「NEW」バッジは直近のCSV取込で新規検出された銘柄です。バッジをクリックすると新規投資候補の重複チェック（UC-006）に銘柄コード入力済みの状態で遷移します</p>
   </div>
 </main>
 

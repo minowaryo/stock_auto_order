@@ -13,7 +13,7 @@
     <a href="screen-UC002-holding-list.html">保有一覧</a>
     <a href="screen-UC004-signal-list.html">利確シグナル</a>
     <a href="screen-UC005-sector-dashboard.html" class="active">セクター配分</a>
-    <a href="screen-UC006-candidate-check.html">新規候補チェック</a>
+    <a href="screen-UC006-candidate-check.html">新規投資候補</a>
     <a href="screen-UC001-csv-import.html">CSV取込</a>
   </nav>
 </header>
@@ -25,28 +25,45 @@
   <div class="card">
     <h2>セクター配分</h2>
 
-    <div style="margin-bottom:16px;">
+    <div style="display:flex; gap:16px; align-items:center; margin-bottom:16px; font-size:12px; color:var(--color-text-secondary);">
+      <span>配分状態の目安:</span>
+      <span>健全（40%未満）</span>
+      <span><span class="badge badge-warning" style="font-size:11px;">やや偏り</span> 40%〜70%</span>
+      <span><span class="badge badge-danger" style="font-size:11px;">偏り警告</span> 70%以上</span>
+      <span>｜ 縦線 = 40%の目安ライン</span>
+    </div>
+
+    <div style="margin-bottom:20px;">
       <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;">
         <span>半導体</span>
         <span class="text-danger" style="font-weight:500;">76.0%　<span class="badge badge-danger">偏り警告</span></span>
       </div>
-      <div class="sector-bar-track"><div class="sector-bar-fill" style="width:76%; background:var(--color-danger);"></div></div>
+      <div class="sector-bar-wrap">
+        <div class="sector-bar-track"><div class="sector-bar-fill" style="width:76%; background:var(--color-danger);"></div></div>
+        <div class="sector-bar-target" style="left:40%;" title="目安ライン 40%"></div>
+      </div>
     </div>
 
-    <div style="margin-bottom:16px;">
+    <div style="margin-bottom:20px;">
       <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;">
         <span>電気機器</span>
         <span>14.0%</span>
       </div>
-      <div class="sector-bar-track"><div class="sector-bar-fill" style="width:14%;"></div></div>
+      <div class="sector-bar-wrap">
+        <div class="sector-bar-track"><div class="sector-bar-fill" style="width:14%;"></div></div>
+        <div class="sector-bar-target" style="left:40%;" title="目安ライン 40%"></div>
+      </div>
     </div>
 
-    <div style="margin-bottom:16px;">
+    <div style="margin-bottom:20px;">
       <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;">
         <span>情報・通信</span>
         <span>7.0%</span>
       </div>
-      <div class="sector-bar-track"><div class="sector-bar-fill" style="width:7%;"></div></div>
+      <div class="sector-bar-wrap">
+        <div class="sector-bar-track"><div class="sector-bar-fill" style="width:7%;"></div></div>
+        <div class="sector-bar-target" style="left:40%;" title="目安ライン 40%"></div>
+      </div>
     </div>
 
     <div>
@@ -54,36 +71,47 @@
         <span class="text-secondary">未分類</span>
         <span class="text-secondary">3.0%</span>
       </div>
-      <div class="sector-bar-track"><div class="sector-bar-fill" style="width:3%; background:var(--color-secondary);"></div></div>
+      <div class="sector-bar-wrap">
+        <div class="sector-bar-track"><div class="sector-bar-fill" style="width:3%; background:var(--color-secondary);"></div></div>
+        <div class="sector-bar-target" style="left:40%;" title="目安ライン 40%"></div>
+      </div>
     </div>
 
-    <p class="text-secondary" style="font-size:12px; margin:16px 0 0;">※ 偏り判定の閾値は初期値70%です</p>
+    <p class="text-secondary" style="font-size:12px; margin:16px 0 0;">※ 目安ライン（40%）・偏り警告の閾値（70%）はいずれも叩き台の初期値です。今後の詳細設計（Gate 3）で調整可能にする想定です</p>
   </div>
 
   <div class="card" style="border-left:4px solid var(--color-warning);">
     <h2>リバランス提案</h2>
-    <p style="margin:0 0 12px;">半導体セクターが70%を超えています。以下は分散候補の一例です（選定はご自身の判断で行ってください）。</p>
+    <p style="margin:0 0 12px;">半導体セクターが偏り警告（76.0%）です。約<strong>¥1,240,000</strong>（約210株相当）を目安に売却すると、目標配分（70%）まで下げられます。</p>
+    <p class="text-secondary" style="font-size:13px; margin:0 0 12px;">あわせて、保有が薄いセクターの中から、登録済みの注目テーマに合致し財務健全性の高い候補を分散先として提示します（選定・購入額は本人の判断で調整してください）。</p>
     <table>
       <thead>
         <tr>
           <th>候補セクター</th>
           <th>候補銘柄</th>
           <th>現在の保有比率</th>
+          <th>推薦理由</th>
+          <th>購入額の目安</th>
         </tr>
       </thead>
       <tbody>
-        <tr>
+        <tr class="clickable" onclick="location.href='screen-UC006-candidate-check.html'">
           <td>ヘルスケア</td>
           <td>サンプル製薬（4568）</td>
           <td class="text-secondary">0.0%</td>
+          <td class="text-secondary" style="font-size:13px;">登録済み注目テーマ「ヘルスケア」に合致。自己資本比率65%・ROE12%と財務健全性の基準を満たしています</td>
+          <td>約¥300,000（全体の約1.5%）</td>
         </tr>
-        <tr>
+        <tr class="clickable" onclick="location.href='screen-UC006-candidate-check.html'">
           <td>生活必需品</td>
           <td>サンプル食品（2802）</td>
           <td class="text-secondary">0.0%</td>
+          <td class="text-secondary" style="font-size:13px;">登録済み注目テーマ「生活必需品」に合致。自己資本比率55%・売上成長+6%と手堅い財務内容です</td>
+          <td>約¥250,000（全体の約1.2%）</td>
         </tr>
       </tbody>
     </table>
+    <p class="text-secondary" style="font-size:12px; margin-top:8px;">※ 候補銘柄の抽出ロジックは新規投資候補レコメンド（F-008/UC-008）と共通です。行をクリックすると重複チェック（UC-006）で詳細を確認できます</p>
   </div>
 </main>
 

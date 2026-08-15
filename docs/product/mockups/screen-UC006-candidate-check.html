@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>新規投資候補の重複チェック | ポートフォリオ管理</title>
+<title>新規投資候補 | ポートフォリオ管理</title>
 <link rel="stylesheet" href="_shared.css">
 </head>
 <body>
@@ -13,21 +13,55 @@
     <a href="screen-UC002-holding-list.html">保有一覧</a>
     <a href="screen-UC004-signal-list.html">利確シグナル</a>
     <a href="screen-UC005-sector-dashboard.html">セクター配分</a>
-    <a href="screen-UC006-candidate-check.html" class="active">新規候補チェック</a>
+    <a href="screen-UC006-candidate-check.html" class="active">新規投資候補</a>
     <a href="screen-UC001-csv-import.html">CSV取込</a>
   </nav>
 </header>
 
 <main class="app-main">
-  <h1>新規投資候補の重複チェック</h1>
-  <p class="page-caption">人力で選んだ新規投資候補について、既存保有との重複・分散への影響を判定します（UC-006）</p>
+  <h1>新規投資候補</h1>
+  <p class="page-caption">おすすめ候補の提示（UC-008）と、個別銘柄の重複・分散チェック（UC-006）を1画面にまとめています</p>
 
   <div class="card">
-    <h2>銘柄コードを入力</h2>
+    <h2>おすすめ候補（UC-008）</h2>
+    <p class="text-secondary" style="font-size:13px; margin:0 0 12px;">登録済みの「注目テーマ・セクター」に合致し、財務健全性の基準を満たす中長期銘柄です。購入額の目安はポートフォリオ全体の1〜2%程度の小口です。</p>
+    <table>
+      <thead>
+        <tr>
+          <th>銘柄</th>
+          <th>合致テーマ</th>
+          <th>財務健全性サマリ</th>
+          <th>購入額の目安</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="clickable" onclick="document.getElementById('symbol_code').value='4568'; document.getElementById('candidate-check-form').scrollIntoView({behavior:'smooth'});">
+          <td><strong>サンプル新興半導体</strong><br><span class="text-secondary" style="font-size:12px;">4568</span></td>
+          <td>AI半導体</td>
+          <td class="text-secondary" style="font-size:13px;">自己資本比率52%・ROE14.5%</td>
+          <td>約¥300,000（全体の約1.5%）</td>
+        </tr>
+        <tr class="clickable" onclick="document.getElementById('symbol_code').value='4568'; document.getElementById('candidate-check-form').scrollIntoView({behavior:'smooth'});">
+          <td><strong>サンプル製薬</strong><br><span class="text-secondary" style="font-size:12px;">4568</span></td>
+          <td>ヘルスケア</td>
+          <td class="text-secondary" style="font-size:13px;">自己資本比率65%・ROE12.0%</td>
+          <td>約¥300,000（全体の約1.5%）</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="text-secondary" style="font-size:12px; margin-top:8px;">※ 行をクリックすると下部の重複チェックに銘柄コードが自動入力されます</p>
+  </div>
+
+  <div class="card" style="border-left:4px solid var(--color-warning); background:#fffbeb;">
+    <p style="margin:0; font-size:13px;">🔍 保有銘柄一覧（UC-002）で検出された新規銘柄です。今回のCSV取込で初めて保有が確認されました。</p>
+  </div>
+
+  <div class="card" id="candidate-check-form">
+    <h2>個別銘柄をチェック（UC-006）</h2>
     <div style="display:flex; gap:12px; align-items:flex-end;">
       <div class="form-group" style="flex:1; margin-bottom:0;">
         <label>証券コード <span class="text-danger">*</span></label>
-        <input type="text" placeholder="例: 4568">
+        <input type="text" id="symbol_code" value="4568" placeholder="例: 4568">
       </div>
       <button class="btn btn-primary">重複をチェック</button>
     </div>
@@ -35,7 +69,7 @@
 
   <div class="card" style="border-left:4px solid var(--color-warning);">
     <h2>判定結果</h2>
-    <p style="margin:0 0 4px;"><strong>サンプル半導体装置</strong> <span class="text-secondary" style="font-size:12px;">6920</span></p>
+    <p style="margin:0 0 4px;"><strong>サンプル新興半導体</strong> <span class="text-secondary" style="font-size:12px;">4568</span></p>
     <table style="margin-top:12px;">
       <tbody>
         <tr><td>セクター分類</td><td>半導体</td></tr>
@@ -43,6 +77,107 @@
         <tr><td>分散への影響</td><td>既に半導体セクターの比率が高く、追加すると偏りがさらに拡大します。分散目的での購入には適さない可能性があります。</td></tr>
       </tbody>
     </table>
+  </div>
+
+  <div class="card">
+    <h2>ウォッチステータス・メモ</h2>
+    <p class="text-secondary" style="font-size:12px; margin:0 0 12px;">この銘柄をどう扱うか、自分用の参考情報として記録しておけます。選定の自動判定は行いません</p>
+    <div style="display:flex; gap:12px; align-items:flex-end; margin-bottom:12px;">
+      <div class="form-group" style="flex:1; margin-bottom:0;">
+        <label>ウォッチステータス</label>
+        <select>
+          <option>様子見</option>
+          <option>買い時</option>
+          <option selected>次回購入候補</option>
+          <option>リバランス対象</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <textarea placeholder="例: PERがまだ高いので押し目待ち。半導体の比率が高いので急がなくてよい"></textarea>
+    </div>
+    <button class="btn btn-primary">ウォッチステータス・メモを保存</button>
+
+    <div style="margin-top:20px;">
+      <div class="memo-item">
+        <div class="memo-date">2026-08-10 <span class="badge badge-neutral">次回購入候補</span></div>
+        <div>押し目が来たら次回検討。決算は堅調で急ぐ必要はなさそう。</div>
+      </div>
+      <div class="memo-item">
+        <div class="memo-date">2026-06-15 <span class="badge badge-warning">様子見</span></div>
+        <div>PERが業界平均より高め。半導体セクターの比率も高いので今は見送り。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2col">
+    <div class="card">
+      <h2>テクニカル指標</h2>
+      <table>
+        <tbody>
+          <tr><td>RSI（14期間）</td><td>55（過熱感なし）</td></tr>
+          <tr><td>MACD</td><td>ゴールデンクロス直後（上昇初動）</td></tr>
+          <tr><td>ボリンジャーバンド</td><td>±0σ付近（平常圏）</td></tr>
+          <tr><td>MA20 / MA75</td><td>￥3,080 / ￥2,950</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>ファンダメンタルズ指標</h2>
+      <table>
+        <tbody>
+          <tr><td>PER</td><td>28.0倍</td></tr>
+          <tr><td>PBR</td><td>2.4倍</td></tr>
+          <tr><td>ROE</td><td>14.5%</td></tr>
+          <tr><td>売上高成長率</td><td>+7.2%（前年同期比）</td></tr>
+          <tr><td>自己資本比率</td><td>52.0%</td></tr>
+          <tr><td>配当利回り</td><td>0.8%</td></tr>
+        </tbody>
+      </table>
+      <p class="text-secondary" style="font-size:12px; margin:8px 0 0;">※ J-Quants由来のため最大12週間遅延している可能性があります</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>過去の業績推移</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>決算期</th>
+          <th>売上高</th>
+          <th>営業利益</th>
+          <th>前年比</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>2026年3月期</td>
+          <td>￥18,200百万</td>
+          <td>￥2,100百万</td>
+          <td class="text-success">増収増益</td>
+        </tr>
+        <tr>
+          <td>2025年3月期</td>
+          <td>￥17,000百万</td>
+          <td>￥1,850百万</td>
+          <td class="text-success">増収増益</td>
+        </tr>
+        <tr>
+          <td>2024年3月期</td>
+          <td>￥15,400百万</td>
+          <td>￥1,600百万</td>
+          <td class="text-success">増収増益</td>
+        </tr>
+        <tr>
+          <td>2023年3月期</td>
+          <td>￥14,900百万</td>
+          <td>￥1,120百万</td>
+          <td class="text-danger">減益</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="text-secondary" style="font-size:12px; margin-top:8px;">※ 直近3期は増収増益が継続しています（J-Quants財務諸表データより。最大12週間遅延の可能性あり）</p>
   </div>
 
   <!-- エラー例: 銘柄コードが存在しない/セクター分類が取得できない場合（422） -->

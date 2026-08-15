@@ -33,6 +33,7 @@
 | sector（セクター分類・リバランス） | J-Quants等から取得した業種分類とセクター配分の集計・偏り検出 | SectorClassification |
 | memo（メモ） | 銘柄ごとの自由記述メモ（LLMとの壁打ち内容の手動転記用） | HoldingMemo |
 | market_overview（市場全体指標） | 日経平均・S&P500・米国10年債利回り・VIX指数・USD/JPY為替レートの取得・週次記録・参考表示（個別銘柄シグナルへの自動反映はしない） | MarketIndicatorSnapshot |
+| watchlist（注目テーマ・新規投資候補レコメンド） | 本人が手動登録した「注目テーマ・セクター」への合致判定・財務健全性フィルタによる新規投資候補の軽量レコメンド（テーマ自体の自動発見はしない） | WatchedTheme, RecommendationCandidate |
 
 ## ディレクトリ構成（概要）
 
