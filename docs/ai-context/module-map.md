@@ -15,18 +15,23 @@
 | `app/Listeners/` | イベントハンドラ | 重い処理はQueueに |
 | `app/Jobs/` | 非同期ジョブ | Horizon経由で実行 |
 
-## Frontend（`meta/adr/ADR-0005-frontend-stack.md` で選定したスタックに応じて記載する）
-
-> 以下は選定結果が **Vue 3 + Inertia.js + Pinia**（デフォルト推奨）の場合の例。
-> Blade / Livewire / React 等を選定した場合は、そのスタックのディレクトリ構成に置き換えること。
+### 本プロジェクト固有のドメイン層
 
 | パス | 役割 | 注意 |
 |---|---|---|
-| `resources/js/Pages/` | Inertia ページコンポーネント（ルート単位） | Controller の return で指定される |
-| `resources/js/Components/` | 汎用・共通コンポーネント | 単一責務・再利用可能に保つ |
-| `resources/js/Composables/` | ロジック分離用 Composable（`use~` 命名） | コンポーネントのロジックをここに集約 |
-| `resources/js/stores/` | Pinia Store（`useXxxStore` 命名） | ローカル状態は入れない |
-| `resources/js/app.js` | エントリポイント | Inertia の初期化処理 |
+| `app/Services/Import/` | 楽天証券CSV（JP株/US株/投資信託）のパース | Shift-JISエンコード・カンマ区切りクォート付き数値に対応 |
+| `app/Services/Analysis/` | テクニカル指標（RSI/MACD/BB/移動平均）・ファンダメンタルズ指標（PER/PBR/ROE等）の計算 | 閾値・パラメータの持たせ方は `docs/architecture/data-model.md`（Gate 3）で確定 |
+| `app/Services/MarketData/` | J-Quants API・Yahoo Finance相当の外部データ取得クライアント（個別銘柄の株価・指標に加え、日経平均・S&P500・米国10年債利回り・VIX指数・USD/JPY為替レート等の市場全体指標も取得する） | APIキー等は `docs/ai-context/do-not-touch.md` の外部連携セクション参照 |
+
+## Frontend（選定結果: **Livewire**。`docs/adr/ADR-0001-frontend-stack-selection.md` 参照）
+
+| パス | 役割 | 注意 |
+|---|---|---|
+| `app/Livewire/` | Livewireコンポーネントクラス（PHP） | ビジネスロジックを書かず `app/Services/` に委譲する |
+| `resources/views/livewire/` | Livewireコンポーネントに対応するBladeビュー | kebab-case命名 |
+| `resources/views/components/` | 汎用・共通のBladeコンポーネント | Livewireに依存しない表示部品 |
+
+詳細な実装ルールは `.claude/rules/15-frontend.md` を参照。
 
 ## Database
 
