@@ -7,17 +7,19 @@
 
 ## カラーパレット
 
+個人利用の株式ポートフォリオ管理ツール。含み益/含み損・シグナル有無を色でひと目で判別できることを優先する。
+
 | 用途 | カラーコード | 備考 |
 |---|---|---|
-| Primary | `#[COLOR]` | メインアクション・ボタン |
-| Secondary | `#[COLOR]` | サブアクション |
-| Danger | `#[COLOR]` | 削除・エラー |
-| Warning | `#[COLOR]` | 注意・警告 |
-| Success | `#[COLOR]` | 成功・完了 |
-| Background | `#[COLOR]` | ページ背景 |
-| Surface | `#[COLOR]` | カード・パネル背景 |
-| Text primary | `#[COLOR]` | 本文 |
-| Text secondary | `#[COLOR]` | 補足テキスト |
+| Primary | `#2563EB` | メインアクション・ボタン・ナビゲーション選択状態 |
+| Secondary | `#64748B` | サブアクション |
+| Danger | `#DC2626` | 含み損・削除・エラー |
+| Warning | `#D97706` | 利確シグナル・セクター偏り警告 |
+| Success | `#16A34A` | 含み益・取込成功 |
+| Background | `#F8FAFC` | ページ背景 |
+| Surface | `#FFFFFF` | カード・パネル背景 |
+| Text primary | `#0F172A` | 本文 |
+| Text secondary | `#64748B` | 補足テキスト |
 
 ---
 
@@ -25,23 +27,25 @@
 
 | 用途 | フォント | サイズ | ウェイト |
 |---|---|---|---|
-| 見出し H1 | [FONT] | [SIZE] | Bold |
-| 見出し H2 | [FONT] | [SIZE] | SemiBold |
-| 本文 | [FONT] | [SIZE] | Regular |
-| ラベル | [FONT] | [SIZE] | Medium |
-| キャプション | [FONT] | [SIZE] | Regular |
+| 見出し H1 | system-ui, "Segoe UI", sans-serif | 24px | Bold |
+| 見出し H2 | system-ui, "Segoe UI", sans-serif | 18px | SemiBold |
+| 本文 | system-ui, "Segoe UI", sans-serif | 14px | Regular |
+| ラベル | system-ui, "Segoe UI", sans-serif | 13px | Medium |
+| キャプション | system-ui, "Segoe UI", sans-serif | 12px | Regular |
+| 数値（指標・金額） | system-ui, "Segoe UI", sans-serif（tabular-nums指定） | 本文と同サイズ | Medium |
 
 ---
 
 ## レイアウト原則
 
-- **グリッド**: [例: 12カラム / 8px基準グリッド]
+- **グリッド**: 8px基準グリッド（個人利用の管理画面のため厳密な12カラムは採用しない）
+- **利用環境**: 本人1人がPCブラウザから利用する想定。デスクトップ表示を優先し、モバイル対応は必須としない
 - **ブレークポイント**:
-  - Mobile: `< 768px`
+  - Mobile: `< 768px`（レイアウト崩れ防止の最低限対応のみ）
   - Tablet: `768px〜1024px`
-  - Desktop: `> 1024px`
-- **コンテナ最大幅**: `[例: 1280px]`
-- **標準余白**: `[例: 16px / 24px / 32px]`
+  - Desktop: `> 1024px`（主要ターゲット）
+- **コンテナ最大幅**: `1200px`
+- **標準余白**: `8px / 16px / 24px / 32px`
 
 ---
 
@@ -72,8 +76,8 @@
 
 ## アイコン
 
-- ライブラリ: [例: Heroicons / FontAwesome / Material Icons]
-- サイズ規則: [例: 16px（インライン） / 20px（ボタン） / 24px（ナビ）]
+- ライブラリ: Heroicons（Livewire/Tailwindエコシステムとの親和性が高いため採用）
+- サイズ規則: 16px（インライン） / 20px（ボタン） / 24px（ナビ）
 
 ---
 
