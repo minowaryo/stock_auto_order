@@ -1,0 +1,3 @@
+# Local development credentials (see docs/credentials/README.md and .claude/rules/40-security.md)
+docs/credentials/*
+!docs/credentials/README.md
