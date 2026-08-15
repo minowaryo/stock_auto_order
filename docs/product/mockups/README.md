@@ -17,7 +17,15 @@ screen-[UC番号]-[画面名（英小文字ハイフン区切り）].[html|png|m
 
 | ファイル名 | 対応UC | 画面名 | 作成日 | ビジネスレビュー | フィードバック反映 |
 |---|---|---|---|---|---|
-| *(追加してください)* | | | | | |
+| `screen-UC001-csv-import.html` | UC-001 | CSV取込 | 2026-08-15 | 未実施 | - |
+| `screen-UC002-holding-list.html` | UC-002（UC-007の市場全体指標ウィジェットを含む） | 保有銘柄一覧 | 2026-08-15 | 未実施 | - |
+| `screen-UC003-holding-detail.html` | UC-003 | 銘柄詳細 | 2026-08-15 | 未実施 | - |
+| `screen-UC004-signal-list.html` | UC-004 | 利確シグナル一覧 | 2026-08-15 | 未実施 | - |
+| `screen-UC005-sector-dashboard.html` | UC-005 | セクター配分ダッシュボード | 2026-08-15 | 未実施 | - |
+| `screen-UC006-candidate-check.html` | UC-006 | 新規投資候補の重複チェック | 2026-08-15 | 未実施 | - |
+
+> UC-007（市場全体指標表示）は独立画面を持たず、`screen-UC002-holding-list.html` 上部のウィジェットとして実装する（`use-cases.md` UC-007参照）。
+> 全画面共通のスタイルは `_shared.css`（`docs/product/ui-guidelines.md` 準拠）を参照している。
 
 ## 運用ルール
 

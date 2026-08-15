@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>保有銘柄一覧 | ポートフォリオ管理</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="logo">📊 ポートフォリオ管理</div>
+  <nav class="app-nav">
+    <a href="screen-UC002-holding-list.html" class="active">保有一覧</a>
+    <a href="screen-UC004-signal-list.html">利確シグナル</a>
+    <a href="screen-UC005-sector-dashboard.html">セクター配分</a>
+    <a href="screen-UC006-candidate-check.html">新規候補チェック</a>
+    <a href="screen-UC001-csv-import.html">CSV取込</a>
+  </nav>
+</header>
+
+<main class="app-main">
+  <h1>保有銘柄一覧</h1>
+  <p class="page-caption">直近の取込（2026-08-15時点）の保有銘柄です（UC-002）</p>
+
+  <!-- UC-007: 市場全体指標ウィジェット -->
+  <div class="card">
+    <h2 style="margin-bottom:12px;">市場全体指標（参考表示・UC-007）</h2>
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="label">日経平均</div>
+        <div class="value">39,120円</div>
+        <div class="text-success" style="font-size:12px;">▲ +0.8%</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">S&amp;P 500</div>
+        <div class="value">5,830pt</div>
+        <div class="text-success" style="font-size:12px;">▲ +0.3%</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">米国10年債利回り</div>
+        <div class="value">4.28%</div>
+        <div class="text-danger" style="font-size:12px;">▲ +0.05pt（金利上昇）</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">VIX指数</div>
+        <div class="value">14.2</div>
+        <div class="text-secondary" style="font-size:12px;">▬ 横ばい（平常圏）</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">USD/JPY</div>
+        <div class="value">￥152.30</div>
+        <div class="text-danger" style="font-size:12px;">▼ 円安方向 -0.2%</div>
+      </div>
+    </div>
+    <p class="text-secondary" style="font-size:12px; margin:0;">※ 個別銘柄のシグナル判定には自動反映されません。全体感の参考情報です。</p>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h2 style="margin:0;">保有銘柄</h2>
+      <div style="display:flex; gap:12px; align-items:center;">
+        <select style="padding:6px 10px; border:1px solid var(--border-color); border-radius:6px; font-size:13px;">
+          <option>すべてのセクター</option>
+          <option>半導体</option>
+          <option>電気機器</option>
+          <option>情報・通信</option>
+        </select>
+        <label style="font-size:13px;"><input type="checkbox"> シグナルのみ表示</label>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>銘柄</th>
+          <th>市場</th>
+          <th>種別</th>
+          <th>セクター</th>
+          <th>保有数量</th>
+          <th>取得単価</th>
+          <th>現在値</th>
+          <th>含み益率</th>
+          <th>シグナル</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
+          <td><strong>サンプル精機</strong><br><span class="text-secondary" style="font-size:12px;">6954</span></td>
+          <td>JP</td>
+          <td>個別株</td>
+          <td>電気機器</td>
+          <td>300</td>
+          <td>￥4,120</td>
+          <td>￥5,440</td>
+          <td class="text-success">+32.0%</td>
+          <td><span class="badge badge-warning">利確検討</span></td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
+          <td><strong>サンプル半導体</strong><br><span class="text-secondary" style="font-size:12px;">6981</span></td>
+          <td>JP</td>
+          <td>個別株</td>
+          <td>半導体</td>
+          <td>500</td>
+          <td>￥1,980</td>
+          <td>￥2,455</td>
+          <td class="text-success">+24.0%</td>
+          <td><span class="badge badge-warning">MACD注意</span></td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
+          <td><strong>SAMPLE INC.</strong><br><span class="text-secondary" style="font-size:12px;">SMPL（US）</span></td>
+          <td>US</td>
+          <td>個別株</td>
+          <td>情報技術</td>
+          <td>50</td>
+          <td>$180.00</td>
+          <td>$212.30</td>
+          <td class="text-success">+18.0%</td>
+          <td><span class="badge badge-neutral">-</span></td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
+          <td><strong>サンプル電子部品</strong><br><span class="text-secondary" style="font-size:12px;">6981</span></td>
+          <td>JP</td>
+          <td>個別株</td>
+          <td>電気機器</td>
+          <td>200</td>
+          <td>￥2,300</td>
+          <td>￥2,415</td>
+          <td class="text-success">+5.0%</td>
+          <td><span class="badge badge-neutral">-</span></td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
+          <td><strong>サンプル通信</strong><br><span class="text-secondary" style="font-size:12px;">9432</span></td>
+          <td>JP</td>
+          <td>個別株</td>
+          <td>情報・通信</td>
+          <td>100</td>
+          <td>￥1,650</td>
+          <td>￥1,590</td>
+          <td class="text-danger">-3.6%</td>
+          <td><span class="badge badge-neutral">-</span></td>
+        </tr>
+        <tr>
+          <td><strong>サンプル世界株式インデックス</strong><br><span class="text-secondary" style="font-size:12px;">投信</span></td>
+          <td>投信</td>
+          <td>投資信託</td>
+          <td class="text-secondary">-</td>
+          <td>120,000口</td>
+          <td>￥11,200 / 万口</td>
+          <td>￥12,450 / 万口</td>
+          <td class="text-success">+11.2%</td>
+          <td><span class="badge badge-neutral">対象外</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="text-secondary" style="font-size:12px; margin-top:8px;">※ ETF・投資信託は一覧に表示されますが、テクニカル/ファンダメンタルズ指標・利確シグナルの計算対象外です（UC-002業務ルール）</p>
+  </div>
+</main>
+
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>セクター配分ダッシュボード | ポートフォリオ管理</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="logo">📊 ポートフォリオ管理</div>
+  <nav class="app-nav">
+    <a href="screen-UC002-holding-list.html">保有一覧</a>
+    <a href="screen-UC004-signal-list.html">利確シグナル</a>
+    <a href="screen-UC005-sector-dashboard.html" class="active">セクター配分</a>
+    <a href="screen-UC006-candidate-check.html">新規候補チェック</a>
+    <a href="screen-UC001-csv-import.html">CSV取込</a>
+  </nav>
+</header>
+
+<main class="app-main">
+  <h1>セクター配分ダッシュボード</h1>
+  <p class="page-caption">保有銘柄をセクター別に集計しています。偏りが大きい場合はリバランス候補を提示します（UC-005）</p>
+
+  <div class="card">
+    <h2>セクター配分</h2>
+
+    <div style="margin-bottom:16px;">
+      <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;">
+        <span>半導体</span>
+        <span class="text-danger" style="font-weight:500;">76.0%　<span class="badge badge-danger">偏り警告</span></span>
+      </div>
+      <div class="sector-bar-track"><div class="sector-bar-fill" style="width:76%; background:var(--color-danger);"></div></div>
+    </div>
+
+    <div style="margin-bottom:16px;">
+      <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;">
+        <span>電気機器</span>
+        <span>14.0%</span>
+      </div>
+      <div class="sector-bar-track"><div class="sector-bar-fill" style="width:14%;"></div></div>
+    </div>
+
+    <div style="margin-bottom:16px;">
+      <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;">
+        <span>情報・通信</span>
+        <span>7.0%</span>
+      </div>
+      <div class="sector-bar-track"><div class="sector-bar-fill" style="width:7%;"></div></div>
+    </div>
+
+    <div>
+      <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;">
+        <span class="text-secondary">未分類</span>
+        <span class="text-secondary">3.0%</span>
+      </div>
+      <div class="sector-bar-track"><div class="sector-bar-fill" style="width:3%; background:var(--color-secondary);"></div></div>
+    </div>
+
+    <p class="text-secondary" style="font-size:12px; margin:16px 0 0;">※ 偏り判定の閾値は初期値70%です</p>
+  </div>
+
+  <div class="card" style="border-left:4px solid var(--color-warning);">
+    <h2>リバランス提案</h2>
+    <p style="margin:0 0 12px;">半導体セクターが70%を超えています。以下は分散候補の一例です（選定はご自身の判断で行ってください）。</p>
+    <table>
+      <thead>
+        <tr>
+          <th>候補セクター</th>
+          <th>候補銘柄</th>
+          <th>現在の保有比率</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>ヘルスケア</td>
+          <td>サンプル製薬（4568）</td>
+          <td class="text-secondary">0.0%</td>
+        </tr>
+        <tr>
+          <td>生活必需品</td>
+          <td>サンプル食品（2802）</td>
+          <td class="text-secondary">0.0%</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+</body>
+</html>

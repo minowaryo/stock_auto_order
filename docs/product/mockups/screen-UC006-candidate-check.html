@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>新規投資候補の重複チェック | ポートフォリオ管理</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="logo">📊 ポートフォリオ管理</div>
+  <nav class="app-nav">
+    <a href="screen-UC002-holding-list.html">保有一覧</a>
+    <a href="screen-UC004-signal-list.html">利確シグナル</a>
+    <a href="screen-UC005-sector-dashboard.html">セクター配分</a>
+    <a href="screen-UC006-candidate-check.html" class="active">新規候補チェック</a>
+    <a href="screen-UC001-csv-import.html">CSV取込</a>
+  </nav>
+</header>
+
+<main class="app-main">
+  <h1>新規投資候補の重複チェック</h1>
+  <p class="page-caption">人力で選んだ新規投資候補について、既存保有との重複・分散への影響を判定します（UC-006）</p>
+
+  <div class="card">
+    <h2>銘柄コードを入力</h2>
+    <div style="display:flex; gap:12px; align-items:flex-end;">
+      <div class="form-group" style="flex:1; margin-bottom:0;">
+        <label>証券コード <span class="text-danger">*</span></label>
+        <input type="text" placeholder="例: 4568">
+      </div>
+      <button class="btn btn-primary">重複をチェック</button>
+    </div>
+  </div>
+
+  <div class="card" style="border-left:4px solid var(--color-warning);">
+    <h2>判定結果</h2>
+    <p style="margin:0 0 4px;"><strong>サンプル半導体装置</strong> <span class="text-secondary" style="font-size:12px;">6920</span></p>
+    <table style="margin-top:12px;">
+      <tbody>
+        <tr><td>セクター分類</td><td>半導体</td></tr>
+        <tr><td>既存保有の同セクター内比率（重複度）</td><td class="text-danger">76.0%</td></tr>
+        <tr><td>分散への影響</td><td>既に半導体セクターの比率が高く、追加すると偏りがさらに拡大します。分散目的での購入には適さない可能性があります。</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- エラー例: 銘柄コードが存在しない/セクター分類が取得できない場合（422） -->
+  <!--
+  <div class="card" style="border-left:4px solid var(--color-danger);">
+    <p class="text-danger" style="margin:0;">銘柄コードを確認してください</p>
+  </div>
+  -->
+</main>
+
+</body>
+</html>

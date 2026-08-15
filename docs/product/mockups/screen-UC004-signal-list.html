@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>利確シグナル一覧 | ポートフォリオ管理</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="logo">📊 ポートフォリオ管理</div>
+  <nav class="app-nav">
+    <a href="screen-UC002-holding-list.html">保有一覧</a>
+    <a href="screen-UC004-signal-list.html" class="active">利確シグナル</a>
+    <a href="screen-UC005-sector-dashboard.html">セクター配分</a>
+    <a href="screen-UC006-candidate-check.html">新規候補チェック</a>
+    <a href="screen-UC001-csv-import.html">CSV取込</a>
+  </nav>
+</header>
+
+<main class="app-main">
+  <h1>利確シグナル一覧</h1>
+  <p class="page-caption">含み益+20%を超えた銘柄のうち、利確検討が必要なものを表示しています（UC-004）</p>
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>銘柄</th>
+          <th>含み益率</th>
+          <th>発生シグナル</th>
+          <th>分割指値の提案</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
+          <td><strong>サンプル精機</strong><br><span class="text-secondary" style="font-size:12px;">6954</span></td>
+          <td class="text-success">+32.0%</td>
+          <td>
+            <span class="badge badge-warning">RSI高値反落</span>
+            <span class="badge badge-neutral" style="margin-left:4px;">BB +2σ圏</span>
+          </td>
+          <td class="text-secondary" style="font-size:13px;">
+            +20%地点で1/3売却済み<br>+35%地点で1/3・残りはトレンド追従
+          </td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
+          <td><strong>サンプル半導体</strong><br><span class="text-secondary" style="font-size:12px;">6981</span></td>
+          <td class="text-success">+24.0%</td>
+          <td>
+            <span class="badge badge-warning">MACDデッドクロス</span>
+          </td>
+          <td class="text-secondary" style="font-size:13px;">
+            +20%地点で1/3・残りはトレンド追従
+          </td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
+          <td><strong>サンプル工業</strong><br><span class="text-secondary" style="font-size:12px;">7011</span></td>
+          <td class="text-success">+21.4%</td>
+          <td>
+            <span class="badge badge-neutral">シグナルなし（含み益+20%超のみ）</span>
+          </td>
+          <td class="text-secondary" style="font-size:13px;">
+            +20%地点で1/3売却の検討目安
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 空状態の例（+20%超の銘柄が0件の場合。実装時はデータ有無で出し分け） -->
+  <!--
+  <div class="card">
+    <div class="empty-state">+20%を超える含み益の銘柄はありません</div>
+  </div>
+  -->
+</main>
+
+</body>
+</html>

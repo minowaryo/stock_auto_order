@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>CSV取込 | ポートフォリオ管理</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="logo">📊 ポートフォリオ管理</div>
+  <nav class="app-nav">
+    <a href="screen-UC002-holding-list.html">保有一覧</a>
+    <a href="screen-UC004-signal-list.html">利確シグナル</a>
+    <a href="screen-UC005-sector-dashboard.html">セクター配分</a>
+    <a href="screen-UC006-candidate-check.html">新規候補チェック</a>
+    <a href="screen-UC001-csv-import.html" class="active">CSV取込</a>
+  </nav>
+</header>
+
+<main class="app-main">
+  <h1>CSV取込</h1>
+  <p class="page-caption">楽天証券からダウンロードしたCSVファイルをアップロードしてください（UC-001）</p>
+
+  <div class="card">
+    <h2>ファイルを選択</h2>
+
+    <div class="form-group">
+      <label>CSV種別 *</label>
+      <label style="font-weight:400; margin-right:16px;"><input type="radio" name="csv_type" checked> 国内株式（JP株）</label>
+      <label style="font-weight:400; margin-right:16px;"><input type="radio" name="csv_type"> 米国株式（US株）</label>
+      <label style="font-weight:400;"><input type="radio" name="csv_type"> 投資信託</label>
+    </div>
+
+    <div class="upload-dropzone">
+      <p style="margin:0 0 8px; font-size:14px;">ここにCSVファイルをドラッグ&ドロップ、またはクリックして選択</p>
+      <p style="margin:0; font-size:12px;">対応形式: .csv（Shift-JISエンコード） / 最大5MB</p>
+    </div>
+
+    <div style="margin-top:20px;">
+      <button class="btn btn-primary">アップロードして取込</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>取込履歴</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>取込日時</th>
+          <th>種別</th>
+          <th>ステータス</th>
+          <th>取込件数</th>
+          <th>エラー件数</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>2026-08-15 10:44</td>
+          <td>国内株式</td>
+          <td><span class="badge badge-success">completed</span></td>
+          <td>8</td>
+          <td>0</td>
+        </tr>
+        <tr>
+          <td>2026-08-15 10:44</td>
+          <td>米国株式</td>
+          <td><span class="badge badge-success">completed</span></td>
+          <td>3</td>
+          <td>0</td>
+        </tr>
+        <tr>
+          <td>2026-08-15 10:44</td>
+          <td>投資信託</td>
+          <td><span class="badge badge-warning">completed（一部エラー）</span></td>
+          <td>2</td>
+          <td>1</td>
+        </tr>
+        <tr>
+          <td>2026-08-01 09:12</td>
+          <td>国内株式</td>
+          <td><span class="badge badge-success">completed</span></td>
+          <td>7</td>
+          <td>0</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+</body>
+</html>
