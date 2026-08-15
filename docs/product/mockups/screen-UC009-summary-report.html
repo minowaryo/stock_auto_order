@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>取込後サマリーレポート | ポートフォリオ管理</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="logo">📊 ポートフォリオ管理</div>
+  <nav class="app-nav">
+    <a href="screen-UC002-holding-list.html">保有一覧</a>
+    <a href="screen-UC004-signal-list.html">利確シグナル</a>
+    <a href="screen-UC005-sector-dashboard.html">セクター配分</a>
+    <a href="screen-UC006-candidate-check.html">新規投資候補</a>
+    <a href="screen-UC001-csv-import.html">CSV取込</a>
+  </nav>
+</header>
+
+<main class="app-main">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px;">
+    <h1>取込後サマリーレポート</h1>
+    <a href="screen-UC002-holding-list.html" class="btn btn-secondary">保有銘柄一覧を見る →</a>
+  </div>
+  <p class="page-caption">2026-08-15 10:44 のCSV取込（国内株式8件・米国株式3件・投資信託2件）完了と同時に自動生成されました（UC-009）。CSV取込（UC-001）完了時に毎回このレポートが表示されます。</p>
+
+  <!-- 全体感サマリー（headline） -->
+  <div class="card" style="border-left:4px solid var(--color-warning); background:#FFFBEB;">
+    <div style="display:flex; gap:14px; align-items:flex-start;">
+      <div style="font-size:26px; line-height:1;">📋</div>
+      <div>
+        <h2 style="margin:0 0 8px;">全体感サマリー</h2>
+        <p style="margin:0; font-size:15px; line-height:1.7;">
+          半導体セクターへの配分が<strong class="text-danger">76.0%</strong>となり偏り警告水準に達しています。含み益+20%を超える銘柄が<strong>3件</strong>あり、うち2件はRSI・MACDに過熱感の緩和シグナルが出ています。ヘルスケア・生活必需品など保有の薄いセクターに分散候補もあるため、下記の優先度リストから順にご確認ください。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 全体指標 -->
+  <div class="stat-row">
+    <div class="stat-box">
+      <div class="label">保有評価額合計</div>
+      <div class="value">¥12,450,000</div>
+    </div>
+    <div class="stat-box">
+      <div class="label">含み益合計</div>
+      <div class="value text-success">+¥1,830,000</div>
+    </div>
+    <div class="stat-box">
+      <div class="label">利確検討</div>
+      <div class="value">3<span style="font-size:13px; font-weight:500;">件</span></div>
+    </div>
+    <div class="stat-box">
+      <div class="label">セクター偏り警告</div>
+      <div class="value text-danger">1<span style="font-size:13px; font-weight:500;">件</span></div>
+    </div>
+    <div class="stat-box">
+      <div class="label">新規投資候補</div>
+      <div class="value">6<span style="font-size:13px; font-weight:500;">件</span></div>
+    </div>
+  </div>
+
+  <!-- 優先度 上位10件（主要レコメンド） -->
+  <div class="card">
+    <h2>優先度 上位10件（今の一手）</h2>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:36px;">順位</th>
+          <th>種別</th>
+          <th>対象</th>
+          <th>提案内容・背景理由</th>
+          <th style="width:96px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
+          <td><strong>1</strong></td>
+          <td><span class="badge badge-warning">利確検討</span></td>
+          <td><strong>サンプル精機</strong><br><span class="text-secondary" style="font-size:12px;">6954・JP</span></td>
+          <td>
+            <div style="font-size:13px; font-weight:500; margin-bottom:4px;">特定口座分を+35%地点で1/3利確</div>
+            <div style="font-size:13px; color:var(--color-text-secondary);">含み益+32%に到達し、RSIが高値72から65へ反落中。過熱感が和らぎつつあります。</div>
+          </td>
+          <td class="text-secondary" style="font-size:12px;">詳細を見る →</td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC005-sector-dashboard.html'">
+          <td><strong>2</strong></td>
+          <td><span class="badge badge-danger">リバランス</span></td>
+          <td><strong>半導体セクター</strong><br><span class="text-secondary" style="font-size:12px;">配分76.0%</span></td>
+          <td>
+            <div style="font-size:13px; font-weight:500; margin-bottom:4px;">約¥1,240,000（約210株相当）を目安に売却</div>
+            <div style="font-size:13px; color:var(--color-text-secondary);">目標配分（70%）を超えて偏り警告水準。他セクターへの分散を検討する目安です。</div>
+          </td>
+          <td class="text-secondary" style="font-size:12px;">詳細を見る →</td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
+          <td><strong>3</strong></td>
+          <td><span class="badge badge-warning">利確検討</span></td>
+          <td><strong>サンプル半導体</strong><br><span class="text-secondary" style="font-size:12px;">6981・JP</span></td>
+          <td>
+            <div style="font-size:13px; font-weight:500; margin-bottom:4px;">+20%地点で1/3・残りはトレンド追従</div>
+            <div style="font-size:13px; color:var(--color-text-secondary);">上昇を牽引していたMACDがデッドクロスに転換。利益確定を検討する目安です。</div>
+          </td>
+          <td class="text-secondary" style="font-size:12px;">詳細を見る →</td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC006-candidate-check.html?symbol_code=4568'">
+          <td><strong>4</strong></td>
+          <td><span class="badge" style="background:#EFF6FF; color:var(--color-primary);">新規投資候補</span></td>
+          <td><strong>サンプル製薬</strong><br><span class="text-secondary" style="font-size:12px;">4568・ヘルスケア</span></td>
+          <td>
+            <div style="font-size:13px; font-weight:500; margin-bottom:4px;">小口（全体の約1.5%・約¥300,000）で新規購入を検討</div>
+            <div style="font-size:13px; color:var(--color-text-secondary);">登録済み注目テーマ「ヘルスケア」に合致。自己資本比率65%・ROE12%と財務健全性の基準を満たします。</div>
+          </td>
+          <td class="text-secondary" style="font-size:12px;">詳細を見る →</td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
+          <td><strong>5</strong></td>
+          <td><span class="badge badge-warning">利確検討</span></td>
+          <td><strong>サンプル工業</strong><br><span class="text-secondary" style="font-size:12px;">7011・JP</span></td>
+          <td>
+            <div style="font-size:13px; font-weight:500; margin-bottom:4px;">+20%地点で1/3売却の検討目安</div>
+            <div style="font-size:13px; color:var(--color-text-secondary);">含み益+21.4%ですがRSI50台で過熱感は限定的。シグナルはまだ弱めです。</div>
+          </td>
+          <td class="text-secondary" style="font-size:12px;">詳細を見る →</td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC006-candidate-check.html?symbol_code=2802'">
+          <td><strong>6</strong></td>
+          <td><span class="badge" style="background:#EFF6FF; color:var(--color-primary);">新規投資候補</span></td>
+          <td><strong>サンプル食品</strong><br><span class="text-secondary" style="font-size:12px;">2802・生活必需品</span></td>
+          <td>
+            <div style="font-size:13px; font-weight:500; margin-bottom:4px;">小口（全体の約1.2%・約¥250,000）で新規購入を検討</div>
+            <div style="font-size:13px; color:var(--color-text-secondary);">登録済み注目テーマ「生活必需品」に合致。自己資本比率55%・売上成長+6%と手堅い内容です。</div>
+          </td>
+          <td class="text-secondary" style="font-size:12px;">詳細を見る →</td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC005-sector-dashboard.html'">
+          <td><strong>7</strong></td>
+          <td><span class="badge badge-danger">リバランス</span></td>
+          <td><strong>電気機器セクター</strong><br><span class="text-secondary" style="font-size:12px;">配分14.0%</span></td>
+          <td>
+            <div style="font-size:13px; font-weight:500; margin-bottom:4px;">分散先として積み増しを検討</div>
+            <div style="font-size:13px; color:var(--color-text-secondary);">保有比率が低く、半導体セクターに偏った配分を是正する分散先の候補です。</div>
+          </td>
+          <td class="text-secondary" style="font-size:12px;">詳細を見る →</td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
+          <td><strong>8</strong></td>
+          <td><span class="badge badge-warning">利確検討</span></td>
+          <td><strong>サンプル精密機器</strong><br><span class="text-secondary" style="font-size:12px;">5522・JP</span></td>
+          <td>
+            <div style="font-size:13px; font-weight:500; margin-bottom:4px;">+20%地点で1/3売却の検討目安</div>
+            <div style="font-size:13px; color:var(--color-text-secondary);">含み益+20.2%で対象条件に到達したばかり。ボリンジャーバンド+2σ圏に接近中です。</div>
+          </td>
+          <td class="text-secondary" style="font-size:12px;">詳細を見る →</td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC006-candidate-check.html?symbol_code=3355'">
+          <td><strong>9</strong></td>
+          <td><span class="badge" style="background:#EFF6FF; color:var(--color-primary);">新規投資候補</span></td>
+          <td><strong>サンプルヘルスケア機器</strong><br><span class="text-secondary" style="font-size:12px;">3355・ヘルスケア</span></td>
+          <td>
+            <div style="font-size:13px; font-weight:500; margin-bottom:4px;">小口（全体の約1.0%・約¥200,000）で新規購入を検討</div>
+            <div style="font-size:13px; color:var(--color-text-secondary);">登録済み注目テーマ「ヘルスケア」に合致。自己資本比率58%と財務健全性の基準を満たします。</div>
+          </td>
+          <td class="text-secondary" style="font-size:12px;">詳細を見る →</td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC005-sector-dashboard.html'">
+          <td><strong>10</strong></td>
+          <td><span class="badge badge-danger">リバランス</span></td>
+          <td><strong>未分類銘柄</strong><br><span class="text-secondary" style="font-size:12px;">配分3.0%</span></td>
+          <td>
+            <div style="font-size:13px; font-weight:500; margin-bottom:4px;">セクター分類の確認を推奨</div>
+            <div style="font-size:13px; color:var(--color-text-secondary);">セクター未分類の銘柄が含まれており、配分状況の正確な把握のため確認をおすすめします。</div>
+          </td>
+          <td class="text-secondary" style="font-size:12px;">詳細を見る →</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 11〜20位（補足レコメンド） -->
+  <div class="card" style="background:#F8FAFC;">
+    <h2 style="font-size:15px;">11〜20位（参考・補足レコメンド）</h2>
+    <p class="text-secondary" style="font-size:12px; margin:0 0 12px;">上位10件ほど優先度は高くありませんが、あわせて確認しておくと良い項目です。</p>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:36px;">順位</th>
+          <th>種別</th>
+          <th>対象</th>
+          <th>一言コメント</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
+          <td>11</td>
+          <td><span class="badge badge-warning" style="font-size:11px;">利確検討</span></td>
+          <td style="font-size:13px;">サンプル電機（6501）</td>
+          <td class="text-secondary" style="font-size:13px;">含み益+21.0%。様子見でも大きな問題はなさそうです。</td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC006-candidate-check.html?symbol_code=4188'">
+          <td>12</td>
+          <td><span class="badge" style="background:#EFF6FF; color:var(--color-primary); font-size:11px;">新規投資候補</span></td>
+          <td style="font-size:13px;">サンプル素材（4188）</td>
+          <td class="text-secondary" style="font-size:13px;">注目テーマ「素材」に合致。財務健全性は基準ぎりぎりです。</td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC005-sector-dashboard.html'">
+          <td>13</td>
+          <td><span class="badge badge-danger" style="font-size:11px;">リバランス</span></td>
+          <td style="font-size:13px;">情報・通信セクター（7.0%）</td>
+          <td class="text-secondary" style="font-size:13px;">分散先の候補ですが優先度は中程度です。</td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
+          <td>14</td>
+          <td><span class="badge badge-warning" style="font-size:11px;">利確検討</span></td>
+          <td style="font-size:13px;">サンプル商事（8058）</td>
+          <td class="text-secondary" style="font-size:13px;">含み益+20.5%。シグナルはまだ弱めです。</td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC006-candidate-check.html?symbol_code=8306'">
+          <td>15</td>
+          <td><span class="badge" style="background:#EFF6FF; color:var(--color-primary); font-size:11px;">新規投資候補</span></td>
+          <td style="font-size:13px;">サンプル銀行（8306）</td>
+          <td class="text-secondary" style="font-size:13px;">注目テーマ「金融」に合致する候補です。</td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC005-sector-dashboard.html'">
+          <td>16</td>
+          <td><span class="badge badge-danger" style="font-size:11px;">リバランス</span></td>
+          <td style="font-size:13px;">生活必需品セクター（5.0%）</td>
+          <td class="text-secondary" style="font-size:13px;">分散先の候補として引き続き保有薄です。</td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
+          <td>17</td>
+          <td><span class="badge badge-warning" style="font-size:11px;">利確検討</span></td>
+          <td style="font-size:13px;">サンプル鉄鋼（5401）</td>
+          <td class="text-secondary" style="font-size:13px;">含み益+20.1%。到達したばかりで様子見でも可です。</td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC006-candidate-check.html?symbol_code=9022'">
+          <td>18</td>
+          <td><span class="badge" style="background:#EFF6FF; color:var(--color-primary); font-size:11px;">新規投資候補</span></td>
+          <td style="font-size:13px;">サンプル運輸（9022）</td>
+          <td class="text-secondary" style="font-size:13px;">注目テーマ合致条件はぎりぎり満たしています。</td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC005-sector-dashboard.html'">
+          <td>19</td>
+          <td><span class="badge badge-danger" style="font-size:11px;">リバランス</span></td>
+          <td style="font-size:13px;">ヘルスケアセクター（6.0%）</td>
+          <td class="text-secondary" style="font-size:13px;">上位4位・9位の候補とあわせて検討すると良いセクターです。</td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
+          <td>20</td>
+          <td><span class="badge badge-warning" style="font-size:11px;">利確検討</span></td>
+          <td style="font-size:13px;">サンプル化学（4005）</td>
+          <td class="text-secondary" style="font-size:13px;">含み益+20.0%。到達直後のため優先度は低めです。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="text-secondary" style="font-size:12px; margin-top:4px;">※ 提案内容・背景理由は簡易的なサマリーです。判定の詳細な根拠は、対象をクリックして各詳細画面（銘柄詳細・セクター配分ダッシュボード・新規投資候補）でご確認ください</p>
+  <p class="text-secondary" style="font-size:12px; margin-top:4px;">※ 優先度の算出は複数の簡易指標（含み益率・RSI・セクター配分状態・注目テーマ合致状況等）を内部で組み合わせたロジックによるもので、算出過程・重み付けの詳細は本レポートでは開示しません（UC-009業務ルール）</p>
+  <p class="text-secondary" style="font-size:12px; margin-top:4px;">※ 表示件数（上位10件・11〜20件）は叩き台の初期値です。今後の詳細設計（Gate 3）で調整可能にする想定です</p>
+  <p class="text-secondary" style="font-size:12px; margin-top:4px;">※ 投資信託は対象外です（UC-002業務ルールに準拠し、個別株〔JP株・US株〕のみを対象とします）</p>
+
+  <!-- 空状態の例（対象となる保有銘柄が存在しない場合。実装時はデータ有無で出し分け） -->
+  <!--
+  <div class="card">
+    <div class="empty-state">現時点でおすすめできる項目はありません</div>
+  </div>
+  -->
+</main>
+
+</body>
+</html>

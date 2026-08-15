@@ -1,5 +1,141 @@
 # PLAN.md
 
+## Gate 3承認（2026-08-15）
+
+### Decision
+
+- 前エントリのレビュー対応を踏まえ、ユーザーに「これでGate3承認できるか」を確認したところ、`docs/architecture/data-model.md`の「保留・確定が必要な初期パラメータ値」表に**未確定のまま残っていた2項目**（財務健全性フィルタ〔UC-008〕、合成スコアの重み付け〔UC-009〕）が見つかった。ドキュメント冒頭の「初期パラメータ値はレビュー時に確定させる」という記述と、当該2項目の「実装時に確定」という記述が矛盾していたため、ユーザーに扱いを確認した
+- ユーザーは「叩き台のまま承認し、実装時に確定（推奨案）」を選択。`docs/architecture/data-model.md`に以下を反映してGate3を正式承認した:
+  - 冒頭の説明文をGate3承認済みに更新
+  - 「保留・確定が必要な初期パラメータ値」表に状態列を追加し、2項目は「叩き台のまま承認。Phase 1実装（`/tdd`サイクル）時に確定」と明記
+  - `use-cases.md`の承認記録に倣い、`data-model.md`末尾に「承認記録」表を新設し記録
+- Gate 3承認により、次のアクションはPhase 1対象UC（UC-001/002/003/004/009の順）のGate4（TDD Redフェーズ）着手。着手前にユーザー指示でコミット・プッシュを実施する
+
+### Files touched
+
+`docs/architecture/data-model.md`（Gate3承認記録・状態列追加）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Gate 3完了。次はコミット・プッシュ後、UC-001からGate4（TDD Redフェーズ）を開始する。
+
+## requirements.md/use-cases.md/data-model.mdの外部レビューと反映（2026-08-15）
+
+### Decision
+
+- ユーザー依頼により`docs/product/requirements.md`・`docs/product/use-cases.md`・`docs/architecture/data-model.md`をレビューし、以下を洗い出した:
+  1. `requirements.md`が「判断材料の優先順位は①出来高②企業業績③市場全体の地合い」と明記しているが、出来高（トレーディングボリューム）が`use-cases.md`のどの出力項目にも`data-model.md`のどのカラムにも存在しない
+  2. `requirements.md`のF-004スコープに「三尊天井等のチャート形状パターン検出」が明記されているが、UC-004の基本フロー・出力、および`data-model.md`の`signals.signal_type`enumに反映されていない
+  3. `holdings.sector_classification_id`が銘柄マスタ側にあるため、将来J-Quants側で業種再分類が起きると過去スナップショットのセクター表示も遡って書き換わり、他の履歴系指標（RSI/PER等）が週次時点の値を保持する設計方針と矛盾しうる
+  4. セクター配分閾値等「本人の運用感覚に合わせて調整可能にする想定」の値がDB上の設定テーブルを持たない
+  5. その他軽微: `financial_statements`再取得時の挙動未定義、`sector_classifications.name`にunique制約なし、UC-001業務ルールの文言が`data-model.md`側の確定内容と未同期
+- ユーザーの回答を受けて対応方針を確定:
+  - **#1（出来高）・#2（波形パターン）**: 判定ロジックの優先順位づけ自体をまだ本人が決めかねており、次回以降のフェーズで検討する範囲と明言。今回はrequirements.md/use-cases.md/data-model.mdへの反映は行わず、本エントリへの記録のみに留める
+  - **#3（セクター分類の履歴化）**: ユーザーが「考慮不要、最悪上書きされて構わない」と明示的に許容したため、対応不要と確定。`holdings.sector_classification_id`は現状のまま（過去スナップショットのセクター表示が将来の再分類で遡って書き換わる可能性を許容する）
+  - **#4**: ユーザーが意図した「調整可能」は「コードを直してデプロイすれば直せる」の意味であり、画面上の設定機能を指すものではないと確認。指摘を撤回（対応不要）
+  - **#5**: 判断を要さない客観的な修正のため反映済み: `use-cases.md`UC-001の口座区分内訳に関する文言を「Gate3で確定する」という未来形から「data-model.mdで確定済み」に同期。`data-model.md`の`sector_classifications`に`name`のunique制約を追加（`financial_statements`の再取得時挙動は、別セッションで行われた改訂で既に記載済みと判明したため対応不要だった）
+
+### Files touched
+
+`docs/product/use-cases.md`（UC-001業務ルールの文言同期）、`docs/architecture/data-model.md`（`sector_classifications.name`にunique制約追加）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+完了。次回以降のフェーズ検討時に持ち越す項目（Gateをブロックしない参考メモ）:
+- 出来高をどう判断ロジックに組み込むか（優先度含め未決定）
+- チャート形状パターン検出（三尊天井等）のシグナル化
+
+セクター再分類時の過去スナップショット遡及書き換え（#3）はユーザーが許容範囲と明示したため対応不要・持ち越し項目からも除外。
+
+## Gate3データモデル叩き台のセルフレビュー・改訂（2026-08-15）
+
+### Decision
+
+- Gate3ドラフト作成後、ユーザーから「より具体的な懸念はあるか」と問われ、`docs/architecture/data-model.md`をセルフレビューし9件の懸念を洗い出した。ユーザーの指示（「７はストレージが無駄とならない仕組みで」「８は17業種/33業種の粒度を見て判断したい」）を受けて以下を反映した:
+  - **致命的3件を解消**: `technical_indicators`/`fundamental_indicators`/`financial_statements`が`holding_snapshot_id`（CSV取込時にしか作られない）に紐づいていたため、UC-006/UC-008/UC-009が必要とする「未保有の候補銘柄」の指標を保存できないギャップがあった。`holdings`を「保有・候補問わない銘柄マスタ」に位置づけ直し（find-or-create）、指標系テーブルを`holding_id`単位の現在値キャッシュに変更して解消
+  - **バグ2件を修正**: `signals`に`(holding_snapshot_id, signal_type)`のunique制約を追加（重複防止）。`watched_themes`は未定義の削除機能（`deleted_at`）を削除し、副次的にMySQLのNULL非同一性によるunique制約の不備も解消
+  - **#7（ストレージ効率）**: `technical_indicators`/`fundamental_indicators`を「週次INSERTで履歴を積む」設計から「`holding_id`単位1行のUPSERT（現在値キャッシュ）」に変更。J-Quantsの更新頻度（最大12週遅延）に対して同一内容の行が積み上がる問題を構造的に解消した。保有銘柄のチャート用週次履歴（MA20/75）は`holding_snapshots`側に残しているため、履歴が必要な用途とキャッシュが必要な用途を明確に分離した
+  - **#8（セクター分類の粒度）**: 17業種・33業種それぞれの一覧をユーザーに提示。判断はまだユーザー確認待ち（`data-model.md`の「保留・確定が必要な初期パラメータ値」表に追記）。テーブル構造自体はどちらでも変更不要
+  - watch_recordsも`holding_id`FK参照に統一（`holdings`のfind-or-create対応により、当初懸念していた「候補銘柄はholdingsに存在しない」制約が解消されたため）
+
+### Files touched
+
+`docs/architecture/data-model.md`（技術的懸念の反映）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Gate3ドラフト改訂版として引き続き承認待ち。セクター分類の粒度は**17業種で確定**（2026-08-15ユーザー決定。33業種は粒度が細かすぎUC-005の偏り検出用途に不利と判断）。`docs/architecture/data-model.md`の`sector_classifications`テーブル定義・保留パラメータ表に反映済み。指摘事項はすべて反映済みで、Gate3最終承認待ち。
+
+## Gate2承認・Gate3データモデル叩き台作成（2026-08-15）
+
+### Decision
+
+- ユーザー（minowaryo）が「use-casesはすべて承認でよい」と明示的に指示したため、`docs/product/use-cases.md`の承認記録にGate 2承認を記録した（UC-001〜UC-009一括承認）。ただし`docs/product/mockups/README.md`上でUC-001追加変更分・UC-003・UC-004・UC-009のビジネスレビューが「未実施」のまま残っている点は承認コメントに明記し、記録上の矛盾が追跡できるようにした（レビュアー自身の判断でこの手順の順序を上書きしたものとして扱う）
+- Gate 2通過を受け、`docs/architecture/data-model.md`の正式ドラフトを作成した（AIによる叩き台生成可）。UC-001〜UC-009全体をカバーする14テーブル構成（import_batches/snapshots/holdings/holding_snapshots/technical_indicators/fundamental_indicators/financial_statements/signals/sector_classifications/holding_memos/watch_records/watched_themes/market_indicator_snapshots/import_summary_reports/import_summary_report_items）とした
+  - 口座区分（特定/一般/NISA枠）の内訳は保持しない方針として明記（use-cases.mdの仮置きをGate3ドラフトとして確定）
+  - 分割指値閾値・セクター配分閾値・財務健全性基準・サマリーレポート件数区分等、use-cases.md側で「Gate3で確定」としていたパラメータ値は叩き台として初期値を設定し、「保留・確定が必要な初期パラメータ値」表にまとめてレビュー時に確認できるようにした
+- **Gate 3は未承認**。ドラフト作成はAIによる叩き台生成であり、正式な承認（テーブル構成・初期パラメータ値の妥当性確認）はユーザーが行う必要がある
+
+### Files touched
+
+`docs/product/use-cases.md`（承認記録追記）、`docs/architecture/data-model.md`（テンプレートから本プロジェクト向け正式ドラフトに全面書き換え）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Gate 2完了。Gate 3はドラフト作成済み・承認待ち。ユーザーに確認いただきたい事項:
+
+1. `docs/architecture/data-model.md`のテーブル構成・カラム設計が妥当か
+2. 同ファイル末尾「保留・確定が必要な初期パラメータ値」表の各値（分割指値閾値・セクター配分閾値40%/70%・財務健全性基準・レポート件数区分等）が妥当か、あるいは変更が必要か
+3. Gate 3承認後、UC-001/002/003/004/009の順でGate4（TDD Redフェーズ）サイクルを開始する
+
+## UC-009追加によるPhase1スコープ拡大の反映・Gate2前提の再整理（2026-08-15）
+
+### Decision
+
+- 作業ツリーの未コミット差分を確認したところ、前回セッション以降に以下がGate2未承認のまま追加されていた:
+  - `docs/product/requirements.md`: F-009（取込後サマリーレポート）を新設し、優先度「高」・**Phase 1（MVP）に繰り上げ**。CSV取込（UC-001）完了直後に、利確検討（F-004相当）・セクターリバランス（F-005相当）・新規投資候補（F-008相当）を横断した優先度上位10件＋補足11〜20件のレコメンドと全体感サマリーを自動生成する機能。F-005/F-008（いずれもPhase2）の軽量ロジックに依存する構成のため、Phase1では上位20件算出に必要な最小ロジックのみ先行実装し、Phase2で画面本体として拡張する方針が明記されている
+  - `requirements.md` 6章に、F-009に限り複数指標を組み合わせた**合成スコアリング（算出根拠は非開示のブラックボックス可）を許容する例外規定**を追加。他機能で維持している「複雑な自動スコアリングを用いないシンプルさ優先」の設計方針とは別枠の例外として明記されている
+  - `docs/product/use-cases.md`: UC-009（取込後サマリーレポート）を新設。UC-001も、CSV入力を単一ファイル選択から「国内株式CSV必須＋米国株式CSV必須＋投資信託CSV任意」の3ファイル構成に変更し、取込完了時にUC-009を自動トリガーするフローを追加
+  - `docs/product/mockups/`: `screen-UC009-summary-report.html` を新規作成（未コミット）。`screen-UC001-csv-import.html` も3ファイル入力・バッチ単位履歴表示・UC-009への導線を追加する形で更新
+  - これに伴い、Phase 1（MVP）対象UCは当初の UC-001〜UC-004 から **UC-001（改訂）/UC-002/UC-003/UC-004/UC-009 の5件** に拡大した（`requirements.md` 7章フェーズ計画にも反映済み）
+- モックのビジネス側レビュー状況（`docs/product/mockups/README.md`）を確認したところ、Phase1対象UCのうち以下がまだ**未レビュー**: UC-001の追加変更分（3ファイル入力・バッチ履歴・UC-009導線）、UC-003、UC-004、UC-009。運用ルール上「モックフィードバックをuse-cases.mdに反映してからGate 2承認」の順序のため、これらのレビューが完了していない状態でのGate 2承認は手順上不整合となる
+- 既存の課題（Gate 2の承認記録が`docs/product/use-cases.md`末尾でテンプレートのまま、`docs/architecture/data-model.md`が汎用テンプレートのまま未着手＝Gate 3未着手）は今回のスコープ拡大後も未解消のまま
+
+### Files touched
+
+`PLAN.md`（本エントリ追加のみ。他ドキュメントは前回セッション時点の未コミット差分を確認したのみで今回は変更なし）
+
+### Status
+
+保留中。Gate4（UC-001/002/003/004/009のTDD Redフェーズ）着手前に、ユーザー（レビュアー）の確認・承認が必要な項目は以下の通り:
+
+1. **モックビジネスレビュー**: UC-001追加変更分・UC-003・UC-004・UC-009の各モックをレビューし、フィードバックがあれば`use-cases.md`に反映する
+2. **Gate 2承認**: 上記反映後、`docs/product/use-cases.md`末尾の承認記録表に正式に記入する（F-009の合成スコアリング例外規定を含め、UC-009の内容が妥当か含めて確認）
+3. **Gate 3承認**: `docs/architecture/data-model.md`の本プロジェクト向け正式ドラフトを作成（AIによる叩き台生成可）し、ユーザーが承認する
+4. 上記完了後、UC-001/002/003/004/009の順でGate4（TDD Redフェーズ）サイクルを開始する
+
+## Gate4開始前のGate2/3未承認判明・作業保留（2026-08-15）
+
+### Decision
+
+- 直前のフェーズ計画エントリで「次のアクションはPhase 1対象UC（UC-001〜UC-004）からGate4（TDDフェーズ）サイクルを開始すること」としたが、着手前に前提Gateを確認したところ以下が判明した:
+  - **Gate 2未通過**: `docs/product/use-cases.md` 末尾の「承認記録」表がテンプレートのまま（`YYYY-MM-DD | [名前] | 承認/差し戻し | [コメント]`）で、実際のレビュアー承認記録がない。
+  - **Gate 3未着手**: `docs/architecture/data-model.md` も汎用テンプレート（`users`/`posts`/`comments`の例、`[table_name]`プレースホルダ）のままで、本プロジェクト固有のテーブル定義（ImportBatch/HoldingSnapshot等）のドラフトすら未着手。
+  - `C:\Users\minow\.claude\plans\stock_auto_order-requirements-phase.md` にも同じ状態が既に記録されていた（フォローアップ計画側の記録と、フェーズ計画エントリの結論が食い違っていた）。
+- `.claude/rules/00-global.md` の絶対禁止事項「Gate 2 通過前のコード生成」に、TDD RedフェーズのFeature Test作成も該当するため、このままGate4サイクルには入れないと判断。
+- ユーザーに状況を提示し対応方針を確認した結果、「一旦停止し、状況整理のみ行う」を選択。今回のセッションではdata-model.mdドラフト作成・テストコード作成等の実装作業には着手しない。
+
+### Files touched
+
+`PLAN.md`（本エントリ追加のみ）
+
+### Status
+
+保留中。次のアクションは以下のいずれかをユーザーが選択してから再開する:
+1. `docs/product/use-cases.md` 承認記録の正式記入（Gate 2通過）
+2. `docs/architecture/data-model.md` の本プロジェクト向け正式ドラフト作成（Gate 2通過後）→ Gate 3承認
+3. 上記完了後、UC-001〜UC-004のGate4（TDD Redフェーズ）サイクル開始
+
 ## MVP〜段階拡充のフェーズ計画策定（2026-08-15）
 
 ### Decision

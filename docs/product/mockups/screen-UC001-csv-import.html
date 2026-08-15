@@ -24,22 +24,43 @@
 
   <div class="card">
     <h2>ファイルを選択</h2>
+    <p class="text-secondary" style="font-size:13px; margin:0 0 20px;">国内株式・米国株式のCSVは<strong>両方必須</strong>です（どちらか一方のみでは取込できません）。投資信託CSVは任意です。</p>
 
     <div class="form-group">
-      <label>CSV種別 *</label>
-      <label style="font-weight:400; margin-right:16px;"><input type="radio" name="csv_type" checked> 国内株式（JP株）</label>
-      <label style="font-weight:400; margin-right:16px;"><input type="radio" name="csv_type"> 米国株式（US株）</label>
-      <label style="font-weight:400;"><input type="radio" name="csv_type"> 投資信託</label>
+      <label>国内株式CSV（JP株） *</label>
+      <div class="upload-dropzone">
+        <p style="margin:0 0 8px; font-size:14px;">ここにCSVファイルをドラッグ&ドロップ、またはクリックして選択</p>
+        <p style="margin:0; font-size:12px;">対応形式: .csv（Shift-JISエンコード） / 最大5MB</p>
+      </div>
     </div>
 
-    <div class="upload-dropzone">
-      <p style="margin:0 0 8px; font-size:14px;">ここにCSVファイルをドラッグ&ドロップ、またはクリックして選択</p>
-      <p style="margin:0; font-size:12px;">対応形式: .csv（Shift-JISエンコード） / 最大5MB</p>
+    <div class="form-group">
+      <label>米国株式CSV（US株） *</label>
+      <div class="upload-dropzone">
+        <p style="margin:0 0 8px; font-size:14px;">ここにCSVファイルをドラッグ&ドロップ、またはクリックして選択</p>
+        <p style="margin:0; font-size:12px;">対応形式: .csv（Shift-JISエンコード） / 最大5MB</p>
+      </div>
     </div>
 
-    <div style="margin-top:20px;">
+    <div class="form-group">
+      <label>投資信託CSV（任意）</label>
+      <div class="upload-dropzone">
+        <p style="margin:0 0 8px; font-size:14px;">ここにCSVファイルをドラッグ&ドロップ、またはクリックして選択</p>
+        <p style="margin:0; font-size:12px;">対応形式: .csv（Shift-JISエンコード） / 最大5MB（省略可）</p>
+      </div>
+    </div>
+
+    <div style="margin-top:20px; display:flex; align-items:center; gap:16px;">
       <button class="btn btn-primary">アップロードして取込</button>
+      <span class="text-secondary" style="font-size:12px;">取込完了後、自動的に取込後サマリーレポート（UC-009）が表示されます</span>
     </div>
+
+    <!-- バリデーションエラーの例（国内株式・米国株式のいずれか一方のみアップロードされた場合。実装時は状態に応じて出し分け） -->
+    <!--
+    <div style="margin-top:12px; padding:10px 14px; background:#FEE2E2; border-radius:6px; color:var(--color-danger); font-size:13px;">
+      国内株式・米国株式のCSVは両方アップロードしてください
+    </div>
+    -->
   </div>
 
   <div class="card">
@@ -48,43 +69,36 @@
       <thead>
         <tr>
           <th>取込日時</th>
-          <th>種別</th>
+          <th>取込内容</th>
           <th>ステータス</th>
           <th>取込件数</th>
           <th>エラー件数</th>
+          <th>新規検出銘柄</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
         <tr>
           <td>2026-08-15 10:44</td>
-          <td>国内株式</td>
-          <td><span class="badge badge-success">completed</span></td>
-          <td>8</td>
-          <td>0</td>
-        </tr>
-        <tr>
-          <td>2026-08-15 10:44</td>
-          <td>米国株式</td>
-          <td><span class="badge badge-success">completed</span></td>
-          <td>3</td>
-          <td>0</td>
-        </tr>
-        <tr>
-          <td>2026-08-15 10:44</td>
-          <td>投資信託</td>
+          <td style="font-size:13px;">国内株式8件 / 米国株式3件 / 投資信託2件</td>
           <td><span class="badge badge-warning">completed（一部エラー）</span></td>
-          <td>2</td>
+          <td>13</td>
           <td>1</td>
+          <td><span class="badge badge-warning">1件</span></td>
+          <td><a href="screen-UC009-summary-report.html" style="font-size:12px; white-space:nowrap;">レポートを見る →</a></td>
         </tr>
         <tr>
           <td>2026-08-01 09:12</td>
-          <td>国内株式</td>
+          <td style="font-size:13px;">国内株式7件 / 米国株式3件</td>
           <td><span class="badge badge-success">completed</span></td>
-          <td>7</td>
+          <td>10</td>
           <td>0</td>
+          <td class="text-secondary">0件</td>
+          <td class="text-secondary" style="font-size:12px;">-</td>
         </tr>
       </tbody>
     </table>
+    <p class="text-secondary" style="font-size:12px; margin-top:8px;">※ 1回の取込（国内株式・米国株式のセット＋任意の投資信託）を1件のバッチとして記録します。バッチごとに取込後サマリーレポート（UC-009）を確認できます</p>
   </div>
 </main>
 
