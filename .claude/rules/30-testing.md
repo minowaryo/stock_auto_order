@@ -63,6 +63,7 @@ Claude Code / Codex は「実装を先に書いてからテストを後付けす
 1. **`run` スキル**を実行し、実際にアプリを起動して機能が期待通りに動作するか確認する
 2. 対象がUCのクリティカルフロー（`docs/product/use-cases.md`）かつUI変更を含む場合、**`/generate-e2e-test`** でPlaywright E2Eテストを追加する
 3. Refactor完了後、マージ前に **`/review`** を実行する（`.claude/rules/50-review.md` 参照）
+   - `/review` 実行時にStep 0として自動計算される review-score の結果（`meta/adr/ADR-0009-review-escalation-mechanism.md` 参照）に従って通常レベル/強化レベルが自動選択される
 
 ## 命名規則
 
