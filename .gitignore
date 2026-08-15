@@ -5,6 +5,9 @@ docs/credentials/*
 # Local Claude Code permission overrides (machine-specific, not shared)
 .claude/settings.local.json
 
-# Personal financial data (real asset balances) — reference-only, not for a public repo
-docs/original-docs/*.csv
-docs/original-docs/*.pdf
+# docs/original-docs/ commonly receives real personal financial exports (brokerage
+# CSV/PDF/Excel, account screenshots, etc.) dropped in ad hoc during requirements
+# gathering. Default-deny everything there and only allow the reviewed Markdown
+# reference docs, instead of chasing each risky extension individually.
+docs/original-docs/*
+!docs/original-docs/*.md
