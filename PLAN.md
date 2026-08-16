@@ -1,5 +1,44 @@
 # PLAN.md
 
+## UC-001 Greenフェーズ完了・実挙動確認（2026-08-16）
+
+### Decision
+
+- `tdd-implementer`サブエージェント（1回API途中断・SendMessageで再開）がGate4承認済みテスト15件を通す最小実装を完了。マイグレーション5本（`import_batches`/`snapshots`/`holdings`/`holding_snapshots`/`import_summary_reports`、テストが直接参照するテーブルのみ）、Model、CSVパーサー（`app/Services/Import/`）、`ImportCsvAction`（`app/Actions/Import/`）、`CsvImportController`+`StoreCsvImportRequest`を実装。`docker compose exec laravel.test php artisan test`で対象15件・既存2件とも全件Green
+  - **data-model.mdからの逸脱**: `holdings.symbol_code`を`varchar(20)`→`varchar(255)`に拡張（投資信託のsymbol_codeはファンド名そのものを格納する仕様のため）。`docs/architecture/data-model.md`に反映済み
+- `run`スキルで実際に`docker compose up -d`済みのコンテナへ`curl`で実HTTPリクエストを送り検証したところ、**テストでは検出できない実環境バグを発見・修正**した:
+  - `POST /csv-import`への実リクエストが500エラー（`tempnam()`失敗）。原因は`docker compose exec`がrootで`storage/`/`bootstrap/cache`を作成する一方、実Webサーバープロセスは`sail`ユーザー（uid 1337）で動くための書き込み権限不足。`chown -R sail:sail storage bootstrap/cache`で解消し、修正後は正しく419（CSRFトークン未設定）を返すことを確認
+  - 副次的に、Windows+Docker Desktop環境で`php artisan serve`経由の実HTTPリクエストが1件あたり4〜13秒かかる特性を確認（原因未特定・実害小と判断し許容）
+  - 両方とも`docs/ai-context/known-pitfalls.md`に記録済み
+  - ログイン画面・認証UCが未実装のため、認証済み状態での実HTTPラウンドトリップ（実ファイルアップロード含む）はcurlでは検証できなかった。Pestテスト（`actingAs()`、実Kernelを通す）による検証と、今回の未認証実リクエスト確認（ミドルウェアチェーンの実配線確認）を組み合わせて代替とした
+
+### Files touched
+
+`database/migrations/*`（5本新規）、`app/Models/*`（5ファイル新規）、`app/Services/Import/*`、`app/Actions/Import/*`、`app/Http/Controllers/CsvImportController.php`、`app/Http/Requests/StoreCsvImportRequest.php`、`app/Exceptions/Import/CsvStructureException.php`、`routes/web.php`、`docs/architecture/data-model.md`（symbol_code桁数変更を反映）、`docs/ai-context/known-pitfalls.md`（2件追記）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実挙動確認完了。次はRefactor（必要な場合のみ）→`/review`実行→マージ、その後UC-002のGate4サイクルへ進む。
+
+## UC-001 Gate4（Redフェーズ）承認・Greenフェーズ着手（2026-08-16）
+
+### Decision
+
+- `test-writer`サブエージェントが`tests/Feature/UC001CsvImportTest.php`にUC-001（CSV取込）のFeature Test 15件を作成（正常系8・バリデーション/境界値6・権限1）。`app/`は未編集。全件が`POST /csv-import`未定義（404）により想定通りRed状態であることを`docker compose exec laravel.test php artisan test`で確認済み
+- ユーザーにテスト内容・失敗ログ・以下3点の実装未確定事項を提示しGate4承認を得た（推奨案「承認してGreenフェーズへ」を選択）:
+  1. エンドポイント実装形態: `POST /csv-import`（Controller + FormRequest）
+  2. 未認証時のステータスコード: 302/401/403のいずれでも許容
+  3. `imported_count`は銘柄数ベースという解釈。複数口座区分合算テストではこの値自体は未アサーション
+- Gate4承認により`tdd-implementer`サブエージェントでGreenフェーズ（最小実装）に着手する
+
+### Files touched
+
+`tests/Feature/UC001CsvImportTest.php`（新規、test-writerが作成）、`tests/Pest.php`（`RefreshDatabase`有効化）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Gate4承認済み。Greenフェーズ着手中。
+
 ## Laravelアプリ雛形の作成（Gate4着手前提のセットアップ・2026-08-16）
 
 ### Decision

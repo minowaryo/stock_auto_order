@@ -93,7 +93,7 @@
 | カラム | 型 | Nullable | デフォルト | 説明 |
 |---|---|---|---|---|
 | id | bigint | NO | auto | 主キー |
-| symbol_code | varchar(20) | NO | - | 銘柄コード（JP証券コード／USティッカー／投信ファンド名） |
+| symbol_code | varchar(255) | NO | - | 銘柄コード（JP証券コード／USティッカー／投信ファンド名）。投資信託はファンド名そのものを格納するため20桁では収まらず、UC-001実装（Gate4/Green）時にvarchar(20)からvarchar(255)へ拡張した |
 | market | enum('jp','us','mutual_fund') | NO | - | 市場区分 |
 | instrument_type | enum('stock','etf','mutual_fund') | NO | - | 銘柄種別。ETF/投資信託は指標・シグナル計算の対象外（UC-002業務ルール） |
 | symbol_name | varchar(255) | NO | - | 銘柄名 |
@@ -376,3 +376,4 @@
 | 2026-08-15 | 初版ドラフト作成（UC-001〜UC-009、Gate 2承認済みuse-cases.mdに基づく）。Gate 3レビュー待ち | - |
 | 2026-08-15 | レビュー指摘を反映し改訂: ①`technical_indicators`/`fundamental_indicators`を`holding_snapshot_id`単位から`holding_id`単位の現在値キャッシュ（UPSERT）に変更し、候補銘柄（UC-006/008/009、未保有）でも指標を持てるようにした（保有銘柄のチャート用週次履歴は`holding_snapshots.ma20`/`ma75`に分離）。②`holdings`をCSV取込専用から「保有・候補問わない銘柄マスタ」に位置づけ変更（find-or-create）。③`watch_records`を`symbol_code`/`market`直持ちから`holding_id`FK参照に統一。④`signals`に`(holding_snapshot_id, signal_type)`のunique制約を追加（重複行防止）。⑤`watched_themes`の`deleted_at`（未定義の削除機能）を削除し、MySQLのNULL非同一性によるunique制約の不備を解消 | - |
 | 2026-08-15 | **Gate 3承認**。承認記録を追加。財務健全性フィルタ・合成スコアの重み付けの2項目は叩き台のままPhase 1実装時に確定する方針を明記 | - |
+| 2026-08-16 | UC-001 Gate4 Greenフェーズ実装に伴い`holdings.symbol_code`を`varchar(20)`→`varchar(255)`に拡張。投資信託の`symbol_code`はファンド名そのものを格納する仕様（UC-001業務ルール）のため20桁では収まらないことが実装時に判明した | - |
