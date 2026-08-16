@@ -1,5 +1,27 @@
 # PLAN.md
 
+## UC-002 Gate4（Redフェーズ）承認・Greenフェーズ着手（2026-08-16）
+
+### Decision
+
+- `test-writer`サブエージェントが`tests/Feature/UC002HoldingListTest.php`にUC-002（保有銘柄一覧表示）のFeature Test 9件を作成（正常系8・権限1）。`app/`・`database/migrations/`は未編集。全件が`GET /holdings`未定義（404）、または`sector_classifications`/`signals`テーブル・モデル未作成（Class not found）により想定通りRed状態であることを`docker compose exec laravel.test php artisan test --filter=UC002`で確認済み
+- ユーザーにテスト内容・失敗ログ・以下の実装未確定事項を提示しGate4承認を得た（いずれも推奨案を選択）:
+  1. レスポンス形式: `{"data": [...]}`（Laravel API Resource Collection形式）
+  2. エンドポイント: `GET /holdings`（`auth`ミドルウェア）
+  3. フィルタクエリパラメータ: `sector`（文字列）、`signal_only`（"1"）
+  4. ETF・投資信託のrsi/per/revenue_growthは`null`で「対象外」を表現
+  5. 未分類セクターは文字列`"未分類"`で表現
+  6. 未認証時のステータスコードは302/401/403のいずれでも許容
+- Gate4承認により`tdd-implementer`サブエージェントでGreenフェーズ（最小実装）に着手する
+
+### Files touched
+
+`tests/Feature/UC002HoldingListTest.php`（新規、test-writerが作成）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Gate4承認済み。Greenフェーズ着手中。
+
 ## UC-001 `/review`指摘修正（2026-08-16）
 
 ### Decision
