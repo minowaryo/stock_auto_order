@@ -1,19 +1,41 @@
 # common-commands.md — よく使うコマンド集
 
+## 実行環境について（重要）
+
+本マシンにはローカルPHP/Composer/MySQLがインストールされていない。Docker Desktop上のLaravel Sail（`compose.yaml`、PHP 8.5 + MySQL 8.4コンテナ）で開発する。
+
+**`./vendor/bin/sail`ラッパースクリプトはWSL2/macOS/Linux専用で、Windows+Git Bash単体では動作しない**（`Unsupported operating system [MINGW64_NT-...]`エラーになる）。そのため本プロジェクトでは`sail`コマンドの代わりに`docker compose exec`を直接使う。
+
+```bash
+# コンテナ起動（初回・再起動時）
+docker compose up -d
+
+# コンテナ停止
+docker compose down
+
+# 起動状態確認
+docker compose ps
+
+# 以降の全コマンドは "docker compose exec laravel.test <コマンド>" で実行する
+# 例: php artisan test → docker compose exec laravel.test php artisan test
+```
+
+以下の各コマンド例は、コンテナが起動済み（`docker compose up -d`実行済み）の状態を前提に、実際に動作確認済みの形式で記載する。
+
 ## テスト
 
 ```bash
 # 全テスト実行
-php artisan test
+docker compose exec laravel.test php artisan test
 
 # 特定ファイル
-php artisan test tests/Feature/UserTest.php
+docker compose exec laravel.test php artisan test tests/Feature/UserTest.php
 
 # カバレッジ付き
-php artisan test --coverage
+docker compose exec laravel.test php artisan test --coverage
 
 # 並列実行（高速）
-php artisan test --parallel
+docker compose exec laravel.test php artisan test --parallel
 ```
 
 ## E2Eテスト（Playwright）
@@ -65,81 +87,81 @@ npx probity check
 
 ```bash
 # フォーマット（自動修正）
-./vendor/bin/pint
+docker compose exec laravel.test ./vendor/bin/pint
 
 # チェックのみ（修正なし）
-./vendor/bin/pint --test
+docker compose exec laravel.test ./vendor/bin/pint --test
 
-# 静的解析
-./vendor/bin/phpstan analyse
+# 静的解析（導入時）
+docker compose exec laravel.test ./vendor/bin/phpstan analyse
 ```
 
 ## データベース
 
 ```bash
 # マイグレーション実行
-php artisan migrate
+docker compose exec laravel.test php artisan migrate
 
 # ロールバック
-php artisan migrate:rollback
+docker compose exec laravel.test php artisan migrate:rollback
 
 # DB リセット（開発環境のみ）
-php artisan migrate:fresh --seed
+docker compose exec laravel.test php artisan migrate:fresh --seed
 
 # マイグレーション状態確認
-php artisan migrate:status
+docker compose exec laravel.test php artisan migrate:status
 ```
 
 ## アプリケーション
 
 ```bash
-# 開発サーバー起動
-php artisan serve
+# コンテナ起動（laravel.test は80番ポートでhttp://localhost に公開済み。serveコマンドは不要）
+docker compose up -d
 
 # キャッシュクリア
-php artisan cache:clear
-php artisan config:clear
-php artisan route:clear
-php artisan view:clear
+docker compose exec laravel.test php artisan cache:clear
+docker compose exec laravel.test php artisan config:clear
+docker compose exec laravel.test php artisan route:clear
+docker compose exec laravel.test php artisan view:clear
 
 # キュー起動（開発）
-php artisan queue:work
+docker compose exec laravel.test php artisan queue:work
 
 # スケジューラ起動（開発）
-php artisan schedule:work
+docker compose exec laravel.test php artisan schedule:work
 ```
 
 ## コード生成（Artisan）
 
 ```bash
 # コントローラ
-php artisan make:controller UserController --resource
+docker compose exec laravel.test php artisan make:controller UserController --resource
 
 # モデル + マイグレーション + Factory + Seeder
-php artisan make:model User -mfs
+docker compose exec laravel.test php artisan make:model User -mfs
 
 # FormRequest
-php artisan make:request StoreUserRequest
+docker compose exec laravel.test php artisan make:request StoreUserRequest
 
 # Policy
-php artisan make:policy UserPolicy --model=User
+docker compose exec laravel.test php artisan make:policy UserPolicy --model=User
 
 # Action / Service（カスタム）
-php artisan make:class Actions/RegisterUserAction
+docker compose exec laravel.test php artisan make:class Actions/RegisterUserAction
 ```
 
 ## Composer
 
 ```bash
 # 依存関係インストール
-composer install
+docker compose exec laravel.test composer install
 
 # パッケージ追加
-composer require [package]
+docker compose exec laravel.test composer require [package]
 
 # 脆弱性チェック
-composer audit
+docker compose exec laravel.test composer audit
 
 # オートロード再生成
-composer dump-autoload
+docker compose exec laravel.test composer dump-autoload
 ```

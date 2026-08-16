@@ -1,5 +1,28 @@
 # PLAN.md
 
+## Laravelアプリ雛形の作成（Gate4着手前提のセットアップ・2026-08-16）
+
+### Decision
+
+- Gate 3承認後、UC-001のGate4（TDD Redフェーズ）に着手しようとしたところ、リポジトリにLaravelアプリの実体（`composer.json`/`app/`/`artisan`/`tests/`）が一切存在しないことが判明した。ローカル環境にはPHP/Composer/MySQLもインストールされていなかった（`php`/`composer`/`mysql`いずれも未検出）
+- ユーザーに確認のうえ、Docker経由でLaravel雛形を作成する方針を選択（推奨案）。Docker Desktopは起動していなかったため起動した上で、以下を実施:
+  - `laravelsail/php84-composer`イメージを使い`composer create-project laravel/laravel`でLaravel本体を作成（`laravel/pint`のダウンロードがネットワーク起因で複数回タイムアウトしたが、リトライで解消）
+  - `docs/ai-context/module-map.md`・`docs/adr/ADR-0001-frontend-stack-selection.md`の選定通り`livewire/livewire`を追加
+  - `docs/development/testing-strategy.md`・`.claude/rules/30-testing.md`のPest記法に合わせ`pestphp/pest`・`pestphp/pest-plugin-laravel`を追加し`vendor/bin/pest --init`で初期化
+  - `laravel/sail`を追加し`--with=mysql`でDocker Compose定義（`compose.yaml`、PHP 8.5 + MySQL 8.4）を生成
+  - **重要**: `./vendor/bin/sail`ラッパースクリプトはWSL2/macOS/Linux専用で、本機（Windows + Git Bash、WSL2不使用）では`Unsupported operating system`エラーで動作しない。そのため`docker compose exec laravel.test <コマンド>`を正規の実行方法として採用し、`docs/ai-context/common-commands.md`に全面反映した
+  - `WWWUSER`/`WWWGROUP`未設定によるイメージビルド失敗（`groupadd: invalid group ID`）を`.env`への値追加で解消
+  - 一時ディレクトリで作成した雛形をリポジトリ直下へ統合。既存の`README.md`（このAI駆動開発テンプレート自体の説明）と`.gitignore`（`docs/credentials/`等の除外設定）は上書きせず、Laravel標準の`.gitignore`エントリを既存ファイルに追記する形でマージした
+  - `docker compose up -d` → `php artisan migrate` → `php artisan test`まで実行し、Pestの初期テスト（Unit/Feature各1件）がPASSすることを確認済み
+
+### Files touched
+
+`app/`・`artisan`・`bootstrap/`・`compose.yaml`・`composer.json`・`composer.lock`・`config/`・`database/`・`package.json`・`phpunit.xml`・`public/`・`resources/`・`routes/`・`storage/`・`tests/`・`vendor/`・`vite.config.js`・`.env`・`.env.example`・`.editorconfig`・`.gitattributes`・`.npmrc`（新規追加）、`.gitignore`（Laravel標準エントリをマージ）、`docs/ai-context/common-commands.md`（`docker compose exec`ベースの実行方法に全面書き換え）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+完了。Docker Desktop起動中・コンテナ起動中であることが次回セッションの前提になる点に注意（`docker compose up -d`で再起動可能）。次はUC-001のGate4（TDD Redフェーズ）に着手する。
+
 ## Gate 3承認（2026-08-15）
 
 ### Decision
