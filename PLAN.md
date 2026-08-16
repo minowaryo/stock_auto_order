@@ -20,7 +20,11 @@
 
 ### Status
 
-Gate4承認済み。Greenフェーズ着手中。
+Gate4承認済み。Green実装完了（`tdd-implementer`）・独立再検証済み。マイグレーション5本（`sector_classifications`/`technical_indicators`/`fundamental_indicators`/`signals`＋`holdings.sector_classification_id`へのFK追加）、モデル4つ新規＋`Holding`/`HoldingSnapshot`にリレーション追加、`app/Actions/Holding/ListHoldingsAction.php`、`app/Http/Controllers/HoldingListController.php`、`app/Http/Requests/ListHoldingsRequest.php`、`GET /holdings`ルートを実装。`docker compose exec laravel.test php artisan test`で全26件（UC-001 15件＋UC-002 9件＋既存2件）Green、Pintも整形済み。`docs/architecture/data-model.md`に変更履歴を追記済み。
+- `run`スキルで実挙動確認済み: 未認証`curl GET /holdings`は実HTTP経由で401（JSON `{"message":"Unauthenticated."}`）を確認（ルーティング・ミドルウェア配線が正しく機能）。ログイン画面（認証UC）が未実装のため認証済み実HTTPラウンドトリップはcurlでは検証できず、代わりに`php artisan tinker`で実DBに投入した実データに対し`ListHoldingsAction`を直接実行し、sector/has_signal/rsi/per/revenue_growthを含む期待通りのJSON構造を確認（トランザクションロールバックでDBは汚していない）
+- UC-002はAPI実装のみでUI（Livewire画面）は未着手のフェーズのため、`/generate-e2e-test`（Playwright）は対象外と判断（UC-001と同様の扱い）
+
+Green確認・実挙動確認完了。`/review`実行で1件（MEDIUM）指摘: `has_signal`が`instrument_type`を明示チェックしておらず、UC-002業務ルール「ETF・投資信託はhas_signal常にfalse」をUC-004（未実装）側のデータ不変条件に暗黙依存していた。`ListHoldingsAction::toRow()`で`instrument_type === 'stock'`を明示ガードするよう修正し、防御的な再発防止テスト（ETFに誤ってsignal行が存在してもhas_signalはfalseのまま）を追加。修正後`docker compose exec laravel.test php artisan test`で全27件Green、Pint整形済み。マージ可能な状態。次はUC-003のGate4サイクルへ進む。
 
 ## UC-001 `/review`指摘修正（2026-08-16）
 

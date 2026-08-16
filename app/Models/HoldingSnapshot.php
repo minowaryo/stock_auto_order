@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'snapshot_id',
@@ -54,5 +55,10 @@ class HoldingSnapshot extends Model
     public function holding(): BelongsTo
     {
         return $this->belongsTo(Holding::class);
+    }
+
+    public function signals(): HasMany
+    {
+        return $this->hasMany(Signal::class);
     }
 }

@@ -2,10 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Models\FundamentalIndicator;
 use App\Models\Holding;
 use App\Models\HoldingSnapshot;
 use App\Models\ImportBatch;
+use App\Models\SectorClassification;
+use App\Models\Signal;
 use App\Models\Snapshot;
+use App\Models\TechnicalIndicator;
 use App\Models\User;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -132,7 +136,7 @@ function ucFrom002TestHoldingSnapshot(Snapshot $snapshot, Holding $holding, arra
  */
 function ucFrom002TestSectorClassification(string $name, ?string $code = null): object
 {
-    return \App\Models\SectorClassification::create([
+    return SectorClassification::create([
         'code' => $code,
         'name' => $name,
     ]);
@@ -145,7 +149,7 @@ function ucFrom002TestSectorClassification(string $name, ?string $code = null): 
  */
 function ucFrom002TestTechnicalIndicator(Holding $holding, array $attributes = []): object
 {
-    return \App\Models\TechnicalIndicator::create(array_merge([
+    return TechnicalIndicator::create(array_merge([
         'holding_id' => $holding->id,
         'rsi' => 65.5,
         'macd' => null,
@@ -165,7 +169,7 @@ function ucFrom002TestTechnicalIndicator(Holding $holding, array $attributes = [
  */
 function ucFrom002TestFundamentalIndicator(Holding $holding, array $attributes = []): object
 {
-    return \App\Models\FundamentalIndicator::create(array_merge([
+    return FundamentalIndicator::create(array_merge([
         'holding_id' => $holding->id,
         'per' => 15.2,
         'pbr' => null,
@@ -186,7 +190,7 @@ function ucFrom002TestFundamentalIndicator(Holding $holding, array $attributes =
  */
 function ucFrom002TestSignal(HoldingSnapshot $holdingSnapshot, array $attributes = []): object
 {
-    return \App\Models\Signal::create(array_merge([
+    return Signal::create(array_merge([
         'holding_snapshot_id' => $holdingSnapshot->id,
         'signal_type' => 'rsi_reversal',
         'reason_summary' => 'RSIが72から65に反落',
@@ -369,6 +373,28 @@ describe('UC-002: 保有銘柄一覧表示', function () {
             expect($row['rsi'])->toBeNull();
             expect($row['per'])->toBeNull();
             expect($row['revenue_growth'])->toBeNull();
+        });
+
+        test('ETFに誤ってsignal行が存在してもhas_signalはfalseのままになる', function () {
+            // Defends UC-002業務ルール「ETF・投資信託はhas_signal常にfalse」
+            // at this endpoint itself, independent of whatever upstream
+            // signal-detection logic (UC-004, not yet implemented) is
+            // supposed to guarantee about which holdings get signal rows.
+            [, $snapshot] = ucFrom002TestImportBatch();
+
+            $etfHolding = ucFrom002TestHolding([
+                'symbol_code' => 'VTI', 'market' => 'us', 'instrument_type' => 'etf', 'symbol_name' => 'Vanguard Total Stock Market ETF',
+            ]);
+            $etfSnapshot = ucFrom002TestHoldingSnapshot($snapshot, $etfHolding, ['quantity' => 10, 'average_cost' => 200, 'current_price' => 250]);
+            ucFrom002TestSignal($etfSnapshot);
+
+            $response = ucFrom002TestFetch($this);
+
+            $response->assertSuccessful();
+
+            $row = ucFrom002TestFindRow($response, 'VTI', 'us');
+            expect($row)->not->toBeNull();
+            expect($row['has_signal'])->toBeFalse();
         });
 
         test('未分類銘柄（sector_classification_idがnull）はsectorが「未分類」として一覧に出る', function () {
