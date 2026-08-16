@@ -37,13 +37,23 @@ class StoreCsvImportRequest extends FormRequest
     }
 
     /**
+     * UC-001エラーケース表は「ファイル未選択」（jp/us両方とも未選択）と
+     * 「一方のみアップロード」で異なるメッセージを定義しているため、
+     * どちらが欠落しているかに応じて required メッセージを出し分ける。
+     *
      * @return array<string, string>
      */
     public function messages(): array
     {
+        $neitherFileSelected = $this->file('jp_stock_file') === null && $this->file('us_stock_file') === null;
+
+        $requiredMessage = $neitherFileSelected
+            ? 'CSVファイルを選択してください'
+            : '国内株式・米国株式のCSVは両方アップロードしてください';
+
         return [
-            'jp_stock_file.required' => '国内株式・米国株式のCSVは両方アップロードしてください',
-            'us_stock_file.required' => '国内株式・米国株式のCSVは両方アップロードしてください',
+            'jp_stock_file.required' => $requiredMessage,
+            'us_stock_file.required' => $requiredMessage,
             'jp_stock_file.extensions' => 'CSVファイルのみアップロードできます',
             'us_stock_file.extensions' => 'CSVファイルのみアップロードできます',
             'mutual_fund_file.extensions' => 'CSVファイルのみアップロードできます',

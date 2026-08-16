@@ -68,7 +68,13 @@ class ImportCsvAction
         $aggregatedHoldings = $this->aggregate($rows);
 
         return DB::transaction(function () use ($batch, $aggregatedHoldings, $errorCount) {
-            $previousSnapshot = Snapshot::query()->orderByDesc('id')->first();
+            // docs/architecture/data-model.md#snapshots: "直近" is determined by
+            // snapshotted_at (the column the table's index is built for), with id
+            // as a tiebreaker for snapshots created within the same second.
+            $previousSnapshot = Snapshot::query()
+                ->orderByDesc('snapshotted_at')
+                ->orderByDesc('id')
+                ->first();
 
             $snapshot = Snapshot::create([
                 'import_batch_id' => $batch->id,

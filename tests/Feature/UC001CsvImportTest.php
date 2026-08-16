@@ -478,6 +478,10 @@ describe('UC-001: CSV取込', function () {
             $response = ucFrom001TestSubmit($this, []);
 
             $response->assertStatus(422);
+            // UC-001エラーケース表:「ファイル未選択」は「一方のみアップロード」とは
+            // 異なるメッセージ（CSVファイルを選択してください）を返す。
+            $response->assertJsonPath('errors.jp_stock_file.0', 'CSVファイルを選択してください');
+            $response->assertJsonPath('errors.us_stock_file.0', 'CSVファイルを選択してください');
             $this->assertDatabaseCount('import_batches', 0);
         });
 
@@ -491,6 +495,7 @@ describe('UC-001: CSV取込', function () {
             ]);
 
             $response->assertStatus(422);
+            $response->assertJsonPath('errors.us_stock_file.0', '国内株式・米国株式のCSVは両方アップロードしてください');
             $this->assertDatabaseCount('import_batches', 0);
         });
 
@@ -504,6 +509,7 @@ describe('UC-001: CSV取込', function () {
             ]);
 
             $response->assertStatus(422);
+            $response->assertJsonPath('errors.jp_stock_file.0', '国内株式・米国株式のCSVは両方アップロードしてください');
             $this->assertDatabaseCount('import_batches', 0);
         });
 

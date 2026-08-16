@@ -1,5 +1,28 @@
 # PLAN.md
 
+## UC-001 `/review`指摘修正（2026-08-16）
+
+### Decision
+
+`/review`実行で判明した指摘のうち、判断不要（use-cases.md/data-model.mdの既存合意との単純な不一致）な2件を修正:
+
+- `StoreCsvImportRequest::messages()`: 「ファイル未選択」（jp/us両方欠落）と「一方のみアップロード」でuse-cases.mdエラーケース表が異なるメッセージを定義しているのに、実装は両ケースで同一メッセージを返していた。欠落状況に応じて動的にメッセージを出し分けるよう修正し、`UC001CsvImportTest.php`の該当3テストにメッセージ内容のアサーションを追加
+- `ImportCsvAction::execute()`: 「直近」スナップショットの判定を`Snapshot::orderByDesc('id')`で行っていたが、data-model.mdは`snapshotted_at`基準（専用インデックスあり）を明記している。`orderByDesc('snapshotted_at')->orderByDesc('id')`（idは同秒発生時のタイブレーク用）に修正
+
+残り3件（LOW）はユーザーに判断を仰ぎ、いずれも現状維持で決着:
+
+- **金額・数量集計のfloat計算**: 現状維持。個人利用規模では実害がほぼないため、bcmath等への置き換えは行わない
+- **instrument_typeのETF判別**: 現状維持（UC-001はスコープ外のまま進める）。use-cases.md UC-001はETF判定方法を定義しておらず、対応するならUC-002/003の`/tdd`サイクルまたは別途use-cases.md改訂で扱う
+- **集計ループ内の個別クエリ（firstOrCreate＋前回スナップショット存在チェック）**: 現状維持。個人利用・週次数十銘柄規模ではボトルネックにならないため、バルククエリ化は行わない
+
+### Files touched
+
+`app/Http/Requests/StoreCsvImportRequest.php`、`app/Actions/Import/ImportCsvAction.php`、`tests/Feature/UC001CsvImportTest.php`、`PLAN.md`（本エントリ追加）
+
+### Status
+
+`/review`指摘5件すべて対応完了（修正2件・現状維持3件、いずれもユーザー確認済み）。`docker compose exec laravel.test php artisan test`全17件Green・Pint整形済み。マージ可能な状態。次はUC-002のGate4サイクルへ進む。
+
 ## UC-001 Greenフェーズ完了・実挙動確認（2026-08-16）
 
 ### Decision
