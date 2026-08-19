@@ -8,7 +8,7 @@
 
 - 利用者は本人1人のみ（`docs/ai-context/project-summary.md`）。`users`テーブルはLaravel標準のまま維持し、複数ユーザーを前提としたテナント分離カラムは設けない
 - 週次スナップショット運用（CSV取込のたびに新しい世代を追記し、既存データは上書きしない）が全体の設計の基本軸
-- 口座区分（特定口座/一般口座/NISA成長投資枠等）の内訳は、UC-001業務ルールの通り**本ドラフトでは保持しない方針とする**（銘柄コード単位で合算・加重平均した結果のみ保存）。将来的に口座別内訳の確認ニーズが出た場合は別テーブル追加で対応する（後方互換を意識し、既存カラムの変更は伴わない想定）
+- 口座区分（特定口座/一般口座/NISA成長投資枠/NISAつみたて投資枠）の内訳は、`holding_snapshot_accounts`テーブルに追記保存する（ADR-0002）。銘柄コード単位で合算・加重平均した値は引き続き`holding_snapshots`に保存し続け、既存の画面・ロジックへの影響はない
 
 ## ER図（概要）
 
@@ -21,6 +21,7 @@
                               |
                               └──1:N── [market_indicator_snapshots]
 [holding_snapshots] ──1:N── [signals]
+[holding_snapshots] ──1:N── [holding_snapshot_accounts]
 
 [import_batches] ──1:1── [import_summary_reports] ──1:N── [import_summary_report_items]
 
@@ -131,6 +132,24 @@
 **FK**: `snapshot_id` → `snapshots(id)`、`holding_id` → `holdings(id)`
 
 > 株価推移チャート（UC-003）は本テーブルの`current_price`/`ma20`/`ma75`を`holding_id`で時系列に並べたものをそのまま終値データとして再利用する（新規のリアルタイム取得は行わない、という業務ルールに合致）。ここでの`ma20`/`ma75`は「取込週ごとに確定した過去値」であり、週が進めば値そのものが変わるため保存しても重複にはならない（後述の`technical_indicators`＝直近値キャッシュとは役割が異なる）。
+
+---
+
+### holding_snapshot_accounts（口座区分別の保有内訳・UC-001/004/005/008、ADR-0002）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| holding_snapshot_id | bigint | NO | - | `holding_snapshots.id` への参照 |
+| account_type | enum('specific','general','nisa_growth','nisa_tsumitate') | NO | - | 口座区分（特定口座/一般口座/NISA成長投資枠/NISAつみたて投資枠） |
+| quantity | decimal(15,2) | NO | - | 当該口座区分での保有数量 |
+| average_cost | decimal(15,2) | NO | - | 当該口座区分での取得単価（円建て） |
+| created_at | timestamp | NO | now() | 作成日時 |
+
+**Index**: `(holding_snapshot_id, account_type)` unique、`holding_snapshot_id`
+**FK**: `holding_snapshot_id` → `holding_snapshots(id)`
+
+> `holding_snapshots`の`quantity`/`average_cost`（合算・加重平均値）はそのまま維持し、本テーブルは口座区分別の内訳を追加で保存するもの。`account_type`が`nisa_growth`/`nisa_tsumitate`の行を「NISA区分」として扱い、UC-004（利確シグナル）・UC-005（リバランス提案）で除外判定に使う。履歴ログ系テーブル（追記のみ、UPDATE/DELETEしない）として`holding_snapshots`と同じ設計方針に従う。
 
 ---
 
@@ -358,6 +377,7 @@
 | セクター配分の判定閾値 | 40%未満=健全、40〜70%=やや偏り、70%以上=偏り警告 | UC-005 | 叩き台のまま承認 |
 | 目標配分率 | 70%（偏り警告閾値と同一） | UC-005 | 叩き台のまま承認 |
 | 財務健全性フィルタ | 自己資本比率40%以上・ROE10%以上 | UC-008 | 叩き台のまま承認。Phase 1実装（F-009用の軽量版）時に`/tdd`サイクルで確定 |
+| NISA推奨（`nisa_recommended`）の追加基準 | 財務健全性フィルタの基準に加え、より高い自己資本比率・ROE等（具体的な閾値は未定） | UC-005/UC-008 | 未確定。ADR-0002に伴い新規追加。`/tdd`サイクルで確定 |
 | 過去業績推移の取得期数 | 5期 | UC-006 | 叩き台のまま承認 |
 | サマリーレポートの件数区分 | 主要10件・補足10件（計20件） | UC-009 | 叩き台のまま承認 |
 | 合成スコアの重み付け | 利確検討・リバランス・新規投資候補の3種を横断する優先順位ロジック（未確定） | UC-009 | 叩き台のまま承認。Phase 1実装時に`/tdd`サイクルで確定 |
@@ -378,3 +398,4 @@
 | 2026-08-15 | **Gate 3承認**。承認記録を追加。財務健全性フィルタ・合成スコアの重み付けの2項目は叩き台のままPhase 1実装時に確定する方針を明記 | - |
 | 2026-08-16 | UC-001 Gate4 Greenフェーズ実装に伴い`holdings.symbol_code`を`varchar(20)`→`varchar(255)`に拡張。投資信託の`symbol_code`はファンド名そのものを格納する仕様（UC-001業務ルール）のため20桁では収まらないことが実装時に判明した | - |
 | 2026-08-16 | UC-002 Gate4 Greenフェーズ実装に伴い`sector_classifications`/`technical_indicators`/`fundamental_indicators`/`signals`をドラフト通りのカラム構成で実装。`holdings.sector_classification_id`は`sector_classifications`不在のため見送っていたFK制約を後続マイグレーションで追加（既存の`holdings`マイグレーションは編集せず、`.claude/rules/20-mysql.md`の「実行済みマイグレーションは編集しない」に従い後方互換を維持） | - |
+| 2026-08-16 | NISA区分を含む口座区分の内訳を`holding_snapshot_accounts`テーブルに追記保存する方針に変更（Gate 3承認済みだった「口座区分を保持しない」方針〔前提セクション旧記述〕を覆すCR）。既存の`holdings`/`holding_snapshots`のカラムは変更しない。UC-004/UC-005/UC-008でNISA区分の除外・推奨判定に使用する | ADR-0002 |

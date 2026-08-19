@@ -1,5 +1,22 @@
 # PLAN.md
 
+## ADR-0002 NISA区分内訳保存CR — Gate 3相当の再承認（2026-08-19）
+
+### Decision
+
+- UC-002 Green完了後、利用者からの要望（NISA区分〔NISA成長投資枠/NISAつみたて投資枠〕は非課税メリット維持のため利確シグナル・リバランス提案の対象外にしたい／新規投資候補では逆にNISA枠購入を推奨してほしい）を受け、`docs/adr/ADR-0002-nisa-account-type-tracking.md`を新規作成
+- Gate 3で一度承認済みだった「口座区分の内訳は保持しない」方針（`data-model.md`前提セクション）を覆すCRのため、`docs/rcid/traceability-matrix.md`にCHG-0001として登録し、`data-model.md`（`holding_snapshot_accounts`テーブル追加）・`use-cases.md`（UC-001/004/005/008）・`glossary.md`・`requirements.md`を合わせて更新
+- 新テーブル`holding_snapshot_accounts`は`holding_snapshots`の子テーブルとして口座区分別の内訳（数量・取得単価）を追記保存する設計とし、既存の`holdings`/`holding_snapshots`カラムは無変更（後方互換維持）。同一銘柄が複数口座区分にまたがる実データ（`docs/original-docs/`のCSVサンプルで確認済み）を理由に、単一`account_type`カラム追加方式は不採用とした
+- ユーザーに差分内容（新テーブル定義・UC-004/005/008への業務ルール追加・代替案）を提示し、Gate 3相当として承認を得た。`traceability-matrix.md`のCHG-0001承認者欄を更新
+
+### Files touched
+
+`docs/adr/ADR-0002-nisa-account-type-tracking.md`（新規）、`docs/architecture/data-model.md`、`docs/product/use-cases.md`、`docs/product/requirements.md`、`docs/ai-context/glossary.md`、`docs/rcid/traceability-matrix.md`、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Gate 3相当の再承認完了。次はUC-003（銘柄詳細表示）のGate4（Redフェーズ）レビュー・承認へ進む（`tests/Feature/UC003HoldingDetailTest.php`は作成済み・未承認）。ADR-0002によるCSVパーサー変更・`ImportCsvAction`拡張の実装（`holding_snapshot_accounts`）は別途TDDサイクルで着手する。
+
 ## UC-002 Gate4（Redフェーズ）承認・Greenフェーズ着手（2026-08-16）
 
 ### Decision
