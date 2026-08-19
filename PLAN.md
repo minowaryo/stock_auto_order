@@ -1,5 +1,45 @@
 # PLAN.md
 
+## UC-003 Gate4（Redフェーズ）承認・Greenフェーズ着手（2026-08-19）
+
+### Decision
+
+- `test-writer`サブエージェントが`tests/Feature/UC003HoldingDetailTest.php`にUC-003（銘柄詳細表示）のFeature Test 15件を作成（正常系〔詳細取得9・メモ保存2〕・異常系境界値2・権限2）。`app/`・`database/migrations/`は未編集。`docker compose exec laravel.test php artisan test --filter=UC003`で14件失敗・1件成功（15件中）を確認。失敗はすべて`GET /holdings/{holding}`・`POST /holdings/{holding}/memos`未定義（404）、または`App\Models\HoldingMemo`未作成（Class not found）による想定通りのRed状態。1件成功（「存在しない銘柄IDを指定した場合は404になる」）はルート自体が未定義のためどのIDでも404になる“たまたまのグリーン”で、実装後は正しいroute-model-binding経由の404として機能するため許容（UC-001/002と同様の扱い）
+- ユーザーにテスト内容・失敗ログ・以下の実装未確定事項を提示しGate4承認を得た（いずれも推奨案を選択）:
+  1. エンドポイント: `GET /holdings/{holding}`（route model binding）、`POST /holdings/{holding}/memos`（body: `memo`）、ともに`auth`ミドルウェア
+  2. レスポンス形式: `{"data": {...}}`、`bollinger_band`は`{bb_upper, bb_lower}`にネスト（use-cases.mdの出力表項目名`bollinger_band`をそのまま採用）
+  3. 指標欠損時（`technical_indicators`/`fundamental_indicators`に行なし、または値null）は該当項目`null`（「取得不可」）
+  4. `chart_period`は`holding_snapshots.snapshot.snapshotted_at`基準の純粋な日付カットオフ。省略時`3y`
+  5. `signal_result`/`signal_reason`文言: シグナルあり`'利確検討'`+`signals.reason_summary`、シグナルなし`'シグナルなし'`+非空の説明文（厳密文言は実装時裁量。use-cases.md出力表の例と一致）
+  6. メモ保存成功時は201、レスポンス本文形状は実装の裁量（再取得した`memo_history`への反映のみテストで確認）
+- Gate4承認により`tdd-implementer`サブエージェントでGreenフェーズ（最小実装）に着手する
+
+### Files touched
+
+`tests/Feature/UC003HoldingDetailTest.php`（新規、test-writerが作成）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Gate4承認済み。Greenフェーズ着手中。完了後はUC-004ではなく**UC-009（取込後サマリーレポート）のGate4サイクル**に進む（本ファイル冒頭の「Phase1実装順の変更」エントリ参照）。
+
+## Phase1実装順の変更 — レポート機能（UC-009）を繰り上げ（2026-08-19）
+
+### Decision
+
+- ユーザーから「レポート機能（取込後サマリーレポート）を先に確認したいので実装優先順位を上げてほしい」との要望を受けた
+- 現在UC-003（銘柄詳細表示）のGate4（Redフェーズ、`tests/Feature/UC003HoldingDetailTest.php`）が未承認のまま進行中だったため、この扱いをユーザーに確認したところ「UC-003を最後まで完了してからUC-009へ」を選択（推奨案の「UC-009を先に着手」ではなく、進行中のTDDサイクルを中断しない方を選んだ）
+- `docs/product/requirements.md` 7章フェーズ計画（128行目）は既に「Phase内の実装順（機能・UC単位のTDDサイクル）はUC番号順を基本とするが、着手時にあらためて判断する」と明記しており、UC番号順からの変更を許容する規定になっている。今回の並び替えはこの規定の範囲内であり、`requirements.md`自体（F-001〜F-009の内容・Phase区分）の変更は不要と判断した
+- Phase1実装順を **UC-001→UC-002→UC-003→UC-009→UC-004** に変更（従来: UC-001→UC-002→UC-003→UC-004→UC-009）。UC-009は`requirements.md`の依存関係メモ（126行目）の通りF-005/F-008の軽量ロジックに依存するが、UC-004（利確シグナル一覧）には依存しないため、UC-004より先に着手すること自体に設計上の支障はない
+- 要件内容自体の変更ではなく実装順序の変更のため、`docs/rcid/traceability-matrix.md`へのCHG登録は不要と判断した（既存のCHG-0001はADR-0002の業務ルール変更が対象であり、今回とは性質が異なる）
+
+### Files touched
+
+`PLAN.md`（本エントリ追加のみ）
+
+### Status
+
+進行中。UC-003のGate4サイクル（Red承認→Green→Refactor→`/review`）は従来通り継続する。UC-003完了後、UC-004ではなく**UC-009（取込後サマリーレポート）のGate4サイクルに着手する**。UC-009はUC-001の取込完了時トリガー（基本フロー7）を含むため、実装時はUC-001側の自動生成呼び出し部分の追加要否も合わせて確認する。
+
 ## ADR-0002 NISA区分内訳保存CR — Gate 3相当の再承認（2026-08-19）
 
 ### Decision
