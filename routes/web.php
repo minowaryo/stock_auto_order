@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CsvImportController;
+use App\Http\Controllers\HoldingDetailController;
 use App\Http\Controllers\HoldingListController;
 use Illuminate\Support\Facades\Route;
 
@@ -10,3 +11,5 @@ Route::get('/', function () {
 
 Route::middleware('auth')->post('/csv-import', [CsvImportController::class, 'store']);
 Route::middleware('auth')->get('/holdings', [HoldingListController::class, 'index']);
+Route::middleware('auth')->get('/holdings/{holding}', [HoldingDetailController::class, 'show']);
+Route::middleware('auth')->post('/holdings/{holding}/memos', [HoldingDetailController::class, 'storeMemo']);

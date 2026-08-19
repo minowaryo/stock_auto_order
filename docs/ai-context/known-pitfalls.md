@@ -34,3 +34,9 @@
 - 現象: `curl`で`http://localhost`上のLaravelアプリを叩くと、1リクエストあたり4〜13秒程度かかる（`docker compose exec`経由のPHPUnit/Pestテスト実行は数百ms〜1秒程度と高速なままで、実HTTPリクエストのみ遅い）
 - 原因: 未特定。`php artisan serve`（PHP内蔵サーバー、`PHP_CLI_SERVER_WORKERS=4`）をDocker Desktop for Windows経由で公開した際のネットワークオーバーヘッドと推測される（Nginx/PHP-FPM構成への切り替えで改善するかは未検証）
 - 対処: 現時点では許容し様子見（`docs/product/requirements.md`の非機能要件「厳密なレスポンス要件は設けない」に該当する用途のため実害は小さい）。UI実装（Livewire）着手時に体感が悪ければ、Nginx+PHP-FPM構成への切り替えを検討する
+
+### Laravel `auth`ミドルウェア（ログイン画面未実装） — ブラウザ的な未認証アクセスが500になる
+
+- 現象: `run`スキルでUC-003（`GET /holdings/{holding}`）を`Accept: application/json`ヘッダーなしでcurlすると500。ログを見ると`RouteNotFoundException: Route [login] not defined.`。同条件で`GET /holdings`（UC-002、既存）を叩いても再現するため、UC-003固有ではなく既存の構造的ギャップと判明。`Accept: application/json`を付けたリクエストでは正しく401が返る（Pest Feature Test群は`getJson()`/`postJson()`で常にこのヘッダーが付くため、テストでは検出できない）
+- 原因: `docs/architecture/authz-authn.md`はWebセッション認証を前提としているが、ログイン画面・`POST /login`ルート（認証UC）自体が未実装。`auth`ミドルウェアは非JSON期待のリクエストを`route('login')`にリダイレクトしようとし、ルートが存在しないため例外→500になる
+- 対処: 未対応。Livewire UI着手前にログイン画面（認証UC）を実装するまでの既知の暫定ギャップとして許容し、`PLAN.md`に記録済み。JSON API的な検証（curlに`Accept: application/json`を付ける、またはPestの`actingAs()`）では問題なく動作するため、UC-001〜003のAPI実装フェーズでは実害なし

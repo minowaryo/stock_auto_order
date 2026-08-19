@@ -49,4 +49,9 @@ class Holding extends Model
     {
         return $this->hasOne(FundamentalIndicator::class);
     }
+
+    public function memos(): HasMany
+    {
+        return $this->hasMany(HoldingMemo::class);
+    }
 }

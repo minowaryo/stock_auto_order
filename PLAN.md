@@ -1,5 +1,24 @@
 # PLAN.md
 
+## UC-003 Greenフェーズ完了・実挙動確認（2026-08-19）
+
+### Decision
+
+- `tdd-implementer`サブエージェントがGate4承認済みテスト15件を通す最小実装を完了。マイグレーション1本（`holding_memos`）、`app/Models/HoldingMemo.php`（`Holding::memos()`リレーション追加）、`app/Http/Requests/ShowHoldingDetailRequest.php`・`SaveHoldingMemoRequest.php`、`app/Actions/Holding/ShowHoldingDetailAction.php`・`SaveHoldingMemoAction.php`、`app/Http/Controllers/HoldingDetailController.php`、`GET /holdings/{holding}`・`POST /holdings/{holding}/memos`ルートを実装（UC-001/002と同じController→FormRequest→Actionの薄いController構成）。`docker compose exec laravel.test php artisan test`で全42件（UC-001 15＋UC-002 9＋UC-003 15＋既存2＋UC-002防御的追加1）Green
+- `run`スキルで実挙動確認を実施し、**テストでは検出できない実装バグを1件発見・修正**した: `ShowHoldingDetailAction::execute()`で`chart_period`省略（`$chartPeriod = null`）時、`self::CHART_PERIOD_YEARS[$chartPeriod]`がnullを配列添字に使う非推奨警告を出していた（Pestの`getJson()`はクエリパラメータ省略時も内部的に空文字列を渡すため、この経路がテストでは通っていなかった）。`$chartPeriod ?? '3y'`で先にnull合流させるよう修正。修正後、`php artisan tinker`で実DBに投入したデータに対し`ShowHoldingDetailAction`/`SaveHoldingMemoAction`を直接実行し、非推奨警告が消えたこと・price_history/rsi/macd/bollinger_band/signal_result/memo_history等が期待通りのJSON構造で返ることを確認（トランザクションロールバックでDBは汚していない）
+  - 併せて、`database/migrations/2026_08_19_000000_create_holding_memos_table.php`が開発用DB（`laravel`データベース）に未適用（`migrate:status`で`Pending`）だったため`php artisan migrate --force`を実行して反映した。PestのFeature TestはRefreshDatabase経由で別途マイグレーションが適用されるため、テストがGreenでも開発用DBには反映されていない、という状態が起こりうる点は今後も要注意
+- **既存の構造的ギャップを発見**（UC-003固有のバグではない）: `Accept: application/json`ヘッダーなしで`GET /holdings/{holding}`を実際にcurlすると500（`RouteNotFoundException: Route [login] not defined.`）。同条件で既存の`GET /holdings`（UC-002）を叩いても再現することを確認し、UC-003の実装起因ではなくログイン画面（認証UC、`docs/architecture/authz-authn.md`記載だが未実装）が存在しないことに起因する既知の暫定ギャップと判明。`docs/ai-context/known-pitfalls.md`に記録済み。JSON API的なリクエスト（`Accept: application/json`付きcurl、またはPestの`actingAs()`）では正しく401/419が返るため、UC-001〜003のAPI実装フェーズでは実害なし。Livewire UI着手前にログイン画面をいつ実装するかはユーザー判断待ち
+- `./vendor/bin/pint`実行。初回実行時、UC-002同様Pintがコミット済みテストファイル（`tests/Feature/UC003HoldingDetailTest.php`）を再整形しようとしたため`git checkout --`で即座に差し戻し、テストファイルはGate4承認時点の内容のまま維持
+- UC-003はAPI実装のみでUI（Livewire画面）は未着手のフェーズのため、`/generate-e2e-test`（Playwright）は対象外と判断（UC-001/002と同様の扱い）
+
+### Files touched
+
+`database/migrations/2026_08_19_000000_create_holding_memos_table.php`（新規）、`app/Models/HoldingMemo.php`（新規）、`app/Models/Holding.php`、`app/Http/Requests/ShowHoldingDetailRequest.php`（新規）、`app/Http/Requests/SaveHoldingMemoRequest.php`（新規）、`app/Actions/Holding/ShowHoldingDetailAction.php`（新規）、`app/Actions/Holding/SaveHoldingMemoAction.php`（新規）、`app/Http/Controllers/HoldingDetailController.php`（新規）、`routes/web.php`、`docs/ai-context/known-pitfalls.md`、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実挙動確認完了。次はRefactor（必要な場合のみ）→`/review`実行→マージ。ログイン画面未実装に起因する500の扱い（いつ着手するか）はユーザー判断待りのため保留事項として残す。マージ後はUC-004ではなくUC-009（取込後サマリーレポート）のGate4サイクルに進む（本ファイルの「Phase1実装順の変更」エントリ参照）。
+
 ## UC-003 Gate4（Redフェーズ）承認・Greenフェーズ着手（2026-08-19）
 
 ### Decision
