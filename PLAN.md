@@ -1,5 +1,28 @@
 # PLAN.md
 
+## UC-009 Gate4（Redフェーズ）承認・Greenフェーズ着手（2026-08-21）
+
+### Decision
+
+- `test-writer`サブエージェントが`tests/Feature/UC009ImportSummaryReportTest.php`にUC-009（取込後サマリーレポート）のFeature Test 13件を作成（正常系9〔基本構造3・件数区分/優先順位4・リバランス/新規投資候補種別2〕・異常系境界値3・権限1）。`app/`・`database/migrations/`は未編集。`docker compose exec laravel.test php artisan test tests/Feature/UC009ImportSummaryReportTest.php`で12件失敗・1件成功（13件中）、フルスイートでは既存43件Green・回帰なしを独立に再確認した。失敗はすべて`GET /import-batches/{importBatch}/summary-report`未定義（404）、または`App\Models\WatchedTheme`未作成（Class not found）による想定通りのRed状態。1件成功（「存在しない取込バッチIDを指定した場合は404になる」）はルート自体が未定義のためどのIDでも404になる“たまたまのグリーン”で、UC-001〜003と同様の扱いとして許容
+- UC-009はUC-004/005/008（Phase2、未実装）の軽量ロジックに依存する複雑な機能のため、テストは`technical_indicators`/`fundamental_indicators`/`sector_classifications`等の既存テーブルにFactory相当のヘルパーで直接データを投入し、レポート生成・優先順位付けロジックのみを検証する構成とした（UC-002/003と同じアプローチ。UC-004/005/008自体の独立画面実装は不要）
+- ユーザーにテスト内容・失敗ログ・以下の実装未確定事項を提示しGate4承認を得た（いずれも推奨案を選択）:
+  1. **NISA区分除外（ADR-0002）はPhase1スコープに含めない**: `holding_snapshot_accounts`未実装のため、全保有数量ベースで優先順位を計算する。NISA除外ロジックはUC-004/005/008実装時にまとめて対応する
+  2. **エンドポイント**: 専用の`GET /import-batches/{importBatch}/summary-report`（route model binding、`auth`ミドルウェア）。UC-001レスポンスへの埋め込みは不採用（再取得できる設計を優先）
+  3. **新規投資候補の注目テーマ合致判定**: `watched_themes.name`と`sector_classifications.name`の完全一致（最も単純な解釈。テスト側が「最も推測度が高い箇所」と明記していた点）
+  4. **初期パラメータ値**: `docs/architecture/data-model.md`の叩き台（財務健全性フィルタ: 自己資本比率40%以上・ROE10%以上、件数区分: 上位10件・補足10件、`link_to`: 利確検討→UC-003・リバランス→UC-005・新規投資候補→UC-006/UC-008のいずれか）をそのまま採用
+  5. 合成スコアの具体的な計算式・重み付けは非開示のまま（ADR-0003）。テストは相対順位（より極端な指標ほど上位rank）のみを緩く検証し、絶対値はアサートしない
+  6. `reason_summary`/`portfolio_headline`は「主要因を示す数値を含む非空文字列」であることのみ検証（ADR-0003の「主要因1〜2件」抽出基準自体はGreenフェーズの実装裁量とする）
+- Gate4承認により`tdd-implementer`サブエージェントでGreenフェーズ（最小実装）に着手する
+
+### Files touched
+
+`tests/Feature/UC009ImportSummaryReportTest.php`（新規、test-writerが作成）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Gate4承認済み。Greenフェーズ着手中。
+
 ## UC-003 Greenフェーズ完了・実挙動確認（2026-08-19）
 
 ### Decision
