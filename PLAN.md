@@ -1,5 +1,23 @@
 # PLAN.md
 
+## MarketData層（Yahoo Finance相当）TDD Red-Green完了・実API確認（実装順ステップ2前半、2026-08-21）
+
+### Decision
+
+- ADR-0004の実装順ステップ2として、`app/Services/MarketData/`にYahoo Finance非公式chart API（`v8/finance/chart/{symbol}?range=2y&interval=1wk`）を使う4クラスを`/tdd`でRed→Green実装した: `YahooFinanceChartClient`（共通HTTP・パース処理）、`JpStockPriceClient`（`.T`サフィックス付与）、`UsStockPriceClient`（サフィックスなし）、`MarketIndexClient`（`nikkei225`→`^N225`、`sp500`→`^GSPC`。ADR-0004のPhase1先行実装対象2件のみ対応、他は`InvalidArgumentException`）
+- 実装前にWebSearch/WebFetchでYahoo Finance chart APIの実際のレスポンス構造（`chart.result[0].timestamp`＋`indicators.quote[0].close`/`volume`の並列配列）を調査し、テスト・実装の前提とした
+- `test-writer`サブエージェントが15件のUnit Test（`Http::fake()`でモック）を作成。Gate4で欠損週の除外・フェイルセーフ（HTTPエラー/空result時は例外を投げず`[]`）・シンボル変換ルール・未対応`index_name`の`InvalidArgumentException`を確認し承認
+- `tdd-implementer`サブエージェントがGreenフェーズを実装。対象15件・フルスイート90件全てGreen、`./vendor/bin/pint app`整形済み
+- **実APIに対する動作確認**: `php artisan tinker`から`YahooFinanceChartClient`・`MarketIndexClient`を実際にYahoo Financeへ接続して呼び出し、トヨタ(7203.T、5週分)・S&P500(104週分)いずれも実際の妥当な価格データが返ることを確認した（モックで仮定したレスポンス構造が実APIと一致していることを検証済み）
+
+### Files touched
+
+`tests/Unit/Services/MarketData/`配下4ファイル（新規）、`app/Services/MarketData/`配下7ファイル（新規: `YahooFinanceChartClient`・`JpStockPriceClientInterface`/`JpStockPriceClient`・`UsStockPriceClientInterface`/`UsStockPriceClient`・`MarketIndexClientInterface`/`MarketIndexClient`）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実API動作確認完了。次はADR-0004の実装順ステップ2後半（J-Quantsクライアント: 認証フロー・セクター分類・財務諸表取得）に進む。
+
 ## TechnicalIndicatorCalculator TDD Red-Green完了（実装順ステップ1、2026-08-21）
 
 ### Decision
