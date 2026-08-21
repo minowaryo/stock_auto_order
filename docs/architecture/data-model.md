@@ -168,6 +168,12 @@
 | ma75 | decimal(15,2) | YES | null | 75週移動平均線（直近値） |
 | bb_upper | decimal(15,2) | YES | null | ボリンジャーバンド+2σ（直近値） |
 | bb_lower | decimal(15,2) | YES | null | ボリンジャーバンド-2σ（直近値） |
+| volume | bigint unsigned | YES | null | 直近出来高（株数、ADR-0004） |
+| volume_ma20 | bigint unsigned | YES | null | 20週平均出来高（ADR-0004） |
+| week52_high | decimal(15,2) | YES | null | 52週高値（ADR-0004） |
+| week52_low | decimal(15,2) | YES | null | 52週安値（ADR-0004） |
+| relative_strength_vs_market | decimal(7,4) | YES | null | 相対力（対市場、%）。直近13週の当該銘柄騰落率−市場指数〔日経平均/S&P500〕騰落率（ADR-0004） |
+| relative_strength_vs_sector | decimal(7,4) | YES | null | 相対力（対セクター、%）。直近13週の当該銘柄騰落率−保有銘柄内の同一セクター平均騰落率（J-Quants無料プランに業種別指数がないための簡易算出、ADR-0004） |
 | computed_at | timestamp | NO | now() | 最終計算日時（UPSERTのたびに更新） |
 
 **Index**: `holding_id` unique
@@ -193,6 +199,8 @@
 | equity_ratio | decimal(7,4) | YES | null | 自己資本比率（%） |
 | dividend_yield | decimal(7,4) | YES | null | 配当利回り（%） |
 | dividend_payout_ratio | decimal(7,4) | YES | null | 配当性向（%） |
+| eps_growth | decimal(7,4) | YES | null | EPS成長率（%、前年同期比。`financial_statements.eps`から算出、ADR-0004） |
+| peg_ratio | decimal(10,4) | YES | null | PEGレシオ（PER÷EPS成長率）。`eps_growth`が0以下の場合は算出せずnull（ADR-0004） |
 | fetched_at | timestamp | NO | now() | J-Quantsからの取得日時（値が変化した時のみ更新。最大12週間遅延の可能性あり） |
 
 **Index**: `holding_id` unique
@@ -211,6 +219,7 @@
 | fiscal_period | varchar(20) | NO | - | 決算期（例: `2025Q4`） |
 | revenue | decimal(18,2) | NO | - | 売上高 |
 | operating_income | decimal(18,2) | NO | - | 営業利益 |
+| eps | decimal(10,2) | YES | null | 1株当たり利益（EPS）。`fundamental_indicators.eps_growth`/`peg_ratio`の算出元（ADR-0004） |
 | revenue_yoy_change | decimal(7,4) | YES | null | 売上高前年比増減（%） |
 | operating_income_yoy_change | decimal(7,4) | YES | null | 営業利益前年比増減（%） |
 | fetched_at | timestamp | NO | now() | J-Quantsからの取得日時 |
@@ -229,7 +238,7 @@
 |---|---|---|---|---|
 | id | bigint | NO | auto | 主キー |
 | holding_snapshot_id | bigint | NO | - | `holding_snapshots.id` への参照 |
-| signal_type | enum('rsi_reversal','macd_dead_cross','bollinger_overheat') | NO | - | シグナル種別 |
+| signal_type | enum('rsi_reversal','macd_dead_cross','bollinger_overheat','week52_high_pullback','peg_overvalued','relative_strength_weakening','volume_spike_decline') | NO | - | シグナル種別。後方4種はADR-0004で追加 |
 | reason_summary | varchar(255) | NO | - | 判定根拠の一言サマリ（例: "RSIが72から65に反落"） |
 | created_at | timestamp | NO | now() | 検出日時 |
 
@@ -237,6 +246,7 @@
 **FK**: `holding_snapshot_id` → `holding_snapshots(id)`
 
 > `split_limit_suggestion`（分割指値提案）はシグナルではなく含み益率のみから機械的に算出できるため、テーブルには持たずアプリケーション層で都度計算する（UC-004業務ルール「固定ルールではなく例示」）。**初期パラメータ値**: 含み益+20%到達で1/3・+35%到達で1/3・残りはトレンド追従。含み益+20%未満の銘柄は本テーブルの対象外（`signals`行を作らない）。
+> **`signal_type`のENUM拡張（ADR-0004）は`.claude/rules/20-mysql.md`が定める「危険な操作（カラム型変更）」に該当する**（MySQLの`ENUM`拡張は`ALTER TABLE ... MODIFY COLUMN`を要し、原理上テーブルロックを伴いうる）。個人利用規模（`signals`は数十〜数百行程度）のため実害は軽微だが、本ADRをもって正式な変更理由の記録とする。
 
 ---
 
@@ -320,6 +330,8 @@
 **Index**: `(snapshot_id, index_name)` unique
 **FK**: `snapshot_id` → `snapshots(id)`
 
+> **Phase1先行実装（ADR-0004）**: 本来UC-007（Phase2）専用のテーブルだが、`technical_indicators.relative_strength_vs_market`（UC-003）の算出に必要なため、`index_name`が`nikkei225`/`sp500`の2件分のみ「取得・保存」ロジックをPhase1で先行実装する（`us10y`/`vix`/`usdjpy`はUC-007画面本体〔Phase2〕着手時にあわせて実装）。F-009がF-005/F-008の軽量ロジックを先行実装したのと同じパターン（`requirements.md` 7章参照）。
+
 ---
 
 ### import_summary_reports（取込後サマリーレポート・UC-009）
@@ -382,6 +394,10 @@
 | サマリーレポートの件数区分 | 主要10件・補足10件（計20件） | UC-009 | 叩き台のまま承認 |
 | 合成スコアの重み付け | 利確検討・リバランス・新規投資候補の3種を横断する優先順位ロジック（未確定） | UC-009 | 叩き台のまま承認。Phase 1実装時に`/tdd`サイクルで確定 |
 | ~~セクター分類の粒度（17業種 or 33業種）~~ | **確定済み: 17業種**（2026-08-15、J-Quants `Sector17Code`を使用） | UC-002/005 | 確定済み |
+| 52週高値からの反落閾値 | -10%以上下落で`week52_high_pullback`検出 | UC-004 | 叩き台（ADR-0004）。Phase 1実装時に`/tdd`サイクルで確定 |
+| PEGレシオの割高判定閾値 | 2.0以上で`peg_overvalued`検出 | UC-004 | 叩き台（ADR-0004）。Phase 1実装時に`/tdd`サイクルで確定 |
+| 相対力の算出期間・低下判定基準 | 直近13週の騰落率差。直近4週でプラス→マイナス転換時に`relative_strength_weakening`検出 | UC-003/004 | 叩き台（ADR-0004）。Phase 1実装時に`/tdd`サイクルで確定 |
+| 出来高急増の判定閾値 | 20週平均比1.5倍以上、かつ株価が前週比下落で`volume_spike_decline`検出 | UC-004 | 叩き台（ADR-0004）。Phase 1実装時に`/tdd`サイクルで確定 |
 
 ## 承認記録
 
@@ -401,4 +417,5 @@
 | 2026-08-16 | NISA区分を含む口座区分の内訳を`holding_snapshot_accounts`テーブルに追記保存する方針に変更（Gate 3承認済みだった「口座区分を保持しない」方針〔前提セクション旧記述〕を覆すCR）。既存の`holdings`/`holding_snapshots`のカラムは変更しない。UC-004/UC-005/UC-008でNISA区分の除外・推奨判定に使用する | ADR-0002 |
 | 2026-08-21 | `import_summary_reports.portfolio_headline`・`import_summary_report_items.reason_summary`の説明を改訂（Gate 3承認済みだった「合成スコアの算出根拠は非開示」という方針を部分的に緩和するCR）。詳細な計算式・重み付けは引き続き非開示のままとしつつ、判定の主要因となった代表指標を出力に含める方針に変更。テーブル構造・カラム追加は不要（既存の`varchar`カラムの文字列内で表現） | ADR-0003（CHG-0002） |
 | 2026-08-21 | `holding_snapshot_accounts`テーブルをドラフト通りのカラム構成で実装（`2026_08_21_000000_create_holding_snapshot_accounts_table.php`）。ADR-0002決定時点では未着手だったマイグレーション・`HoldingSnapshotAccount`モデル（`holdingSnapshot()`リレーション）・`HoldingSnapshot::accounts()`逆リレーションを追加。CSVパーサ（`JpStockCsvParser`/`UsStockCsvParser`/`MutualFundCsvParser`）・`ImportCsvAction`側での口座区分別内訳の書き込みロジックはまだ未実装（別途Gate4 TDDサイクルで対応） | ADR-0002 |
+| 2026-08-21 | 分析エンジンの指標セットを拡張（CHG-0003）。`technical_indicators`に`volume`/`volume_ma20`/`week52_high`/`week52_low`/`relative_strength_vs_market`/`relative_strength_vs_sector`、`fundamental_indicators`に`eps_growth`/`peg_ratio`、`financial_statements`に`eps`を追加。`signals.signal_type`のENUMに4種追加（危険な操作に該当、上記注記参照）。`market_indicator_snapshots`（`nikkei225`/`sp500`分のみ）をUC-007に先行してPhase1で実装対象に追加。`technical_indicators`/`fundamental_indicators`/`signals`は既存マイグレーション実行済みのため、本変更は新規ALTER TABLEマイグレーションで対応する（既存マイグレーションファイルは編集しない） | ADR-0004 |
 | 2026-08-21 | UC-009 Gate4 Greenフェーズ実装に伴い`watched_themes`/`import_summary_report_items`をドラフト通りのカラム構成で実装。Gate4承認によりPhase1スコープではNISA区分除外（ADR-0002）を対象外とし、全保有数量ベースで優先順位を算出する方針とした（`holding_snapshot_accounts`との連携は別途UC-004/005/008実装時に対応）。新規投資候補の注目テーマ合致判定は`watched_themes.name`と`sector_classifications.name`の完全一致、財務健全性フィルタ・件数区分（上位10件/補足10件）は本ファイルの叩き台の値をそのまま採用 | - |

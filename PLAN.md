@@ -1,5 +1,86 @@
 # PLAN.md
 
+## 分析エンジンの指標セット拡張・設計確定、並行セッションとの整合（ADR-0004、2026-08-21）
+
+### Decision
+
+- 分析エンジンの心臓部（テクニカル/ファンダメンタルズ指標の実計算・J-Quants/Yahoo Finance連携・シグナル判定ロジック）がまだ未着手だったため、本セッションでユーザーと協議し設計を確定した。`PLAN.md`・`docs/original-docs/stock-portfolio-system-plan.md`・`requirements.md`・`use-cases.md`・`data-model.md`・ADR-0003を確認し、既存の指標セット（RSI/MACD/BB/MA、PER/PBR/ROE/成長率/自己資本比率/配当）を土台に設計した
+- 外部データ取得は**CSV取込（UC-001）時に同期取得**、実装方式は**LaravelのHTTPクライアントで直接呼び出し**（Pythonブリッジは不採用）と決定。`app/Services/MarketData/`（外部データ取得）・`app/Services/Analysis/`（指標計算・シグナル判定）のレイヤー構成で設計した
+- チャート形状パターン検出（三尊天井等）は引き続き持ち越し（今回のスコープ外）
+- ユーザーへの「投資歴5年程度の個人投資家として指標セットは妥当か」という確認に対し、**出来高・52週高値安値・PEGレシオ・相対力（対市場・対セクター）**の4指標を追加することで合意した。出来高は`docs/original-docs/`で判断材料の優先順位①とされながら指標セット・data-model.mdに未反映だった既知のギャップだった
+- 相対力（対セクター）はJ-Quants無料プランに業種別指数（TOPIX-17指数等）がない（[J-Quants API記事](https://qiita.com/j_quants/items/68ffe2383cd6c3b8f6e1)で確認、スタンダード/プレミアムプラン限定）ため、保有銘柄内の同一セクター平均騰落率で簡易代用する設計にした
+- 相対力（対市場）はUC-007（Phase2）専用の`market_indicator_snapshots`テーブルに依存するため、F-009がF-005/F-008の軽量ロジックをPhase1に先行実装したのと同じパターンで、同テーブルの「取得・保存」ロジック（`nikkei225`/`sp500`分のみ）をPhase1に先行実装する方針とした（ユーザー選択）
+- 新指標はUC-004の自動シグナル判定（`signal_type`）にも組み込む方針とし（ユーザー選択）、`week52_high_pullback`/`peg_overvalued`/`relative_strength_weakening`/`volume_spike_decline`の4種を追加した
+- 以上をADR-0004として記録し、`requirements.md`（2章IN scope・4章F-004行・6章優先順位記述・7章フェーズ計画）・`use-cases.md`（UC-001フロー追加、UC-003出力表・業務ルール追加、UC-004シグナル種別追加、UC-007に先行実装の注記、承認記録にCR追記）・`data-model.md`（`technical_indicators`/`fundamental_indicators`/`financial_statements`/`signals`へのカラム追加、`market_indicator_snapshots`の先行実装注記、保留パラメータ表・変更履歴の追記）・`traceability-matrix.md`（CHG-0003）・`glossary.md`（用語追加）・`known-pitfalls.md`（J-Quants業種別指数の制約）・`mockups/README.md`（UC-003モックの陳腐化注記）に反映した
+
+### 並行セッションとの競合発見・整合（本エントリの追加対応）
+
+- ドキュメント改訂の作業途中、`docs/product/requirements.md`・`PLAN.md`が本セッションの編集と別に更新されていることを検知した。調査の結果、**別セッションが同一の作業ディレクトリで並行して稼働しており**、以下を完了・コミット済みだったことが判明した:
+  1. 貴金属・仮想通貨、楽天証券パフォーマンスレポート（PDF）由来情報をOUTスコープとして明記するCR（`requirements.md` 2章）
+  2. 投資方針・数値目標（年率+5%・年間約100万円目安）の背景整理と`BACKGROUND.md`新規作成（次エントリ参照）
+  3. **UC-009（取込後サマリーレポート）のGate4 Red→Green実装・`/review`対応・マージ完了**（コミット`2f6a56c`）
+- ユーザーに状況を報告し、「別セッションでの作業は停止済みなので、本チャットで確定した設計方針に沿って整理し直してほしい」との指示を受けた
+- `app/Actions/ImportSummaryReport/ShowImportSummaryReportAction.php`を確認し、ADR-0004との整合性を検証した結果:
+  - **コードレベルの後方互換性は壊れていない**: 追加したカラムはすべて既存テーブルへの追加nullable列であり、UC-009の現行実装は`signals.signal_type`・`market_indicator_snapshots`のいずれも参照していない
+  - **一方でUC-009はADR-0004の新指標を未反映のまま実装済み**: 利確検討の根拠は`unrealized_gain_rate`/`rsi`のみ、新規投資候補の根拠は`equity_ratio`/`roe`のみで、出来高・52週高値安値・PEG・相対力は使われていない。UC-003と同様、**UC-009にも追加のTDDサイクル（Red→Green、Gate4再承認）が必要**と判明した
+- ADR-0004・`traceability-matrix.md`（CHG-0003）・`use-cases.md`承認記録を、この発見を反映して更新した（UC-003のみでなくUC-009も既存実装への影響対象として明記）
+
+### Files touched
+
+`docs/adr/ADR-0004-analysis-engine-indicator-expansion.md`（新規）、`docs/product/requirements.md`、`docs/product/use-cases.md`、`docs/architecture/data-model.md`、`docs/rcid/traceability-matrix.md`、`docs/ai-context/glossary.md`、`docs/ai-context/known-pitfalls.md`、`docs/product/mockups/README.md`、`PLAN.md`（本エントリ追加）
+
+### Status
+
+ドキュメント改訂完了。実装順（実装しやすい順、ユーザー合意済み）は以下の通り:
+
+1. `TechnicalIndicatorCalculator`（外部APIなし・純粋計算、Unit Testしやすい）— RSI/MACD/BB/MA/出来高/52週高値安値/相対力の計算ロジック
+2. `app/Services/MarketData/`のクライアント群（JP株価格→US株価格→J-Quantsの順）
+3. `SignalDeterminationService`（UC-004向け、新シグナル種別含む）
+4. `FetchExternalMarketDataAction`でUC-001フローに統合
+5. `FinancialHealthFilter`・`SectorAllocationCalculator`・`SummaryScoreEngine`（UC-009軽量版一式の拡張）
+6. UC-004 Gate4サイクル
+7. **既存実装への追加改修（新たなGate4サイクル）**: UC-003（`ShowHoldingDetailAction`）・UC-009（`ShowImportSummaryReportAction`）の両方に新指標を反映
+
+なお`BACKGROUND.md`は既に別セッションで作成済みのため（次エントリ参照）、本エントリでは新規作成しない。
+
+## 投資方針・数値目標の背景整理、BACKGROUND.md新規作成（2026-08-21）
+
+### Decision
+
+- ユーザーから、本システム導入の最終的な目的・背景を明確化したいとの要望を受けた。要点を整理すると以下の通り:
+  - 基本戦略は積立投資・長期保有（「ガチホ」）であり、本システムはこれを置き換えるものではない
+  - 積立・長期保有のみではパフォーマンスが市場平均（年率5〜10%程度）に収束していく傾向があるため、本システムは中長期の「要所要所」での売買タイミング判断（利確・リバランス・新規投資候補選定）を支援し、市場平均に対する追加収益（アルファ）獲得を狙う
+  - 数値目標の目安: 現在の資産規模は約2,000万円。年率+5%程度・年間約100万円の追加利益を確実に積み上げることを目標水準とする（この数値は**最低限確保したい下限ライン**であり上限ではない。これを上回る収益〔例: +10%等〕が得られるならなお良いという位置づけ）
+  - 短期の頻繁なトレードではなく中長期判断が基本方針であること、判断基準は本人が根拠を目視で理解できる信頼できるものであり、安心して投資判断を行えることを重視する
+- グローバルCLAUDE.mdの規約（`BACKGROUND.md` = システム背景・導入背景・課題・方針・位置づけを記録するファイル）に従い、リポジトリ直下に`BACKGROUND.md`を新規作成した。これまで本プロジェクトには存在していなかった
+- `docs/product/requirements.md` 1章「背景・目的」にも、積立・長期保有が基本戦略である旨と数値目標（年率+5%・年間約100万円目安）を追記した。既存のIN/OUTスコープ・機能一覧（F-001〜F-009）自体への変更はなく、背景・目的セクションの補強のみのため、Gate 1再承認や`traceability-matrix.md`のCHG登録は不要と判断した（純粋な背景情報の追記であり、要件の追加・変更ではないため）
+- `docs/ai-context/project-summary.md`の「目的」行も簡潔に更新し、`BACKGROUND.md`への参照を追加した
+
+### Files touched
+
+`BACKGROUND.md`（新規）、`docs/product/requirements.md`（1章に追記）、`docs/ai-context/project-summary.md`（目的行を更新）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+完了。要件のスコープ・機能一覧自体に変更はないため後続のGate再承認は不要。今後の機能検討（特にF-004利確シグナル・F-009サマリーレポートの優先順位付けロジック）は、ここで明文化した数値目標を判断材料の一つとして参照する。
+
+## スコープ確認: パフォーマンスレポート(PDF)由来の情報・貴金属/仮想通貨の対象外化（2026-08-21）
+
+### Decision
+
+- `docs/original-docs/PerformanceReport_20260815.pdf`（楽天証券のパフォーマンスレポート）の内容を調査し、既存の保有銘柄CSV（JP株/US株/投資信託）との重複・差分を洗い出した。差分情報（実現損益・銘柄別の月間/年間期間損益・資産総額サマリー・預り金/信用建玉・複数通貨の参考為替レート等）について、ユーザーに活用価値の評価を提示した
+- ユーザーの判断: これらの情報は楽天証券の既存ツール・レポートで別途確認可能であり、本システムのメイン機能は売買提案（利確判断・リバランス・新規投資候補選定）に絞りたいため、重複しない差分情報も含めて**現時点では対象外のまま放置してよい**と確認。`requirements.md` 2章OUTスコープに、PDF由来の非重複情報を明示的に対象外として追記した
+- 併せて、ユーザーが金・銀・プラチナ・仮想通貨（ポートフォリオの一部〔数%〜2割程度〕を占める）も保有していることが判明。これらは現行の`holdings.market` enum（`jp`/`us`/`mutual_fund`）に存在せずCSV取込対象にも含まれていなかったが、これまで明文化された除外判断ではなかったため、ユーザーに「対象を株式・投資信託に絞りスコープを広げすぎない」方針でよいか確認したところ同意を得た。`requirements.md` OUTスコープに追記し、意図的な除外であることを記録した
+- どちらも`data-model.md`・`use-cases.md`側の変更は不要（元々対象に含めていなかったため）。既存のOUTスコープ記載「バックテスト機能（将来的に過去の売買を振り返る）」とも整合する判断
+
+### Files touched
+
+`docs/product/requirements.md`（2章OUTスコープに2件追記）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+完了。将来的にバックテスト機能や資産全体（現金・貴金属・仮想通貨含む）の可視化を扱う場合は、別途requirements.md改訂・CRとして再検討する。
+
 ## UC-009 Gate4（Redフェーズ）承認・Greenフェーズ着手（2026-08-21）
 
 ### Decision
