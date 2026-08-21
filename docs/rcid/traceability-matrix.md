@@ -10,6 +10,7 @@
 | F-001 | UC-001 | `app/Http/Controllers/CsvImportController.php`, `app/Actions/Import/ImportCsvAction.php` | `tests/Feature/UC001CsvImportTest.php` | 完了 |
 | F-002 | UC-002 | `app/Http/Controllers/HoldingListController.php`, `app/Actions/Holding/ListHoldingsAction.php` | `tests/Feature/UC002HoldingListTest.php` | 完了 |
 | F-003 | UC-003 | `app/Http/Controllers/HoldingDetailController.php`, `app/Actions/Holding/ShowHoldingDetailAction.php`, `app/Actions/Holding/SaveHoldingMemoAction.php` | `tests/Feature/UC003HoldingDetailTest.php` | 実装中（Green完了・`/review`未実施） |
+| F-009 | UC-009 | `app/Http/Controllers/ImportSummaryReportController.php`, `app/Actions/ImportSummaryReport/ShowImportSummaryReportAction.php` | `tests/Feature/UC009ImportSummaryReportTest.php` | 完了 |
 
 ## 変更追跡
 

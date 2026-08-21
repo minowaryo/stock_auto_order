@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable(['import_batch_id', 'portfolio_headline', 'generated_at'])]
 class ImportSummaryReport extends Model
@@ -24,5 +25,10 @@ class ImportSummaryReport extends Model
     public function importBatch(): BelongsTo
     {
         return $this->belongsTo(ImportBatch::class);
+    }
+
+    public function items(): HasMany
+    {
+        return $this->hasMany(ImportSummaryReportItem::class);
     }
 }
