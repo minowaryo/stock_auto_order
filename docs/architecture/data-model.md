@@ -399,6 +399,26 @@
 | 相対力の算出期間・低下判定基準 | 直近13週の騰落率差。直近4週でプラス→マイナス転換時に`relative_strength_weakening`検出 | UC-003/004 | 叩き台（ADR-0004）。Phase 1実装時に`/tdd`サイクルで確定 |
 | 出来高急増の判定閾値 | 20週平均比1.5倍以上、かつ株価が前週比下落で`volume_spike_decline`検出 | UC-004 | 叩き台（ADR-0004）。Phase 1実装時に`/tdd`サイクルで確定 |
 
+## 分析ロジックの計算仕様（`TechnicalIndicatorCalculator`、Gate4確定・2026-08-21）
+
+`technical_indicators`の各カラムを算出する`app/Services/Analysis/TechnicalIndicatorCalculator::calculate()`の計算式・データ不足時の扱いを記録する（ADR-0004、`tests/Unit/Services/Analysis/TechnicalIndicatorCalculatorTest.php`のGate4承認内容と同期）。入力は週次の価格系列（`date`/`close`/`volume`、時系列昇順）と、相対力算出用のベンチマーク13週騰落率（呼び出し側が算出して渡す。このクラス自身はベンチマークの騰落率を計算しない）。
+
+| 指標 | 計算式 | 必要データ件数 | 不足時 |
+|---|---|---|---|
+| `rsi` | RSI(14週)。直近15件（14回の変化）の値上がり幅合計÷14＝平均上げ幅、値下がり幅合計÷14＝平均下げ幅（Wilderのスムージングは使わない単純移動平均ベース）。RS＝平均上げ幅÷平均下げ幅、RSI＝100−100/(1+RS)。平均下げ幅が0の場合はRSI＝100（0除算回避、慣例通り） | 15件 | `null` |
+| `macd` | 12週EMA − 26週EMA | 26件 | `null` |
+| `macd_signal` | MACD値の時系列（26件目以降、各時点で再計算したMACD値）に対する9週EMA | 35件 | `null`（`macd`自体は26件で算出されるため、26〜34件では`macd`のみ値を持ち`macd_signal`は`null`になりうる） |
+| `ma20` / `ma75` | 直近20週/75週の終値の単純移動平均 | 20件 / 75件 | `null` |
+| `bb_upper` / `bb_lower` | 直近20週終値の単純移動平均 ±（2 × 標本標準偏差、分散はn-1で除算） | 20件 | `null` |
+| `volume` | 直近週（配列の最終要素）の出来高そのまま | 1件 | `null`（0件時） |
+| `volume_ma20` | 直近20週の出来高の単純移動平均 | 20件 | `null` |
+| `week52_high` / `week52_low` | 直近52週の終値の最大値/最小値 | 52件 | `null`（部分レンジでは算出しない） |
+| `relative_strength_vs_market` / `relative_strength_vs_sector` | 直近13週の当該銘柄騰落率(%) − 対応するベンチマーク13週騰落率(%、引数`marketReturn13w`/`sectorReturn13w`)。銘柄騰落率＝(直近close − 13週前close) ÷ 13週前close × 100 | 14件（かつ対応するベンチマーク引数が非null） | `null`（データ不足またはベンチマーク引数が`null`の場合。市場・セクターは独立に判定するため、片方だけ算出されるケースもありうる） |
+
+**EMA（`macd`/`macd_signal`共通）**: 最初の`period`件の単純移動平均でシードし、以降を平滑化定数 α=2/(period+1) で `EMA_t = α×値_t + (1-α)×EMA_{t-1}` として再帰計算する。
+
+> 上記の計算式・データ件数閾値はGate4（テストケース承認、2026-08-21）で確定済み。変更する場合は`tests/Unit/Services/Analysis/TechnicalIndicatorCalculatorTest.php`の該当テストとあわせて改訂すること。
+
 ## 承認記録
 
 | 日付 | レビュアー | 結果 | コメント |
@@ -418,4 +438,5 @@
 | 2026-08-21 | `import_summary_reports.portfolio_headline`・`import_summary_report_items.reason_summary`の説明を改訂（Gate 3承認済みだった「合成スコアの算出根拠は非開示」という方針を部分的に緩和するCR）。詳細な計算式・重み付けは引き続き非開示のままとしつつ、判定の主要因となった代表指標を出力に含める方針に変更。テーブル構造・カラム追加は不要（既存の`varchar`カラムの文字列内で表現） | ADR-0003（CHG-0002） |
 | 2026-08-21 | `holding_snapshot_accounts`テーブルをドラフト通りのカラム構成で実装（`2026_08_21_000000_create_holding_snapshot_accounts_table.php`）。ADR-0002決定時点では未着手だったマイグレーション・`HoldingSnapshotAccount`モデル（`holdingSnapshot()`リレーション）・`HoldingSnapshot::accounts()`逆リレーションを追加。CSVパーサ（`JpStockCsvParser`/`UsStockCsvParser`/`MutualFundCsvParser`）・`ImportCsvAction`側での口座区分別内訳の書き込みロジックはまだ未実装（別途Gate4 TDDサイクルで対応） | ADR-0002 |
 | 2026-08-21 | 分析エンジンの指標セットを拡張（CHG-0003）。`technical_indicators`に`volume`/`volume_ma20`/`week52_high`/`week52_low`/`relative_strength_vs_market`/`relative_strength_vs_sector`、`fundamental_indicators`に`eps_growth`/`peg_ratio`、`financial_statements`に`eps`を追加。`signals.signal_type`のENUMに4種追加（危険な操作に該当、上記注記参照）。`market_indicator_snapshots`（`nikkei225`/`sp500`分のみ）をUC-007に先行してPhase1で実装対象に追加。`technical_indicators`/`fundamental_indicators`/`signals`は既存マイグレーション実行済みのため、本変更は新規ALTER TABLEマイグレーションで対応する（既存マイグレーションファイルは編集しない） | ADR-0004 |
+| 2026-08-21 | `app/Services/Analysis/TechnicalIndicatorCalculator`（TDD Red-Green完了）に伴い「分析ロジックの計算仕様」節を追加。`technical_indicators`の各カラムの算出式・必要データ件数・不足時のnull扱いをGate4確定内容として記録 | ADR-0004 |
 | 2026-08-21 | UC-009 Gate4 Greenフェーズ実装に伴い`watched_themes`/`import_summary_report_items`をドラフト通りのカラム構成で実装。Gate4承認によりPhase1スコープではNISA区分除外（ADR-0002）を対象外とし、全保有数量ベースで優先順位を算出する方針とした（`holding_snapshot_accounts`との連携は別途UC-004/005/008実装時に対応）。新規投資候補の注目テーマ合致判定は`watched_themes.name`と`sector_classifications.name`の完全一致、財務健全性フィルタ・件数区分（上位10件/補足10件）は本ファイルの叩き台の値をそのまま採用 | - |

@@ -1,5 +1,27 @@
 # PLAN.md
 
+## TechnicalIndicatorCalculator TDD Red-Green完了（実装順ステップ1、2026-08-21）
+
+### Decision
+
+- ADR-0004の実装順（PLAN.md「分析エンジンの指標セット拡張・設計確定」エントリ参照）のステップ1として、`app/Services/Analysis/TechnicalIndicatorCalculator`を`/tdd`でRed→Green実装した
+- `test-writer`サブエージェントが`tests/Unit/Services/Analysis/TechnicalIndicatorCalculatorTest.php`に20件のUnit Testを作成（正常系7・境界値9・null伝播3・空配列1）。等差数列等の手計算で検証可能なデータで具体的な数値をアサートする設計。`docker compose exec laravel.test php artisan test --filter=TechnicalIndicatorCalculator`で全20件、クラス未実装によるRedを確認
+- ユーザーにテスト内容・以下3点の実装未確定事項を提示しGate4承認を得た（いずれも推奨案を選択）:
+  1. RSIのavg_loss=0時はRSI=100（0除算回避、慣例通り）
+  2. EMAのシード方式は単純移動平均シード（等差数列データを使うことで結果はシード方式に依存しない設計のため実質影響なし）
+  3. ボリンジャーバンドの標準偏差は標本標準偏差（n-1）
+- `tdd-implementer`サブエージェントがGreenフェーズを実装。全20件Green、フルスイート75件Green（既存への回帰なし）、`./vendor/bin/pint app`整形済み。実装中、相対力の計算式で浮動小数点丸め誤差（`toBe(8.0)`が`7.999999999999989`で失敗）が発生したため、数式の演算順序を`(($current - $past) / $past) * 100 - $benchmark`に変更して解消（要求される数式自体は変更していない）
+- このクラスはまだどこからも呼び出されていない（呼び出し元`FetchExternalMarketDataAction`は実装順ステップ4）ため、`run`スキルによる画面確認は対象外と判断。代わりに`php artisan tinker`で乱数による現実的な波形の80週分価格データ（等差数列ではない）を生成し直接呼び出したところ、RSI/MA/BB/週52高値安値/相対力すべてが妥当な範囲の値を返すことを確認した（クラッシュ・NaN・Infinity・意図しないnullなし）
+- ユーザーから「各分析ロジックは細かめに要件として資料に残しておいて」との指示を受け、`docs/architecture/data-model.md`に「分析ロジックの計算仕様」節を新設し、13項目全ての計算式・必要データ件数・不足時のnull扱いを記録した
+
+### Files touched
+
+`tests/Unit/Services/Analysis/TechnicalIndicatorCalculatorTest.php`（新規）、`app/Services/Analysis/TechnicalIndicatorCalculator.php`（新規）、`docs/architecture/data-model.md`（計算仕様節・変更履歴追加）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実挙動サニティチェック完了。次はADR-0004の実装順ステップ2（`app/Services/MarketData/`のクライアント群、JP株価格→US株価格→J-Quantsの順）に進む。
+
 ## 分析エンジンの指標セット拡張・設計確定、並行セッションとの整合（ADR-0004、2026-08-21）
 
 ### Decision
