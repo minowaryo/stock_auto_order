@@ -328,7 +328,7 @@
 |---|---|---|---|---|
 | id | bigint | NO | auto | 主キー |
 | import_batch_id | bigint | NO | - | `import_batches.id` への参照（1取込＝1レポート） |
-| portfolio_headline | varchar(500) | NO | - | 全体感サマリー（1〜数文） |
+| portfolio_headline | varchar(500) | NO | - | 全体感サマリー（1〜数文）。判定の主要因となった代表指標を含める（ADR-0003） |
 | generated_at | timestamp | NO | now() | レポート生成日時 |
 
 **Index**: `import_batch_id` unique
@@ -347,14 +347,14 @@
 | recommendation_type | enum('利確検討','リバランス','新規投資候補') | NO | - | レコメンド種別 |
 | target_label | varchar(255) | NO | - | 対象銘柄コード・銘柄名またはセクター名 |
 | action_suggestion | varchar(255) | NO | - | 提案内容の一言 |
-| reason_summary | varchar(255) | NO | - | 背景理由の一言サマリ |
+| reason_summary | varchar(255) | NO | - | 背景理由の一言サマリ。判定の主要因となった代表指標1〜2件を具体的な値とともに含める（例:「含み益+38%・RSI71（過熱）が中心的根拠」） |
 | link_to | varchar(50) | NO | - | 裏付け確認先の画面識別子（例: `UC-003`, `UC-005`, `UC-006`） |
-| composite_score | decimal(10,4) | NO | - | 合成スコア（算出根拠は非開示だが、順位再現性のためDBには保存する） |
+| composite_score | decimal(10,4) | NO | - | 合成スコア（詳細な計算式・重み付けは非開示だが、順位再現性のためDBには保存する） |
 
 **Index**: `(import_summary_report_id, rank)` unique
 **FK**: `import_summary_report_id` → `import_summary_reports(id)`
 
-> 合成スコアリングの計算式・重み付けは`requirements.md` 6章の例外規定に基づきユーザーに開示しないが、内部実装（`app/Services/Analysis/`）では算出根拠をログ等に残さず`composite_score`のみ保存する。件数（10件/20件）・スコア計算の重み付けは**初期パラメータ値（叩き台）**であり、Phase 1実装時の`/tdd`サイクルで確定させる。
+> 合成スコアリングの詳細な計算式・重み付けは`requirements.md` 6章の設計方針（ADR-0003）に基づきユーザーに開示しない。ただし判定結果そのものは非開示にせず、`reason_summary`（および`import_summary_reports.portfolio_headline`）には主要因となった代表指標を含める。内部実装（`app/Services/Analysis/`）は`composite_score`の算出に用いた各指標の寄与度を保持し、`reason_summary`生成時に寄与度上位1〜2件を代表指標として抽出する（抽出ロジックの詳細はPhase 1実装時の`/tdd`サイクルで確定）。件数（10件/20件）・スコア計算の重み付けは**初期パラメータ値（叩き台）**であり、Phase 1実装時の`/tdd`サイクルで確定させる。
 
 ---
 
@@ -399,3 +399,4 @@
 | 2026-08-16 | UC-001 Gate4 Greenフェーズ実装に伴い`holdings.symbol_code`を`varchar(20)`→`varchar(255)`に拡張。投資信託の`symbol_code`はファンド名そのものを格納する仕様（UC-001業務ルール）のため20桁では収まらないことが実装時に判明した | - |
 | 2026-08-16 | UC-002 Gate4 Greenフェーズ実装に伴い`sector_classifications`/`technical_indicators`/`fundamental_indicators`/`signals`をドラフト通りのカラム構成で実装。`holdings.sector_classification_id`は`sector_classifications`不在のため見送っていたFK制約を後続マイグレーションで追加（既存の`holdings`マイグレーションは編集せず、`.claude/rules/20-mysql.md`の「実行済みマイグレーションは編集しない」に従い後方互換を維持） | - |
 | 2026-08-16 | NISA区分を含む口座区分の内訳を`holding_snapshot_accounts`テーブルに追記保存する方針に変更（Gate 3承認済みだった「口座区分を保持しない」方針〔前提セクション旧記述〕を覆すCR）。既存の`holdings`/`holding_snapshots`のカラムは変更しない。UC-004/UC-005/UC-008でNISA区分の除外・推奨判定に使用する | ADR-0002 |
+| 2026-08-21 | `import_summary_reports.portfolio_headline`・`import_summary_report_items.reason_summary`の説明を改訂（Gate 3承認済みだった「合成スコアの算出根拠は非開示」という方針を部分的に緩和するCR）。詳細な計算式・重み付けは引き続き非開示のままとしつつ、判定の主要因となった代表指標を出力に含める方針に変更。テーブル構造・カラム追加は不要（既存の`varchar`カラムの文字列内で表現） | ADR-0003（CHG-0002） |
