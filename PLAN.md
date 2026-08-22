@@ -2,6 +2,50 @@
 
 > 2026-08-21以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 
+## `/review`拡張レベルの指摘（per-holding非アトミック性）を修正（2026-08-22）
+
+### Decision
+
+- 前エントリのバグ修正に対して`/review`を実施（review-scoreが未コミット差分に対応していなかったため、同じロジックを作業ツリー差分に手動適用しスコア47〔閾値30超過〕→拡張レベルで実施）
+- MEDIUM指摘: `FetchExternalMarketDataAction`の2つ目のループのtry-catchは、`TechnicalIndicator::updateOrCreate()`成功**後**にファンダメンタルズ指標保存・シグナル判定で例外が起きた場合、その銘柄が「テクニカル指標だけ最新化・ファンダメンタルズ指標とシグナルは古いまま」という中途半端な状態になり得る点を発見
+- ユーザー承認のもと、失敗する再発防止テスト（既存のstale値付きTechnicalIndicator行を用意し、`fetchStatements()`失敗時にその値が更新されず据え置かれることを検証）をRedで作成・確認後、2つ目のループの銘柄ごとの処理本体を`DB::transaction()`で包む修正をGreenで実施。フルスイート164件全てGreen
+- `known-pitfalls.md`に追記
+
+### Files touched
+
+`app/Actions/Analysis/FetchExternalMarketDataAction.php`（`DB::transaction()`でラップ）、`tests/Feature/FetchExternalMarketDataActionTest.php`（1件追加）、`docs/ai-context/known-pitfalls.md`、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認完了。コミット・プッシュ済み。
+
+## UC-009サマリーレポートのサンプル出力を実データで作成・過程で実バグ2件を発見し修正（2026-08-22）
+
+### Decision
+
+- 前エントリでの「UC-009サマリーレポートのサンプル出力（PDF相当）を実データで準備する」という要望に着手した。ユーザーに出力形式を確認したところ「モックHTML（`docs/product/mockups/screen-UC009-summary-report.html`）に実データを差し込んだ静的HTML」を選択された
+- 実データとして`docs/original-docs/assetbalance*.csv`（ユーザーの実際の楽天証券資産残高CSV、134銘柄）をUC-001の実フロー（`ImportCsvAction`経由、`php artisan tinker`から`StoreCsvImportRequest`を構築して実行）で取り込んだところ、**`FetchExternalMarketDataAction`が銘柄24件目付近で例外を起こし、134件中126件がテクニカル指標・シグナルなしのまま気づかれず取込完了扱いになる実バグ**を発見した
+  1. `fundamental_indicators.eps_growth`（`decimal(7,4)`、最大±999.9999%）に、ほぼゼロ近辺からの回復銘柄の実際のEPS成長率1136%を保存しようとしてMySQLの`Out of range`エラー
+  2. この例外が`FetchExternalMarketDataAction`の2つ目のループ（テクニカル/ファンダメンタルズ計算・シグナル判定）でper-holdingのtry-catchに囲われておらず、1銘柄の失敗で残り全銘柄の処理が丸ごと中断。`fetchSectorInfo()`呼び出しも同様に1つ目のループのtry-catchの外にあり無保護だった。`ImportCsvAction`側の外側の`catch (\Throwable) {}`がログなしで握りつぶすため、実運用でも気づけない構造だった
+- ユーザーに報告し「根本修正してからサンプル生成」の方針で承認を得て`/tdd`を実施。`test-writer`が3件の再発防止Feature Test（列幅超過・`fetchSectorInfo()`失敗時の分離・2つ目のループ内失敗時の分離）を追加しGate4承認。`tdd-implementer`がGreenフェーズを実装:
+  - 新規マイグレーションで`eps_growth`/`revenue_growth`/`operating_income_growth`を`decimal(7,4)`→`decimal(10,4)`に拡張（ADR-0006作成、MySQLのカラム型変更に該当するため）
+  - `FetchExternalMarketDataAction`の1つ目のループ（`fetchSectorInfo()`含む）・2つ目のループ双方を1銘柄単位のtry-catchで囲み、失敗時は`Log::warning()`で記録した上でスキップに変更
+  - 対象3件・フルスイート163件全てGreen。`known-pitfalls.md`・`data-model.md`（列定義・変更履歴）に反映
+- 修正後、実データ（134銘柄）を改めて再取込みし直したところ全134件が例外なく完走（バッチID 14）。テクニカル指標129件・ファンダメンタルズ指標86件・シグナル81件が保存され、警告ログ6件（実際に外部データが取得できなかった銘柄）が正常にスキップされたことを確認した
+- **サンプル生成過程で追加の実データ観察事項**（いずれも既知の制約・別の設計判断であり、今回は追加対応せず記録のみ）:
+  - J-Quantsのセクター情報取得（`fetchSectorInfo()`）が85件中6件しか成功しなかった。個別に叩くと正常に応答が返ることを確認しており、大量の逐次リクエストによるレート制限が原因と推測される。これは以前の`/review`で「外部APIのレート制限・リトライ未実装」としてLOW優先度・対応見送りと既に判断済みの制約の顕在化であり、新規バグとして扱わなかった。結果としてセクター分類済み銘柄が少なく、UC-009のリバランス候補（セクター70%集中判定）が0件になった
+  - `WatchedTheme`（注目テーマ）が0件登録のため、新規投資候補も0件だった（登録機能はまだ使われていないだけで正常な状態）
+  - 投資信託CSVの「基準価額」は10,000口あたりの値であるため、サンプルの合計評価額集計スクリプト（今回限りの`tinker`ワンショット、アプリ本体のコードではない）では`quantity × price ÷ 10000`で補正した（Rakuten CSVの`時価評価額`列と照合し正しいことを確認済み）。UC-009の`ShowImportSummaryReportAction`自体は投資信託を集計対象から除外しているため、この単位の問題はアプリ本体には影響しない
+- 上記を踏まえ、実データ（バッチ14、生成日時2026-08-22 17:03 JST、含み益合計+¥336万・上位20件は全て利確検討）をもとにサンプルレポートHTMLを作成し、Artifactとして公開した（`artifact-design`スキル使用、ライト/ダーク両対応・既知の制約を明記するnoteブロック付き）
+
+### Files touched
+
+`database/migrations/2026_08_22_000004_widen_growth_columns_on_fundamental_indicators_table.php`（新規）、`docs/adr/ADR-0006-widen-fundamental-growth-columns.md`（新規）、`app/Actions/Analysis/FetchExternalMarketDataAction.php`（per-holding例外分離）、`tests/Feature/FetchExternalMarketDataActionTest.php`（3件追加）、`tests/Support/Fakes/FakeJQuantsClient.php`（`throwsForSectorInfo`/`throwsForStatements`追加）、`docs/ai-context/known-pitfalls.md`、`docs/architecture/data-model.md`（列定義・変更履歴）、`PLAN.md`（本エントリ追加）。サンプルレポートHTML自体はリポジトリ外のArtifactとして公開（アプリのコード変更ではないため）
+
+### Status
+
+バグ修正完了・フルスイート163件Green。実データでのサンプルレポート生成・Artifact公開完了。マージ前に`/review`の実施を推奨（未実施）。J-Quantsレート制限対応・注目テーマ登録機能は既知の保留事項として引き続き別サイクルの課題。
+
 ## UC-009への新指標反映完了（ADR-0004の既存実装改修、最終、2026-08-22）
 
 ### Decision

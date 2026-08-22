@@ -194,12 +194,12 @@
 | per | decimal(10,2) | YES | null | PER |
 | pbr | decimal(10,2) | YES | null | PBR |
 | roe | decimal(7,4) | YES | null | ROE（%） |
-| revenue_growth | decimal(7,4) | YES | null | 売上高成長率（%、前年同期比） |
-| operating_income_growth | decimal(7,4) | YES | null | 営業利益成長率（%、前年同期比） |
+| revenue_growth | decimal(10,4) | YES | null | 売上高成長率（%、前年同期比）。ADR-0006により`decimal(7,4)`から拡張 |
+| operating_income_growth | decimal(10,4) | YES | null | 営業利益成長率（%、前年同期比）。ADR-0006により`decimal(7,4)`から拡張 |
 | equity_ratio | decimal(7,4) | YES | null | 自己資本比率（%） |
 | dividend_yield | decimal(7,4) | YES | null | 配当利回り（%） |
 | dividend_payout_ratio | decimal(7,4) | YES | null | 配当性向（%） |
-| eps_growth | decimal(7,4) | YES | null | EPS成長率（%、前年同期比。`financial_statements.eps`から算出、ADR-0004） |
+| eps_growth | decimal(10,4) | YES | null | EPS成長率（%、前年同期比。`financial_statements.eps`から算出、ADR-0004）。実データでほぼゼロ近辺からの回復銘柄が999.9999%を超えINSERTエラーになったため、ADR-0006により`decimal(7,4)`から拡張 |
 | peg_ratio | decimal(10,4) | YES | null | PEGレシオ（PER÷EPS成長率）。`eps_growth`が0以下の場合は算出せずnull（ADR-0004） |
 | fetched_at | timestamp | NO | now() | J-Quantsからの取得日時（値が変化した時のみ更新。最大12週間遅延の可能性あり） |
 
@@ -441,3 +441,4 @@
 | 2026-08-21 | `app/Services/Analysis/TechnicalIndicatorCalculator`（TDD Red-Green完了）に伴い「分析ロジックの計算仕様」節を追加。`technical_indicators`の各カラムの算出式・必要データ件数・不足時のnull扱いをGate4確定内容として記録 | ADR-0004 |
 | 2026-08-22 | `app/Actions/Analysis/FetchExternalMarketDataAction`実装に伴い、CHG-0003で設計した`technical_indicators`/`fundamental_indicators`の列追加・`signals.signal_type`のENUM拡張・`market_indicator_snapshots`テーブルを実際にマイグレーション化（`2026_08_22_000000`〜`000003`）。`market_indicator_snapshots.ma_deviation`の移動平均期間を26週に確定（MACD低速EMA期間と揃えた） | ADR-0004 |
 | 2026-08-21 | UC-009 Gate4 Greenフェーズ実装に伴い`watched_themes`/`import_summary_report_items`をドラフト通りのカラム構成で実装。Gate4承認によりPhase1スコープではNISA区分除外（ADR-0002）を対象外とし、全保有数量ベースで優先順位を算出する方針とした（`holding_snapshot_accounts`との連携は別途UC-004/005/008実装時に対応）。新規投資候補の注目テーマ合致判定は`watched_themes.name`と`sector_classifications.name`の完全一致、財務健全性フィルタ・件数区分（上位10件/補足10件）は本ファイルの叩き台の値をそのまま採用 | - |
+| 2026-08-22 | 実際のユーザーCSV（134銘柄）をUC-001経由でインポートした際、ほぼゼロ近辺からの回復銘柄でEPS成長率が1136%に達し`fundamental_indicators.eps_growth`（`decimal(7,4)`、最大±999.9999%）がMySQLの`Out of range`エラーになる実バグが判明。`eps_growth`/`revenue_growth`/`operating_income_growth`を`decimal(10,4)`に拡張するマイグレーションを追加（既存マイグレーションは編集せず、`change()`による新規ALTER TABLE）。あわせて`FetchExternalMarketDataAction`のper-holding例外分離が2つ目のループ・`fetchSectorInfo()`呼び出しに及んでいなかった非対称バグも修正（1銘柄の失敗が同一バッチ内の他銘柄の処理を巻き込んで中断させていた） | ADR-0006 |

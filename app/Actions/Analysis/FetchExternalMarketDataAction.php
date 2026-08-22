@@ -17,6 +17,8 @@ use App\Services\MarketData\JpStockPriceClientInterface;
 use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\MarketData\MarketIndexClientInterface;
 use App\Services\MarketData\UsStockPriceClientInterface;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -94,35 +96,41 @@ class FetchExternalMarketDataAction
                 $priceHistory = $holding->market === 'jp'
                     ? $this->jpStockPriceClient->fetchWeeklyPriceHistory($holding->symbol_code)
                     : $this->usStockPriceClient->fetchWeeklyPriceHistory($holding->symbol_code);
-            } catch (Throwable) {
+
+                $sectorClassificationId = $holding->sector_classification_id;
+
+                if ($holding->market === 'jp') {
+                    $sectorInfo = $this->jQuantsClient->fetchSectorInfo($holding->symbol_code);
+
+                    if ($sectorInfo !== null) {
+                        $sector = SectorClassification::firstOrCreate(
+                            ['name' => $sectorInfo['name']],
+                            ['code' => $sectorInfo['code']],
+                        );
+
+                        $sectorClassificationId = $sector->id;
+                        $holding->forceFill(['sector_classification_id' => $sectorClassificationId])->save();
+                    }
+                }
+
+                $eligible[] = [
+                    'holding' => $holding,
+                    'holdingSnapshot' => $holdingSnapshot,
+                    'priceHistory' => $priceHistory,
+                    'ownReturn13w' => $this->calculate13wReturn($priceHistory),
+                    // Sector-average relative strength only applies to JP
+                    // stocks (J-Quants無料プランに業種別指数がないための簡易算出).
+                    'sectorClassificationId' => $holding->market === 'jp' ? $sectorClassificationId : null,
+                ];
+            } catch (Throwable $e) {
+                Log::warning('FetchExternalMarketDataAction: holding price/sector fetch failed', [
+                    'holding_id' => $holding->id,
+                    'symbol_code' => $holding->symbol_code,
+                    'exception' => $e->getMessage(),
+                ]);
+
                 continue;
             }
-
-            $sectorClassificationId = $holding->sector_classification_id;
-
-            if ($holding->market === 'jp') {
-                $sectorInfo = $this->jQuantsClient->fetchSectorInfo($holding->symbol_code);
-
-                if ($sectorInfo !== null) {
-                    $sector = SectorClassification::firstOrCreate(
-                        ['name' => $sectorInfo['name']],
-                        ['code' => $sectorInfo['code']],
-                    );
-
-                    $sectorClassificationId = $sector->id;
-                    $holding->forceFill(['sector_classification_id' => $sectorClassificationId])->save();
-                }
-            }
-
-            $eligible[] = [
-                'holding' => $holding,
-                'holdingSnapshot' => $holdingSnapshot,
-                'priceHistory' => $priceHistory,
-                'ownReturn13w' => $this->calculate13wReturn($priceHistory),
-                // Sector-average relative strength only applies to JP
-                // stocks (J-Quants無料プランに業種別指数がないための簡易算出).
-                'sectorClassificationId' => $holding->market === 'jp' ? $sectorClassificationId : null,
-            ];
         }
 
         // Sector-average 13-week return, scoped to the stock holdings
@@ -148,60 +156,72 @@ class FetchExternalMarketDataAction
             $holdingSnapshot = $row['holdingSnapshot'];
             $priceHistory = $row['priceHistory'];
 
-            $marketReturn13w = $holding->market === 'jp' ? $nikkeiReturn13w : $sp500Return13w;
-            $sectorReturn13w = $row['sectorClassificationId'] !== null
-                ? ($sectorAverageReturns[$row['sectorClassificationId']] ?? null)
-                : null;
+            try {
+                DB::transaction(function () use ($holding, $holdingSnapshot, $priceHistory, $row, $nikkeiReturn13w, $sp500Return13w, $sectorAverageReturns) {
+                    $marketReturn13w = $holding->market === 'jp' ? $nikkeiReturn13w : $sp500Return13w;
+                    $sectorReturn13w = $row['sectorClassificationId'] !== null
+                        ? ($sectorAverageReturns[$row['sectorClassificationId']] ?? null)
+                        : null;
 
-            $technical = $this->technicalIndicatorCalculator->calculate($priceHistory, $marketReturn13w, $sectorReturn13w);
+                    $technical = $this->technicalIndicatorCalculator->calculate($priceHistory, $marketReturn13w, $sectorReturn13w);
 
-            TechnicalIndicator::updateOrCreate(
-                ['holding_id' => $holding->id],
-                [...$technical, 'computed_at' => now()],
-            );
+                    TechnicalIndicator::updateOrCreate(
+                        ['holding_id' => $holding->id],
+                        [...$technical, 'computed_at' => now()],
+                    );
 
-            $pegRatio = null;
+                    $pegRatio = null;
 
-            // Fundamentals/sector are JP個別株限定 (UC-002業務ルール
-            // "指標計算はJP株・US株の個別株のみ対象" + fundamentals自体はJP限定).
-            if ($holding->market === 'jp') {
-                $statements = $this->jQuantsClient->fetchStatements($holding->symbol_code);
-                $currentPrice = $holdingSnapshot->current_price !== null
-                    ? (float) $holdingSnapshot->current_price
-                    : null;
+                    // Fundamentals/sector are JP個別株限定 (UC-002業務ルール
+                    // "指標計算はJP株・US株の個別株のみ対象" + fundamentals自体はJP限定).
+                    if ($holding->market === 'jp') {
+                        $statements = $this->jQuantsClient->fetchStatements($holding->symbol_code);
+                        $currentPrice = $holdingSnapshot->current_price !== null
+                            ? (float) $holdingSnapshot->current_price
+                            : null;
 
-                $fundamental = $this->fundamentalIndicatorMapper->map($statements, $currentPrice);
+                        $fundamental = $this->fundamentalIndicatorMapper->map($statements, $currentPrice);
 
-                FundamentalIndicator::updateOrCreate(
-                    ['holding_id' => $holding->id],
-                    [...$fundamental, 'fetched_at' => now()],
-                );
+                        FundamentalIndicator::updateOrCreate(
+                            ['holding_id' => $holding->id],
+                            [...$fundamental, 'fetched_at' => now()],
+                        );
 
-                $pegRatio = $fundamental['peg_ratio'];
-            }
+                        $pegRatio = $fundamental['peg_ratio'];
+                    }
 
-            // UC-004業務ルール: 含み益+20%未満は利確シグナル判定の対象外.
-            if ((float) $holdingSnapshot->unrealized_gain_rate > self::SIGNAL_GAIN_RATE_THRESHOLD) {
-                $signals = $this->signalDeterminationService->determine(
-                    $priceHistory,
-                    $marketReturn13w,
-                    $sectorReturn13w,
-                    $pegRatio,
-                );
+                    // UC-004業務ルール: 含み益+20%未満は利確シグナル判定の対象外.
+                    if ((float) $holdingSnapshot->unrealized_gain_rate > self::SIGNAL_GAIN_RATE_THRESHOLD) {
+                        $signals = $this->signalDeterminationService->determine(
+                            $priceHistory,
+                            $marketReturn13w,
+                            $sectorReturn13w,
+                            $pegRatio,
+                        );
 
-                // Re-determination: drop stale signal rows from a previous
-                // run before persisting the freshly-determined set, so
-                // signals that no longer hold true (e.g. price history
-                // replaced on retry) don't linger.
-                Signal::where('holding_snapshot_id', $holdingSnapshot->id)->delete();
+                        // Re-determination: drop stale signal rows from a previous
+                        // run before persisting the freshly-determined set, so
+                        // signals that no longer hold true (e.g. price history
+                        // replaced on retry) don't linger.
+                        Signal::where('holding_snapshot_id', $holdingSnapshot->id)->delete();
 
-                foreach ($signals as $signal) {
-                    Signal::create([
-                        'holding_snapshot_id' => $holdingSnapshot->id,
-                        'signal_type' => $signal['signal_type'],
-                        'reason_summary' => $signal['reason_summary'],
-                    ]);
-                }
+                        foreach ($signals as $signal) {
+                            Signal::create([
+                                'holding_snapshot_id' => $holdingSnapshot->id,
+                                'signal_type' => $signal['signal_type'],
+                                'reason_summary' => $signal['reason_summary'],
+                            ]);
+                        }
+                    }
+                });
+            } catch (Throwable $e) {
+                Log::warning('FetchExternalMarketDataAction: holding indicator/signal processing failed', [
+                    'holding_id' => $holding->id,
+                    'symbol_code' => $holding->symbol_code,
+                    'exception' => $e->getMessage(),
+                ]);
+
+                continue;
             }
         }
     }

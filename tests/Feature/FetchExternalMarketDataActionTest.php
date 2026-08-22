@@ -189,6 +189,34 @@ function femdStatements(): array
 }
 
 /**
+ * Same 5-period fixture shape as femdStatements(), but with an EPS swing
+ * (past EPS near-zero → current EPS much larger) that produces a growth
+ * rate exceeding fundamental_indicators.eps_growth's current
+ * decimal(7,4) column width (max ±999.9999%). Mirrors a real production
+ * row found while importing docs/original-docs/assetbalance*.csv (a JP
+ * holding recovering from a near-zero EPS, ~1136% growth) — see
+ * describe('ADR-0004 再発防止: 実データ由来のバグの回帰テスト') below.
+ *
+ * @return array<int, array{disclosed_date: string, net_sales: float|null, operating_profit: float|null, profit: float|null, eps: float|null, book_value_per_share: float|null, equity_to_asset_ratio: float|null, roe: float|null, dividend_per_share_annual: float|null, payout_ratio_annual: float|null}>
+ */
+function femdStatementsWithExtremeEpsGrowth(): array
+{
+    $statements = femdStatements();
+
+    // (108.8 - 8.8) / 8.8 * 100 ≈ 1136.36% — comfortably over the
+    // decimal(7,4) max of 999.9999, and not a "round" number so a coincidental
+    // rounding/truncation in the buggy column width wouldn't accidentally
+    // mask the failure.
+    $statements[0]['eps'] = 108.8;
+    $statements[1]['eps'] = 108.8;
+    $statements[2]['eps'] = 108.8;
+    $statements[3]['eps'] = 108.8;
+    $statements[4]['eps'] = 8.8;
+
+    return $statements;
+}
+
+/**
  * @return array{0: ImportBatch, 1: Snapshot}
  */
 function femdImportBatch(?\DateTimeInterface $snapshottedAt = null): array
@@ -333,7 +361,7 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
 
             $action = femdAction(
                 new FakeJpStockPriceClient(['7203' => $priceHistory]),
-                new FakeUsStockPriceClient(),
+                new FakeUsStockPriceClient,
                 new FakeMarketIndexClient(['nikkei225' => $nikkeiHistory, 'sp500' => $sp500History]),
                 new FakeJQuantsClient(['7203' => ['code' => '6050', 'name' => '電気機器']], ['7203' => $statements]),
             );
@@ -373,7 +401,7 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
 
             $action = femdAction(
                 new FakeJpStockPriceClient(['7203' => $priceHistory]),
-                new FakeUsStockPriceClient(),
+                new FakeUsStockPriceClient,
                 new FakeMarketIndexClient([
                     'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 20)),
                     'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20)),
@@ -407,13 +435,13 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
             $sp500History = femdPriceHistory(femdCloses(4500.0, 20.0, 30), 1_000_000, '2023-01-02');
 
             $action = femdAction(
-                new FakeJpStockPriceClient(),
+                new FakeJpStockPriceClient,
                 new FakeUsStockPriceClient(['AAPL' => $priceHistory]),
                 new FakeMarketIndexClient([
                     'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 30), 1_000_000, '2023-01-02'),
                     'sp500' => $sp500History,
                 ]),
-                new FakeJQuantsClient(),
+                new FakeJQuantsClient,
             );
 
             $action->execute($batch);
@@ -450,13 +478,13 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
             femdHoldingSnapshot($snapshot, $mutualFundHolding, ['unrealized_gain_rate' => 5.0]);
 
             $action = femdAction(
-                new FakeJpStockPriceClient(),
-                new FakeUsStockPriceClient(),
+                new FakeJpStockPriceClient,
+                new FakeUsStockPriceClient,
                 new FakeMarketIndexClient([
                     'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 20)),
                     'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20)),
                 ]),
-                new FakeJQuantsClient(),
+                new FakeJQuantsClient,
             );
 
             $action->execute($batch);
@@ -478,10 +506,10 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
             $sp500History = femdPriceHistory($sp500Closes, 1_000_000, '2023-01-02');
 
             $action = femdAction(
-                new FakeJpStockPriceClient(),
-                new FakeUsStockPriceClient(),
+                new FakeJpStockPriceClient,
+                new FakeUsStockPriceClient,
                 new FakeMarketIndexClient(['nikkei225' => $nikkeiHistory, 'sp500' => $sp500History]),
-                new FakeJQuantsClient(),
+                new FakeJQuantsClient,
             );
 
             $action->execute($batch);
@@ -528,7 +556,7 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
 
             $action = femdAction(
                 new FakeJpStockPriceClient(['6758' => $priceHistoryA, '6501' => $priceHistoryB]),
-                new FakeUsStockPriceClient(),
+                new FakeUsStockPriceClient,
                 new FakeMarketIndexClient(['nikkei225' => $nikkeiHistory, 'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20))]),
                 new FakeJQuantsClient(['6758' => $sectorInfo, '6501' => $sectorInfo]),
             );
@@ -565,12 +593,12 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
 
             $action = femdAction(
                 new FakeJpStockPriceClient(['7203' => $priceHistory]),
-                new FakeUsStockPriceClient(),
+                new FakeUsStockPriceClient,
                 new FakeMarketIndexClient([
                     'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 30), 1_000_000, '2023-01-02'),
                     'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 30), 1_000_000, '2023-01-02'),
                 ]),
-                new FakeJQuantsClient(),
+                new FakeJQuantsClient,
             );
 
             $action->execute($batch);
@@ -592,12 +620,12 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
 
             $action = femdAction(
                 new FakeJpStockPriceClient(['7203' => $priceHistory]),
-                new FakeUsStockPriceClient(),
+                new FakeUsStockPriceClient,
                 new FakeMarketIndexClient([
                     'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 30), 1_000_000, '2023-01-02'),
                     'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 30), 1_000_000, '2023-01-02'),
                 ]),
-                new FakeJQuantsClient(),
+                new FakeJQuantsClient,
             );
 
             $action->execute($batch);
@@ -624,9 +652,9 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
 
             $firstAction = femdAction(
                 new FakeJpStockPriceClient(['7203' => $overheatPriceHistory]),
-                new FakeUsStockPriceClient(),
+                new FakeUsStockPriceClient,
                 $marketIndexHistoryForOverheatRun,
-                new FakeJQuantsClient(),
+                new FakeJQuantsClient,
             );
 
             $firstAction->execute($batch);
@@ -643,12 +671,12 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
 
             $secondAction = femdAction(
                 new FakeJpStockPriceClient(['7203' => $mildPriceHistory]),
-                new FakeUsStockPriceClient(),
+                new FakeUsStockPriceClient,
                 new FakeMarketIndexClient([
                     'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 10)),
                     'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 10)),
                 ]),
-                new FakeJQuantsClient(),
+                new FakeJQuantsClient,
             );
 
             $secondAction->execute($batch);
@@ -674,12 +702,12 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
                     responses: ['1234' => $okPriceHistory],
                     throwsFor: ['9999'],
                 ),
-                new FakeUsStockPriceClient(),
+                new FakeUsStockPriceClient,
                 new FakeMarketIndexClient([
                     'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 30), 1_000_000, '2023-01-02'),
                     'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 30), 1_000_000, '2023-01-02'),
                 ]),
-                new FakeJQuantsClient(),
+                new FakeJQuantsClient,
             );
 
             $action->execute($batch);
@@ -717,12 +745,12 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
 
             $action = femdAction(
                 new FakeJpStockPriceClient(['5001' => $priceHistory]),
-                new FakeUsStockPriceClient(),
+                new FakeUsStockPriceClient,
                 new FakeMarketIndexClient([
                     'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 30), 1_000_000, '2023-01-02'),
                     'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 30), 1_000_000, '2023-01-02'),
                 ]),
-                new FakeJQuantsClient(),
+                new FakeJQuantsClient,
             );
 
             $action->execute($batch);
@@ -732,6 +760,201 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
             $row = TechnicalIndicator::where('holding_id', $holding->id)->first();
             expect((float) $row->rsi)->toEqualWithDelta(100.0, 0.01);
             expect($row->computed_at->greaterThan($staleComputedAt))->toBeTrue();
+        });
+    });
+
+    describe('ADR-0004 再発防止: 実データ由来のバグの回帰テスト', function () {
+        /*
+        |----------------------------------------------------------------
+        | Background (see task description for this Red-phase addition):
+        | Importing the real user's 134-holding CSV
+        | (docs/original-docs/assetbalance*.csv) through UC-001 surfaced
+        | two real bugs:
+        |   1. fundamental_indicators.eps_growth/revenue_growth/
+        |      operating_income_growth are decimal(7,4) (max ±999.9999%),
+        |      but a real JP holding recovering from a near-zero EPS
+        |      produced ~1136% growth, causing MySQL's strict mode to
+        |      raise "Out of range value" on INSERT.
+        |   2. That per-holding DB failure (or any other per-holding
+        |      failure inside FetchExternalMarketDataAction::execute()'s
+        |      second loop, or inside the first loop's fetchSectorInfo()
+        |      call) is not caught individually, unlike the first loop's
+        |      price-history fetch (already covered by
+        |      describe('個別銘柄の失敗が全体を止めない') above). This
+        |      aborts the *entire* batch — every holding processed after
+        |      the failing one silently gets no technical/fundamental
+        |      indicators or signals, and ImportCsvAction swallows the
+        |      exception without logging it.
+        |----------------------------------------------------------------
+        */
+
+        describe('eps_growthのdecimal桁数超過（Out of Range）', function () {
+            test('EPS成長率が1000%を超える銘柄でも fundamental_indicators に丸めなしの正しい値が保存される', function () {
+                [$batch, $snapshot] = femdImportBatch();
+                $holding = femdHolding([
+                    'symbol_code' => '3999',
+                    'symbol_name' => 'EPS急回復銘柄',
+                ]);
+                femdHoldingSnapshot($snapshot, $holding, [
+                    'current_price' => 2500.0,
+                    'unrealized_gain_rate' => 5.0, // <=20% -> シグナル判定の副作用を避ける
+                ]);
+
+                $priceHistory = femdPriceHistory(femdCloses(2000.0, 5.0, 20));
+                $statements = femdStatementsWithExtremeEpsGrowth();
+
+                $action = femdAction(
+                    new FakeJpStockPriceClient(['3999' => $priceHistory]),
+                    new FakeUsStockPriceClient,
+                    new FakeMarketIndexClient([
+                        'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 20)),
+                        'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20)),
+                    ]),
+                    new FakeJQuantsClient(statementsResponses: ['3999' => $statements]),
+                );
+
+                $expectedFundamental = (new FundamentalIndicatorMapper)->map($statements, 2500.0);
+                // Sanity check on the fixture itself: this test is only
+                // meaningful if the growth rate actually exceeds the
+                // buggy decimal(7,4) column's range.
+                expect($expectedFundamental['eps_growth'])->toBeGreaterThan(999.9999);
+
+                $action->execute($batch);
+
+                femdAssertFundamentalIndicatorMatches($holding->id, $expectedFundamental);
+            });
+        });
+
+        describe('per-holding例外分離が2つ目のループ・fetchSectorInfoに及んでいない', function () {
+            test('fetchSectorInfo()が例外を投げても、その銘柄はスキップされ他の銘柄の処理は継続する', function () {
+                [$batch, $snapshot] = femdImportBatch();
+
+                // 先に処理される銘柄（symbol_codeが辞書順で小さくID順でも先）で
+                // fetchSectorInfo()を失敗させる。1つ目のループの価格取得
+                // try-catchの「外」で例外が起きるため、現状の実装では
+                // execute()全体が例外を投げて中断する。
+                $failingHolding = femdHolding([
+                    'symbol_code' => '8888',
+                    'symbol_name' => 'セクター取得失敗銘柄',
+                ]);
+                femdHoldingSnapshot($snapshot, $failingHolding, ['unrealized_gain_rate' => 5.0]);
+
+                $okHolding = femdHolding([
+                    'symbol_code' => '1234',
+                    'symbol_name' => '正常銘柄',
+                ]);
+                femdHoldingSnapshot($snapshot, $okHolding, ['unrealized_gain_rate' => 10.0]);
+
+                $failingPriceHistory = femdPriceHistory(femdCloses(500.0, 2.0, 20));
+                $okPriceHistory = femdPriceHistory(femdCloses(1000.0, 3.0, 20));
+
+                $action = femdAction(
+                    new FakeJpStockPriceClient([
+                        '8888' => $failingPriceHistory,
+                        '1234' => $okPriceHistory,
+                    ]),
+                    new FakeUsStockPriceClient,
+                    new FakeMarketIndexClient([
+                        'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 20)),
+                        'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20)),
+                    ]),
+                    new FakeJQuantsClient(throwsForSectorInfo: ['8888']),
+                );
+
+                $action->execute($batch);
+
+                $this->assertDatabaseMissing('technical_indicators', ['holding_id' => $failingHolding->id]);
+                $this->assertDatabaseHas('technical_indicators', ['holding_id' => $okHolding->id]);
+            });
+
+            test('2つ目のループ内（テクニカル・ファンダメンタルズ指標計算やDB保存）で例外が起きても、その銘柄はスキップされ他の銘柄の処理は継続する', function () {
+                [$batch, $snapshot] = femdImportBatch();
+
+                // 先に処理される銘柄でfetchStatements()（2つ目のループ内、
+                // ファンダメンタルズ指標計算の直前に呼ばれる）を失敗させる。
+                // 現状の実装では2つ目のループにper-holdingのtry-catchが
+                // 一切ないため、この銘柄以降（okHoldingを含む）の
+                // テクニカル指標・ファンダメンタルズ指標・シグナルが
+                // 一切保存されないまま処理が中断する。
+                $failingHolding = femdHolding([
+                    'symbol_code' => '7777',
+                    'symbol_name' => '決算取得失敗銘柄',
+                ]);
+                femdHoldingSnapshot($snapshot, $failingHolding, ['unrealized_gain_rate' => 5.0]);
+
+                $okHolding = femdHolding([
+                    'symbol_code' => '1234',
+                    'symbol_name' => '正常銘柄',
+                ]);
+                femdHoldingSnapshot($snapshot, $okHolding, ['unrealized_gain_rate' => 10.0]);
+
+                $failingPriceHistory = femdPriceHistory(femdCloses(500.0, 2.0, 20));
+                $okPriceHistory = femdPriceHistory(femdCloses(1000.0, 3.0, 20));
+
+                $action = femdAction(
+                    new FakeJpStockPriceClient([
+                        '7777' => $failingPriceHistory,
+                        '1234' => $okPriceHistory,
+                    ]),
+                    new FakeUsStockPriceClient,
+                    new FakeMarketIndexClient([
+                        'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 20)),
+                        'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20)),
+                    ]),
+                    new FakeJQuantsClient(throwsForStatements: ['7777']),
+                );
+
+                $action->execute($batch);
+
+                $this->assertDatabaseMissing('fundamental_indicators', ['holding_id' => $failingHolding->id]);
+                $this->assertDatabaseHas('technical_indicators', ['holding_id' => $okHolding->id]);
+                $this->assertDatabaseHas('fundamental_indicators', ['holding_id' => $okHolding->id]);
+            });
+
+            test('2つ目のループ内でテクニカル指標保存後に例外が起きた銘柄は、テクニカル指標も含めて更新前の状態にロールバックされる（1銘柄単位のアトミック性）', function () {
+                [$batch, $snapshot] = femdImportBatch();
+
+                $failingHolding = femdHolding(['symbol_code' => '7777', 'symbol_name' => '決算取得失敗銘柄']);
+                femdHoldingSnapshot($snapshot, $failingHolding, ['unrealized_gain_rate' => 5.0]);
+
+                // 更新前の状態を明確に区別できる、あり得ない値(1.11)を
+                // stale値として先に保存しておく。TechnicalIndicator::
+                // updateOrCreate()自体は例外発生前に実行されるため、
+                // トランザクションで包んでいなければこの値は新しい
+                // 計算結果に更新されてしまう。
+                $staleComputedAt = now()->subDays(30);
+                TechnicalIndicator::create([
+                    'holding_id' => $failingHolding->id,
+                    'rsi' => 1.11,
+                    'macd' => null,
+                    'macd_signal' => null,
+                    'ma20' => null,
+                    'ma75' => null,
+                    'bb_upper' => null,
+                    'bb_lower' => null,
+                    'computed_at' => $staleComputedAt,
+                ]);
+
+                $failingPriceHistory = femdPriceHistory(femdCloses(2000.0, 5.0, 80));
+
+                $action = femdAction(
+                    new FakeJpStockPriceClient(['7777' => $failingPriceHistory]),
+                    new FakeUsStockPriceClient,
+                    new FakeMarketIndexClient([
+                        'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 30), 1_000_000, '2023-01-02'),
+                        'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 30), 1_000_000, '2023-01-02'),
+                    ]),
+                    new FakeJQuantsClient(throwsForStatements: ['7777']),
+                );
+
+                $action->execute($batch);
+
+                $row = TechnicalIndicator::where('holding_id', $failingHolding->id)->first();
+                expect((float) $row->rsi)->toEqualWithDelta(1.11, 0.001);
+                // DB column truncates sub-second precision, so compare at
+                // second resolution rather than exact Carbon equality.
+                expect($row->computed_at->format('Y-m-d H:i:s'))->toBe($staleComputedAt->format('Y-m-d H:i:s'));
+            });
         });
     });
 });
