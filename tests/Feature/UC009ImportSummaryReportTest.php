@@ -7,6 +7,7 @@ use App\Models\Holding;
 use App\Models\HoldingSnapshot;
 use App\Models\ImportBatch;
 use App\Models\SectorClassification;
+use App\Models\Signal;
 use App\Models\Snapshot;
 use App\Models\TechnicalIndicator;
 use App\Models\User;
@@ -115,6 +116,21 @@ use Tests\TestCase;
 |     UC-009's own business rules don't explicitly restate the NISA
 |     exclusion the way UC-004/UC-005 do. See the completion report's
 |     "実装未確定事項" list.
+|   - ADR-0004 signal reflection (new, added after this file's initial Green
+|     merge): `buildTakeProfitCandidates()` currently only reads
+|     `unrealized_gain_rate` and `holding->technicalIndicator->rsi` — it
+|     never queries the `signals` table populated by
+|     App\Services\Analysis\SignalDeterminationService /
+|     App\Actions\Analysis\FetchExternalMarketDataAction (UC-004's 7 signal
+|     types, docs/architecture/data-model.md#signals). The one new test
+|     below assumes (a) `reason_summary` for a 利確検討 candidate must
+|     include wording drawn from that candidate's saved
+|     `signals.reason_summary` rows when any exist, and (b) having more
+|     saved signals raises a candidate's rank relative to an
+|     otherwise-comparable candidate with none — but does *not* assert the
+|     exact scoring formula/weight (same black-box relaxation as ADR-0003).
+|     Confirm both the exact reason_summary-composition rule and the
+|     signal-count-to-score weighting at Gate 4.
 |
 */
 
@@ -175,6 +191,18 @@ function ucFrom009TestHoldingSnapshot(Snapshot $snapshot, Holding $holding, arra
         'ma20' => null,
         'ma75' => null,
         'is_newly_detected' => false,
+    ], $attributes));
+}
+
+/**
+ * @param  array<string, mixed>  $attributes
+ */
+function ucFrom009TestSignal(HoldingSnapshot $holdingSnapshot, array $attributes = []): Signal
+{
+    return Signal::create(array_merge([
+        'holding_snapshot_id' => $holdingSnapshot->id,
+        'signal_type' => 'rsi_reversal',
+        'reason_summary' => 'RSIが72から65に反落',
     ], $attributes));
 }
 
@@ -465,6 +493,86 @@ describe('UC-009: 取込後サマリーレポート', function () {
             $borderlineRank = (int) $borderlineItem['rank'];
 
             expect($extremeRank)->toBeLessThan($borderlineRank);
+        });
+
+        test('signalsテーブルに保存されたシグナルが利確検討のreason_summary・優先順位に反映される（ADR-0004）', function () {
+            // Placeholder contract for signal reflection only — the exact
+            // signal-count-to-score weighting is intentionally not asserted
+            // (same black-box relaxation as ADR-0003, see the file-level
+            // docblock's ADR-0004 note). Confirm at Gate 4.
+            [$batch, $snapshot] = ucFrom009TestImportBatch();
+
+            $signalSector = ucFrom009TestSectorClassification('セクターC', 'C01');
+            $noSignalSector = ucFrom009TestSectorClassification('セクターD', 'D01');
+
+            // Holding with 2 saved signals. Gain rate/RSI are kept slightly
+            // *below* the no-signal holding's, so that the current
+            // gain-rate-plus-RSI-only composite score would rank it *lower*
+            // than the no-signal holding — the signals must be what tips the
+            // ranking the other way once reflected.
+            $signalHolding = ucFrom009TestHolding([
+                'symbol_code' => '3333', 'market' => 'jp', 'symbol_name' => 'シグナル銘柄',
+                'sector_classification_id' => $signalSector->id,
+            ]);
+            $signalHoldingSnapshot = ucFrom009TestHoldingSnapshot($snapshot, $signalHolding, [
+                'average_cost' => 1000.0,
+                'current_price' => 1300.0,
+                'unrealized_gain_amount' => 3000.0,
+                'unrealized_gain_rate' => 30.0,
+            ]);
+            ucFrom009TestTechnicalIndicator($signalHolding, ['rsi' => 70.0]);
+            ucFrom009TestSignal($signalHoldingSnapshot, [
+                'signal_type' => 'week52_high_pullback',
+                'reason_summary' => '週52週高値から-15%まで反落',
+            ]);
+            ucFrom009TestSignal($signalHoldingSnapshot, [
+                'signal_type' => 'peg_overvalued',
+                'reason_summary' => 'PEGレシオが2.3で割高水準',
+            ]);
+
+            // Holding with no saved signals, gain rate/RSI set slightly
+            // *higher* than the signal holding's.
+            $noSignalHolding = ucFrom009TestHolding([
+                'symbol_code' => '4444', 'market' => 'jp', 'symbol_name' => '無シグナル銘柄',
+                'sector_classification_id' => $noSignalSector->id,
+            ]);
+            ucFrom009TestHoldingSnapshot($snapshot, $noSignalHolding, [
+                'average_cost' => 1000.0,
+                'current_price' => 1320.0,
+                'unrealized_gain_amount' => 3200.0,
+                'unrealized_gain_rate' => 32.0,
+            ]);
+            ucFrom009TestTechnicalIndicator($noSignalHolding, ['rsi' => 72.0]);
+
+            $response = ucFrom009TestFetchReport($this, $batch);
+
+            $response->assertSuccessful();
+
+            $top = collect($response->json('data.top_recommendations'));
+            $signalItem = $top->first(fn ($item) => str_contains((string) $item['target'], '3333'));
+            $noSignalItem = $top->first(fn ($item) => str_contains((string) $item['target'], '4444'));
+
+            expect($signalItem)->not->toBeNull();
+            expect($noSignalItem)->not->toBeNull();
+
+            // reason_summary must reflect the saved signals' content (ADR-0004),
+            // not just gain rate/RSI — following this file's existing
+            // convention of only checking for the presence of the driving
+            // indicator's wording, not the full generated sentence.
+            $signalReasonSummary = (string) $signalItem['reason_summary'];
+            expect(
+                str_contains($signalReasonSummary, '週52週高値')
+                || str_contains($signalReasonSummary, 'PEG')
+            )->toBeTrue();
+
+            // Priority ordering only (composite_score's absolute value/weights
+            // are not asserted, per this file's existing convention): the
+            // signal-bearing holding must outrank the signal-less holding even
+            // though its raw gain rate/RSI are slightly lower.
+            $signalRank = (int) $signalItem['rank'];
+            $noSignalRank = (int) $noSignalItem['rank'];
+
+            expect($signalRank)->toBeLessThan($noSignalRank);
         });
     });
 

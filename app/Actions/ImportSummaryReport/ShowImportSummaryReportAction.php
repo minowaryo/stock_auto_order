@@ -6,6 +6,7 @@ use App\Models\Holding;
 use App\Models\HoldingSnapshot;
 use App\Models\ImportBatch;
 use App\Models\ImportSummaryReportItem;
+use App\Models\Signal;
 use App\Models\Snapshot;
 use App\Models\WatchedTheme;
 use Illuminate\Support\Collection;
@@ -121,15 +122,26 @@ class ShowImportSummaryReportAction
             $holding = $holdingSnapshot->holding;
             $rsi = $holding->technicalIndicator?->rsi !== null ? (float) $holding->technicalIndicator->rsi : null;
 
+            // ADR-0004: reflect saved signals (UC-004's 7 signal types) into
+            // both the reason_summary wording and the composite score, on
+            // top of the existing gain-rate/RSI-only ranking.
+            $signals = Signal::query()->where('holding_snapshot_id', $holdingSnapshot->id)->get();
+
+            $reasonSummary = $rsi !== null
+                ? sprintf('含み益+%s%%・RSI%sが中心的根拠', $this->fmt($gainRate), $this->fmt($rsi))
+                : sprintf('含み益+%s%%が中心的根拠', $this->fmt($gainRate));
+
+            if ($signals->isNotEmpty()) {
+                $reasonSummary .= '、'.$signals->pluck('reason_summary')->implode('、');
+            }
+
             $items[] = [
                 'recommendation_type' => '利確検討',
                 'target' => "{$holding->symbol_code} {$holding->symbol_name}",
                 'action_suggestion' => '含み益の一部について利益確定（分割売却）を検討してください',
-                'reason_summary' => $rsi !== null
-                    ? sprintf('含み益+%s%%・RSI%sが中心的根拠', $this->fmt($gainRate), $this->fmt($rsi))
-                    : sprintf('含み益+%s%%が中心的根拠', $this->fmt($gainRate)),
+                'reason_summary' => $reasonSummary,
                 'link_to' => 'UC-003',
-                'composite_score' => $gainRate + ($rsi ?? 0.0),
+                'composite_score' => $gainRate + ($rsi ?? 0.0) + $signals->count() * 15,
             ];
         }
 
