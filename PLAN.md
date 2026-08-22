@@ -1,5 +1,24 @@
 # PLAN.md
 
+## JQuantsClient TDD Red-Green完了・V2移行対応・実API確認（実装順ステップ2後半、2026-08-22）
+
+### Decision
+
+- ADR-0004実装順ステップ2の後半として`app/Services/MarketData/JQuantsClient`（セクター分類・財務諸表取得）を`/tdd`で実装した
+- **着手直後、別セッション（本チャットとは別）がJ-Quants API V1認証（メールアドレス/パスワード→トークン方式）で常時403 Forbiddenが返る事象を実環境で発見し、`docs/adr/ADR-0005-jquants-api-v2-migration.md`を作成、`config/services.php`/`.env.example`をV2（APIキー方式）に更新済みだったことが判明した**。当時本チャットでは既にV1前提で`JQuantsClientTest.php`のRedフェーズを完了させていた（未Green）ため、実装前に発覚し手戻りは実装コードには及ばなかった
+- ユーザーに他セッションが停止済みであることを確認したうえで、`JQuantsClientTest.php`をV2仕様（エンドポイント`/v2/equities/master`・`/v2/fins/summary`、`x-api-key`ヘッダー認証、`data`キー・短縮カラム名`S17`/`EPS`/`EqAR`/`ROE`等）で全面書き直した。`docs/ai-context/known-pitfalls.md`にV1→V2移行の経緯、およびADR-0005のConsequencesが要求していた「業種別指数取得不可の制約がV2でも維持されるか」の再確認（維持される、WebSearchで確認済み）を記録した。アーキテクチャ一貫性のため`JQuantsClientInterface`も追加（兄弟のMarketDataクライアントと揃える）
+- ADR-0005（Accepted）・config変更・known-pitfalls.md更新・書き直したテストをまとめてコミット・プッシュ
+- `test-writer`→Gate4承認（Interfaceの論点を含めユーザーに説明）→`tdd-implementer`でGreenフェーズ実装。対象8件・フルスイート98件全てGreen
+- **実APIでの動作確認**（`.env`の`JQUANTS_API_KEY`設定済み、`php artisan tinker`）: トヨタ(72030)・JPX(86970)のセクター情報・財務諸表を実際に取得し、想定通りのデータが返ることを確認。その過程で**テストのモックでは検出できなかった実仕様を発見**: `EqAR`（自己資本比率）/`ROE`/`PayoutRatioAnn`（配当性向）は0〜1の比率で返る（例: トヨタの自己資本比率は`0.378`＝37.8%）。`data-model.md`の`fundamental_indicators`はこれらをパーセント値として定義しているため、今後実装する変換層（`FundamentalIndicatorMapper`）で×100する必要があることを`known-pitfalls.md`に記録した。また四半期決算では`BPS`/`ROE`/`DivAnn`/`PayoutRatioAnn`が空（本決算のみ開示）になることも確認済み
+
+### Files touched
+
+`app/Services/MarketData/JQuantsClient.php`（新規）、`app/Services/MarketData/JQuantsClientInterface.php`（新規）、`tests/Unit/Services/MarketData/JQuantsClientTest.php`（V1版から全面書き直し）、`docs/adr/ADR-0005-jquants-api-v2-migration.md`（Status更新: Accepted）、`config/services.php`・`.env.example`（他セッション作成分、内容確認のみ）、`docs/ai-context/known-pitfalls.md`（V1→V2移行・EqAR/ROE/PayoutRatioAnn単位の2件追記）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実API動作確認完了。ADR-0004の実装順ステップ2（MarketData層）が完了。次はステップ3（`SignalDeterminationService`、UC-004向け新シグナル種別含む）に進む。なお`FundamentalIndicatorMapper`（J-Quants生データ→`fundamental_indicators`変換、EqAR/ROE/PayoutRatioAnnの×100変換を含む）はステップ2完了時点でまだ未着手（ステップ4のFetchExternalMarketDataAction統合時、またはそれ以前の別サイクルで対応予定）。
+
 ## MarketData層（Yahoo Finance相当）TDD Red-Green完了・実API確認（実装順ステップ2前半、2026-08-21）
 
 ### Decision

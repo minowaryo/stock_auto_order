@@ -53,3 +53,10 @@
 - 現象: `POST /v1/token/auth_user`に正しい資格情報を送っても常に`403 Forbidden`（`x-amzn-errortype: ForbiddenException`）が返る。存在しないパス・ルートパスでも同一の403が返り、個別の資格情報・エンドポイントの問題ではないことが分かった
 - 原因: J-Quants APIは2025年12月にV2がリリースされ、認証方式がトークン方式（`refreshToken`→`idToken`）からAPIキー方式（`x-api-key`ヘッダー）に変更された。2025年12月22日以降の新規登録ユーザーはV2のみ利用可能で、V1の該当エンドポイント（`/v1/token/auth_user`等）は実質的に利用不可
 - 対処: `docs/adr/ADR-0005-jquants-api-v2-migration.md`の通りV2方式に全面移行。認証情報は`JQUANTS_API_KEY`（`.env`）のみ、リクエストヘッダー`x-api-key`で送る。エンドポイントも`/v1/listed/info`→`/v2/equities/master`、`/v1/fins/statements`→`/v2/fins/summary`に変更（レスポンスは`{"data": [...]}`形式、カラム名も短縮される。例: `Sector17Code`→`S17`、`EarningsPerShare`→`EPS`、`EquityToAssetRatio`→`EqAR`）。V1向けに書いていたテスト・実装は破棄してV2仕様で書き直す
+
+### J-Quants API V2 `/fins/summary` — `EqAR`/`ROE`/`PayoutRatioAnn`は0〜1の比率で返る（%表記ではない）
+
+- 現象: `JQuantsClient::fetchStatements()`をGate4承認後に実際のAPIキーで疎通確認したところ（トヨタ`72030`）、`EqAR`（自己資本比率）が`0.378`、`ROE`が`0.101`、`PayoutRatioAnn`（配当性向）が`0.321`という値で返ってきた。実際の値（自己資本比率37.8%・ROE10.1%・配当性向32.1%）と整合するため、APIの異常値ではなく仕様。Gate4テストのモックでは`"38.7"`のような%表記の数値を仮に使っていたため、この仕様差はUnit Testでは検出できなかった
+- 原因: J-Quants API V2の`/fins/summary`は`EqAR`/`ROE`/`PayoutRatioAnn`を比率（0〜1）で返す。`EPS`/`BPS`/`Sales`等の金額・株数系フィールドはそのままの単位（円・株）で返る
+- 対処: `JQuantsClient`自体は生の値をそのまま返す設計（変換責務を持たない）ため実装変更は不要。ただし、今後実装する「J-Quants生データ→`fundamental_indicators`」変換層（`FundamentalIndicatorMapper`等）では、`equity_ratio`/`roe`/`dividend_payout_ratio`（`data-model.md`でパーセント値として定義済み）にマッピングする際、`EqAR`/`ROE`/`PayoutRatioAnn`の値を**×100**すること。実装時にこの記録を必ず参照する
+- 補足: 四半期決算（`disclosed_date`が直近でも本決算でない回）では`BPS`/`ROE`/`DivAnn`/`PayoutRatioAnn`が空文字列で返り`null`になるケースを確認（本決算のみ開示される項目のため、想定通りの挙動）
