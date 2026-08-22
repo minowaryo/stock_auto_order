@@ -1,5 +1,23 @@
 # PLAN.md
 
+## UC-004 Gate4サイクル完了（利確シグナル一覧、2026-08-22）
+
+### Decision
+
+- 判定ロジック・DB保存（`SignalDeterminationService`・`FetchExternalMarketDataAction`）は既に完成済みのため、UC-004は画面（`GET /signals`）実装のみを`/tdd`で行った。UC-001/002/003と同じController→Actionの薄い構成
+- `holding_snapshot_accounts`（NISA区分内訳、ADR-0002）はCSVパーサー側の書き込みロジックが未実装のため、**UC-009 Gate4承認時と同じ前例に従いNISA区分除外を今回のスコープ外**とし、`split_limit_suggestion`は保有数量全体ベースで算出する方針をGate4で確認した
+- `test-writer`が9件のFeature Testを作成（正常系: シグナルあり/シグナルなし・境界値: 含み益ちょうど20%は対象外・除外: ETF/投資信託・空状態・権限）。Gate4でレスポンス形状（`{"data":[...]}`）・`signal_types`は生のenum値・`split_limit_suggestion`の形状（`{price, quantity}`、トレンド追従枠は`price=null`）を確認し承認
+- `tdd-implementer`がGreenフェーズを実装: `routes/web.php`に`GET /signals`追加、`SignalListController`・`ShowSignalListAction`新規作成。対象9件・フルスイート157件全てGreen
+- `php artisan tinker`で実データ相当のシナリオ（含み益+30%・RSI反落シグナルあり・保有数量30）を投入し実挙動確認。分割指値提案が数量10/10/10・価格1200(+20%)/1350(+35%)/トレンド追従(価格null)と正しく算出されることを確認（トランザクションロールバックでDBは汚していない）
+
+### Files touched
+
+`app/Http/Controllers/SignalListController.php`（新規）、`app/Actions/Signal/ShowSignalListAction.php`（新規）、`routes/web.php`（ルート追加）、`tests/Feature/UC004SignalListTest.php`（新規）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実挙動確認完了。UC-004完了。次はUC-003・UC-009の既存実装への新指標反映（出来高・PEG・相対力等）に進む。NISA区分除外は`holding_snapshot_accounts`書き込み実装後の別サイクルで対応する保留事項として残る（UC-004/005/008共通）。
+
 ## UC-001への`FetchExternalMarketDataAction`配線完了（ADR-0004最終ステップ、2026-08-22）
 
 ### Decision

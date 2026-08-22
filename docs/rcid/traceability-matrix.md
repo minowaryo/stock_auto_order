@@ -11,6 +11,7 @@
 | F-002 | UC-002 | `app/Http/Controllers/HoldingListController.php`, `app/Actions/Holding/ListHoldingsAction.php` | `tests/Feature/UC002HoldingListTest.php` | 完了 |
 | F-003 | UC-003 | `app/Http/Controllers/HoldingDetailController.php`, `app/Actions/Holding/ShowHoldingDetailAction.php`, `app/Actions/Holding/SaveHoldingMemoAction.php` | `tests/Feature/UC003HoldingDetailTest.php` | 実装中（Green完了・`/review`未実施） |
 | F-009 | UC-009 | `app/Http/Controllers/ImportSummaryReportController.php`, `app/Actions/ImportSummaryReport/ShowImportSummaryReportAction.php` | `tests/Feature/UC009ImportSummaryReportTest.php` | 完了 |
+| F-004 | UC-004 | `app/Http/Controllers/SignalListController.php`, `app/Actions/Signal/ShowSignalListAction.php` | `tests/Feature/UC004SignalListTest.php` | 完了（NISA区分除外はスコープ外、`holding_snapshot_accounts`実装後に別対応） |
 
 ## 変更追跡
 

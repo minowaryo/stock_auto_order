@@ -4,6 +4,7 @@ use App\Http\Controllers\CsvImportController;
 use App\Http\Controllers\HoldingDetailController;
 use App\Http\Controllers\HoldingListController;
 use App\Http\Controllers\ImportSummaryReportController;
+use App\Http\Controllers\SignalListController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -15,3 +16,4 @@ Route::middleware('auth')->get('/holdings', [HoldingListController::class, 'inde
 Route::middleware('auth')->get('/holdings/{holding}', [HoldingDetailController::class, 'show']);
 Route::middleware('auth')->post('/holdings/{holding}/memos', [HoldingDetailController::class, 'storeMemo']);
 Route::middleware('auth')->get('/import-batches/{importBatch}/summary-report', [ImportSummaryReportController::class, 'show']);
+Route::middleware('auth')->get('/signals', [SignalListController::class, 'index']);
