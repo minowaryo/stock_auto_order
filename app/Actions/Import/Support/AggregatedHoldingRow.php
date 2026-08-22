@@ -9,6 +9,12 @@ namespace App\Actions\Import\Support;
  */
 final class AggregatedHoldingRow
 {
+    /**
+     * Per (symbol_code, market, account_type) breakdown, used to populate
+     * `holding_snapshot_accounts` (docs/adr/ADR-0002-nisa-account-type-tracking.md).
+     *
+     * @param  array<int, array{accountType: string, quantity: float, averageCost: float}>  $accountBreakdown
+     */
     public function __construct(
         public readonly string $symbolCode,
         public readonly string $symbolName,
@@ -18,5 +24,6 @@ final class AggregatedHoldingRow
         public readonly float $averageCost,
         public readonly float $currentPrice,
         public readonly ?float $fxRateUsed,
+        public readonly array $accountBreakdown,
     ) {}
 }

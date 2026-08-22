@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Holding;
 use App\Models\HoldingSnapshot;
+use App\Models\HoldingSnapshotAccount;
 use App\Models\ImportBatch;
 use App\Models\Signal;
 use App\Models\Snapshot;
@@ -30,16 +31,29 @@ use Tests\TestCase;
 | UC003HoldingDetailTest.php (which failed on missing models); here the
 | models already exist, so the Red cause is purely "no route yet".
 |
-| Scope note (per Gate 4 precedent set by UC-009, see PLAN.md /
-| data-model.md 変更履歴 2026-08-21 entry): holding_snapshot_accounts
-| (NISA account-type breakdown, ADR-0002) has no writer yet (CSV parsers
-| don't populate it), so NISA-account exclusion for split_limit_suggestion
-| (use-cases.md UC-004 output table) is explicitly OUT OF SCOPE for this
-| Gate 4 cycle. split_limit_suggestion is computed against the holding's
-| whole (combined) quantity, matching the precedent's "全保有数量ベース"
-| approach. This will need a follow-up Red/Green cycle once
-| holding_snapshot_accounts is populated (same as UC-004/005/008 are noted
-| as pending in data-model.md's 2026-08-21 entry for UC-009).
+| Scope note (updated for the NISA-account follow-up cycle — see
+| stock_auto_order-nisa-account-implementation-phase.md 実装方針4 and
+| PLAN.md): the CSV-parser writer side for holding_snapshot_accounts
+| (ADR-0002) was completed in a prior cycle (Cycle A), so THIS cycle
+| (Cycle B) addresses the previously-deferred consumer side in
+| ShowSignalListAction. See the "NISA区分除外・課税口座数量ベース化"
+| describe block below, which asserts:
+|   - holdings whose holding_snapshot_accounts breakdown has zero taxable
+|     (specific+general) quantity (i.e. entirely NISA) are excluded from
+|     the `/signals` response entirely;
+|   - split_limit_suggestion's quantity total is computed against the
+|     taxable (specific+general) quantity, not the whole combined
+|     quantity, whenever a holding_snapshot_accounts breakdown exists
+|     (including when taxable quantity spans multiple rows, e.g.
+|     specific + general);
+|   - price bands remain based on the whole position's average_cost
+|     (unchanged — only the quantity basis changes, not price);
+|   - holdings with no holding_snapshot_accounts rows at all (legacy /
+|     not-yet-backfilled snapshots) keep the prior behavior of treating
+|     the whole quantity as taxable (backward-compatible fallback). This
+|     is exercised by the pre-existing tests above (which deliberately
+|     create no HoldingSnapshotAccount rows) and MUST keep passing
+|     unmodified as a regression check for this fallback.
 |
 | Assumptions made while writing these tests (not yet confirmed by an
 | implementation — flag during Gate 4 review if a different contract is
@@ -146,6 +160,22 @@ function ucFrom004TestSignal(HoldingSnapshot $holdingSnapshot, array $attributes
         'holding_snapshot_id' => $holdingSnapshot->id,
         'signal_type' => 'rsi_reversal',
         'reason_summary' => 'RSIが72から65に反落',
+    ], $attributes));
+}
+
+/**
+ * Create a `holding_snapshot_accounts` breakdown row for a given
+ * HoldingSnapshot (ADR-0002 NISA account-type breakdown).
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function ucFrom004TestAccount(HoldingSnapshot $holdingSnapshot, array $attributes = []): HoldingSnapshotAccount
+{
+    return HoldingSnapshotAccount::create(array_merge([
+        'holding_snapshot_id' => $holdingSnapshot->id,
+        'account_type' => 'specific',
+        'quantity' => 100,
+        'average_cost' => 1000.00,
     ], $attributes));
 }
 
@@ -353,6 +383,89 @@ describe('UC-004: 利確シグナル一覧', function () {
 
             $response->assertSuccessful();
             expect($response->json('data'))->toBe([]);
+        });
+    });
+
+    describe('NISA区分除外・課税口座数量ベース化', function () {
+        test('特定口座とNISA成長投資枠が混在する銘柄は、split_limit_suggestionの数量合計が課税口座分のみになる', function () {
+            [, $snapshot] = ucFrom004TestImportBatch();
+            $holding = ucFrom004TestHolding(['symbol_code' => '7203', 'market' => 'jp', 'symbol_name' => 'トヨタ自動車']);
+            $holdingSnapshot = ucFrom004TestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 300,
+                'average_cost' => 1000.00,
+                'current_price' => 1300.00,
+                'unrealized_gain_rate' => 30.0,
+            ]);
+            ucFrom004TestAccount($holdingSnapshot, ['account_type' => 'specific', 'quantity' => 200, 'average_cost' => 1000.00]);
+            ucFrom004TestAccount($holdingSnapshot, ['account_type' => 'nisa_growth', 'quantity' => 100, 'average_cost' => 1000.00]);
+
+            $response = ucFrom004TestFetch($this);
+
+            $response->assertSuccessful();
+
+            $row = ucFrom004TestFindRow($response, '7203');
+            expect($row)->not->toBeNull();
+
+            $suggestion = $row['split_limit_suggestion'];
+            expect($suggestion)->toBeArray();
+
+            // Quantity basis must be the taxable (specific+general) portion
+            // only (200), not the whole combined quantity (300).
+            $totalQuantity = array_sum(array_map(fn ($tier) => (float) $tier['quantity'], $suggestion));
+            expect($totalQuantity)->toEqualWithDelta(200.0, 0.5);
+
+            // Price bands are unaffected: still based on the whole
+            // position's average_cost (1000 -> +20%/+35%).
+            $firstTier = $suggestion[0];
+            expect((float) $firstTier['price'])->toEqualWithDelta(1200.0, 0.01);
+            expect((float) $firstTier['quantity'])->toEqualWithDelta(200.0 / 3, 2.0);
+        });
+
+        test('課税口座が特定口座・一般口座の複数行にまたがる場合、taxable数量はその合計になる', function () {
+            [, $snapshot] = ucFrom004TestImportBatch();
+            $holding = ucFrom004TestHolding(['symbol_code' => 'AAPL', 'market' => 'us', 'symbol_name' => 'Apple Inc.']);
+            $holdingSnapshot = ucFrom004TestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 300,
+                'average_cost' => 1000.00,
+                'current_price' => 1300.00,
+                'unrealized_gain_rate' => 30.0,
+            ]);
+            ucFrom004TestAccount($holdingSnapshot, ['account_type' => 'specific', 'quantity' => 150, 'average_cost' => 1000.00]);
+            ucFrom004TestAccount($holdingSnapshot, ['account_type' => 'general', 'quantity' => 50, 'average_cost' => 1000.00]);
+            ucFrom004TestAccount($holdingSnapshot, ['account_type' => 'nisa_tsumitate', 'quantity' => 100, 'average_cost' => 1000.00]);
+
+            $response = ucFrom004TestFetch($this);
+
+            $response->assertSuccessful();
+
+            $row = ucFrom004TestFindRow($response, 'AAPL');
+            expect($row)->not->toBeNull();
+
+            $suggestion = $row['split_limit_suggestion'];
+            $totalQuantity = array_sum(array_map(fn ($tier) => (float) $tier['quantity'], $suggestion));
+            // specific(150) + general(50) = 200 taxable, excluding
+            // nisa_tsumitate(100).
+            expect($totalQuantity)->toEqualWithDelta(200.0, 0.5);
+        });
+
+        test('内訳が全てNISA区分（課税口座分が0）の銘柄は含み益+20%超でも一覧から除外される', function () {
+            [, $snapshot] = ucFrom004TestImportBatch();
+            $holding = ucFrom004TestHolding(['symbol_code' => '9432', 'market' => 'jp', 'symbol_name' => '日本電信電話']);
+            $holdingSnapshot = ucFrom004TestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 300,
+                'average_cost' => 1000.00,
+                'current_price' => 1300.00,
+                'unrealized_gain_rate' => 30.0,
+            ]);
+            ucFrom004TestAccount($holdingSnapshot, ['account_type' => 'nisa_growth', 'quantity' => 200, 'average_cost' => 1000.00]);
+            ucFrom004TestAccount($holdingSnapshot, ['account_type' => 'nisa_tsumitate', 'quantity' => 100, 'average_cost' => 1000.00]);
+
+            $response = ucFrom004TestFetch($this);
+
+            $response->assertSuccessful();
+
+            $row = ucFrom004TestFindRow($response, '9432');
+            expect($row)->toBeNull();
         });
     });
 

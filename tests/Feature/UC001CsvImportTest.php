@@ -138,9 +138,15 @@ function ucFrom001TestJpStockCsv(array $tokuteiRows, array $nisaRows = [], array
  * structure, including the reference FX rate header
  * ("参考為替レート(米ドル)") used for JPY conversion (UC-001業務ルール).
  *
+ * $generalRows optionally adds a second "■一般口座" account section (実際の
+ * ユーザーCSVに実在するセクション。ADR-0002 / NISA区分内訳の実装計画参照),
+ * matching the way ucFrom001TestJpStockCsv() already supports a second
+ * "■NISA成長投資枠" section via $nisaRows.
+ *
  * @param  array<int, array{ticker: string, name: string, quantity: string, avg_cost: string, current_price: string}>  $rows
+ * @param  array<int, array{ticker: string, name: string, quantity: string, avg_cost: string, current_price: string}>  $generalRows
  */
-function ucFrom001TestUsStockCsv(array $rows, string $fxRate = '159.32'): string
+function ucFrom001TestUsStockCsv(array $rows, string $fxRate = '159.32', array $generalRows = []): string
 {
     $lines = [
         '■時価評価額合計［USドル］,"0",■前日比合計［USドル］,"0",■評価損益額合計［USドル］,"0",,時間外株価を含まない',
@@ -163,6 +169,26 @@ function ucFrom001TestUsStockCsv(array $rows, string $fxRate = '159.32'): string
     }
 
     $lines[] = ',,,,,,,,特定口座合計,"0",,,"0","0"';
+
+    if (! empty($generalRows)) {
+        $lines[] = '';
+        $lines[] = '■一般口座';
+        $lines[] = '';
+        $lines[] = 'ティッカー,銘柄名,取引所,保有数量［株］,執行中数量［株］,(内訳　通常数量[株]),(内訳　積立数量[株]),表示通貨,平均取得価額［USドル］,取得総額［USドル］,現在値［USドル］,前日比［USドル］,時価評価額［USドル］,評価損益［USドル］';
+
+        foreach ($generalRows as $row) {
+            $acquisitionTotal = $row['acquisition_total'] ?? '0';
+            $marketValue = $row['market_value'] ?? '0';
+            $gain = $row['gain'] ?? '0';
+
+            $lines[] = ucFrom001TestCsvLine([
+                $row['ticker'], $row['name'], '米国市場', $row['quantity'], '-', '-', '-', 'USドル',
+                $row['avg_cost'], $acquisitionTotal, $row['current_price'], '0.00', $marketValue, $gain,
+            ]);
+        }
+
+        $lines[] = ',,,,,,,,一般口座合計,"0",,,"0","0"';
+    }
 
     return implode("\r\n", $lines)."\r\n";
 }
@@ -339,6 +365,124 @@ describe('UC-001: CSV取込', function () {
 
             expect((float) $snapshot->quantity)->toEqualWithDelta(150.0, 0.001);
             expect((float) $snapshot->average_cost)->toEqualWithDelta(2066.6667, 0.01);
+        });
+
+        // ADR-0002 / holding_snapshot_accounts write-path (NISA区分内訳の実装計画).
+        // App\Models\HoldingSnapshotAccount / holding_snapshot_accounts table already
+        // exist (created 2026-08-21), but nothing under app/ writes to it yet
+        // (ImportCsvAction::aggregate()/execute() only ever create HoldingSnapshot
+        // rows). Every test below is expected to fail because no rows are ever
+        // inserted into holding_snapshot_accounts.
+        test('同一銘柄が複数口座区分にまたがる場合はholding_snapshot_accountsに口座区分ごとの内訳が保存される', function () {
+            // 特定口座: 7203 x60 @1,000円 + x40 @1,300円
+            //   -> 特定口座内で合算100株、区分内加重平均 (60*1000+40*1300)/100 = 1,120円
+            // NISA成長投資枠: 7203 x50 @2,200円
+            // holding_snapshots（既存の合算値、回帰確認）:
+            //   150株、加重平均 (60*1000+40*1300+50*2200)/150 = 1,480円
+            $jpCsv = ucFrom001TestJpStockCsv(
+                tokuteiRows: [
+                    ['code' => '7203', 'name' => 'トヨタ自動車', 'quantity' => '60', 'avg_cost' => '1,000.00', 'current_price' => '2,500.0'],
+                    ['code' => '7203', 'name' => 'トヨタ自動車', 'quantity' => '40', 'avg_cost' => '1,300.00', 'current_price' => '2,500.0'],
+                ],
+                nisaRows: [
+                    ['code' => '7203', 'name' => 'トヨタ自動車', 'quantity' => '50', 'avg_cost' => '2,200.00', 'current_price' => '2,500.0'],
+                ],
+            );
+            $usCsv = ucFrom001TestUsStockCsv([
+                ['ticker' => 'MSFT', 'name' => 'マイクロソフト', 'quantity' => '1', 'avg_cost' => '100.00', 'current_price' => '100.00'],
+            ]);
+
+            $response = ucFrom001TestSubmit($this, [
+                'jp_stock_file' => ucFrom001TestFakeCsvFile('jp_stock.csv', ucFrom001TestUtf8ToShiftJis($jpCsv)),
+                'us_stock_file' => ucFrom001TestFakeCsvFile('us_stock.csv', ucFrom001TestUtf8ToShiftJis($usCsv)),
+            ]);
+
+            $response->assertSuccessful();
+
+            $holding = DB::table('holdings')->where('symbol_code', '7203')->where('market', 'jp')->first();
+            $snapshot = DB::table('holding_snapshots')->where('holding_id', $holding->id)->first();
+
+            // 回帰確認: 既存のholding_snapshots（合算値）は従来通り変更なく保存される
+            expect((float) $snapshot->quantity)->toEqualWithDelta(150.0, 0.001);
+            expect((float) $snapshot->average_cost)->toEqualWithDelta(1480.0, 0.01);
+
+            $accounts = DB::table('holding_snapshot_accounts')
+                ->where('holding_snapshot_id', $snapshot->id)
+                ->get()
+                ->keyBy('account_type');
+
+            expect($accounts)->toHaveCount(2);
+
+            expect((float) $accounts['specific']->quantity)->toEqualWithDelta(100.0, 0.001);
+            expect((float) $accounts['specific']->average_cost)->toEqualWithDelta(1120.0, 0.01);
+
+            expect((float) $accounts['nisa_growth']->quantity)->toEqualWithDelta(50.0, 0.001);
+            expect((float) $accounts['nisa_growth']->average_cost)->toEqualWithDelta(2200.0, 0.01);
+        });
+
+        test('単一の口座区分にしか保有していない銘柄はholding_snapshot_accountsに1行だけ保存される', function () {
+            $jpCsv = ucFrom001TestJpStockCsv([
+                ['code' => '7203', 'name' => 'トヨタ自動車', 'quantity' => '10', 'avg_cost' => '2,000.00', 'current_price' => '2,500.0'],
+            ]);
+            $usCsv = ucFrom001TestUsStockCsv([
+                ['ticker' => 'MSFT', 'name' => 'マイクロソフト', 'quantity' => '2', 'avg_cost' => '200.00', 'current_price' => '300.00'],
+            ], fxRate: '150.00');
+
+            $response = ucFrom001TestSubmit($this, [
+                'jp_stock_file' => ucFrom001TestFakeCsvFile('jp_stock.csv', ucFrom001TestUtf8ToShiftJis($jpCsv)),
+                'us_stock_file' => ucFrom001TestFakeCsvFile('us_stock.csv', ucFrom001TestUtf8ToShiftJis($usCsv)),
+            ]);
+
+            $response->assertSuccessful();
+
+            $holding = DB::table('holdings')->where('symbol_code', 'MSFT')->where('market', 'us')->first();
+            $snapshot = DB::table('holding_snapshots')->where('holding_id', $holding->id)->first();
+
+            $accounts = DB::table('holding_snapshot_accounts')->where('holding_snapshot_id', $snapshot->id)->get();
+
+            expect($accounts)->toHaveCount(1);
+            expect($accounts[0]->account_type)->toBe('specific');
+            expect((float) $accounts[0]->quantity)->toEqualWithDelta(2.0, 0.001);
+            // average_cost は円換算後の値（200.00USD * 150.00円/USD）
+            expect((float) $accounts[0]->average_cost)->toEqualWithDelta(200.0 * 150.0, 1.0);
+        });
+
+        test('米国株式CSVの一般口座セクションの保有銘柄はaccount_type=generalとしてholding_snapshot_accountsに保存される', function () {
+            $jpCsv = ucFrom001TestJpStockCsv([
+                ['code' => '7203', 'name' => 'トヨタ自動車', 'quantity' => '10', 'avg_cost' => '2,000.00', 'current_price' => '2,500.0'],
+            ]);
+            $usCsv = ucFrom001TestUsStockCsv(
+                rows: [
+                    ['ticker' => 'MSFT', 'name' => 'マイクロソフト', 'quantity' => '2', 'avg_cost' => '200.00', 'current_price' => '300.00'],
+                ],
+                fxRate: '150.00',
+                generalRows: [
+                    ['ticker' => 'MSFT', 'name' => 'マイクロソフト', 'quantity' => '3', 'avg_cost' => '250.00', 'current_price' => '300.00'],
+                ],
+            );
+
+            $response = ucFrom001TestSubmit($this, [
+                'jp_stock_file' => ucFrom001TestFakeCsvFile('jp_stock.csv', ucFrom001TestUtf8ToShiftJis($jpCsv)),
+                'us_stock_file' => ucFrom001TestFakeCsvFile('us_stock.csv', ucFrom001TestUtf8ToShiftJis($usCsv)),
+            ]);
+
+            $response->assertSuccessful();
+
+            $holding = DB::table('holdings')->where('symbol_code', 'MSFT')->where('market', 'us')->first();
+            $snapshot = DB::table('holding_snapshots')->where('holding_id', $holding->id)->first();
+
+            // 回帰確認: holding_snapshots（合算値）は一般口座分も合算した5株のまま
+            expect((float) $snapshot->quantity)->toEqualWithDelta(5.0, 0.001);
+
+            $accounts = DB::table('holding_snapshot_accounts')
+                ->where('holding_snapshot_id', $snapshot->id)
+                ->get()
+                ->keyBy('account_type');
+
+            expect($accounts)->toHaveCount(2);
+            expect((float) $accounts['specific']->quantity)->toEqualWithDelta(2.0, 0.001);
+            expect((float) $accounts['general']->quantity)->toEqualWithDelta(3.0, 0.001);
+            expect((float) $accounts['general']->average_cost)->toEqualWithDelta(250.0 * 150.0, 1.0);
         });
 
         test('米国株式は参考為替レートで円換算して保存する', function () {

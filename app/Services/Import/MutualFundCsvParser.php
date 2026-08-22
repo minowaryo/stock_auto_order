@@ -3,6 +3,7 @@
 namespace App\Services\Import;
 
 use App\Exceptions\Import\CsvStructureException;
+use App\Services\Import\Support\AccountTypeMapper;
 use App\Services\Import\Support\CsvNumberParser;
 use App\Services\Import\Support\ParsedCsvFile;
 use App\Services\Import\Support\ParsedCsvRow;
@@ -19,6 +20,8 @@ use InvalidArgumentException;
 final class MutualFundCsvParser
 {
     private const HEADER_MARKER = '投資信託種別';
+
+    private const COLUMN_ACCOUNT_TYPE = '口座区分';
 
     private const COLUMN_FUND_NAME = 'ファンド';
 
@@ -67,6 +70,10 @@ final class MutualFundCsvParser
                     throw new InvalidArgumentException('Missing fund name');
                 }
 
+                $accountType = AccountTypeMapper::toEnum(
+                    trim((string) ($fields[$columnIndex[self::COLUMN_ACCOUNT_TYPE]] ?? ''))
+                );
+
                 $rows[] = new ParsedCsvRow(
                     code: $fundName,
                     name: $fundName,
@@ -75,6 +82,7 @@ final class MutualFundCsvParser
                     quantity: CsvNumberParser::parse((string) ($fields[$columnIndex[self::COLUMN_QUANTITY]] ?? '')),
                     averageCost: CsvNumberParser::parse((string) ($fields[$columnIndex[self::COLUMN_AVERAGE_COST]] ?? '')),
                     currentPrice: CsvNumberParser::parse((string) ($fields[$columnIndex[self::COLUMN_BASE_PRICE]] ?? '')),
+                    accountType: $accountType,
                 );
             } catch (InvalidArgumentException) {
                 $errorCount++;

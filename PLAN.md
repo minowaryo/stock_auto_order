@@ -2,6 +2,25 @@
 
 > 2026-08-21以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 
+## NISA区分（口座区分）内訳の書き込み・UC-004消費 完了（2026-08-23）
+
+### Decision
+
+- ADR-0002（2026-08-16）決定以来の保留事項だった`holding_snapshot_accounts`（口座区分別内訳）の書き込み経路と、UC-004（`ShowSignalListAction`）での消費側を実装した。計画は`C:\Users\minow\.claude\plans\stock_auto_order-nisa-account-implementation-phase.md`（Planモードで作成、ユーザー承認済み）
+- Planフェーズで3点をユーザーに確認: (1) 分割指値提案の価格帯は全体〔NISA含む〕の平均取得単価を基準にする、(2) 投資信託CSVでも口座区分をパース・保存する（現状消費側はないが将来のため）、(3) 未知の口座区分ラベルは例外を投げて取込を失敗させる
+- **サイクルA（書き込み経路）**: 新規`AccountTypeMapper`（ラベル→enum変換）を追加し、JP/US株CSVパーサーは`■特定口座`等の見出し行のラベルを、投資信託CSVパーサーは`口座区分`列を読み取って`ParsedCsvRow->accountType`に付与。`ImportCsvAction::aggregate()`で`(market, code, accountType)`単位の内訳も算出し、`execute()`で`HoldingSnapshotAccount::create()`を実行。`test-writer`が22件のテスト（`AccountTypeMapper`・3パーサー・`ImportCsvAction`統合）を作成しGate4承認、`tdd-implementer`がGreenフェーズを実装。対象22件・フルスイート173件全てGreen
+- **サイクルB（UC-004消費側）**: `ShowSignalListAction`の`split_limit_suggestion`の数量基準を課税口座（specific/general）分のみに変更し、全額NISA銘柄を一覧から除外するよう改修。`holding_snapshot_accounts`の内訳が1件も無い銘柄（後方互換）は保有数量全体を課税口座扱いとしてフォールバックする設計とし、既存9件のテストが無改変でGreenのままであることで回帰確認とした。`test-writer`が3件追加しGate4承認、`tdd-implementer`がGreenフェーズを実装。対象3件・フルスイート176件全てGreen
+- 両サイクルとも実データ（今回のセッションで取り込んだユーザーの実CSV、134銘柄を再取込みしたバッチID15）で実挙動確認済み: 複数口座区分にまたがる銘柄（例: TSLA=特定8株+一般4株+NISA成長投資枠59株）が正しく分割保存され、`/signals`のレスポンスで混在銘柄の`split_limit_suggestion`が課税口座分のみの数量になること、全額NISA銘柄（例: AAPL）が一覧から正しく除外されることを確認した
+- 作業と並行して別セッションがF-010（既存保有株の買い増しタイミングレコメンド、ADR-0007）のGate1〜3ドキュメント整備を進めていたため、着手前にファイル・ドメインの競合有無を確認した。両セッションの変更は完全に独立（テーブル・Action・use-cases.mdのセクションいずれも重複なし）であることを確認し、そのまま進行した
+
+### Files touched
+
+`app/Services/Import/Support/AccountTypeMapper.php`（新規）、`app/Services/Import/Support/ParsedCsvRow.php`、`app/Services/Import/JpStockCsvParser.php`、`app/Services/Import/UsStockCsvParser.php`、`app/Services/Import/MutualFundCsvParser.php`、`app/Actions/Import/Support/AggregatedHoldingRow.php`、`app/Actions/Import/ImportCsvAction.php`、`app/Actions/Signal/ShowSignalListAction.php`、`tests/Unit/Services/Import/`（新規4ファイル）、`tests/Feature/UC001CsvImportTest.php`、`tests/Feature/UC004SignalListTest.php`、`docs/architecture/data-model.md`（変更履歴）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実データ動作確認完了。フルスイート176件Green。UC-004/005/008共通の保留事項だったNISA区分除外のうち、UC-004分が完了。UC-005・UC-008はPhase2未着手のため、実装時に`holding_snapshot_accounts`をそのまま利用できる状態になった。マージ前に`/review`の実施を推奨（未実施）。
+
 ## `/review`拡張レベルの指摘（per-holding非アトミック性）を修正（2026-08-22）
 
 ### Decision

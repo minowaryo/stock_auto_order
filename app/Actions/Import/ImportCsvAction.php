@@ -9,6 +9,7 @@ use App\Exceptions\Import\CsvStructureException;
 use App\Http\Requests\StoreCsvImportRequest;
 use App\Models\Holding;
 use App\Models\HoldingSnapshot;
+use App\Models\HoldingSnapshotAccount;
 use App\Models\ImportBatch;
 use App\Models\ImportSummaryReport;
 use App\Models\Snapshot;
@@ -115,7 +116,7 @@ class ImportCsvAction
                     ? ($row->currentPrice - $row->averageCost) / $row->averageCost * 100
                     : 0.0;
 
-                HoldingSnapshot::create([
+                $holdingSnapshot = HoldingSnapshot::create([
                     'snapshot_id' => $snapshot->id,
                     'holding_id' => $holding->id,
                     'quantity' => $row->quantity,
@@ -126,6 +127,17 @@ class ImportCsvAction
                     'unrealized_gain_rate' => $gainRate,
                     'is_newly_detected' => $isNewlyDetected,
                 ]);
+
+                // docs/adr/ADR-0002-nisa-account-type-tracking.md: persist the
+                // per-account-type breakdown alongside the combined snapshot.
+                foreach ($row->accountBreakdown as $accountBreakdown) {
+                    HoldingSnapshotAccount::create([
+                        'holding_snapshot_id' => $holdingSnapshot->id,
+                        'account_type' => $accountBreakdown['accountType'],
+                        'quantity' => $accountBreakdown['quantity'],
+                        'average_cost' => $accountBreakdown['averageCost'],
+                    ]);
+                }
             }
 
             $importedAt = now();
@@ -197,6 +209,7 @@ class ImportCsvAction
                     'cost_sum' => 0.0,
                     'current_price' => $row->currentPrice,
                     'fx_rate_used' => $row->fxRateUsed,
+                    'account_buckets' => [],
                 ];
             }
 
@@ -207,19 +220,47 @@ class ImportCsvAction
             if ($row->fxRateUsed !== null) {
                 $buckets[$key]['fx_rate_used'] = $row->fxRateUsed;
             }
+
+            // docs/adr/ADR-0002-nisa-account-type-tracking.md: also aggregate
+            // within (market, code) by account_type so the write-path can
+            // populate holding_snapshot_accounts alongside the combined total.
+            if (! isset($buckets[$key]['account_buckets'][$row->accountType])) {
+                $buckets[$key]['account_buckets'][$row->accountType] = [
+                    'quantity' => 0.0,
+                    'cost_sum' => 0.0,
+                ];
+            }
+
+            $buckets[$key]['account_buckets'][$row->accountType]['quantity'] += $row->quantity;
+            $buckets[$key]['account_buckets'][$row->accountType]['cost_sum'] += $row->quantity * $row->averageCost;
         }
 
         return array_values(array_map(
-            static fn (array $bucket) => new AggregatedHoldingRow(
-                symbolCode: $bucket['symbol_code'],
-                symbolName: $bucket['symbol_name'],
-                market: $bucket['market'],
-                instrumentType: $bucket['instrument_type'],
-                quantity: $bucket['quantity'],
-                averageCost: $bucket['quantity'] > 0.0 ? $bucket['cost_sum'] / $bucket['quantity'] : 0.0,
-                currentPrice: $bucket['current_price'],
-                fxRateUsed: $bucket['fx_rate_used'],
-            ),
+            static function (array $bucket) {
+                $accountBreakdown = [];
+
+                foreach ($bucket['account_buckets'] as $accountType => $accountBucket) {
+                    $accountBreakdown[] = [
+                        'accountType' => $accountType,
+                        'quantity' => $accountBucket['quantity'],
+                        'averageCost' => $accountBucket['quantity'] > 0.0
+                            ? $accountBucket['cost_sum'] / $accountBucket['quantity']
+                            : 0.0,
+                    ];
+                }
+
+                return new AggregatedHoldingRow(
+                    symbolCode: $bucket['symbol_code'],
+                    symbolName: $bucket['symbol_name'],
+                    market: $bucket['market'],
+                    instrumentType: $bucket['instrument_type'],
+                    quantity: $bucket['quantity'],
+                    averageCost: $bucket['quantity'] > 0.0 ? $bucket['cost_sum'] / $bucket['quantity'] : 0.0,
+                    currentPrice: $bucket['current_price'],
+                    fxRateUsed: $bucket['fx_rate_used'],
+                    accountBreakdown: $accountBreakdown,
+                );
+            },
             $buckets,
         ));
     }

@@ -3,6 +3,7 @@
 namespace App\Services\Import;
 
 use App\Exceptions\Import\CsvStructureException;
+use App\Services\Import\Support\AccountTypeMapper;
 use App\Services\Import\Support\CsvNumberParser;
 use App\Services\Import\Support\ParsedCsvFile;
 use App\Services\Import\Support\ParsedCsvRow;
@@ -38,6 +39,9 @@ final class JpStockCsvParser
         $columnIndex = [];
         $rows = [];
         $errorCount = 0;
+        $pendingAccountLabel = null;
+        $currentAccountType = null;
+        $accountTypeError = false;
 
         foreach ($lines as $line) {
             if (trim($line) === '') {
@@ -54,6 +58,25 @@ final class JpStockCsvParser
                 $inDataSection = true;
                 $columnIndex = array_flip(array_map('trim', $fields));
 
+                try {
+                    $currentAccountType = AccountTypeMapper::toEnum((string) $pendingAccountLabel);
+                    $accountTypeError = false;
+                } catch (InvalidArgumentException) {
+                    $currentAccountType = null;
+                    $accountTypeError = true;
+                }
+
+                continue;
+            }
+
+            // Section headings (e.g. "■特定口座", "■NISA成長投資枠") are captured
+            // regardless of $inDataSection so the label is available the next
+            // time a HEADER_MARKER row re-establishes the account section
+            // (docs/adr/ADR-0002-nisa-account-type-tracking.md).
+            if (str_starts_with($first, '■')) {
+                $pendingAccountLabel = mb_substr($first, mb_strlen('■'));
+                $inDataSection = false;
+
                 continue;
             }
 
@@ -61,8 +84,14 @@ final class JpStockCsvParser
                 continue;
             }
 
-            if ($first === '' || str_starts_with($first, '■')) {
+            if ($first === '') {
                 $inDataSection = false;
+
+                continue;
+            }
+
+            if ($accountTypeError) {
+                $errorCount++;
 
                 continue;
             }
@@ -76,6 +105,7 @@ final class JpStockCsvParser
                     quantity: CsvNumberParser::parse((string) ($fields[$columnIndex[self::COLUMN_QUANTITY]] ?? '')),
                     averageCost: CsvNumberParser::parse((string) ($fields[$columnIndex[self::COLUMN_AVERAGE_COST]] ?? '')),
                     currentPrice: CsvNumberParser::parse((string) ($fields[$columnIndex[self::COLUMN_CURRENT_PRICE]] ?? '')),
+                    accountType: (string) $currentAccountType,
                 );
             } catch (InvalidArgumentException) {
                 $errorCount++;

@@ -17,6 +17,7 @@ final class ParsedCsvRow
         public readonly float $quantity,
         public readonly float $averageCost,
         public readonly float $currentPrice,
+        public readonly string $accountType,
         public readonly ?float $fxRateUsed = null,
     ) {}
 }
