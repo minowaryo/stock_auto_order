@@ -1,5 +1,24 @@
 # PLAN.md
 
+## `/review`実施・指摘2件を修正（分析エンジン一式、2026-08-22）
+
+### Decision
+
+- ステップ4完了後、ユーザーの指示で`/review`を実施した。レビュー範囲はこのセッションで積み上げた分析エンジン一式（`ee868a5`からの差分、61ファイル・6128行）。`review-score.sh`を手動でこの範囲に対して実行しスコア472（閾値30）→拡張レベル推奨と判定
+- 主要ファイル（`FetchExternalMarketDataAction`・`YahooFinanceChartClient`・マイグレーション・Fakeクラス・モデル）を直接読み、以下2件のMEDIUM指摘を発見:
+  1. `FetchExternalMarketDataAction`が`signals`を`updateOrCreate`のみで保存しており、再実行（外部APIリトライ等）で成立しなくなった古いシグナルが削除されず残り続ける
+  2. このセッション中に手動（tinker）で発見した`AppServiceProvider`のMarketData Interface束縛漏れバグに対し、自動テストでの回帰防止がなかった
+- ユーザーに修正の承認を得て、両方とも`/tdd`で対応: (1)はGate4なしの小規模バグ修正として再発防止テスト→Green、(2)は「追加時点でGreenになる回帰防止テスト」として`MarketDataContainerBindingTest.php`を新規作成。`FetchExternalMarketDataAction`のシグナル保存を`updateOrCreate`から「削除→新規作成」に変更（閾値以下でスキップされるケースは削除処理も行わない）
+- LOW指摘2件（外部APIのレート制限・リトライ未実装、`Snapshot::firstOrFail()`の例外設計）は現状の規模では実害小と判断し、記録のみで今回は対応見送り
+
+### Files touched
+
+`app/Actions/Analysis/FetchExternalMarketDataAction.php`（signals保存ロジック変更）、`tests/Feature/FetchExternalMarketDataActionTest.php`（1件追記）、`tests/Feature/MarketDataContainerBindingTest.php`（新規）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+レビュー指摘2件（MEDIUM）修正完了。フルスイート146件Green。次はADR-0004の残タスクのうち「`ImportCsvAction`（UC-001）への`FetchExternalMarketDataAction`配線」に進む。
+
 ## FetchExternalMarketDataAction TDD Red-Green完了・実データ統合確認（実装順ステップ4後半、2026-08-22）
 
 ### Decision

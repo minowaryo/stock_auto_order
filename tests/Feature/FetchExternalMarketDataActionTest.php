@@ -606,6 +606,57 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
         });
     });
 
+    describe('シグナルの再判定（再実行時に成立しなくなった古いシグナルの削除）', function () {
+        test('1回目のexecute()でbollinger_overheatが発生した後、2回目のexecute()でどのシグナルも発生しない価格推移に差し替えて再実行すると、1回目のシグナル行が削除されsignalsが0件になる', function () {
+            [$batch, $snapshot] = femdImportBatch();
+            $holding = femdHolding(['symbol_code' => '7203']);
+            $holdingSnapshot = femdHoldingSnapshot($snapshot, $holding, ['unrealized_gain_rate' => 25.0]);
+
+            $marketIndexHistoryForOverheatRun = new FakeMarketIndexClient([
+                'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 30), 1_000_000, '2023-01-02'),
+                'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 30), 1_000_000, '2023-01-02'),
+            ]);
+
+            // 1回目: 「利確シグナル判定」ブロックと同一のbollinger_overheatフィクスチャ
+            // (19週横ばい(100)→最終週130まで急騰、bb_upper≈114.92<130) でシグナルを発生させる。
+            $overheatCloses = array_merge(array_fill(0, 19, 100.0), [130.0]);
+            $overheatPriceHistory = femdPriceHistory($overheatCloses, 1000);
+
+            $firstAction = femdAction(
+                new FakeJpStockPriceClient(['7203' => $overheatPriceHistory]),
+                new FakeUsStockPriceClient(),
+                $marketIndexHistoryForOverheatRun,
+                new FakeJQuantsClient(),
+            );
+
+            $firstAction->execute($batch);
+
+            expect(Signal::where('holding_snapshot_id', $holdingSnapshot->id)->where('signal_type', 'bollinger_overheat')->count())->toBe(1);
+
+            // 2回目: 同一batch・同一snapshot・同一holding_snapshotに対して、
+            // 80週連続の緩やかな上昇のみ（どのシグナルも発生しない価格推移）に
+            // Fakeクライアントを差し替えて再実行する（外部API障害後のリトライ等を想定）。
+            // 市場指数は13週に満たない短い履歴にしてmarketReturn13wをnullにし、
+            // relative_strength_vs_marketがnullになる（=relative_strength_weakening
+            // シグナルが誤って発生しない）ようにしている。
+            $mildPriceHistory = femdPriceHistory(femdCloses(2000.0, 5.0, 80));
+
+            $secondAction = femdAction(
+                new FakeJpStockPriceClient(['7203' => $mildPriceHistory]),
+                new FakeUsStockPriceClient(),
+                new FakeMarketIndexClient([
+                    'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 10)),
+                    'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 10)),
+                ]),
+                new FakeJQuantsClient(),
+            );
+
+            $secondAction->execute($batch);
+
+            expect(Signal::where('holding_snapshot_id', $holdingSnapshot->id)->count())->toBe(0);
+        });
+    });
+
     describe('個別銘柄の失敗が全体を止めない', function () {
         test('価格取得に失敗した銘柄はスキップされ、他の銘柄の処理は正常に完了する', function () {
             [$batch, $snapshot] = femdImportBatch();

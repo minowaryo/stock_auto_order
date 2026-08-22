@@ -189,14 +189,18 @@ class FetchExternalMarketDataAction
                     $pegRatio,
                 );
 
+                // Re-determination: drop stale signal rows from a previous
+                // run before persisting the freshly-determined set, so
+                // signals that no longer hold true (e.g. price history
+                // replaced on retry) don't linger.
+                Signal::where('holding_snapshot_id', $holdingSnapshot->id)->delete();
+
                 foreach ($signals as $signal) {
-                    Signal::updateOrCreate(
-                        [
-                            'holding_snapshot_id' => $holdingSnapshot->id,
-                            'signal_type' => $signal['signal_type'],
-                        ],
-                        ['reason_summary' => $signal['reason_summary']],
-                    );
+                    Signal::create([
+                        'holding_snapshot_id' => $holdingSnapshot->id,
+                        'signal_type' => $signal['signal_type'],
+                        'reason_summary' => $signal['reason_summary'],
+                    ]);
                 }
             }
         }
