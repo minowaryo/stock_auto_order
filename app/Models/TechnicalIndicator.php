@@ -15,6 +15,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'ma75',
     'bb_upper',
     'bb_lower',
+    'volume',
+    'volume_ma20',
+    'week52_high',
+    'week52_low',
+    'relative_strength_vs_market',
+    'relative_strength_vs_sector',
     'computed_at',
 ])]
 class TechnicalIndicator extends Model
@@ -40,6 +46,12 @@ class TechnicalIndicator extends Model
             'ma75' => 'decimal:2',
             'bb_upper' => 'decimal:2',
             'bb_lower' => 'decimal:2',
+            'volume' => 'integer',
+            'volume_ma20' => 'decimal:2',
+            'week52_high' => 'decimal:2',
+            'week52_low' => 'decimal:2',
+            'relative_strength_vs_market' => 'decimal:4',
+            'relative_strength_vs_sector' => 'decimal:4',
             'computed_at' => 'datetime',
         ];
     }

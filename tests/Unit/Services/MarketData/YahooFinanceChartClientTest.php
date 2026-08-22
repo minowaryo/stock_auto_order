@@ -235,3 +235,112 @@ test('chart.resultがnull（存在しない）場合は例外を投げず空配�
     // Assert
     expect($result)->toBe([]);
 });
+
+/*
+|--------------------------------------------------------------------------
+| Additional cases — 未確定週（in-progress week）の除外
+|--------------------------------------------------------------------------
+|
+| Discovered against the real Yahoo Finance chart API (verified with
+| 7203.T and the Nikkei 225 index): when the API is called outside of
+| market hours / mid-week, the LAST element of the weekly series can be a
+| placeholder for the still-in-progress current week, characterized by
+| volume === 0 AND close identical to the previous (confirmed) week's
+| close. If left in the series, this placeholder is mistaken for the
+| latest confirmed week, corrupting change_rate (falsely shows 0%) and any
+| "most recent value" indicator calculation (RSI/MACD) that reads the last
+| element.
+|
+| YahooFinanceChartClient::fetchWeeklyHistory() does not yet implement
+| this exclusion (see current implementation: it only drops weeks where
+| close or volume is null — a volume=0 trailing week with a
+| duplicate close is NOT null-filtered and passes through unchanged).
+| The two tests below are expected to fail (Red) against the current
+| implementation.
+|
+| Assumptions made while writing these tests (not yet confirmed by an
+| implementation — flag during Gate 4 review if a different contract is
+| preferred):
+|   - Only the trailing (last) element of the series is a candidate for
+|     this exclusion; only volume === 0 AND close === previous week's
+|     close together trigger removal (guards against dropping a
+|     legitimate quiet-trading week where volume genuinely happens to be
+|     low/zero but the price still moved).
+|   - The `weeks` slicing (-N) is expected to apply after this exclusion,
+|     so a placeholder week must not count against the requested window.
+|
+*/
+
+test('末尾が出来高0・前週と同じ終値の未確定週の場合、その週は結果から除外される', function () {
+    // Arrange: 3 weeks; the last week is an unconfirmed in-progress week
+    // placeholder (volume=0, close identical to the previous week's close).
+    Http::fake([
+        'query1.finance.yahoo.com/*' => Http::response([
+            'chart' => [
+                'result' => [
+                    [
+                        'timestamp' => [1704067200, 1704672000, 1705276800],
+                        'indicators' => [
+                            'quote' => [
+                                [
+                                    'close' => [100.0, 101.5, 101.5],
+                                    'volume' => [1000000, 1100000, 0],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                'error' => null,
+            ],
+        ], 200),
+    ]);
+
+    $client = new YahooFinanceChartClient;
+
+    // Act
+    $result = $client->fetchWeeklyHistory('7203.T', 104);
+
+    // Assert: the trailing placeholder week (2024-01-15) is excluded
+    expect($result)->toBe([
+        ['date' => '2024-01-01', 'close' => 100.0, 'volume' => 1000000],
+        ['date' => '2024-01-08', 'close' => 101.5, 'volume' => 1100000],
+    ]);
+});
+
+test('volumeが0でもcloseが前週と異なる場合は除外しない', function () {
+    // Arrange: 3 weeks; the last week has volume=0 but its close differs
+    // from the previous week's close, so it must be treated as a
+    // legitimate (if illiquid) confirmed week, not a placeholder.
+    Http::fake([
+        'query1.finance.yahoo.com/*' => Http::response([
+            'chart' => [
+                'result' => [
+                    [
+                        'timestamp' => [1704067200, 1704672000, 1705276800],
+                        'indicators' => [
+                            'quote' => [
+                                [
+                                    'close' => [100.0, 101.5, 102.25],
+                                    'volume' => [1000000, 1100000, 0],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                'error' => null,
+            ],
+        ], 200),
+    ]);
+
+    $client = new YahooFinanceChartClient;
+
+    // Act
+    $result = $client->fetchWeeklyHistory('7203.T', 104);
+
+    // Assert: all three weeks are kept, including the volume=0 last week
+    expect($result)->toBe([
+        ['date' => '2024-01-01', 'close' => 100.0, 'volume' => 1000000],
+        ['date' => '2024-01-08', 'close' => 101.5, 'volume' => 1100000],
+        ['date' => '2024-01-15', 'close' => 102.25, 'volume' => 0],
+    ]);
+});

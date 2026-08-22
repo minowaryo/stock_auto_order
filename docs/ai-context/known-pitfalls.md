@@ -60,3 +60,9 @@
 - 原因: J-Quants API V2の`/fins/summary`は`EqAR`/`ROE`/`PayoutRatioAnn`を比率（0〜1）で返す。`EPS`/`BPS`/`Sales`等の金額・株数系フィールドはそのままの単位（円・株）で返る
 - 対処: `JQuantsClient`自体は生の値をそのまま返す設計（変換責務を持たない）ため実装変更は不要。ただし、今後実装する「J-Quants生データ→`fundamental_indicators`」変換層（`FundamentalIndicatorMapper`等）では、`equity_ratio`/`roe`/`dividend_payout_ratio`（`data-model.md`でパーセント値として定義済み）にマッピングする際、`EqAR`/`ROE`/`PayoutRatioAnn`の値を**×100**すること。実装時にこの記録を必ず参照する
 - 補足: 四半期決算（`disclosed_date`が直近でも本決算でない回）では`BPS`/`ROE`/`DivAnn`/`PayoutRatioAnn`が空文字列で返り`null`になるケースを確認（本決算のみ開示される項目のため、想定通りの挙動）
+
+### Yahoo Finance chart API — 週足の最新1件が「未確定・進行中の週」のプレースホルダーになることがある
+
+- 現象: `FetchExternalMarketDataAction`を実データで動作確認したところ、日経平均の週足データの最終要素が`volume=0`かつ`close`が前週と全く同じ値になっていた（`change_rate`が実際には変化がないはずなのに0%と一致してしまい、偶然発覚しづらい）。`YahooFinanceChartClient`に「末尾要素が`volume===0`かつ直前週と`close`が同一の場合は除外する」ガードを追加し解消した（2026-08-22）
+- **未解決の関連ケース**: 個別銘柄（トヨタ7203.T）では、同様に最終週の`close`が前週と同一になるケースで、`volume`が0ではなく前週より少ないが非ゼロの値（部分的な週内出来高）になっていることを確認した。現在のガード（`volume===0`限定）はこのケースを検出できない。「`close`が前週と同一」だけを条件にすると、偶然一致した正当な週まで誤って除外するリスクがあるため、あえて`volume===0`の明確なケースのみに限定した保守的な実装としている
+- 対処: 本システムの運用サイクルは週末（土日）のCSV取込を前提とするため（`requirements.md`）、取引週が完全に終了した状態で取得することが多く、この問題が実害になる可能性は低いと判断し現状は追加対応しない。**週中（平日）にCSV取込・分析を行う運用に変える場合は、この制約を再検討すること**

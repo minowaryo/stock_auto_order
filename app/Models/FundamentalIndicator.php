@@ -16,6 +16,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'equity_ratio',
     'dividend_yield',
     'dividend_payout_ratio',
+    'eps_growth',
+    'peg_ratio',
     'fetched_at',
 ])]
 class FundamentalIndicator extends Model
@@ -42,6 +44,8 @@ class FundamentalIndicator extends Model
             'equity_ratio' => 'decimal:4',
             'dividend_yield' => 'decimal:4',
             'dividend_payout_ratio' => 'decimal:4',
+            'eps_growth' => 'decimal:4',
+            'peg_ratio' => 'decimal:4',
             'fetched_at' => 'datetime',
         ];
     }

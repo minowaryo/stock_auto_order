@@ -55,6 +55,18 @@ final class YahooFinanceChartClient
             ];
         }
 
+        // Yahoo Finance's weekly chart series can end with a placeholder for
+        // the still-in-progress current week (volume=0, close identical to
+        // the previous confirmed week's close). Drop it so callers never
+        // mistake it for the latest confirmed week.
+        $lastIndex = count($history) - 1;
+        if ($lastIndex > 0
+            && $history[$lastIndex]['volume'] === 0
+            && $history[$lastIndex]['close'] === $history[$lastIndex - 1]['close']
+        ) {
+            array_pop($history);
+        }
+
         if (count($history) > $weeks) {
             $history = array_slice($history, -$weeks);
         }

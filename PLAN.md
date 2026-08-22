@@ -1,5 +1,32 @@
 # PLAN.md
 
+## FetchExternalMarketDataAction TDD Red-Green完了・実データ統合確認（実装順ステップ4後半、2026-08-22）
+
+### Decision
+
+- ADR-0004実装順ステップ4の後半として`app/Actions/Analysis/FetchExternalMarketDataAction`を`/tdd`で実装した。これまでに実装済みの5コンポーネント（`TechnicalIndicatorCalculator`・`FundamentalIndicatorMapper`・`SignalDeterminationService`・MarketData層4クライアント）を統合し、取込バッチ内の保有銘柄について外部データ取得→指標計算→シグナル判定→DB保存を行う。**`ImportCsvAction`への配線はまだ行わず、このAction単体で完結させた**（UC-001フローへの統合は別サイクル）
+- スコープ判断: J-QuantsはJP株専用のため、**US株のファンダメンタルズ指標・セクター分類は今回未対応**（`null`のまま、既存の「取得不可」表示で対応）。JP株はテクニカル+ファンダメンタルズ+セクター、US株はテクニカルのみを今回のスコープとした
+- `test-writer`が10件のFeature Test（`RefreshDatabase`、4つのMarketData Interfaceに対応するFakeクラスをDIコンテナに束縛）を作成。実行時に**ADR-0004分のマイグレーション（`technical_indicators`/`fundamental_indicators`への列追加、`signals.signal_type`のENUM拡張、`market_indicator_snapshots`テーブル新規作成）がまだ存在しないこと**が判明し、Gate4でGreenフェーズにこれらの新規マイグレーション作成を含めることを確認した
+- Gate4でユーザーに`market_indicator_snapshots.ma_deviation`の移動平均期間を確認したところ「現状のつくりで最大の長さを検証して、長めたほうがよいならそうして」との指示を受け、MACD計算の低速EMA期間と揃えた**26週**を採用（実データでも十分な件数を確保できる長さ）
+- `tdd-implementer`がGreenフェーズを実装（新規マイグレーション4本、`MarketIndicatorSnapshot`モデル新規、`TechnicalIndicator`/`FundamentalIndicator`モデルの`$fillable`拡張を含む）。対象10件・フルスイート139件全てGreen
+- **実装後に判明した追加の欠落**: `app/Providers/AppServiceProvider.php`に4つのMarketData Interfaceの実装クラスへの束縛（binding）が登録されておらず、テスト外（本番相当）ではコンテナが`FetchExternalMarketDataAction`を解決できない状態だった（テストは`app()->instance()`でFakeを直接束縛するため検出されなかった）。追加で束縛を登録した
+- **実データでのエンドツーエンド動作確認**（トランザクション内で実行しロールバック、DBを汚さない）: 実際のJ-Quants/Yahoo Finance APIを使い、トヨタ(7203/JP)の一連の処理（価格取得→テクニカル指標保存→セクター取得〔自動車・輸送機〕→財務諸表取得→ファンダメンタルズ指標保存→52週高値からの反落シグナル発生確認）・市場全体指標(nikkei225/sp500)の保存が全て正しく連動することを確認した
+- **この過程でバグを発見**: Yahoo Finance chart APIの週足データの最終要素が、取引が確定していない進行中の週のプレースホルダー（`volume=0`かつ`close`が前週と同一）になることがあり、日経平均で実際に検出した（`change_rate`が偶然0%と一致し気づきにくい形で紛れ込んでいた）。`YahooFinanceChartClient`（既にGreenだった既存コンポーネント）に対し、再発防止テスト2件を追加するTDDサイクル（Red→Gate4→Green）を回し、「末尾要素が`volume===0`かつ直前週と`close`が同一の場合のみ除外する」保守的なガードを追加した。個別銘柄（トヨタ）では出来高が0ではなく部分的な値になる類似ケースがあり今回のガードでは検出できないことも確認したが、本システムは週末（取引週終了後）のCSV取込を前提とするため実害は低いと判断し、`known-pitfalls.md`に記録のうえ追加対応は見送った
+
+### Files touched
+
+`app/Actions/Analysis/FetchExternalMarketDataAction.php`（新規）、`app/Models/MarketIndicatorSnapshot.php`（新規）、`app/Models/TechnicalIndicator.php`・`app/Models/FundamentalIndicator.php`（`$fillable`拡張）、`database/migrations/2026_08_22_000000〜000003`（新規4本）、`app/Providers/AppServiceProvider.php`（MarketData Interface束縛追加）、`app/Services/MarketData/YahooFinanceChartClient.php`（未確定週プレースホルダー除外ロジック追加）、`tests/Feature/FetchExternalMarketDataActionTest.php`・`tests/Support/Fakes/Fake*.php`（新規）、`tests/Unit/Services/MarketData/YahooFinanceChartClientTest.php`（2件追記）、`docs/ai-context/known-pitfalls.md`（未確定週プレースホルダー問題を追記）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実データエンドツーエンド動作確認完了。**ADR-0004の実装順ステップ1〜4（分析エンジンの心臓部一式）が完了**。残りの作業:
+
+1. `ImportCsvAction`（UC-001、既にGreen）への`FetchExternalMarketDataAction`の配線（use-cases.mdフロー7〜8への対応）
+2. UC-004 Gate4サイクル（利確シグナル一覧画面、判定ロジック自体は完成済みのため画面実装は薄い想定）
+3. 既存UC-003（`ShowHoldingDetailAction`）・UC-009（`ShowImportSummaryReportAction`）への新指標反映（CHG-0003で既に識別済みの既存実装への追加改修）
+4. `financial_statements`テーブルへの保存（UC-006の過去業績推移用、今回は`fundamental_indicators`のみ対応しておりUC-006自体もPhase2未着手のため後回し）
+5. US株のファンダメンタルズ指標・セクター分類データソースの検討（今回未対応、将来の別サイクル）
+
 ## FundamentalIndicatorMapper TDD Red-Green完了（実装順ステップ4前半、2026-08-22）
 
 ### Decision
