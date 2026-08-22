@@ -46,3 +46,10 @@
 - 現象: 相対力（対セクター）指標の設計時、J-Quantsの`/indices`（指数四本値）で業種別指数を取得しセクターベンチマークとして使う案を検討したが、無料プランでは利用できない可能性が高いと判明
 - 原因: J-Quants公式記事（[指数四本値を取得できる新規のAPIについて](https://qiita.com/j_quants/items/68ffe2383cd6c3b8f6e1)）によると、`/indices`エンドポイントの利用にはスタンダード/プレミアムプランの契約が必要と明記されており、サンプルコードにも業種別指数（TOPIX-17等）は含まれていない（TOPIX Core30/Large70/Mid400等の規模別指数のみ）
 - 対処: `requirements.md`の前提（J-Quantsは無料プラン使用）を維持したまま、相対力（対セクター）は「保有銘柄内の同一セクター平均騰落率」で簡易代用する設計にした（ADR-0004）。将来J-Quantsを有償プランに切り替える場合は、業種別指数ベースの算出に置き換える余地がある
+- **2026-08-22追記（ADR-0005、V2移行時に再確認）**: J-Quants API V2移行後にも同条件（指数四本値は無料プランで「-」＝利用不可、有償プランのみ過去10年分等が開放）が維持されていることをWebSearchで再確認した。上記の対処方針（対セクター相対力は保有銘柄内平均で簡易代用）は変更不要
+
+### J-Quants API — V1認証（メールアドレス/パスワード・トークン方式）が403 Forbiddenで機能しない（V2への移行）
+
+- 現象: `POST /v1/token/auth_user`に正しい資格情報を送っても常に`403 Forbidden`（`x-amzn-errortype: ForbiddenException`）が返る。存在しないパス・ルートパスでも同一の403が返り、個別の資格情報・エンドポイントの問題ではないことが分かった
+- 原因: J-Quants APIは2025年12月にV2がリリースされ、認証方式がトークン方式（`refreshToken`→`idToken`）からAPIキー方式（`x-api-key`ヘッダー）に変更された。2025年12月22日以降の新規登録ユーザーはV2のみ利用可能で、V1の該当エンドポイント（`/v1/token/auth_user`等）は実質的に利用不可
+- 対処: `docs/adr/ADR-0005-jquants-api-v2-migration.md`の通りV2方式に全面移行。認証情報は`JQUANTS_API_KEY`（`.env`）のみ、リクエストヘッダー`x-api-key`で送る。エンドポイントも`/v1/listed/info`→`/v2/equities/master`、`/v1/fins/statements`→`/v2/fins/summary`に変更（レスポンスは`{"data": [...]}`形式、カラム名も短縮される。例: `Sector17Code`→`S17`、`EarningsPerShare`→`EPS`、`EquityToAssetRatio`→`EqAR`）。V1向けに書いていたテスト・実装は破棄してV2仕様で書き直す

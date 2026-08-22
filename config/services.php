@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    // J-Quants API V2。認証はダッシュボードで発行したAPIキーをx-api-key
+    // ヘッダーに設定する方式（ADR-0005参照）
+    // （docs/ai-context/do-not-touch.md「外部連携」参照。値は.envのみで管理する）。
+    'jquants' => [
+        'api_key' => env('JQUANTS_API_KEY'),
+    ],
+
 ];
