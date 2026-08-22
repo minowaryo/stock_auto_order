@@ -352,6 +352,79 @@ describe('UC-003: 銘柄詳細表示', function () {
             expect((float) $data['roe'])->toEqualWithDelta(12.5, 0.01);
         });
 
+        test('銘柄詳細のレスポンスに出来高・52週高値安値・相対力・EPS成長率・PEGレシオが含まれる', function () {
+            // docs/product/use-cases.md UC-003 output table (ADR-0004 additions):
+            //   technical_indicators: volume/volume_ma20/week52_high/week52_low/
+            //     relative_strength_vs_market/relative_strength_vs_sector
+            //   fundamental_indicators: eps_growth/peg_ratio
+            [, $snapshot] = ucFrom003TestImportBatch();
+            $holding = ucFrom003TestHolding();
+            ucFrom003TestHoldingSnapshot($snapshot, $holding);
+            ucFrom003TestTechnicalIndicator($holding, [
+                'volume' => 1_200_000,
+                'volume_ma20' => 950_000,
+                'week52_high' => 2900.0,
+                'week52_low' => 1800.0,
+                'relative_strength_vs_market' => 3.25,
+                'relative_strength_vs_sector' => -1.5,
+            ]);
+            ucFrom003TestFundamentalIndicator($holding, [
+                'eps_growth' => 12.4,
+                'peg_ratio' => 1.23,
+            ]);
+
+            $response = ucFrom003TestFetchDetail($this, $holding);
+
+            $response->assertSuccessful();
+
+            $data = $response->json('data');
+            expect((float) $data['volume'])->toEqualWithDelta(1_200_000, 0.01);
+            expect((float) $data['volume_ma20'])->toEqualWithDelta(950_000, 0.01);
+            expect((float) $data['week52_high'])->toEqualWithDelta(2900.0, 0.01);
+            expect((float) $data['week52_low'])->toEqualWithDelta(1800.0, 0.01);
+            expect((float) $data['relative_strength_vs_market'])->toEqualWithDelta(3.25, 0.01);
+            expect((float) $data['relative_strength_vs_sector'])->toEqualWithDelta(-1.5, 0.01);
+            expect((float) $data['eps_growth'])->toEqualWithDelta(12.4, 0.01);
+            expect((float) $data['peg_ratio'])->toEqualWithDelta(1.23, 0.01);
+        });
+
+        test('新指標がnull（取得不可）の場合はnullとして返る', function () {
+            // Same "取得不可" convention as the existing "指標データが存在しない場合は
+            // 該当項目がnull" test, but scoped to the ADR-0004 additions specifically
+            // (rows exist, but the new nullable columns themselves are null — e.g.
+            // peg_ratio when eps_growth <= 0, or relative_strength_vs_sector when
+            // there is no other holding in the same sector).
+            [, $snapshot] = ucFrom003TestImportBatch();
+            $holding = ucFrom003TestHolding();
+            ucFrom003TestHoldingSnapshot($snapshot, $holding);
+            ucFrom003TestTechnicalIndicator($holding, [
+                'volume' => null,
+                'volume_ma20' => null,
+                'week52_high' => null,
+                'week52_low' => null,
+                'relative_strength_vs_market' => null,
+                'relative_strength_vs_sector' => null,
+            ]);
+            ucFrom003TestFundamentalIndicator($holding, [
+                'eps_growth' => null,
+                'peg_ratio' => null,
+            ]);
+
+            $response = ucFrom003TestFetchDetail($this, $holding);
+
+            $response->assertSuccessful();
+
+            $data = $response->json('data');
+            expect($data['volume'])->toBeNull();
+            expect($data['volume_ma20'])->toBeNull();
+            expect($data['week52_high'])->toBeNull();
+            expect($data['week52_low'])->toBeNull();
+            expect($data['relative_strength_vs_market'])->toBeNull();
+            expect($data['relative_strength_vs_sector'])->toBeNull();
+            expect($data['eps_growth'])->toBeNull();
+            expect($data['peg_ratio'])->toBeNull();
+        });
+
         test('指標データが存在しない場合は該当項目がnull（取得不可）になる', function () {
             [, $snapshot] = ucFrom003TestImportBatch();
             $holding = ucFrom003TestHolding();
