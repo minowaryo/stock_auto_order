@@ -1,5 +1,23 @@
 # PLAN.md
 
+## SignalDeterminationService TDD Red-Green完了（実装順ステップ3、2026-08-22）
+
+### Decision
+
+- ADR-0004実装順ステップ3として`app/Services/Analysis/SignalDeterminationService`（UC-004向け7種のシグナル判定）を`/tdd`で実装した
+- `technical_indicators`が直近値のみのキャッシュ設計（履歴なし）のため、トレンド系シグナル（RSI反落・MACDデッドクロス）は`TechnicalIndicatorCalculator`を「今週（全価格系列）」「1週間前（末尾1件除いた系列）」の2時点で呼び出し比較する設計とした。DBスキーマ変更は不要
+- `test-writer`が21件のUnit Testを作成（既にGreenの`TechnicalIndicatorCalculator`で事前検証した数値をフィクスチャに採用）。Gate4で`relative_strength_weakening`の判定を「直近4週でのプラス→マイナス転換」（data-model.mdの叩き台）から**「現在の相対力が0未満」という単時点閾値判定に簡略化**する解釈をユーザーに提示し承認を得た（他のトレンド系シグナルと異なりベンチマークの過去時点データが必要になり複雑化するため）
+- `tdd-implementer`がGreenフェーズを実装。対象21件・フルスイート119件全てGreen、`./vendor/bin/pint app`整形済み
+- `php artisan tinker`で乱数による現実的な波形データ（80週、ボラティリティあり）に対し`determine()`を実行し、クラッシュなく複数シグナル（`macd_dead_cross`・`peg_overvalued`）が同時発生するケースも含め妥当な結果が返ることを確認した
+
+### Files touched
+
+`tests/Unit/Services/Analysis/SignalDeterminationServiceTest.php`（新規）、`app/Services/Analysis/SignalDeterminationService.php`（新規）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実挙動サニティチェック完了。ADR-0004実装順ステップ1〜3（`TechnicalIndicatorCalculator`・MarketData層・`SignalDeterminationService`）が完了。次はステップ4（`FetchExternalMarketDataAction`でUC-001取込フローへ統合）に進む。なお`relative_strength_weakening`の判定簡略化は`docs/architecture/data-model.md`の「保留・確定が必要な初期パラメータ値」表への反映がまだ未実施（要フォローアップ）。
+
 ## JQuantsClient TDD Red-Green完了・V2移行対応・実API確認（実装順ステップ2後半、2026-08-22）
 
 ### Decision
