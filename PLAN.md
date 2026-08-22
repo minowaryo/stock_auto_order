@@ -1,5 +1,27 @@
 # PLAN.md
 
+## UC-001への`FetchExternalMarketDataAction`配線完了（ADR-0004最終ステップ、2026-08-22）
+
+### Decision
+
+- ADR-0004の残タスクの1点目、`ImportCsvAction`（UC-001、既にGreen・マージ済み）への`FetchExternalMarketDataAction`の配線を`/tdd`で実施した
+- `test-writer`が`tests/Feature/UC001CsvImportTest.php`を更新: 全17件（既存15件＋新規2件）にMarketData 4Interfaceのfakeバインディングを追加（配線後も実APIを叩かないため）。新規2件は「CSV取込完了後にテクニカル指標が自動計算される」「外部データ取得で予期しない例外が起きてもCSV取込自体は成功する」を検証。後者は配線前は「たまたまグリーン」（UC-001/002/003の既存パターンと同じ扱い）であることをGate4提示時に明記した
+- `tdd-implementer`がGreenフェーズを実装: `ImportCsvAction`のコンストラクタに`FetchExternalMarketDataAction`を追加し、`DB::transaction()`が成功で終わった後（トランザクション外）に`try-catch`で囲んで実行するよう変更。パース失敗の早期returnパスは対象外（元々`FetchExternalMarketDataAction`を呼ぶ必要がない経路）。対象17件・フルスイート148件全てGreen
+- **実挙動確認**: 実際のRakuten CSVフォーマットを手作業で再現するのはCSVパーサーの検証範囲と重複し本質的でないと判断し、代わりに`php artisan tinker`で本番相当のコンテナから`app(ImportCsvAction::class)`を解決し、新しく追加した`FetchExternalMarketDataAction`依存（→さらにその先のMarketData 4クライアント）まで一切のバインディングエラーなく解決できることを確認した（`FetchExternalMarketDataAction`自体の実API動作は前エントリで既に確認済みのため、今回はDI配線の健全性確認に絞った）
+
+### Files touched
+
+`app/Actions/Import/ImportCsvAction.php`（コンストラクタ・`execute()`変更）、`tests/Feature/UC001CsvImportTest.php`（fakeバインディング追加、新規2件）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+配線完了。**ADR-0004（分析エンジンの指標セット拡張）の中核実装がすべて完了**。残りは以下（優先度順ではなく、着手時にあらためて判断）:
+
+1. UC-004 Gate4サイクル（利確シグナル一覧画面。判定ロジックは完成済みのため画面実装は薄い想定）
+2. UC-003・UC-009の既存実装（`ShowHoldingDetailAction`・`ShowImportSummaryReportAction`）への新指標反映
+3. `financial_statements`テーブル実装（UC-006向け、Phase2のため優先度低）
+4. US株のファンダメンタルズ指標データソース（今回未対応）
+
 ## `/review`実施・指摘2件を修正（分析エンジン一式、2026-08-22）
 
 ### Decision

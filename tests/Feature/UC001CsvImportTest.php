@@ -3,9 +3,17 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\MarketData\JpStockPriceClientInterface;
+use App\Services\MarketData\JQuantsClientInterface;
+use App\Services\MarketData\MarketIndexClientInterface;
+use App\Services\MarketData\UsStockPriceClientInterface;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
+use Tests\Support\Fakes\FakeJpStockPriceClient;
+use Tests\Support\Fakes\FakeJQuantsClient;
+use Tests\Support\Fakes\FakeMarketIndexClient;
+use Tests\Support\Fakes\FakeUsStockPriceClient;
 use Tests\TestCase;
 
 /*
@@ -204,6 +212,25 @@ function ucFrom001TestSubmit(TestCase $test, array $files, ?User $user = null): 
 }
 
 describe('UC-001: CSV取込', function () {
+    // ADR-0004 wiring: ImportCsvAction is expected to trigger
+    // FetchExternalMarketDataAction (App\Actions\Analysis) once the DB
+    // transaction that persists the snapshot/holdings completes
+    // (use-cases.md UC-001 フロー7〜8). Once wired, every test in this file
+    // exercises that call, so bind Fakes for all 4 MarketData client
+    // interfaces here to guarantee no real HTTP call is ever made
+    // (docs/adr/ADR-0004-analysis-engine-indicator-expansion.md "テストでは
+    // Fake実装に差し替える"). Empty-array responses (the Fake classes'
+    // default constructor argument) mean every indicator ends up null
+    // (data-insufficient), which does not affect any existing CSV-import
+    // assertion below. Individual tests that need non-empty responses (or a
+    // throwing Fake) re-bind the relevant interface(s) themselves.
+    beforeEach(function () {
+        app()->instance(JpStockPriceClientInterface::class, new FakeJpStockPriceClient());
+        app()->instance(UsStockPriceClientInterface::class, new FakeUsStockPriceClient());
+        app()->instance(MarketIndexClientInterface::class, new FakeMarketIndexClient());
+        app()->instance(JQuantsClientInterface::class, new FakeJQuantsClient());
+    });
+
     describe('正常系', function () {
         test('国内株式・米国株式のCSVを取り込める', function () {
             $jpCsv = ucFrom001TestJpStockCsv([
@@ -470,6 +497,92 @@ describe('UC-001: CSV取込', function () {
             expect($report->portfolio_headline)->not->toBeNull();
             expect(trim((string) $report->portfolio_headline))->not->toBe('');
             expect($report->generated_at)->not->toBeNull();
+        });
+
+        test('CSV取込完了後、外部データ取得（テクニカル指標計算）が自動的に実行される', function () {
+            // 25 weeks of ascending closes is enough for
+            // TechnicalIndicatorCalculator to produce a non-null RSI (needs
+            // >= 15 points) / MA20 / Bollinger Bands, without needing to
+            // pin down the full 52/75-week indicators this test doesn't
+            // assert on (docs/architecture/data-model.md technical_indicators).
+            $jpHistory = [];
+            $usHistory = [];
+            $weekStart = new \DateTimeImmutable('2025-01-06');
+
+            for ($i = 0; $i < 25; $i++) {
+                $date = $weekStart->modify("+{$i} weeks")->format('Y-m-d');
+                $jpHistory[] = ['date' => $date, 'close' => 2000.0 + $i * 10, 'volume' => 100000];
+                $usHistory[] = ['date' => $date, 'close' => 100.0 + $i * 2, 'volume' => 50000];
+            }
+
+            app()->instance(JpStockPriceClientInterface::class, new FakeJpStockPriceClient(['7203' => $jpHistory]));
+            app()->instance(UsStockPriceClientInterface::class, new FakeUsStockPriceClient(['AAPL' => $usHistory]));
+
+            $jpCsv = ucFrom001TestJpStockCsv([
+                ['code' => '7203', 'name' => 'トヨタ自動車', 'quantity' => '10', 'avg_cost' => '2,000.00', 'current_price' => '2,500.0'],
+            ]);
+            $usCsv = ucFrom001TestUsStockCsv([
+                ['ticker' => 'AAPL', 'name' => 'アップル', 'quantity' => '5', 'avg_cost' => '100.00', 'current_price' => '150.00'],
+            ]);
+
+            $response = ucFrom001TestSubmit($this, [
+                'jp_stock_file' => ucFrom001TestFakeCsvFile('jp_stock.csv', ucFrom001TestUtf8ToShiftJis($jpCsv)),
+                'us_stock_file' => ucFrom001TestFakeCsvFile('us_stock.csv', ucFrom001TestUtf8ToShiftJis($usCsv)),
+            ]);
+
+            $response->assertSuccessful();
+
+            $jpHolding = DB::table('holdings')->where('symbol_code', '7203')->where('market', 'jp')->first();
+            $usHolding = DB::table('holdings')->where('symbol_code', 'AAPL')->where('market', 'us')->first();
+            expect($jpHolding)->not->toBeNull();
+            expect($usHolding)->not->toBeNull();
+
+            $this->assertDatabaseCount('technical_indicators', 2);
+            $this->assertDatabaseHas('technical_indicators', ['holding_id' => $jpHolding->id]);
+            $this->assertDatabaseHas('technical_indicators', ['holding_id' => $usHolding->id]);
+
+            $jpIndicator = DB::table('technical_indicators')->where('holding_id', $jpHolding->id)->first();
+            $usIndicator = DB::table('technical_indicators')->where('holding_id', $usHolding->id)->first();
+
+            expect($jpIndicator->rsi)->not->toBeNull();
+            expect($usIndicator->rsi)->not->toBeNull();
+        });
+
+        test('外部データ取得処理で予期しない例外が発生しても、CSV取込自体は成功する', function () {
+            // FakeMarketIndexClient (tests/Support/Fakes/FakeMarketIndexClient.php)
+            // has no throwsFor-style failure injection hook (confirmed by
+            // reading the file before writing this test), so an inline
+            // anonymous implementation of MarketIndexClientInterface is used
+            // to simulate a failure that is NOT scoped to a single symbol
+            // (unlike JpStockPriceClientInterface/UsStockPriceClientInterface's
+            // per-symbol try/catch inside FetchExternalMarketDataAction) —
+            // this exercises the outer try/catch that
+            // ImportCsvAction is expected to wrap the whole
+            // FetchExternalMarketDataAction::execute() call in
+            // (UC-001業務ルール "外部データ取得は...特定銘柄の取得に失敗しても
+            // 取込全体は失敗させない").
+            app()->instance(MarketIndexClientInterface::class, new class implements MarketIndexClientInterface
+            {
+                public function fetchWeeklyHistory(string $indexName): array
+                {
+                    throw new \RuntimeException('市場指数取得に失敗');
+                }
+            });
+
+            $jpCsv = ucFrom001TestJpStockCsv([
+                ['code' => '7203', 'name' => 'トヨタ自動車', 'quantity' => '10', 'avg_cost' => '2,000.00', 'current_price' => '2,500.0'],
+            ]);
+            $usCsv = ucFrom001TestUsStockCsv([
+                ['ticker' => 'AAPL', 'name' => 'アップル', 'quantity' => '5', 'avg_cost' => '100.00', 'current_price' => '150.00'],
+            ]);
+
+            $response = ucFrom001TestSubmit($this, [
+                'jp_stock_file' => ucFrom001TestFakeCsvFile('jp_stock.csv', ucFrom001TestUtf8ToShiftJis($jpCsv)),
+                'us_stock_file' => ucFrom001TestFakeCsvFile('us_stock.csv', ucFrom001TestUtf8ToShiftJis($usCsv)),
+            ]);
+
+            $response->assertSuccessful();
+            $this->assertDatabaseHas('import_batches', ['status' => 'completed']);
         });
     });
 

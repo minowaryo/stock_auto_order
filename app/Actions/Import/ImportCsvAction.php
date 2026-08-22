@@ -2,6 +2,7 @@
 
 namespace App\Actions\Import;
 
+use App\Actions\Analysis\FetchExternalMarketDataAction;
 use App\Actions\Import\Support\AggregatedHoldingRow;
 use App\Actions\Import\Support\ImportResult;
 use App\Exceptions\Import\CsvStructureException;
@@ -29,6 +30,7 @@ class ImportCsvAction
         private readonly JpStockCsvParser $jpStockCsvParser,
         private readonly UsStockCsvParser $usStockCsvParser,
         private readonly MutualFundCsvParser $mutualFundCsvParser,
+        private readonly FetchExternalMarketDataAction $fetchExternalMarketDataAction,
     ) {}
 
     public function execute(StoreCsvImportRequest $request): ImportResult
@@ -67,7 +69,7 @@ class ImportCsvAction
 
         $aggregatedHoldings = $this->aggregate($rows);
 
-        return DB::transaction(function () use ($batch, $aggregatedHoldings, $errorCount) {
+        $result = DB::transaction(function () use ($batch, $aggregatedHoldings, $errorCount) {
             // docs/architecture/data-model.md#snapshots: "直近" is determined by
             // snapshotted_at (the column the table's index is built for), with id
             // as a tiebreaker for snapshots created within the same second.
@@ -153,6 +155,16 @@ class ImportCsvAction
                 newlyDetectedSymbols: $newlyDetectedSymbols,
             );
         });
+
+        if ($result->success) {
+            try {
+                $this->fetchExternalMarketDataAction->execute($batch);
+            } catch (\Throwable) {
+                // UC-001業務ルール: 外部データ取得の失敗は取込全体を失敗させない
+            }
+        }
+
+        return $result;
     }
 
     private function decode(UploadedFile $file): string
