@@ -1,5 +1,23 @@
 # PLAN.md
 
+## FundamentalIndicatorMapper TDD Red-Green完了（実装順ステップ4前半、2026-08-22）
+
+### Decision
+
+- ADR-0004実装順ステップ4の前半として`app/Services/Analysis/FundamentalIndicatorMapper`（J-Quants生データ→`fundamental_indicators`変換）を`/tdd`で実装した
+- `JQuantsClient::fetchStatements()`が返す5期分の開示データ（`disclosed_date`降順）を受け取り、`per`/`pbr`/`roe`/`equity_ratio`/`dividend_yield`/`dividend_payout_ratio`/`revenue_growth`/`operating_income_growth`/`eps_growth`/`peg_ratio`を算出する。J-Quants財務情報は年4回の四半期累積開示のため、**4期前（`$statements[4]`）を「概ね前年同期」とみなしてYoY成長率を算出**する設計とした（開示期区分フィールドを持たないための現実的な近似）
+- `known-pitfalls.md`記載の「EqAR/ROE/PayoutRatioAnnは0〜1の比率で返る」仕様に対応し、×100変換をこのマッパーの責務として実装
+- `test-writer`が10件のUnit Testを作成、Gate4承認後`tdd-implementer`がGreenフェーズを実装。対象10件・フルスイート129件全てGreen
+- **実データでの動作確認**: `JQuantsClient`（トヨタ72030の実財務データ）と`JpStockPriceClient`（実株価3132円）を組み合わせて`map()`を実行し、PER≈10.6・PBR≈1.02・ROE=10.1%・配当利回り≈3.0%・配当性向32.1%等、実態と整合する妥当な値が算出されることを確認した（EPS成長率がマイナスのため`peg_ratio`が正しくnullになることも確認）
+
+### Files touched
+
+`tests/Unit/Services/Analysis/FundamentalIndicatorMapperTest.php`（新規）、`app/Services/Analysis/FundamentalIndicatorMapper.php`（新規）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実データ動作確認完了。次はADR-0004実装順ステップ4後半（`FetchExternalMarketDataAction`でUC-001取込フローへ統合。`technical_indicators`/`fundamental_indicators`/`financial_statements`/`signals`/`market_indicator_snapshots`へのDB保存〔UPSERT〕ロジックを含む）に進む。
+
 ## SignalDeterminationService TDD Red-Green完了（実装順ステップ3、2026-08-22）
 
 ### Decision
