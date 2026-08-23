@@ -44,10 +44,12 @@ use Tests\TestCase;
 |     `signal_only` (boolean, sent as "1"/"0").
 |   - Requests use Accept: application/json (via getJson()).
 |   - Success response body is assumed to be a Laravel API Resource
-|     collection shape: `{"data": [ {symbol_code, symbol_name, market,
+|     collection shape: `{"data": [ {id, symbol_code, symbol_name, market,
 |     instrument_type, quantity, average_cost, current_price,
 |     unrealized_gain_rate, sector, has_signal, rsi, per, revenue_growth,
-|     is_newly_detected}, ... ] }`. This is the biggest unconfirmed part of
+|     is_newly_detected}, ... ] }` (`id` added 2026-08-23 for the frontend's
+|     list -> detail link, stock_auto_order-frontend-implementation-phase.md
+|     Phase0). This is the biggest unconfirmed part of
 |     the contract — a bare top-level array, or a differently-named
 |     wrapper key, would also satisfy use-cases.md's output definition.
 |   - "対象外" (N/A) for rsi/per/revenue_growth on ETF/mutual fund rows is
@@ -205,7 +207,7 @@ function ucFrom002TestSignal(HoldingSnapshot $holdingSnapshot, array $attributes
 function ucFrom002TestFetch(TestCase $test, array $query = [], ?User $user = null): TestResponse
 {
     $user ??= User::factory()->create();
-    $url = '/holdings'.(empty($query) ? '' : ('?'.http_build_query($query)));
+    $url = '/api/holdings'.(empty($query) ? '' : ('?'.http_build_query($query)));
 
     return $test->actingAs($user)->getJson($url);
 }
@@ -248,6 +250,10 @@ describe('UC-002: 保有銘柄一覧表示', function () {
 
             $row = ucFrom002TestFindRow($response, '7203', 'jp');
             expect($row)->not->toBeNull();
+            // フロントエンド実装（一覧→詳細画面へのリンク生成、GET /holdings/{holding}
+            // のroute model binding）に必要なため追加。stock_auto_order-frontend-
+            // implementation-phase.md Phase0参照。
+            expect($row['id'])->toBe($holding->id);
             expect($row['symbol_name'])->toBe('トヨタ自動車');
             expect($row['instrument_type'])->toBe('stock');
             expect((float) $row['quantity'])->toEqualWithDelta(100.0, 0.01);
@@ -423,13 +429,22 @@ describe('UC-002: 保有銘柄一覧表示', function () {
         });
     });
 
+    describe('バリデーションエラー', function () {
+        test('signal_onlyに真偽値でない値を渡すと422になる', function () {
+            $response = ucFrom002TestFetch($this, ['signal_only' => 'not-a-boolean']);
+
+            $response->assertStatus(422);
+            $response->assertJsonValidationErrors(['signal_only']);
+        });
+    });
+
     describe('権限', function () {
         test('未認証ユーザーは保有銘柄一覧を取得できない', function () {
             [, $snapshot] = ucFrom002TestImportBatch();
             $holding = ucFrom002TestHolding();
             ucFrom002TestHoldingSnapshot($snapshot, $holding);
 
-            $response = $this->getJson('/holdings');
+            $response = $this->getJson('/api/holdings');
 
             // Single-user app (docs/architecture/authz-authn.md): unauthenticated
             // access must be rejected, either via a redirect to login (web guard)

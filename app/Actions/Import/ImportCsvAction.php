@@ -6,7 +6,6 @@ use App\Actions\Analysis\FetchExternalMarketDataAction;
 use App\Actions\Import\Support\AggregatedHoldingRow;
 use App\Actions\Import\Support\ImportResult;
 use App\Exceptions\Import\CsvStructureException;
-use App\Http\Requests\StoreCsvImportRequest;
 use App\Models\Holding;
 use App\Models\HoldingSnapshot;
 use App\Models\HoldingSnapshotAccount;
@@ -34,12 +33,19 @@ class ImportCsvAction
         private readonly FetchExternalMarketDataAction $fetchExternalMarketDataAction,
     ) {}
 
-    public function execute(StoreCsvImportRequest $request): ImportResult
+    /**
+     * @param  UploadedFile  $jpFile  JP株CSV（必須）
+     * @param  UploadedFile  $usFile  US株CSV（必須）
+     * @param  UploadedFile|null  $mutualFundFile  投資信託CSV（任意）
+     *
+     * プレーンなUploadedFileを受け取る（FormRequestに依存しない）ことで、
+     * HTTP経由のCsvImportControllerだけでなく、Livewireコンポーネントが
+     * 保持するTemporaryUploadedFile（Illuminate\Http\UploadedFileのサブ
+     * クラス）からも直接呼び出せる（stock_auto_order-frontend-
+     * implementation-phase.md Phase0）。
+     */
+    public function execute(UploadedFile $jpFile, UploadedFile $usFile, ?UploadedFile $mutualFundFile = null): ImportResult
     {
-        $jpFile = $request->file('jp_stock_file');
-        $usFile = $request->file('us_stock_file');
-        $mutualFundFile = $request->file('mutual_fund_file');
-
         $batch = ImportBatch::create([
             'status' => 'processing',
             'jp_stock_filename' => $jpFile->getClientOriginalName(),

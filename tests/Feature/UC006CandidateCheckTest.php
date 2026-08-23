@@ -286,7 +286,7 @@ function ucFrom006CandidateTestWatchRecord(Holding $holding, array $attributes =
 function ucFrom006CandidateTestFetch(TestCase $test, string $symbolCode, ?User $user = null): TestResponse
 {
     $user ??= User::factory()->create();
-    $url = '/candidate-check?'.http_build_query(['symbol_code' => $symbolCode]);
+    $url = '/api/candidate-check?'.http_build_query(['symbol_code' => $symbolCode]);
 
     return $test->actingAs($user)->getJson($url);
 }
@@ -300,7 +300,7 @@ function ucFrom006CandidateTestSaveWatchRecord(TestCase $test, array $body, ?Use
 {
     $user ??= User::factory()->create();
 
-    return $test->actingAs($user)->postJson('/candidate-check/watch-records', $body);
+    return $test->actingAs($user)->postJson('/api/candidate-check/watch-records', $body);
 }
 
 describe('UC-006: 新規投資候補の重複チェック（本体）', function () {
@@ -632,7 +632,7 @@ describe('UC-006: 新規投資候補の重複チェック（本体）', function
         test('存在しないsymbol_codeを指定するとGET /candidate-checkは422になる', function () {
             $user = User::factory()->create();
 
-            $response = $this->actingAs($user)->getJson('/candidate-check?'.http_build_query(['symbol_code' => '0000']));
+            $response = $this->actingAs($user)->getJson('/api/candidate-check?'.http_build_query(['symbol_code' => '0000']));
 
             $response->assertStatus(422);
             $response->assertJsonPath('errors.symbol_code.0', '銘柄コードを確認してください');
@@ -665,6 +665,39 @@ describe('UC-006: 新規投資候補の重複チェック（本体）', function
             $response->assertJsonPath('errors.watch_memo.0', 'メモは2000文字以内で入力してください');
         });
 
+        test('symbol_codeを指定せずにGET /candidate-checkを呼ぶと422になる', function () {
+            $user = User::factory()->create();
+
+            $response = $this->actingAs($user)->getJson('/api/candidate-check');
+
+            $response->assertStatus(422);
+            $response->assertJsonValidationErrors(['symbol_code']);
+        });
+
+        test('symbol_codeを指定せずにPOST /candidate-check/watch-recordsを呼ぶと422になる', function () {
+            $response = ucFrom006CandidateTestSaveWatchRecord($this, [
+                'watch_status' => '様子見',
+            ]);
+
+            $response->assertStatus(422);
+            $response->assertJsonValidationErrors(['symbol_code']);
+        });
+
+        test('watch_statusに許可されていない値を指定すると422になる', function () {
+            $candidate = ucFrom006CandidateTestHolding([
+                'symbol_code' => '4589',
+                'symbol_name' => 'オンコリスバイオファーマ',
+            ]);
+
+            $response = ucFrom006CandidateTestSaveWatchRecord($this, [
+                'symbol_code' => $candidate->symbol_code,
+                'watch_status' => '謎ステータス',
+            ]);
+
+            $response->assertStatus(422);
+            $response->assertJsonValidationErrors(['watch_status']);
+        });
+
         test('watch_status・watch_memoの両方が省略された場合は422になる（Gate4要確認の仮定）', function () {
             // use-cases.mdはこのケースを明示的には扱っていない。保存すべき
             // 内容が何も無いため422を仮定しているが、Gate4で正式な仕様を
@@ -689,7 +722,7 @@ describe('UC-006: 新規投資候補の重複チェック（本体）', function
                 'symbol_name' => 'オンコリスバイオファーマ',
             ]);
 
-            $response = $this->getJson('/candidate-check?'.http_build_query(['symbol_code' => $candidate->symbol_code]));
+            $response = $this->getJson('/api/candidate-check?'.http_build_query(['symbol_code' => $candidate->symbol_code]));
 
             // Single-user app (docs/architecture/authz-authn.md): unauthenticated
             // access must be rejected, either via a redirect to login (web guard)
@@ -704,7 +737,7 @@ describe('UC-006: 新規投資候補の重複チェック（本体）', function
                 'symbol_name' => 'オンコリスバイオファーマ',
             ]);
 
-            $response = $this->postJson('/candidate-check/watch-records', [
+            $response = $this->postJson('/api/candidate-check/watch-records', [
                 'symbol_code' => $candidate->symbol_code,
                 'watch_status' => '様子見',
             ]);

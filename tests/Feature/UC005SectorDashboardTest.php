@@ -186,7 +186,7 @@ function ucFrom005SectorTestFetch(TestCase $test, ?User $user = null): TestRespo
 {
     $user ??= User::factory()->create();
 
-    return $test->actingAs($user)->getJson('/sector-dashboard');
+    return $test->actingAs($user)->getJson('/api/sector-dashboard');
 }
 
 /**
@@ -513,7 +513,7 @@ describe('UC-005: セクター配分ダッシュボード', function () {
             $holding = ucFrom005SectorTestHolding();
             ucFrom005SectorTestHoldingSnapshot($snapshot, $holding);
 
-            $response = $this->getJson('/sector-dashboard');
+            $response = $this->getJson('/api/sector-dashboard');
 
             // Single-user app (docs/architecture/authz-authn.md): unauthenticated
             // access must be rejected, either via a redirect to login (web

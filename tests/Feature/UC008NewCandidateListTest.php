@@ -156,7 +156,7 @@ function ucFrom008CandidateTestFetch(TestCase $test, ?User $user = null): TestRe
 {
     $user ??= User::factory()->create();
 
-    return $test->actingAs($user)->getJson('/new-candidates');
+    return $test->actingAs($user)->getJson('/api/new-candidates');
 }
 
 /**
@@ -459,7 +459,7 @@ describe('UC-008: 新規投資候補レコメンド（軽量版）候補一覧',
         test('未認証ユーザーは新規投資候補一覧を取得できない', function () {
             WatchedTheme::create(['name' => 'AI半導体']);
 
-            $response = $this->getJson('/new-candidates');
+            $response = $this->getJson('/api/new-candidates');
 
             // Single-user app (docs/architecture/authz-authn.md): unauthenticated
             // access must be rejected, either via a redirect to login (web

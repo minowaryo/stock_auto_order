@@ -48,3 +48,7 @@ Accepted
 ## Related
 - `meta/adr/ADR-0005-frontend-stack.md`
 - `.claude/rules/15-frontend.md`
+
+## 追記（2026-08-23、フロントエンド実装着手時）
+
+`composer.json`は`livewire/livewire: ^4.4`を採用しており、本ADR・`.claude/rules/15-frontend.md`が当初前提としていた3.xとは異なる。新規ライブラリの採用ではなく既にインストール済みのバージョンへドキュメント記述を追従させる修正のため、新規ADRは作成せず本ADRおよび`.claude/rules/15-frontend.md`のバージョン記述を4.xに修正した。

@@ -59,7 +59,7 @@ function ucFrom008TestRegister(TestCase $test, ?User $user, ?string $name): Test
 
     $payload = $name === null ? [] : ['name' => $name];
 
-    return $test->actingAs($user)->postJson('/watched-themes', $payload);
+    return $test->actingAs($user)->postJson('/api/watched-themes', $payload);
 }
 
 /**
@@ -69,7 +69,7 @@ function ucFrom008TestList(TestCase $test, ?User $user = null): TestResponse
 {
     $user ??= User::factory()->create();
 
-    return $test->actingAs($user)->getJson('/watched-themes');
+    return $test->actingAs($user)->getJson('/api/watched-themes');
 }
 
 describe('UC-008: 注目テーマ・セクターの登録・更新', function () {
@@ -151,7 +151,7 @@ describe('UC-008: 注目テーマ・セクターの登録・更新', function ()
 
     describe('権限', function () {
         test('未認証ユーザーはテーマを登録できない', function () {
-            $response = $this->postJson('/watched-themes', ['name' => 'AI半導体']);
+            $response = $this->postJson('/api/watched-themes', ['name' => 'AI半導体']);
 
             // Single-user app (docs/architecture/authz-authn.md): unauthenticated
             // access must be rejected, either via a redirect to login (web
@@ -166,7 +166,7 @@ describe('UC-008: 注目テーマ・セクターの登録・更新', function ()
         test('未認証ユーザーはテーマ一覧を取得できない', function () {
             WatchedTheme::create(['name' => 'AI半導体']);
 
-            $response = $this->getJson('/watched-themes');
+            $response = $this->getJson('/api/watched-themes');
 
             expect($response->status())->toBeIn([302, 401, 403]);
         });

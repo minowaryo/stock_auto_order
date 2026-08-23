@@ -14,7 +14,11 @@ class CsvImportController extends Controller
 {
     public function store(StoreCsvImportRequest $request, ImportCsvAction $action): JsonResponse
     {
-        $result = $action->execute($request);
+        $result = $action->execute(
+            $request->file('jp_stock_file'),
+            $request->file('us_stock_file'),
+            $request->file('mutual_fund_file'),
+        );
 
         if (! $result->success) {
             return response()->json([

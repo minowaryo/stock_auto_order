@@ -234,7 +234,7 @@ function ucFrom001TestSubmit(TestCase $test, array $files, ?User $user = null): 
 {
     $user ??= User::factory()->create();
 
-    return $test->actingAs($user)->post('/csv-import', $files, ['Accept' => 'application/json']);
+    return $test->actingAs($user)->post('/api/csv-import', $files, ['Accept' => 'application/json']);
 }
 
 describe('UC-001: CSV取込', function () {
@@ -285,6 +285,16 @@ describe('UC-001: CSV取込', function () {
             $batch = DB::table('import_batches')->first();
             expect($batch->mutual_fund_filename)->toBeNull();
             expect($batch->imported_at)->not->toBeNull();
+
+            // Response body contract (CsvImportController::store): previously
+            // only DB side effects were asserted for the success path; the
+            // actual JSON response returned to the caller was never checked.
+            $response->assertJsonPath('import_batch_id', $batch->id);
+            $response->assertJsonPath('status', 'completed');
+            $response->assertJsonPath('imported_count', 2);
+            $response->assertJsonPath('error_count', 0);
+            expect($response->json('imported_at'))->not->toBeNull();
+            expect($response->json('newly_detected_symbols'))->toBe([]);
 
             $this->assertDatabaseCount('snapshots', 1);
             $this->assertDatabaseHas('snapshots', ['import_batch_id' => $batch->id]);
@@ -615,6 +625,16 @@ describe('UC-001: CSV取込', function () {
                 expect((bool) $snapshot->is_newly_detected)
                     ->toBe($expectedNewlyDetected, "symbol_code={$symbolCode} の is_newly_detected が期待値と異なります");
             }
+
+            // Response body contract: newly_detected_symbols is the field the
+            // caller actually receives (DB's is_newly_detected column above
+            // only confirms the underlying persistence, not what the API
+            // returns).
+            $responseNewlyDetected = $response->json('newly_detected_symbols');
+            expect($responseNewlyDetected)->toContain('9984:jp');
+            expect($responseNewlyDetected)->toContain('MSFT:us');
+            expect($responseNewlyDetected)->not->toContain('7203:jp');
+            expect($responseNewlyDetected)->not->toContain('AAPL:us');
         });
 
         test('取込完了と同時に取込後サマリーレポート（UC-009）が自動生成される', function () {
@@ -822,6 +842,12 @@ describe('UC-001: CSV取込', function () {
             expect($batch)->not->toBeNull();
             expect($batch->status)->toBe('failed');
             expect($batch->failure_reason)->not->toBeNull();
+
+            // This 422 is CsvImportController's own {"message": ...} body
+            // (ImportResult::failure()), not a FormRequest {"errors": ...}
+            // validation response — the response contract must be checked
+            // separately from the DB's failure_reason column.
+            expect($response->json('message'))->toBe($batch->failure_reason);
         });
 
         test('未知の口座区分見出しを含むCSVは取込全体を失敗として扱い422エラーになる', function () {
@@ -849,6 +875,8 @@ describe('UC-001: CSV取込', function () {
             expect($batch)->not->toBeNull();
             expect($batch->status)->toBe('failed');
             expect($batch->failure_reason)->not->toBeNull();
+
+            expect($response->json('message'))->toBe($batch->failure_reason);
         });
     });
 
@@ -861,7 +889,7 @@ describe('UC-001: CSV取込', function () {
                 ['ticker' => 'AAPL', 'name' => 'アップル', 'quantity' => '5', 'avg_cost' => '100.00', 'current_price' => '150.00'],
             ]);
 
-            $response = $this->post('/csv-import', [
+            $response = $this->post('/api/csv-import', [
                 'jp_stock_file' => ucFrom001TestFakeCsvFile('jp_stock.csv', ucFrom001TestUtf8ToShiftJis($jpCsv)),
                 'us_stock_file' => ucFrom001TestFakeCsvFile('us_stock.csv', ucFrom001TestUtf8ToShiftJis($usCsv)),
             ], ['Accept' => 'application/json']);

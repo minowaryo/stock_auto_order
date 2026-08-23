@@ -59,6 +59,7 @@ class ListHoldingsAction
         $holding = $holdingSnapshot->holding;
 
         return [
+            'id' => $holding->id,
             'symbol_code' => $holding->symbol_code,
             'symbol_name' => $holding->symbol_name,
             'market' => $holding->market,

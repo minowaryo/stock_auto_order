@@ -186,7 +186,7 @@ function ucFrom004TestFetch(TestCase $test, ?User $user = null): TestResponse
 {
     $user ??= User::factory()->create();
 
-    return $test->actingAs($user)->getJson('/signals');
+    return $test->actingAs($user)->getJson('/api/signals');
 }
 
 /**
@@ -475,7 +475,7 @@ describe('UC-004: 利確シグナル一覧', function () {
             $holding = ucFrom004TestHolding();
             ucFrom004TestHoldingSnapshot($snapshot, $holding, ['unrealized_gain_rate' => 30.0]);
 
-            $response = $this->getJson('/signals');
+            $response = $this->getJson('/api/signals');
 
             // Single-user app (docs/architecture/authz-authn.md): unauthenticated
             // access must be rejected, either via a redirect to login (web guard)

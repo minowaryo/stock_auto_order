@@ -117,7 +117,7 @@ function ucFrom007MarketTestFetch(TestCase $test, ?User $user = null): TestRespo
 {
     $user ??= User::factory()->create();
 
-    return $test->actingAs($user)->getJson('/market-indicators');
+    return $test->actingAs($user)->getJson('/api/market-indicators');
 }
 
 /**
@@ -259,7 +259,7 @@ describe('UC-007: 市場全体指標表示', function () {
             [, $snapshot] = ucFrom007MarketTestImportBatch();
             ucFrom007MarketTestIndicator($snapshot, 'nikkei225');
 
-            $response = $this->getJson('/market-indicators');
+            $response = $this->getJson('/api/market-indicators');
 
             // Single-user app (docs/architecture/authz-authn.md): unauthenticated
             // access must be rejected, either via a redirect to login (web

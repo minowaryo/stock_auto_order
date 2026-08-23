@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\FundamentalIndicator;
 use App\Models\Holding;
+use App\Models\HoldingMemo;
 use App\Models\HoldingSnapshot;
 use App\Models\ImportBatch;
 use App\Models\Signal;
@@ -213,7 +214,7 @@ function ucFrom003TestSignal(HoldingSnapshot $holdingSnapshot, array $attributes
  */
 function ucFrom003TestMemo(Holding $holding, string $body, ?\DateTimeInterface $recordedAt = null)
 {
-    return \App\Models\HoldingMemo::create([
+    return HoldingMemo::create([
         'holding_id' => $holding->id,
         'body' => $body,
         'recorded_at' => $recordedAt ?? now(),
@@ -229,7 +230,7 @@ function ucFrom003TestFetchDetail(TestCase $test, int|Holding $holding, array $q
 {
     $user ??= User::factory()->create();
     $holdingId = $holding instanceof Holding ? $holding->id : $holding;
-    $url = "/holdings/{$holdingId}".(empty($query) ? '' : ('?'.http_build_query($query)));
+    $url = "/api/holdings/{$holdingId}".(empty($query) ? '' : ('?'.http_build_query($query)));
 
     return $test->actingAs($user)->getJson($url);
 }
@@ -241,7 +242,7 @@ function ucFrom003TestSaveMemo(TestCase $test, Holding $holding, string $memo, ?
 {
     $user ??= User::factory()->create();
 
-    return $test->actingAs($user)->postJson("/holdings/{$holding->id}/memos", ['memo' => $memo]);
+    return $test->actingAs($user)->postJson("/api/holdings/{$holding->id}/memos", ['memo' => $memo]);
 }
 
 describe('UC-003: 銘柄詳細表示', function () {
@@ -546,9 +547,32 @@ describe('UC-003: 銘柄詳細表示', function () {
         test('存在しない銘柄IDを指定した場合は404になる', function () {
             $user = User::factory()->create();
 
-            $response = $this->actingAs($user)->getJson('/holdings/999999');
+            $response = $this->actingAs($user)->getJson('/api/holdings/999999');
 
             $response->assertStatus(404);
+        });
+
+        test('chart_periodに許可されていない値を指定した場合は422エラーになる', function () {
+            [, $snapshot] = ucFrom003TestImportBatch();
+            $holding = ucFrom003TestHolding();
+            ucFrom003TestHoldingSnapshot($snapshot, $holding);
+
+            $response = ucFrom003TestFetchDetail($this, $holding, ['chart_period' => '2y']);
+
+            $response->assertStatus(422);
+            $response->assertJsonValidationErrors(['chart_period']);
+        });
+
+        test('memoを指定せずに保存しようとすると422エラーになる', function () {
+            [, $snapshot] = ucFrom003TestImportBatch();
+            $holding = ucFrom003TestHolding();
+            ucFrom003TestHoldingSnapshot($snapshot, $holding);
+
+            $user = User::factory()->create();
+            $response = $this->actingAs($user)->postJson("/api/holdings/{$holding->id}/memos", []);
+
+            $response->assertStatus(422);
+            $response->assertJsonValidationErrors(['memo']);
         });
     });
 
@@ -558,7 +582,7 @@ describe('UC-003: 銘柄詳細表示', function () {
             $holding = ucFrom003TestHolding();
             ucFrom003TestHoldingSnapshot($snapshot, $holding);
 
-            $response = $this->getJson("/holdings/{$holding->id}");
+            $response = $this->getJson("/api/holdings/{$holding->id}");
 
             // Single-user app (docs/architecture/authz-authn.md): unauthenticated
             // access must be rejected, either via a redirect to login (web guard)
@@ -572,7 +596,7 @@ describe('UC-003: 銘柄詳細表示', function () {
             $holding = ucFrom003TestHolding();
             ucFrom003TestHoldingSnapshot($snapshot, $holding);
 
-            $response = $this->postJson("/holdings/{$holding->id}/memos", ['memo' => 'テスト']);
+            $response = $this->postJson("/api/holdings/{$holding->id}/memos", ['memo' => 'テスト']);
 
             expect($response->status())->toBeIn([302, 401, 403]);
         });

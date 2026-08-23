@@ -11,6 +11,7 @@ use App\Models\Signal;
 use App\Models\Snapshot;
 use App\Models\TechnicalIndicator;
 use App\Models\User;
+use App\Models\WatchedTheme;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -51,7 +52,7 @@ use Tests\TestCase;
 | points that were deliberately left *out* of these tests rather than
 | encoded as an assumption here.
 |
-|   - Endpoint: GET /import-batches/{importBatch}/summary-report, route
+|   - Endpoint: GET /api/import-batches/{importBatch}/summary-report, route
 |     model binding on import_batches.id, `auth` middleware (same "web"
 |     session guard convention as UC-001/002/003). The alternative of
 |     folding the report into UC-001's own POST /csv-import response body
@@ -260,7 +261,7 @@ function ucFrom009TestFundamentalIndicator(Holding $holding, array $attributes =
  */
 function ucFrom009TestWatchedTheme(string $name): object
 {
-    return \App\Models\WatchedTheme::create(['name' => $name]);
+    return WatchedTheme::create(['name' => $name]);
 }
 
 /**
@@ -271,7 +272,7 @@ function ucFrom009TestFetchReport(TestCase $test, int|ImportBatch $importBatch, 
     $user ??= User::factory()->create();
     $importBatchId = $importBatch instanceof ImportBatch ? $importBatch->id : $importBatch;
 
-    return $test->actingAs($user)->getJson("/import-batches/{$importBatchId}/summary-report");
+    return $test->actingAs($user)->getJson("/api/import-batches/{$importBatchId}/summary-report");
 }
 
 /**
@@ -731,7 +732,7 @@ describe('UC-009: 取込後サマリーレポート', function () {
         test('存在しない取込バッチIDを指定した場合は404になる', function () {
             $user = User::factory()->create();
 
-            $response = $this->actingAs($user)->getJson('/import-batches/999999/summary-report');
+            $response = $this->actingAs($user)->getJson('/api/import-batches/999999/summary-report');
 
             $response->assertStatus(404);
         });
@@ -746,7 +747,7 @@ describe('UC-009: 取込後サマリーレポート', function () {
                 'unrealized_gain_rate' => 30.0,
             ]);
 
-            $response = $this->getJson("/import-batches/{$batch->id}/summary-report");
+            $response = $this->getJson("/api/import-batches/{$batch->id}/summary-report");
 
             // Single-user app (docs/architecture/authz-authn.md): unauthenticated
             // access must be rejected, either via a redirect to login (web guard)

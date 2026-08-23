@@ -2,6 +2,32 @@
 
 > 2026-08-21以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 
+## フロントエンド実装Phase0（基盤整備）完了（2026-08-23）
+
+### Decision
+
+- Phase2完了後、ユーザーから「CSVを投入してレポートを見て、その裏付けを画面で取れる状態か」と問われ、UC-001〜009は全てAPIバックエンドのみでUI（Livewireコンポーネント・Bladeビュー）が0件であることを確認。Planモードでフロントエンド実装計画（`stock_auto_order-frontend-implementation-phase.md`）を作成しユーザー承認を得た
+- Plan時に3点をAskUserQuestionで確認済み: (1) 既存JSON API（10ルート・233件のテストが依存）は`/api`配下に移動し、Livewireページが元のURLを使う（推奨採用）、(2) `composer.json`が既にインストール済みのLivewire 4.xを採用しドキュメント側〔ADR-0001・`.claude/rules/15-frontend.md`〕の3.x記述を修正（推奨採用）、(3) UC-004画面のUC-010（買い増し候補）セクションは別セッション進行中・未マージのF-010に依存するため今回のPhase0/Phase1〜7スコープからは除外し、利確検討セクションのみで進める
+- Phase0（全画面の前提となる基盤整備）を実施:
+  - `routes/web.php`の既存13ルートを`Route::prefix('api')->middleware('auth')->group(...)`に再編。対応する10本のFeature TestファイルのURL文字列を`/api/...`に一括置換（ロジック変更なし）
+  - `.claude/rules/15-frontend.md`・`docs/adr/ADR-0001-frontend-stack-selection.md`のLivewireバージョン記述を3.x→4.xに修正（新規ライブラリ採用ではないため新規ADR無し）
+  - `ListHoldingsAction`のレスポンスに`id`（一覧→詳細画面のリンク生成用）を追加。回帰テスト1件追加
+  - `ImportCsvAction::execute()`のシグネチャを`StoreCsvImportRequest`直接受け取りから、プレーンな`UploadedFile`3引数（Livewireの`TemporaryUploadedFile`は`Illuminate\Http\UploadedFile`のサブクラスのため互換）に変更。`CsvImportController`は薄いアダプタ化。既存テストへの影響なし（HTTP経由のみで検証されているため）
+  - 共通レイアウト`resources/views/components/layouts/app.blade.php`（ui-guidelines.md確定の5タブナビゲーション）と共通Bladeコンポーネント6種（card/badge/stat-box/btn/empty-state/page-header）を新規作成。カラーパレットはui-guidelines.mdの値をTailwind v4の`@theme`セマンティックトークンとして`resources/css/app.css`に追加
+  - 最小限の自作Livewireログイン画面（`app/Livewire/Auth/Login.php`、Breeze/Fortify等は導入せず）+ ログアウトルートを新規追加。既存シード（`test@example.com`/`password`）を使用。Feature Test 6件（Livewire::test()ベース）
+  - `npm install && npm run build`でVite/Tailwindアセットをビルド（既存の`@vite`参照に必要）
+  - Playwright MCPで実ブラウザ確認: `/login`にログインフォームが正しく表示され、正しい認証情報でログイン→`/holdings`へのリダイレクトが発火し、認証セッションが実際に確立されていること（`/api/holdings`への直接アクセスで実データJSON応答を確認）を確認。`/holdings`自体はPhase3未着手のため404だが想定通り
+  - `docs/architecture/overview.md`に初めて実質的な内容を記載（フロントエンド構成の方針、/api分離の理由等）
+- 対象6件（ログイン関連）+ 既存233件の回帰確認、フルスイート239件全てGreen
+
+### Files touched
+
+`routes/web.php`、`tests/Feature/UC001CsvImportTest.php`・`UC002HoldingListTest.php`・`UC003HoldingDetailTest.php`・`UC004SignalListTest.php`・`UC005SectorDashboardTest.php`・`UC006CandidateCheckTest.php`・`UC007MarketIndicatorTest.php`・`UC008WatchedThemeTest.php`・`UC008NewCandidateListTest.php`・`UC009ImportSummaryReportTest.php`（URL文字列を`/api/...`に変更）、`.claude/rules/15-frontend.md`、`docs/adr/ADR-0001-frontend-stack-selection.md`（バージョン記述修正）、`app/Actions/Holding/ListHoldingsAction.php`（`id`追加）、`app/Actions/Import/ImportCsvAction.php`・`app/Http/Controllers/CsvImportController.php`（シグネチャ変更）、`resources/views/components/layouts/app.blade.php`（新規）、`resources/views/components/{card,badge,stat-box,btn,empty-state,page-header}.blade.php`（新規）、`resources/css/app.css`（テーマトークン追加）、`app/Livewire/Auth/Login.php`（新規）、`resources/views/livewire/auth/login.blade.php`（新規）、`tests/Feature/LoginTest.php`（新規、6件）、`docs/architecture/overview.md`（初の実質的記載）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実ブラウザ動作確認完了。フルスイート239件Green。次はPhase1（UC-001 CSV取込画面）に進む。
+
 ## 今後の対応（未着手・スコープ確認済み）（2026-08-23追記、UC-007完了時点で更新）
 
 - **フロントエンドUI（Livewire画面化）**: UC-001〜UC-009はこれまで全てAPIのみで実装してきた（`app/Livewire/`・`resources/views/`配下のBladeビューは0件、`docs/product/mockups/`は静的HTMLモックのみで実際に動く画面ではない）。Phase2（F-005/F-006/F-007/F-008）がAPIレベルで全完了したため、**次はLivewireコンポーネント・Bladeビューの実装（実際にブラウザでCSV取込〜各画面確認ができる状態にする）に着手する**方針をユーザーと確認済み

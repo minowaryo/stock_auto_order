@@ -8,7 +8,7 @@
 ## 前提バージョン
 
 - **Laravel**: `meta/adr/ADR-0001-use-laravel.md` に準拠
-- **Livewire**: 3.x
+- **Livewire**: 4.x（`composer.json`の`livewire/livewire: ^4.4`に準拠。2026-08-23、フロントエンド実装着手時に3.x前提の旧記述から修正）
 - **Alpine.js**: Livewire同梱のものを使用（追加のフロントエンドフレームワークは導入しない）
 - **CSS**: Tailwind CSS
 
