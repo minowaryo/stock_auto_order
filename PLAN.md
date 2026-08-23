@@ -2,6 +2,23 @@
 
 > 2026-08-21以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 
+## `/review`拡張レベルの指摘（NewCandidateFinderのN+1）を修正（2026-08-23）
+
+### Decision
+
+- Cycle3完了後、Cycle4着手前に`/review`を実施（Cycle1〜3累積差分16ファイル・+1767/-4行に対しスコア105〔閾値30超過〕→拡張レベル）
+- MEDIUM指摘: `NewCandidateFinder::find()`が`portfolioEvaluationTotal()`算出用の`$allHoldingSnapshots`を`holding`リレーションをeager loadせずに取得しており、`instrument_type`参照のたびに遅延ロードクエリが発生するN+1だった。UC-005（`ShowSectorDashboardAction`）も内部で`NewCandidateFinder::find()`を呼ぶため影響が波及していた
+- `HoldingSnapshot::query()->where(...)->with('holding')->get()`に1行修正。既存のテスト値・挙動は変わらないため新規テストは追加せず、フルスイート202件Greenで回帰なしを確認
+- LOW指摘（`NewCandidateFinder`と`SectorAllocationCalculator`の評価額計算ロジック重複）はユーザー判断で今回見送り
+
+### Files touched
+
+`app/Services/Candidate/NewCandidateFinder.php`、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認完了。フルスイート202件Green。次はCycle4のUC-006（新規投資候補の重複チェック）に進む。
+
 ## Phase2: UC-005 Cycle3（セクター配分ダッシュボード）完了（2026-08-23）
 
 ### Decision

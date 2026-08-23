@@ -55,7 +55,7 @@ class NewCandidateFinder
             ->first();
 
         $allHoldingSnapshots = $latestSnapshot
-            ? HoldingSnapshot::query()->where('snapshot_id', $latestSnapshot->id)->get()
+            ? HoldingSnapshot::query()->where('snapshot_id', $latestSnapshot->id)->with('holding')->get()
             : collect();
 
         $heldHoldingIds = $allHoldingSnapshots->pluck('holding_id')->all();
