@@ -2,6 +2,26 @@
 
 > 2026-08-21以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 
+## Phase2: UC-005 Cycle3（セクター配分ダッシュボード）完了（2026-08-23）
+
+### Decision
+
+- Cycle2（UC-008）に続き、UC-005（セクター配分ダッシュボード）を実装した。計画は`C:\Users\minow\.claude\plans\stock_auto_order-uc005-implementation-phase.md`（Planモードで作成、ユーザー承認済み）
+- use-cases.mdの出力表は`sector_name`/`allocation_rate`等をフラットに列挙しているが、モックアップ（`screen-UC005-sector-dashboard.html`）は「セクター配分バー一覧」と「リバランス提案」の2セクション構成だったため、レスポンス形状を`{"data": {"sectors": [...], "rebalance_candidates": [...]}}`の入れ子構造として設計し、Gate4でユーザー承認を得た
+- セクター集計はUC-008/UC-009と異なり**全instrument_type（stock/etf/mutual_fund）を対象**とする設計とした（use-cases.md「セクター分類が取得できていない銘柄は『未分類』として集計に含める」という文言が保有全体を前提にしているため）
+- `test-writer`が7件のFeature Testを作成しGate4承認。`suggested_sell_quantity`の按分方法（セクター内課税口座保有銘柄の加重平均現在値で除算）は叩き台として承認
+- `tdd-implementer`がGreenフェーズを実装: `SectorAllocationCalculator`（新規、投資信託の単位補正込み評価額集計・40%/70%閾値判定・NISA区分除外〔`holding_snapshot_accounts`経由、UC-004と同じフォールバックパターン〕）・`ShowSectorDashboardAction`（`NewCandidateFinder`をそのまま呼び出しフィールドをリマップ、偏り警告セクター所属候補を除外）・`SectorDashboardController`（`GET /sector-dashboard`）を新規作成。対象7件・フルスイート202件全てGreen
+- 実データで実挙動確認: `allocation_rate`合計が100%になることを確認。既知の制約（J-Quantsレート制限によるセクター分類カバレッジ不足）により保有の96.7%が「未分類」に集約され偏り警告（売却提案額¥4,266,160）になることを確認。ロジック自体は正常
+- `data-model.md`の「保留・確定が必要な初期パラメータ値」表を更新: セクター配分閾値・目標配分率・財務健全性フィルタ・NISA推奨基準のUC-005分を確定、売却株数按分方法を新規追記
+
+### Files touched
+
+`app/Services/Sector/SectorAllocationCalculator.php`（新規）、`app/Actions/Sector/ShowSectorDashboardAction.php`（新規）、`app/Http/Controllers/SectorDashboardController.php`（新規）、`routes/web.php`（ルート追加）、`tests/Feature/UC005SectorDashboardTest.php`（新規）、`docs/architecture/data-model.md`（初期パラメータ確定・変更履歴）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実データ動作確認完了。フルスイート202件Green。これでPhase2「UC-008→UC-005」が完了。次はCycle4のUC-006（新規投資候補の重複チェック、UC-008と同一画面の下部セクション）に進む。
+
 ## Phase2: UC-008 Cycle2（候補一覧本体・NewCandidateFinder）完了（2026-08-23）
 
 ### Decision
