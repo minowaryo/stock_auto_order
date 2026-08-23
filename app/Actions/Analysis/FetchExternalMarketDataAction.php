@@ -123,6 +123,10 @@ class FetchExternalMarketDataAction
                     'sectorClassificationId' => $holding->market === 'jp' ? $sectorClassificationId : null,
                 ];
             } catch (Throwable $e) {
+                // $e->getMessage() is safe to log today: MarketData clients'
+                // exceptions carry only the request URL/status, never
+                // headers (so no J-Quants API key leaks). Re-check this
+                // assumption if a client implementation changes.
                 Log::warning('FetchExternalMarketDataAction: holding price/sector fetch failed', [
                     'holding_id' => $holding->id,
                     'symbol_code' => $holding->symbol_code,
@@ -215,6 +219,7 @@ class FetchExternalMarketDataAction
                     }
                 });
             } catch (Throwable $e) {
+                // See the safety note on the identical log call above.
                 Log::warning('FetchExternalMarketDataAction: holding indicator/signal processing failed', [
                     'holding_id' => $holding->id,
                     'symbol_code' => $holding->symbol_code,
