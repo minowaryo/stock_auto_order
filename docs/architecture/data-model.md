@@ -302,6 +302,8 @@
 
 > 追記のみで、最新1件を「現在のステータス」として画面表示する。`holdings`が保有・候補を問わない銘柄マスタになったこと（前述）により、`symbol_code`/`market`の直接保持ではなく`holding_id`経由に統一した。
 
+> **実装完了**（2026-08-23、UC-006 Cycle B Gate4）: `WatchRecord`モデル（`holding_memos`と同じ追記のみパターン、`$timestamps=false`）で実装。`GET /candidate-check`・`POST /candidate-check/watch-records`から利用する。`overlap_rate`/`diversification_comment`は新規計算式を作らず`SectorAllocationCalculator`（UC-005）の`allocation_rate`/`allocation_status`をそのまま流用（対象銘柄のセクター名が一致する行を検索。一致行が無い場合＝現在そのセクターの保有が無い場合は`overlap_rate=0`とする）。`symbol_code`が`holdings`に存在しない場合はFormRequestの`Rule::exists`で422拒否する（find-or-createは行わない）。
+
 ---
 
 ### watched_themes（注目テーマ・UC-008）
@@ -453,3 +455,4 @@
 | 2026-08-23 | Phase2 Cycle3（UC-005セクター配分ダッシュボード）実装完了。「保留・確定が必要な初期パラメータ値」表のセクター配分判定閾値（40%/70%）・目標配分率（70%）を確定し、`suggested_sell_amount`の算出式（(現在配分率-70)/100×保有評価額合計）を明記。売却株数の按分方法（セクター内課税口座保有銘柄の加重平均現在値で除算）を新規に確定・追記。財務健全性フィルタ・NISA推奨基準のUC-005分もUC-008と同一値で確定（`rebalance_candidates`が`NewCandidateFinder`をそのまま流用するため）。セクター集計はUC-008/UC-009と異なり全instrument_type（stock/etf/mutual_fund）を対象とする点を明記 | - |
 | 2026-08-23 | Phase2 Cycle4（UC-006）のCycle A: `financial_statements`テーブルをドラフト通りのカラム構成で実装（`2026_08_23_000000_create_financial_statements_table.php`）。`FetchExternalMarketDataAction`を改修し、JP株について既に取得済みの`jQuantsClient->fetchStatements()`の5期分を新規の外部API呼び出しなしで`financial_statements`に保存するようにした。`revenue_yoy_change`/`operating_income_yoy_change`は最新期（index 0）のみ算出し、過去の期（index 1〜4）はフェッチ範囲外のためnullとする方針をGate4で確定 | - |
 | 2026-08-23 | UC-006 Cycle Aの`/review`拡張レベル指摘（MEDIUM）を修正。`financial_statements.revenue`/`operating_income`をNOT NULLからnullableに変更（`2026_08_23_000001_nullable_revenue_operating_income_on_financial_statements_table.php`）。データソース（J-Quants `net_sales`/`operating_profit`）自体がnullを返しうるにもかかわらずNOT NULLだったため、該当銘柄で`financial_statements`のINSERT失敗が同一トランザクション内の`technical_indicators`/`fundamental_indicators`/`signals`更新まで巻き添えでロールバックさせていた | ADR-0008 |
+| 2026-08-23 | Phase2 Cycle4（UC-006）のCycle B（本体）実装完了、これでPhase2「UC-008→UC-005→UC-006」全サイクル完了。`watch_records`テーブル・`WatchRecord`モデルを`holding_memos`と同じ追記のみパターンで新規実装。`GET /candidate-check`（`overlap_rate`/`diversification_comment`をUC-005の`SectorAllocationCalculator`から流用、UC-003と同一のテクニカル/ファンダメンタルズ指標一式、`historical_performance`、`watch_status`/`watch_memo_history`）・`POST /candidate-check/watch-records`を新規追加。未知の`symbol_code`はFormRequestの`Rule::exists`で422拒否する方針・`overlap_rate`の一致なし時`0`扱い・ウォッチステータス/メモ両方省略時422をGate4で確定 | - |

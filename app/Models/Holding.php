@@ -54,4 +54,9 @@ class Holding extends Model
     {
         return $this->hasMany(HoldingMemo::class);
     }
+
+    public function watchRecords(): HasMany
+    {
+        return $this->hasMany(WatchRecord::class);
+    }
 }

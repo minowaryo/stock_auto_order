@@ -2,6 +2,23 @@
 
 > 2026-08-21以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 
+## Phase2: UC-006 Cycle B（本体）完了、Phase2「UC-008→UC-005→UC-006」全完了（2026-08-23）
+
+### Decision
+
+- Cycle A（`financial_statements`書き込み経路）に続き、UC-006本体（`GET /candidate-check`・`POST /candidate-check/watch-records`）を実装。計画は`C:\Users\minow\.claude\plans\stock_auto_order-uc006-implementation-phase.md`
+- `test-writer`が13件のFeature Testを作成。Gate4で3点確認: (1) `overlap_rate`/`diversification_comment`はUC-005の`SectorAllocationCalculator`を流用し、対象銘柄のセクターに一致する行の`allocation_rate`/`allocation_status`から決定（一致行が無い＝現在保有が無いセクターの場合は`overlap_rate=0`）— 「妥当」で承認、(2) `watch_status`・`watch_memo`が両方省略されたPOSTは422で拒否 — 承認、(3) `GET /candidate-check`の未認証時は302リダイレクト（既存UCと統一）— 承認。いずれもテストの仮定通りで確定したためテスト修正なしでGreenへ進んだ
+- `tdd-implementer`がGreenフェーズを実装: `WatchRecord`モデル・マイグレーション（`holding_memos`と同じ追記のみパターン）、`CandidateOverlapCalculator`（`SectorAllocationCalculator`を呼び出しセクター名一致行から算出。新規計算式は作らない）、`ShowCandidateCheckAction`（UC-003`ShowHoldingDetailAction`と同一の指標フィールド・null安全パターンを踏襲）、`SaveWatchRecordAction`、`ShowCandidateCheckRequest`/`SaveWatchRecordRequest`（`symbol_code`未存在を`Rule::exists`で422化）、`CandidateCheckController`、ルート追加。対象13件・フルスイート221件全てGreen
+- 実データで実挙動確認（トランザクションロールバックでDBは汚さず）: (a) 直近スナップショットに存在しない保有銘柄（トヨタ自動車）で`overlap_rate=0`・「現在このセクターの保有はありません」コメントになることを確認（該当セクターの現在保有が無いケースの実例）、(b) 直近スナップショットに存在する銘柄（ソフトバンクグループ、情報通信・サービスその他セクター）で`overlap_rate`が`SectorAllocationCalculator::calculate()`の該当行の`allocation_rate`と完全一致することを確認、(c) `SaveWatchRecordAction`での保存→`ShowCandidateCheckAction`での再取得が正しく連動することを確認
+
+### Files touched
+
+`database/migrations/2026_08_23_000002_create_watch_records_table.php`（新規）、`app/Models/WatchRecord.php`（新規）、`app/Services/Candidate/CandidateOverlapCalculator.php`（新規）、`app/Actions/Candidate/ShowCandidateCheckAction.php`（新規）、`app/Actions/Candidate/SaveWatchRecordAction.php`（新規）、`app/Http/Requests/ShowCandidateCheckRequest.php`（新規）、`app/Http/Requests/SaveWatchRecordRequest.php`（新規）、`app/Http/Controllers/CandidateCheckController.php`（新規）、`app/Models/Holding.php`（`watchRecords()`リレーション追加）、`routes/web.php`（ルート追加）、`tests/Feature/UC006CandidateCheckTest.php`（新規、13件）、`docs/architecture/data-model.md`（実装完了注記・変更履歴）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実データ動作確認完了。フルスイート221件Green。これでPhase2（F-005/F-008/F-006、「UC-008→UC-005→UC-006」の順）が全て完了。次のスコープはユーザーと相談の上で決定する（F-007市場全体指標ダッシュボードUI、他のPhase2/3項目、または別セッションで進行中のF-010〔ADR-0007、押し目買いシグナル〕への合流等、未確定）。
+
 ## UC-006 Cycle Aの`/review`拡張レベル指摘（MEDIUM）を修正（2026-08-23）
 
 ### Decision

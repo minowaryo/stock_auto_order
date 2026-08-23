@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CandidateCheckController;
 use App\Http\Controllers\CsvImportController;
 use App\Http\Controllers\HoldingDetailController;
 use App\Http\Controllers\HoldingListController;
@@ -24,3 +25,5 @@ Route::middleware('auth')->post('/watched-themes', [WatchedThemeController::clas
 Route::middleware('auth')->get('/watched-themes', [WatchedThemeController::class, 'index']);
 Route::middleware('auth')->get('/new-candidates', [NewCandidateController::class, 'index']);
 Route::middleware('auth')->get('/sector-dashboard', [SectorDashboardController::class, 'index']);
+Route::middleware('auth')->get('/candidate-check', [CandidateCheckController::class, 'show']);
+Route::middleware('auth')->post('/candidate-check/watch-records', [CandidateCheckController::class, 'storeWatchRecord']);
