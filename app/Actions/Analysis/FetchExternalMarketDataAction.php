@@ -2,6 +2,7 @@
 
 namespace App\Actions\Analysis;
 
+use App\Models\FinancialStatement;
 use App\Models\FundamentalIndicator;
 use App\Models\HoldingSnapshot;
 use App\Models\ImportBatch;
@@ -192,6 +193,26 @@ class FetchExternalMarketDataAction
                         );
 
                         $pegRatio = $fundamental['peg_ratio'];
+
+                        // UC-006向け財務諸表履歴の保存（docs/architecture/data-model.md
+                        // "financial_statements"）: 同じ$statementsを
+                        // (holding_id, fiscal_period)単位でUPSERTする。
+                        // revenue_yoy_change/operating_income_yoy_changeは
+                        // 最新期（index 0）のみFundamentalIndicatorMapper::
+                        // calculateGrowth()と同一ロジックで算出する。
+                        foreach ($statements as $index => $statement) {
+                            FinancialStatement::updateOrCreate(
+                                ['holding_id' => $holding->id, 'fiscal_period' => $statement['disclosed_date']],
+                                [
+                                    'revenue' => $statement['net_sales'],
+                                    'operating_income' => $statement['operating_profit'],
+                                    'eps' => $statement['eps'],
+                                    'revenue_yoy_change' => $index === 0 ? $this->calculateStatementGrowth($statements, 'net_sales') : null,
+                                    'operating_income_yoy_change' => $index === 0 ? $this->calculateStatementGrowth($statements, 'operating_profit') : null,
+                                    'fetched_at' => now(),
+                                ],
+                            );
+                        }
                     }
 
                     // UC-004業務ルール: 含み益+20%未満は利確シグナル判定の対象外.
@@ -290,5 +311,30 @@ class FetchExternalMarketDataAction
         }
 
         return (($current - $past) / $past) * 100;
+    }
+
+    /**
+     * Growth rate (%) between the latest statement (index 0) and the
+     * statement 4 periods before (index 4), for the given field. Same
+     * formula/inputs as FundamentalIndicatorMapper::calculateGrowth() (kept
+     * as a small private duplicate here since that method is private on a
+     * separate class).
+     *
+     * @param  array<int, array<string, float|null>>  $statements
+     */
+    private function calculateStatementGrowth(array $statements, string $field): ?float
+    {
+        if (! isset($statements[0], $statements[4])) {
+            return null;
+        }
+
+        $latestValue = $statements[0][$field] ?? null;
+        $pastValue = $statements[4][$field] ?? null;
+
+        if ($latestValue === null || $pastValue === null || $pastValue == 0.0) {
+            return null;
+        }
+
+        return ($latestValue - $pastValue) / $pastValue * 100;
     }
 }

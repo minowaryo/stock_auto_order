@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Actions\Analysis\FetchExternalMarketDataAction;
+use App\Models\FinancialStatement;
 use App\Models\Holding;
 use App\Models\HoldingSnapshot;
 use App\Models\ImportBatch;
@@ -760,6 +761,277 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
             $row = TechnicalIndicator::where('holding_id', $holding->id)->first();
             expect((float) $row->rsi)->toEqualWithDelta(100.0, 0.01);
             expect($row->computed_at->greaterThan($staleComputedAt))->toBeTrue();
+        });
+    });
+
+    describe('financial_statements（UC-006向け財務諸表履歴）の保存', function () {
+        /*
+        |----------------------------------------------------------------
+        | Source of truth for this describe() block:
+        |   - docs/architecture/data-model.md ("financial_statements"
+        |     section) — columns, `(holding_id, fiscal_period)` unique
+        |     index, "同一期を重複INSERTしない" UPSERT-by-fiscal_period rule.
+        |   - C:\Users\minow\.claude\plans\stock_auto_order-uc006-implementation-phase.md
+        |     (Cycle A: "既存のFetchExternalMarketDataAction ... を改修し、
+        |     JP株についてjQuantsClient->fetchStatements()の結果を
+        |     FinancialStatement::updateOrCreate()で5期分保存する。
+        |     revenue_yoy_change/operating_income_yoy_changeはFundamentalIndicatorMapper
+        |     ::calculateGrowth()と同じ「4期前とのYoY」ロジックを流用").
+        |
+        | Expected Red state: App\Models\FinancialStatement does not exist
+        | yet (no file at app/Models/FinancialStatement.php, no migration
+        | under database/migrations/ for a `financial_statements` table —
+        | verified via Glob before writing these tests). Every test below
+        | is expected to fail with a fatal "Class \"App\Models\
+        | FinancialStatement\" not found" error, raised either directly
+        | (tests that construct a pre-existing row via
+        | FinancialStatement::create() before calling execute()) or
+        | indirectly inside FetchExternalMarketDataAction::execute() itself
+        | once it's extended to reference the model (not yet the case
+        | today — see note below). Same convention as
+        | tests/Unit/Services/Import/Support/AccountTypeMapperTest.php for
+        | a not-yet-existing class, and tests/Feature/UC003HoldingDetailTest.php
+        | for HoldingMemo before that model existed.
+        |
+        | Important nuance verified by reading the current (Green)
+        | FetchExternalMarketDataAction::execute() before writing this
+        | block: it does NOT yet write to `financial_statements` at all
+        | (only `technical_indicators`/`fundamental_indicators`/`signals`/
+        | `market_indicator_snapshots`). So today, tests 1〜4 below (which
+        | only assert on FinancialStatement rows *after* calling
+        | execute()) are Red purely because the `FinancialStatement`
+        | class-reference inside the test itself (in the assertion, via
+        | `FinancialStatement::where(...)`) fails to resolve — execute()
+        | runs to completion without ever touching financial_statements.
+        | Test 5 (UPSERT) additionally constructs a FinancialStatement row
+        | *before* calling execute(), so it fails even earlier, at the
+        | Arrange step. Once Green-phase work adds the migration + model +
+        | the write path inside execute()'s per-holding loop, all 5
+        | assertions below become meaningful.
+        |
+        | Assumption flagged for Gate 4 review: the plan says
+        | revenue_yoy_change/operating_income_yoy_change for index 0 only
+        | reuse FundamentalIndicatorMapper::calculateGrowth()'s exact
+        | formula (index 0 vs index 4, null if either is missing or the
+        | index-4 value is 0), and index 1〜4 are always null (the 5-period
+        | fetch window can't look back a further 4 periods for those). This
+        | test pins that contract down explicitly since data-model.md's
+        | column description alone ("売上高前年比増減") doesn't specify which
+        | rows get a computed value vs null.
+        |----------------------------------------------------------------
+        */
+
+        test('JP個別株の保有銘柄について、5期分の財務諸表がfinancial_statementsにfiscal_period・revenue・operating_income・epsとともに全て保存される', function () {
+            [$batch, $snapshot] = femdImportBatch();
+            $holding = femdHolding([
+                'symbol_code' => '7203',
+                'market' => 'jp',
+                'instrument_type' => 'stock',
+                'symbol_name' => 'トヨタ自動車',
+            ]);
+            femdHoldingSnapshot($snapshot, $holding, [
+                'current_price' => 2500.0,
+                'unrealized_gain_rate' => 5.0, // <=20% -> シグナル判定の副作用を避ける
+            ]);
+
+            $priceHistory = femdPriceHistory(femdCloses(2000.0, 5.0, 20));
+            $statements = femdStatements();
+
+            $action = femdAction(
+                new FakeJpStockPriceClient(['7203' => $priceHistory]),
+                new FakeUsStockPriceClient,
+                new FakeMarketIndexClient([
+                    'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 20)),
+                    'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20)),
+                ]),
+                new FakeJQuantsClient(statementsResponses: ['7203' => $statements]),
+            );
+
+            $action->execute($batch);
+
+            expect(FinancialStatement::where('holding_id', $holding->id)->count())->toBe(5);
+
+            foreach ($statements as $statement) {
+                $row = FinancialStatement::where('holding_id', $holding->id)
+                    ->where('fiscal_period', $statement['disclosed_date'])
+                    ->first();
+
+                expect($row)->not->toBeNull();
+                expect((float) $row->revenue)->toEqualWithDelta((float) $statement['net_sales'], 0.01);
+                expect((float) $row->operating_income)->toEqualWithDelta((float) $statement['operating_profit'], 0.01);
+                expect((float) $row->eps)->toEqualWithDelta((float) $statement['eps'], 0.01);
+            }
+        });
+
+        test('最新期（index 0）のrevenue_yoy_change・operating_income_yoy_changeが、4期前（index4）との比較で正しく算出される', function () {
+            [$batch, $snapshot] = femdImportBatch();
+            $holding = femdHolding([
+                'symbol_code' => '7203',
+                'market' => 'jp',
+                'instrument_type' => 'stock',
+                'symbol_name' => 'トヨタ自動車',
+            ]);
+            femdHoldingSnapshot($snapshot, $holding, [
+                'current_price' => 2500.0,
+                'unrealized_gain_rate' => 5.0,
+            ]);
+
+            $priceHistory = femdPriceHistory(femdCloses(2000.0, 5.0, 20));
+            // femdStatements(): index0 net_sales=120000/operating_profit=15000,
+            // index4 net_sales=100000/operating_profit=12000 ->
+            // revenue_yoy_change=(120000-100000)/100000*100=20%,
+            // operating_income_yoy_change=(15000-12000)/12000*100=25%
+            // (identical formula/inputs to
+            // FundamentalIndicatorMapper::calculateGrowth()).
+            $statements = femdStatements();
+
+            $action = femdAction(
+                new FakeJpStockPriceClient(['7203' => $priceHistory]),
+                new FakeUsStockPriceClient,
+                new FakeMarketIndexClient([
+                    'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 20)),
+                    'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20)),
+                ]),
+                new FakeJQuantsClient(statementsResponses: ['7203' => $statements]),
+            );
+
+            $action->execute($batch);
+
+            $latestRow = FinancialStatement::where('holding_id', $holding->id)
+                ->where('fiscal_period', $statements[0]['disclosed_date'])
+                ->first();
+
+            expect($latestRow)->not->toBeNull();
+            expect((float) $latestRow->revenue_yoy_change)->toEqualWithDelta(20.0, 0.01);
+            expect((float) $latestRow->operating_income_yoy_change)->toEqualWithDelta(25.0, 0.01);
+        });
+
+        test('過去の期（index 1〜4）のrevenue_yoy_change・operating_income_yoy_changeはnullになる（5期分の取得データだけでは4期前を遡れないため）', function () {
+            [$batch, $snapshot] = femdImportBatch();
+            $holding = femdHolding([
+                'symbol_code' => '7203',
+                'market' => 'jp',
+                'instrument_type' => 'stock',
+                'symbol_name' => 'トヨタ自動車',
+            ]);
+            femdHoldingSnapshot($snapshot, $holding, [
+                'current_price' => 2500.0,
+                'unrealized_gain_rate' => 5.0,
+            ]);
+
+            $priceHistory = femdPriceHistory(femdCloses(2000.0, 5.0, 20));
+            $statements = femdStatements();
+
+            $action = femdAction(
+                new FakeJpStockPriceClient(['7203' => $priceHistory]),
+                new FakeUsStockPriceClient,
+                new FakeMarketIndexClient([
+                    'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 20)),
+                    'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20)),
+                ]),
+                new FakeJQuantsClient(statementsResponses: ['7203' => $statements]),
+            );
+
+            $action->execute($batch);
+
+            for ($i = 1; $i <= 4; $i++) {
+                $row = FinancialStatement::where('holding_id', $holding->id)
+                    ->where('fiscal_period', $statements[$i]['disclosed_date'])
+                    ->first();
+
+                expect($row)->not->toBeNull();
+                expect($row->revenue_yoy_change)->toBeNull();
+                expect($row->operating_income_yoy_change)->toBeNull();
+            }
+        });
+
+        test('US株の保有銘柄についてはfinancial_statementsが一切保存されない', function () {
+            [$batch, $snapshot] = femdImportBatch();
+            $holding = femdHolding([
+                'symbol_code' => 'AAPL',
+                'market' => 'us',
+                'instrument_type' => 'stock',
+                'symbol_name' => 'Apple Inc.',
+            ]);
+            femdHoldingSnapshot($snapshot, $holding, [
+                'current_price' => 25000.0,
+                'fx_rate_used' => 150.0,
+                'unrealized_gain_rate' => 8.0,
+            ]);
+
+            $priceHistory = femdPriceHistory(femdCloses(150.0, 2.0, 20));
+
+            $action = femdAction(
+                new FakeJpStockPriceClient,
+                new FakeUsStockPriceClient(['AAPL' => $priceHistory]),
+                new FakeMarketIndexClient([
+                    'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 20)),
+                    'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20)),
+                ]),
+                new FakeJQuantsClient,
+            );
+
+            $action->execute($batch);
+
+            expect(FinancialStatement::where('holding_id', $holding->id)->count())->toBe(0);
+        });
+
+        test('既存のfinancial_statements行がある場合、同一(holding_id, fiscal_period)には新規行を追加せず既存行が更新される（UPSERT）', function () {
+            [$batch, $snapshot] = femdImportBatch();
+            $holding = femdHolding([
+                'symbol_code' => '7203',
+                'market' => 'jp',
+                'instrument_type' => 'stock',
+                'symbol_name' => 'トヨタ自動車',
+            ]);
+            femdHoldingSnapshot($snapshot, $holding, [
+                'current_price' => 2500.0,
+                'unrealized_gain_rate' => 5.0,
+            ]);
+
+            $statements = femdStatements();
+            $staleFetchedAt = now()->subDays(30);
+
+            // Pre-existing row for the latest fiscal_period, with values
+            // distinctly different from the fixture's real figures (120000/
+            // 15000/120), so a passing re-run is unambiguous.
+            FinancialStatement::create([
+                'holding_id' => $holding->id,
+                'fiscal_period' => $statements[0]['disclosed_date'],
+                'revenue' => 1.0,
+                'operating_income' => 1.0,
+                'eps' => 1.0,
+                'revenue_yoy_change' => null,
+                'operating_income_yoy_change' => null,
+                'fetched_at' => $staleFetchedAt,
+            ]);
+
+            $priceHistory = femdPriceHistory(femdCloses(2000.0, 5.0, 20));
+
+            $action = femdAction(
+                new FakeJpStockPriceClient(['7203' => $priceHistory]),
+                new FakeUsStockPriceClient,
+                new FakeMarketIndexClient([
+                    'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 20)),
+                    'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20)),
+                ]),
+                new FakeJQuantsClient(statementsResponses: ['7203' => $statements]),
+            );
+
+            $action->execute($batch);
+
+            // Still exactly one row per fiscal_period across all 5 periods
+            // (no duplicate inserted for the pre-existing one).
+            expect(FinancialStatement::where('holding_id', $holding->id)->count())->toBe(5);
+
+            $updatedRow = FinancialStatement::where('holding_id', $holding->id)
+                ->where('fiscal_period', $statements[0]['disclosed_date'])
+                ->first();
+
+            expect((float) $updatedRow->revenue)->toEqualWithDelta(120000.0, 0.01);
+            expect((float) $updatedRow->operating_income)->toEqualWithDelta(15000.0, 0.01);
+            expect((float) $updatedRow->eps)->toEqualWithDelta(120.0, 0.01);
+            expect($updatedRow->fetched_at->greaterThan($staleFetchedAt))->toBeTrue();
         });
     });
 

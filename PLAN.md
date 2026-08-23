@@ -2,6 +2,24 @@
 
 > 2026-08-21以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 
+## Phase2: UC-006 Cycle A（financial_statements書き込み経路）完了（2026-08-23）
+
+### Decision
+
+- Cycle4（UC-006）に着手。他3サイクルと異なり`financial_statements`/`watch_records`という未実装の2テーブルに依存するため、計画（`C:\Users\minow\.claude\plans\stock_auto_order-uc006-implementation-phase.md`）で2サイクルに分割し、まずCycle A（`financial_statements`）を実施した
+- Planフェーズでユーザーに確認: (1) `holdings`に一度も存在しない銘柄コードは422エラーで拒否（外部APIでの新規find-or-createは実装しない）、(2) 指標データはキャッシュ済みのみ参照（ライブ外部APIコールはしない）、(3) `financial_statements`は`FetchExternalMarketDataAction`が既に取得済みの`jQuantsClient->fetchStatements()`結果を保存先追加するだけ（新規API呼び出しなし）
+- `test-writer`が5件のFeature Testを`FetchExternalMarketDataActionTest.php`に追加しGate4承認。過去期（index1〜4）のYoY成長率は5期分の取得データだけでは4期前を遡れないためnullにする設計を確認
+- `tdd-implementer`がGreenフェーズを実装: 新規マイグレーション・モデル`FinancialStatement`、`FetchExternalMarketDataAction`のJP株処理ブロック内に5期分の`updateOrCreate()`を追加。`revenue_yoy_change`/`operating_income_yoy_change`は最新期（index0）のみ`FundamentalIndicatorMapper::calculateGrowth()`と同一ロジックで算出。対象5件・フルスイート207件全てGreen（実装完了後、セッションのAPI制限で報告前に中断したが、成果物を直接確認し完了を確認した）
+- 実データで実挙動確認: 既存の再取込み済みバッチに対し`FetchExternalMarketDataAction`を再実行し、225件の`financial_statements`が実際のJ-Quants財務データ（売上高・営業利益・YoY成長率）で正しく保存されることを確認
+
+### Files touched
+
+`database/migrations/2026_08_23_000000_create_financial_statements_table.php`（新規）、`app/Models/FinancialStatement.php`（新規）、`app/Actions/Analysis/FetchExternalMarketDataAction.php`、`tests/Feature/FetchExternalMarketDataActionTest.php`（5件追加）、`docs/architecture/data-model.md`（実装完了注記・変更履歴）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実データ動作確認完了。フルスイート207件Green。次はCycle B（`watch_records`テーブル＋UC-006本体`GET /candidate-check`・`POST /candidate-check/watch-records`）に進む。
+
 ## `/review`拡張レベルの指摘（NewCandidateFinderのN+1）を修正（2026-08-23）
 
 ### Decision
