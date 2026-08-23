@@ -2,6 +2,24 @@
 
 > 2026-08-21以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 
+## UC-006 Cycle Aの`/review`拡張レベル指摘（MEDIUM）を修正（2026-08-23）
+
+### Decision
+
+- コミット`2712167`（UC-006 Cycle A）に対し`/review`拡張レベル（review-score 43 ≧ 閾値30、`database/migrations/`が該当したため）を実施
+- 指摘（MEDIUM）: `financial_statements.revenue`/`operating_income`をNOT NULLで定義していたが、データソースである`JQuantsClient::fetchStatements()`の`net_sales`/`operating_profit`は`float|null`として型付けされており、`FundamentalIndicatorMapper`側は既にこのnullを一貫して考慮済みだった。この非対称性により、J-Quantsが該当期のSales/OPを欠損で返す銘柄で`financial_statements`のINSERTが`QueryException`となり、`DB::transaction()`配下の同一銘柄の`technical_indicators`/`fundamental_indicators`/`signals`更新まで巻き添えでロールバックしてしまう不具合があった
+- 修正方針は「修正してから、Cycle Bへ」の指示に従い即座に対応。再発防止として先に回帰テスト（Red）を自分で書き、現状のNOT NULL制約で実際にロールバックが発生する（`FinancialStatement::count()`が0になる）ことを確認してから、新規マイグレーション`2026_08_23_000001_nullable_revenue_operating_income_on_financial_statements_table.php`で`revenue`/`operating_income`をnullable化（Green）。既存の`2026_08_23_000000_create_financial_statements_table`は編集せず`change()`で列制約のみ変更（`.claude/rules/20-mysql.md`）
+- 列制約変更は`.claude/rules/60-docs.md`の「危険な操作（ADR必須）」に該当するため、先行するeps_growth拡張（ADR-0006）と同じ形式でADR-0008を新規作成
+- フルスイート208件Green（207→208、回帰テスト1件追加）を確認
+
+### Files touched
+
+`database/migrations/2026_08_23_000001_nullable_revenue_operating_income_on_financial_statements_table.php`（新規）、`docs/adr/ADR-0008-nullable-financial-statement-columns.md`（新規）、`tests/Feature/FetchExternalMarketDataActionTest.php`（回帰テスト1件追加）、`docs/architecture/data-model.md`（`financial_statements`のnullable反映・変更履歴）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認完了。フルスイート208件Green。次はUC-006 Cycle B（`watch_records`テーブル＋`GET /candidate-check`・`POST /candidate-check/watch-records`）に進む。
+
 ## Phase2: UC-006 Cycle A（financial_statements書き込み経路）完了（2026-08-23）
 
 ### Decision

@@ -217,8 +217,8 @@
 | id | bigint | NO | auto | 主キー |
 | holding_id | bigint | NO | - | `holdings.id` への参照 |
 | fiscal_period | varchar(20) | NO | - | 決算期（例: `2025Q4`） |
-| revenue | decimal(18,2) | NO | - | 売上高 |
-| operating_income | decimal(18,2) | NO | - | 営業利益 |
+| revenue | decimal(18,2) | YES | null | 売上高。J-Quantsが当該期のSalesを欠損で返す場合がありnull許容（ADR-0008） |
+| operating_income | decimal(18,2) | YES | null | 営業利益。J-Quantsが当該期のOPを欠損で返す場合がありnull許容（ADR-0008） |
 | eps | decimal(10,2) | YES | null | 1株当たり利益（EPS）。`fundamental_indicators.eps_growth`/`peg_ratio`の算出元（ADR-0004） |
 | revenue_yoy_change | decimal(7,4) | YES | null | 売上高前年比増減（%） |
 | operating_income_yoy_change | decimal(7,4) | YES | null | 営業利益前年比増減（%） |
@@ -231,6 +231,8 @@
 > UC-006業務ルール「直近3〜5期分」の件数は**初期値5期**とし、取得できる期数がそれ未満の場合は取得可能な範囲のみ表示する。
 
 > **実装完了**（2026-08-23、UC-006 Cycle A Gate4）: `FetchExternalMarketDataAction`がJP株について既に取得している`jQuantsClient->fetchStatements()`の5期分をそのまま保存する（新規の外部API呼び出しは追加しない）。`revenue_yoy_change`/`operating_income_yoy_change`は**最新期（index 0）のみ**`FundamentalIndicatorMapper::calculateGrowth()`と同一ロジック（4期前との比較）で算出し、過去の期（index 1〜4）は比較対象期がフェッチ範囲外のためnullのままとする。US株・投信は対象外（fundamentals自体がJP限定のため）。
+
+> **`/review`拡張レベル指摘の修正**（2026-08-23、MEDIUM、ADR-0008）: `revenue`/`operating_income`は当初NOT NULLで定義していたが、データソースである`net_sales`/`operating_profit`（J-Quants）自体がnullを返しうるため、`financial_statements`のINSERTが同一銘柄の`technical_indicators`/`fundamental_indicators`/`signals`更新まで巻き添えでロールバックさせる不具合があった。両カラムをnullableに変更（`2026_08_23_000001_nullable_revenue_operating_income_on_financial_statements_table.php`）。
 
 ---
 
@@ -450,3 +452,4 @@
 | 2026-08-23 | Phase2着手（UC-008 Cycle2）。`NewCandidateFinder`サービス実装に伴い、「保留・確定が必要な初期パラメータ値」表の財務健全性フィルタ・NISA推奨追加基準のUC-008分を確定（自己資本比率40%/ROE10%以上、NISA推奨は自己資本比率50%/ROE15%以上）。小口購入額の目安率（保有評価額合計の1%）を新規に確定・追記。保有評価額合計の算出には投資信託の基準価額単位補正（`quantity×current_price÷10000`）が必要であることを実データで確認し明記した | - |
 | 2026-08-23 | Phase2 Cycle3（UC-005セクター配分ダッシュボード）実装完了。「保留・確定が必要な初期パラメータ値」表のセクター配分判定閾値（40%/70%）・目標配分率（70%）を確定し、`suggested_sell_amount`の算出式（(現在配分率-70)/100×保有評価額合計）を明記。売却株数の按分方法（セクター内課税口座保有銘柄の加重平均現在値で除算）を新規に確定・追記。財務健全性フィルタ・NISA推奨基準のUC-005分もUC-008と同一値で確定（`rebalance_candidates`が`NewCandidateFinder`をそのまま流用するため）。セクター集計はUC-008/UC-009と異なり全instrument_type（stock/etf/mutual_fund）を対象とする点を明記 | - |
 | 2026-08-23 | Phase2 Cycle4（UC-006）のCycle A: `financial_statements`テーブルをドラフト通りのカラム構成で実装（`2026_08_23_000000_create_financial_statements_table.php`）。`FetchExternalMarketDataAction`を改修し、JP株について既に取得済みの`jQuantsClient->fetchStatements()`の5期分を新規の外部API呼び出しなしで`financial_statements`に保存するようにした。`revenue_yoy_change`/`operating_income_yoy_change`は最新期（index 0）のみ算出し、過去の期（index 1〜4）はフェッチ範囲外のためnullとする方針をGate4で確定 | - |
+| 2026-08-23 | UC-006 Cycle Aの`/review`拡張レベル指摘（MEDIUM）を修正。`financial_statements.revenue`/`operating_income`をNOT NULLからnullableに変更（`2026_08_23_000001_nullable_revenue_operating_income_on_financial_statements_table.php`）。データソース（J-Quants `net_sales`/`operating_profit`）自体がnullを返しうるにもかかわらずNOT NULLだったため、該当銘柄で`financial_statements`のINSERT失敗が同一トランザクション内の`technical_indicators`/`fundamental_indicators`/`signals`更新まで巻き添えでロールバックさせていた | ADR-0008 |

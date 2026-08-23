@@ -1097,6 +1097,75 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
             });
         });
 
+        describe('financial_statements.revenue/operating_incomeのNOT NULL制約とJ-Quantsのnull値の衝突', function () {
+            /*
+            |------------------------------------------------------------
+            | /reviewの拡張レベル指摘（UC-006 Cycle A、2026-08-23、MEDIUM）:
+            | JQuantsClient::fetchStatements()のnet_sales/operating_profit
+            | はtoFloatOrNull()経由でfloat|nullとして返され、
+            | FundamentalIndicatorMapperはこのnullを一貫して考慮済みだが、
+            | financial_statements.revenue/operating_incomeはNOT NULLの
+            | ままだった。この書き込みはDB::transaction()配下・外側の
+            | try-catch配下にあるため、いずれかの期でnet_sales/
+            | operating_profitがnullの銘柄は、financial_statementsの
+            | INSERTでQueryExceptionが発生し、同一銘柄の
+            | technical_indicators/fundamental_indicators/signals更新まで
+            | 巻き添えでロールバックされてしまっていた（修正前は本テストが
+            | Redになることで再現する）。
+            |------------------------------------------------------------
+            */
+
+            test('net_sales/operating_profitがnullの期があっても、financial_statementsにはnullのまま保存され、同一銘柄のtechnical_indicators更新はロールバックされない', function () {
+                [$batch, $snapshot] = femdImportBatch();
+                $holding = femdHolding([
+                    'symbol_code' => '7203',
+                    'market' => 'jp',
+                    'instrument_type' => 'stock',
+                    'symbol_name' => 'トヨタ自動車',
+                ]);
+                femdHoldingSnapshot($snapshot, $holding, [
+                    'current_price' => 2500.0,
+                    'unrealized_gain_rate' => 5.0,
+                ]);
+
+                $priceHistory = femdPriceHistory(femdCloses(2000.0, 5.0, 20));
+                $statements = femdStatements();
+                // 決算様式の違い等でJ-Quantsが当該期のSales/OPを欠損させて
+                // 返すケースを再現する（過去期・index2）。
+                $statements[2]['net_sales'] = null;
+                $statements[2]['operating_profit'] = null;
+
+                $action = femdAction(
+                    new FakeJpStockPriceClient(['7203' => $priceHistory]),
+                    new FakeUsStockPriceClient,
+                    new FakeMarketIndexClient([
+                        'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 20)),
+                        'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20)),
+                    ]),
+                    new FakeJQuantsClient(statementsResponses: ['7203' => $statements]),
+                );
+
+                $action->execute($batch);
+
+                // financial_statementsは5期分すべて保存され、null値の期は
+                // nullのまま保持される（例外で欠落しない）。
+                expect(FinancialStatement::where('holding_id', $holding->id)->count())->toBe(5);
+
+                $nullPeriodRow = FinancialStatement::where('holding_id', $holding->id)
+                    ->where('fiscal_period', $statements[2]['disclosed_date'])
+                    ->first();
+
+                expect($nullPeriodRow)->not->toBeNull();
+                expect($nullPeriodRow->revenue)->toBeNull();
+                expect($nullPeriodRow->operating_income)->toBeNull();
+
+                // financial_statementsの書き込み失敗が同一トランザクション内の
+                // 他の更新を道連れにしていないことを確認する。
+                $this->assertDatabaseHas('technical_indicators', ['holding_id' => $holding->id]);
+                $this->assertDatabaseHas('fundamental_indicators', ['holding_id' => $holding->id]);
+            });
+        });
+
         describe('per-holding例外分離が2つ目のループ・fetchSectorInfoに及んでいない', function () {
             test('fetchSectorInfo()が例外を投げても、その銘柄はスキップされ他の銘柄の処理は継続する', function () {
                 [$batch, $snapshot] = femdImportBatch();
