@@ -2,6 +2,23 @@
 
 > 2026-08-21以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 
+## フロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了（2026-08-23）
+
+### Decision
+
+- Phase0に続き、Phase1（UC-001 CSV取込画面）とPhase2（UC-009サマリーレポート画面）を1サイクルとして実施。理由: Phase1の取込成功時フローがPhase2の画面へ直接リダイレクトするため、別々に作ると存在しないルートへのリダイレクトが残ってしまう
+- `test-writer`が2画面分のLivewireコンポーネントテスト20件を作成。Gate4で2点確認: (1) サマリーレポート画面の行リンクは暫定的に`/holdings?symbol_code=...`（利確検討・新規投資候補）・`/sector-dashboard`（リバランス）とし、Phase3/4実装後に正式な`/holdings/{id}`リンクへ置き換える、(2) `ShowImportSummaryReportAction`に`symbol_code`フィールドを追加（利確検討・新規投資候補のみ、リバランスは対象外）— いずれも「妥当」で承認
+- `tdd-implementer`がGreenフェーズを実装: `app/Livewire/CsvImport/Upload.php`（`WithFileUploads`、`StoreCsvImportRequest`と同一のバリデーション、`ImportCsvAction`を直接呼び出し成功時はサマリーレポート画面へリダイレクト、取込履歴一覧表示）、`app/Livewire/ImportSummaryReport/Show.php`（`mount()`で`ShowImportSummaryReportAction`を1回だけ呼び出し、`render()`では再呼び出ししない副作用安全設計）。`symbol_code`フィールドはAPIレスポンス（`toResponseItem()`）のみに追加し、`import_summary_report_items`テーブルへの永続化は対象外（DBスキーマ変更なし）。対象20件・フルスイート259件全てGreen
+- 実ブラウザ確認（Playwright MCP）: `/csv-import`で実際の取込履歴（134銘柄・実ファイル名）が正しく表示されること、`/import-batches/15/summary-report`で実データに基づく利確検討候補20件（マイクロン テクノロジー含み益+555%等、実際の保有銘柄）が正しくランキング表示され、`symbol_code`ベースの暫定リンク（`/holdings?symbol_code=MU`等）が正しく生成されることを確認。コンソールエラーなし
+
+### Files touched
+
+`app/Livewire/CsvImport/Upload.php`（新規）、`resources/views/livewire/csv-import/upload.blade.php`（新規）、`app/Livewire/ImportSummaryReport/Show.php`（新規）、`resources/views/livewire/import-summary-report/show.blade.php`（新規）、`app/Actions/ImportSummaryReport/ShowImportSummaryReportAction.php`（`symbol_code`フィールド追加）、`routes/web.php`（`/csv-import`・`/import-batches/{importBatch}/summary-report`ルート追加）、`tests/Feature/CsvImportUploadTest.php`（新規、14件）、`tests/Feature/ImportSummaryReportShowTest.php`（新規、6件）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実ブラウザ動作確認完了（実データ）。フルスイート259件Green。次はPhase3（UC-002保有銘柄一覧画面＋UC-007市場全体指標ウィジェット）に進む。
+
 ## フロントエンド実装Phase0（基盤整備）完了（2026-08-23）
 
 ### Decision

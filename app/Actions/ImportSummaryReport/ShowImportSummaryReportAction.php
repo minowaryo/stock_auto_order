@@ -138,6 +138,7 @@ class ShowImportSummaryReportAction
             $items[] = [
                 'recommendation_type' => '利確検討',
                 'target' => "{$holding->symbol_code} {$holding->symbol_name}",
+                'symbol_code' => $holding->symbol_code,
                 'action_suggestion' => '含み益の一部について利益確定（分割売却）を検討してください',
                 'reason_summary' => $reasonSummary,
                 'link_to' => 'UC-003',
@@ -230,6 +231,7 @@ class ShowImportSummaryReportAction
             $items[] = [
                 'recommendation_type' => '新規投資候補',
                 'target' => "{$holding->symbol_code} {$holding->symbol_name}",
+                'symbol_code' => $holding->symbol_code,
                 'action_suggestion' => '注目テーマ合致・財務健全性の高い新規投資候補として検討してください',
                 'reason_summary' => sprintf('自己資本比率%s%%・ROE%sが中心的根拠', $this->fmt($equityRatio), $this->fmt($roe)),
                 'link_to' => 'UC-006',
@@ -302,6 +304,10 @@ class ShowImportSummaryReportAction
             'reason_summary' => $item['reason_summary'],
             'link_to' => $item['link_to'],
         ];
+
+        if (array_key_exists('symbol_code', $item)) {
+            $response['symbol_code'] = $item['symbol_code'];
+        }
 
         if ($includeSupplementaryFlag) {
             $response['is_supplementary'] = true;

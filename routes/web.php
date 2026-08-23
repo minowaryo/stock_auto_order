@@ -11,6 +11,8 @@ use App\Http\Controllers\SectorDashboardController;
 use App\Http\Controllers\SignalListController;
 use App\Http\Controllers\WatchedThemeController;
 use App\Livewire\Auth\Login;
+use App\Livewire\CsvImport\Upload;
+use App\Livewire\ImportSummaryReport\Show;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -26,6 +28,11 @@ Route::post('/logout', function () {
 
     return redirect('/login');
 })->middleware('auth')->name('logout');
+
+Route::middleware('auth')->group(function () {
+    Route::get('/csv-import', Upload::class);
+    Route::get('/import-batches/{importBatch}/summary-report', Show::class);
+});
 
 // JSON API（フロントエンドのLivewireページはこれらをHTTP経由で呼ばず、
 // 同じApp\Actions\**を直接呼び出す。既存の自動テスト資産をそのまま
