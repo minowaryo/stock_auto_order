@@ -20,7 +20,7 @@ Explore → Plan → Implement → Test
 ```
 
 1. **Explore**: `docs/ai-context/` と関連ドキュメントを読み、現状を理解する
-2. **Plan**: 変更の影響範囲・リスクを整理し、実装方針をユーザーに提示して合意を得る
+2. **Plan**: 変更の影響範囲・リスクを整理し、実装方針をユーザーに提示して合意を得る（承認を求める前の要約出力ルールは `.claude/rules/05-plan-approval.md` を参照）
 3. **Implement**: 合意した計画に従って実装する（スコープ外に触れない）
 4. **Test**: Feature Testを追加・実行して動作を確認する
 

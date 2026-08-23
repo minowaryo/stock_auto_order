@@ -57,6 +57,7 @@ Laravel + MySQL web application
 - `docs/original-docs/` is read-only — never edit, delete, or create files in it
 - Test case names must be derived from use-cases.md UC titles
 - Follow Red → Gate 4 approval → Green → Refactor for new features, not just bug fixes (`.claude/rules/30-testing.md`)
+- Before asking the user to approve a plan, output a bullet-point summary of it first (see `.claude/rules/05-plan-approval.md`)
 
 ## Output expectations
 
