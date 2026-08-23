@@ -2,6 +2,24 @@
 
 > 2026-08-21以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 
+## Phase2着手: UC-008 Cycle1（注目テーマ・セクターの登録・更新）完了（2026-08-23）
+
+### Decision
+
+- Phase2（F-005〜008）の着手順として「UC-008→UC-005→UC-006」の順で別々のTDDサイクルを回す方針をユーザーと合意（計画: `C:\Users\minow\.claude\plans\stock_auto_order-uc008-implementation-phase.md`）。UC-005のリバランス候補抽出がUC-008の抽出ロジックを流用する設計のため、UC-008を先に実装する
+- Cycle1として、UC-008の前提機能である「注目テーマ・セクター」の登録・更新を実装した。`WatchedTheme`モデル・マイグレーションは既存だったが、登録する手段（Controller/Route）が一切なかった
+- `test-writer`が8件のFeature Testを作成。Gate4で重複登録時の挙動（use-cases.mdに明記がなかった）をユーザーに確認し、**「422エラーで明示的に拒否」**を選択。テストをその内容に固定して承認
+- `tdd-implementer`がGreenフェーズを実装: `StoreWatchedThemeRequest`（バリデーション＋`withValidator`での重複チェック、DB unique制約由来の500エラーを防ぐ）・`StoreWatchedThemeAction`・`ShowWatchedThemeListAction`・`WatchedThemeController`を新規作成。`update`/`delete`はuse-cases.mdに定義がないためスコープ外。対象8件・フルスイート185件全てGreen
+- `php artisan tinker`で実際にテーマ登録→一覧取得が動作することを確認（トランザクションロールバックでDBは汚していない）
+
+### Files touched
+
+`app/Http/Requests/StoreWatchedThemeRequest.php`（新規）、`app/Actions/WatchedTheme/StoreWatchedThemeAction.php`（新規）、`app/Actions/WatchedTheme/ShowWatchedThemeListAction.php`（新規）、`app/Http/Controllers/WatchedThemeController.php`（新規）、`routes/web.php`（ルート追加）、`tests/Feature/UC008WatchedThemeTest.php`（新規）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実挙動確認完了。フルスイート185件Green。次はCycle2（`NewCandidateFinder`サービス＋UC-008候補一覧エンドポイント本体、保有評価額合計の投信単位補正・NISA推奨基準をGate4で確定）に進む。
+
 ## `/review`拡張レベルの指摘（未知の口座区分ラベルの扱い）を修正（2026-08-23）
 
 ### Decision
