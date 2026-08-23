@@ -388,8 +388,9 @@
 | 分割指値の閾値・比率 | +20%地点で1/3、+35%地点で1/3、残りはトレンド追従 | UC-004 | 叩き台のまま承認 |
 | セクター配分の判定閾値 | 40%未満=健全、40〜70%=やや偏り、70%以上=偏り警告 | UC-005 | 叩き台のまま承認 |
 | 目標配分率 | 70%（偏り警告閾値と同一） | UC-005 | 叩き台のまま承認 |
-| 財務健全性フィルタ | 自己資本比率40%以上・ROE10%以上 | UC-008 | 叩き台のまま承認。Phase 1実装（F-009用の軽量版）時に`/tdd`サイクルで確定 |
-| NISA推奨（`nisa_recommended`）の追加基準 | 財務健全性フィルタの基準に加え、より高い自己資本比率・ROE等（具体的な閾値は未定） | UC-005/UC-008 | 未確定。ADR-0002に伴い新規追加。`/tdd`サイクルで確定 |
+| 財務健全性フィルタ | 自己資本比率40%以上・ROE10%以上 | UC-005/UC-008 | UC-008分は**確定済み**（2026-08-23、`NewCandidateFinder`Gate4）。UC-005分は未実装のため引き続き叩き台 |
+| 小口購入額の目安率（`suggested_amount`） | 保有評価額合計の1%（投資信託は`quantity×current_price÷10000`で単位補正して合算） | UC-008 | **確定済み**（2026-08-23、`NewCandidateFinder`Gate4） |
+| NISA推奨（`nisa_recommended`）の追加基準 | 財務健全性フィルタの基準に加え、自己資本比率50%以上・ROE15%以上 | UC-005/UC-008 | UC-008分は**確定済み**（2026-08-23、`NewCandidateFinder`Gate4。UC-010の買い増し側NISA推奨基準と同一値を採用）。UC-005分は未実装のため引き続き未確定 |
 | 過去業績推移の取得期数 | 5期 | UC-006 | 叩き台のまま承認 |
 | サマリーレポートの件数区分 | 主要10件・補足10件（計20件） | UC-009 | 叩き台のまま承認 |
 | 合成スコアの重み付け | 利確検討・リバランス・新規投資候補の3種を横断する優先順位ロジック（未確定） | UC-009 | 叩き台のまま承認。Phase 1実装時に`/tdd`サイクルで確定 |
@@ -443,3 +444,4 @@
 | 2026-08-21 | UC-009 Gate4 Greenフェーズ実装に伴い`watched_themes`/`import_summary_report_items`をドラフト通りのカラム構成で実装。Gate4承認によりPhase1スコープではNISA区分除外（ADR-0002）を対象外とし、全保有数量ベースで優先順位を算出する方針とした（`holding_snapshot_accounts`との連携は別途UC-004/005/008実装時に対応）。新規投資候補の注目テーマ合致判定は`watched_themes.name`と`sector_classifications.name`の完全一致、財務健全性フィルタ・件数区分（上位10件/補足10件）は本ファイルの叩き台の値をそのまま採用 | - |
 | 2026-08-22 | 実際のユーザーCSV（134銘柄）をUC-001経由でインポートした際、ほぼゼロ近辺からの回復銘柄でEPS成長率が1136%に達し`fundamental_indicators.eps_growth`（`decimal(7,4)`、最大±999.9999%）がMySQLの`Out of range`エラーになる実バグが判明。`eps_growth`/`revenue_growth`/`operating_income_growth`を`decimal(10,4)`に拡張するマイグレーションを追加（既存マイグレーションは編集せず、`change()`による新規ALTER TABLE）。あわせて`FetchExternalMarketDataAction`のper-holding例外分離が2つ目のループ・`fetchSectorInfo()`呼び出しに及んでいなかった非対称バグも修正（1銘柄の失敗が同一バッチ内の他銘柄の処理を巻き込んで中断させていた） | ADR-0006 |
 | 2026-08-23 | `holding_snapshot_accounts`（口座区分別内訳、ADR-0002）の書き込み経路（CSVパーサー3本・`ImportCsvAction`）と消費側（UC-004 `ShowSignalListAction`）を実装完了。書き込み: `AccountTypeMapper`（新規、ラベル→enum変換）を追加し、JP/US株パーサーは`■`見出し行のラベルを、投資信託パーサーは`口座区分`列を読み取って`holding_snapshot_accounts`に口座区分ごとの内訳を保存する。消費: `ShowSignalListAction`の`split_limit_suggestion`は課税口座（specific/general）分の数量のみを基準に算出し、全額NISA（内訳が`nisa_growth`/`nisa_tsumitate`のみ）の銘柄は一覧から除外する。価格帯（+20%/+35%）は変更せず全体の`average_cost`基準のまま。内訳が1件も無い銘柄（後方互換）は保有数量全体を課税口座扱いとしてフォールバックする。テーブル・モデル・リレーションは2026-08-21時点で既存のため変更なし | ADR-0002 |
+| 2026-08-23 | Phase2着手（UC-008 Cycle2）。`NewCandidateFinder`サービス実装に伴い、「保留・確定が必要な初期パラメータ値」表の財務健全性フィルタ・NISA推奨追加基準のUC-008分を確定（自己資本比率40%/ROE10%以上、NISA推奨は自己資本比率50%/ROE15%以上）。小口購入額の目安率（保有評価額合計の1%）を新規に確定・追記。保有評価額合計の算出には投資信託の基準価額単位補正（`quantity×current_price÷10000`）が必要であることを実データで確認し明記した | - |

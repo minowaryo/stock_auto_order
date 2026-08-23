@@ -2,6 +2,25 @@
 
 > 2026-08-21以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 
+## Phase2: UC-008 Cycle2（候補一覧本体・NewCandidateFinder）完了（2026-08-23）
+
+### Decision
+
+- Cycle1（注目テーマ登録）に続き、UC-008本体（登録済みテーマに合致・財務健全性フィルタを満たす未保有銘柄の候補一覧）を実装した
+- `test-writer`が10件のFeature Testを作成。Gate4で2点確認: (1) `suggested_amount`（小口購入額の目安）は保有評価額合計の**1%**（use-cases.mdの「1〜2%」の下限を採用）、(2) `nisa_recommended`の閾値は**自己資本比率50%以上・ROE15%以上**（F-010〔UC-010〕の買い増し側NISA推奨基準と同一値、将来の一貫性のため）
+- テスト作成過程でtest-writer自身の計算ミス（投資信託の評価額補正 `quantity×current_price÷10000` の算出結果をコメントで10倍誤記し、期待値がそれに引きずられていた）が`tdd-implementer`のGreenフェーズ時に発覚。実装ではなくテストの誤りと判明したため、私が直接テストの期待値を修正（350,000→215,000、3,500→2,150等）
+- `tdd-implementer`がGreenフェーズを実装: `NewCandidateFinder`サービス（`ShowImportSummaryReportAction::buildNewCandidateItems()`の抽出条件をベースに拡張）・`ShowNewCandidateListAction`・`NewCandidateController`（`GET /new-candidates`）を新規作成。`ShowImportSummaryReportAction`自体は変更せずUC-009は既存のまま据え置き。対象10件・フルスイート195件全てGreen
+- 実データで実挙動確認: セクター分類済みの未保有銘柄（トヨタ自動車、自己資本比率37.8%）が財務健全性フィルタ（40%以上）をわずかに下回り除外されることを確認。候補0件という結果自体は、既知の制約（J-Quantsレート制限でセクター分類が85銘柄中6件のみ）に起因する正しい挙動であり、ロジック自体は正常に機能していることを確認した
+- `data-model.md`の「保留・確定が必要な初期パラメータ値」表を更新: 財務健全性フィルタ・NISA推奨基準のUC-008分を確定、小口購入額の目安率（1%）を新規追記
+
+### Files touched
+
+`app/Services/Candidate/NewCandidateFinder.php`（新規）、`app/Actions/Candidate/ShowNewCandidateListAction.php`（新規）、`app/Http/Controllers/NewCandidateController.php`（新規）、`routes/web.php`（ルート追加）、`tests/Feature/UC008NewCandidateListTest.php`（新規）、`docs/architecture/data-model.md`（初期パラメータ確定・変更履歴）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実データ動作確認完了。フルスイート195件Green。これでUC-008（Cycle1・2とも）完了。次はCycle3のUC-005（セクター配分ダッシュボード、`NewCandidateFinder`のリバランス候補抽出への流用を含む）に進む。
+
 ## Phase2着手: UC-008 Cycle1（注目テーマ・セクターの登録・更新）完了（2026-08-23）
 
 ### Decision
