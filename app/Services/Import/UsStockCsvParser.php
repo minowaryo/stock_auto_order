@@ -42,7 +42,6 @@ final class UsStockCsvParser
         $errorCount = 0;
         $pendingAccountLabel = null;
         $currentAccountType = null;
-        $accountTypeError = false;
 
         foreach ($lines as $line) {
             if (trim($line) === '') {
@@ -61,10 +60,10 @@ final class UsStockCsvParser
 
                 try {
                     $currentAccountType = AccountTypeMapper::toEnum((string) $pendingAccountLabel);
-                    $accountTypeError = false;
                 } catch (InvalidArgumentException) {
-                    $currentAccountType = null;
-                    $accountTypeError = true;
+                    throw new CsvStructureException(
+                        "米国株式CSVの口座区分「{$pendingAccountLabel}」を認識できませんでした（想定外の見出しの可能性があります）"
+                    );
                 }
 
                 continue;
@@ -87,12 +86,6 @@ final class UsStockCsvParser
 
             if ($first === '') {
                 $inDataSection = false;
-
-                continue;
-            }
-
-            if ($accountTypeError) {
-                $errorCount++;
 
                 continue;
             }

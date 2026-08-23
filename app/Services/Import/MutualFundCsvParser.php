@@ -63,16 +63,22 @@ final class MutualFundCsvParser
                 continue;
             }
 
+            $accountTypeLabel = trim((string) ($fields[$columnIndex[self::COLUMN_ACCOUNT_TYPE]] ?? ''));
+
+            try {
+                $accountType = AccountTypeMapper::toEnum($accountTypeLabel);
+            } catch (InvalidArgumentException) {
+                throw new CsvStructureException(
+                    "投資信託CSVの口座区分「{$accountTypeLabel}」を認識できませんでした（想定外の値の可能性があります）"
+                );
+            }
+
             try {
                 $fundName = trim((string) ($fields[$columnIndex[self::COLUMN_FUND_NAME]] ?? ''));
 
                 if ($fundName === '') {
                     throw new InvalidArgumentException('Missing fund name');
                 }
-
-                $accountType = AccountTypeMapper::toEnum(
-                    trim((string) ($fields[$columnIndex[self::COLUMN_ACCOUNT_TYPE]] ?? ''))
-                );
 
                 $rows[] = new ParsedCsvRow(
                     code: $fundName,

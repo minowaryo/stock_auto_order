@@ -2,6 +2,22 @@
 
 > 2026-08-21以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 
+## `/review`拡張レベルの指摘（未知の口座区分ラベルの扱い）を修正（2026-08-23）
+
+### Decision
+
+- 前エントリ（NISA区分内訳の書き込み・UC-004消費）に対して`/review`を実施（origin/main未反映の差分に対して手動スコア算出、スコア64〔閾値30超過〕→拡張レベル）
+- HIGH指摘: Planフェーズでユーザーが明示的に選んだ「未知の口座区分ラベルは例外を投げて取込を失敗させる」という決定が、実装では反映されていなかった。3パーサー（`JpStockCsvParser`/`UsStockCsvParser`/`MutualFundCsvParser`）とも`AccountTypeMapper`が投げる`InvalidArgumentException`を握りつぶし`$errorCount++`でスキップするだけで、取込全体は`status='completed'`のまま完了していた。これは私自身がCycle AのRed phase委任時に「スキップかthrowかは固定しない」と緩めて指示したことが原因で、Planフェーズの決定を正しく反映できていなかった
+- 3パーサーの「未知ラベルは緩くどちらでもよい」テストを`toThrow(CsvStructureException::class)`の明確なアサーションに置き換え、`ImportCsvAction`統合テストに「未知の口座区分見出しを含むCSVは取込全体を失敗として扱い422エラーになる」を追加。Redを確認したうえで、3パーサーとも未知ラベル検出時に`CsvStructureException`を投げるよう修正（`$accountTypeError`フラグによるスキップ処理を撤去）。フルスイート177件全てGreen
+
+### Files touched
+
+`app/Services/Import/JpStockCsvParser.php`、`app/Services/Import/UsStockCsvParser.php`、`app/Services/Import/MutualFundCsvParser.php`、`tests/Unit/Services/Import/JpStockCsvParserTest.php`・`UsStockCsvParserTest.php`・`MutualFundCsvParserTest.php`（既存テストの厳格化）、`tests/Feature/UC001CsvImportTest.php`（1件追加）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認完了。フルスイート177件Green。前エントリと合わせてコミット・プッシュ予定。
+
 ## NISA区分（口座区分）内訳の書き込み・UC-004消費 完了（2026-08-23）
 
 ### Decision

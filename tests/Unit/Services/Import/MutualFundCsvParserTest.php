@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Services\Import;
 
+use App\Exceptions\Import\CsvStructureException;
 use App\Services\Import\MutualFundCsvParser;
 
 /*
@@ -60,7 +61,7 @@ test('口座区分列が「特定」の場合accountTypeがspecificになる', f
         ['account_type' => '特定', 'fund_name' => '楽天・全米株式インデックス・ファンド', 'qty' => '100', 'avg' => '10000', 'price' => '12000'],
     ]);
 
-    $parsed = (new MutualFundCsvParser())->parse($csv);
+    $parsed = (new MutualFundCsvParser)->parse($csv);
 
     expect($parsed->rows)->toHaveCount(1);
     expect($parsed->rows[0]->accountType)->toBe('specific');
@@ -71,7 +72,7 @@ test('口座区分列が「NISAつみたて投資枠」の場合accountTypeがni
         ['account_type' => 'NISAつみたて投資枠', 'fund_name' => 'eMAXIS Slim 全世界株式', 'qty' => '50', 'avg' => '11000', 'price' => '12500'],
     ]);
 
-    $parsed = (new MutualFundCsvParser())->parse($csv);
+    $parsed = (new MutualFundCsvParser)->parse($csv);
 
     expect($parsed->rows)->toHaveCount(1);
     expect($parsed->rows[0]->accountType)->toBe('nisa_tsumitate');
@@ -83,29 +84,18 @@ test('同一ファンドが複数口座区分にまたがる場合、各行が�
         ['account_type' => 'NISAつみたて投資枠', 'fund_name' => '楽天・全米株式インデックス・ファンド', 'qty' => '50', 'avg' => '11000', 'price' => '12000'],
     ]);
 
-    $parsed = (new MutualFundCsvParser())->parse($csv);
+    $parsed = (new MutualFundCsvParser)->parse($csv);
 
     expect($parsed->rows)->toHaveCount(2);
     expect($parsed->rows[0]->accountType)->toBe('specific');
     expect($parsed->rows[1]->accountType)->toBe('nisa_tsumitate');
 });
 
-test('口座区分列が未知のラベルの場合はエラーとして扱われる', function () {
+test('口座区分列が未知のラベルの場合はCsvStructureExceptionが投げられ取込全体が失敗する', function () {
     $csv = mfAccCsvBuild([
         ['account_type' => '謎の口座区分', 'fund_name' => '謎ファンド', 'qty' => '1', 'avg' => '1000', 'price' => '1000'],
     ]);
 
-    $exceptionThrown = false;
-    $fundNames = [];
-    $errorCount = 0;
-
-    try {
-        $parsed = (new MutualFundCsvParser())->parse($csv);
-        $fundNames = array_map(fn ($row) => $row->code, $parsed->rows);
-        $errorCount = $parsed->errorCount;
-    } catch (\Throwable) {
-        $exceptionThrown = true;
-    }
-
-    expect($exceptionThrown || (! in_array('謎ファンド', $fundNames, true) && $errorCount > 0))->toBeTrue();
+    expect(fn () => (new MutualFundCsvParser)->parse($csv))
+        ->toThrow(CsvStructureException::class);
 });

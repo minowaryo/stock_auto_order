@@ -251,10 +251,10 @@ describe('UC-001: CSV取込', function () {
     // assertion below. Individual tests that need non-empty responses (or a
     // throwing Fake) re-bind the relevant interface(s) themselves.
     beforeEach(function () {
-        app()->instance(JpStockPriceClientInterface::class, new FakeJpStockPriceClient());
-        app()->instance(UsStockPriceClientInterface::class, new FakeUsStockPriceClient());
-        app()->instance(MarketIndexClientInterface::class, new FakeMarketIndexClient());
-        app()->instance(JQuantsClientInterface::class, new FakeJQuantsClient());
+        app()->instance(JpStockPriceClientInterface::class, new FakeJpStockPriceClient);
+        app()->instance(UsStockPriceClientInterface::class, new FakeUsStockPriceClient);
+        app()->instance(MarketIndexClientInterface::class, new FakeMarketIndexClient);
+        app()->instance(JQuantsClientInterface::class, new FakeJQuantsClient);
     });
 
     describe('正常系', function () {
@@ -813,6 +813,33 @@ describe('UC-001: CSV取込', function () {
 
             $response = ucFrom001TestSubmit($this, [
                 'jp_stock_file' => ucFrom001TestFakeCsvFile('jp_stock.csv', $unparseableJp),
+                'us_stock_file' => ucFrom001TestFakeCsvFile('us_stock.csv', ucFrom001TestUtf8ToShiftJis($usCsv)),
+            ]);
+
+            $response->assertStatus(422);
+
+            $batch = DB::table('import_batches')->latest('id')->first();
+            expect($batch)->not->toBeNull();
+            expect($batch->status)->toBe('failed');
+            expect($batch->failure_reason)->not->toBeNull();
+        });
+
+        test('未知の口座区分見出しを含むCSVは取込全体を失敗として扱い422エラーになる', function () {
+            // ADR-0002 / holding_snapshot_accounts write-path: an
+            // unrecognized 口座区分 section heading must fail the whole
+            // import (per user decision during Planning), not silently
+            // skip the affected rows.
+            $jpCsv = ucFrom001TestJpStockCsv([
+                ['code' => '7203', 'name' => 'トヨタ自動車', 'quantity' => '10', 'avg_cost' => '2,000.00', 'current_price' => '2,500.0'],
+            ]);
+            $jpCsv = str_replace('■特定口座', '■謎の口座区分', $jpCsv);
+
+            $usCsv = ucFrom001TestUsStockCsv([
+                ['ticker' => 'MSFT', 'name' => 'マイクロソフト', 'quantity' => '1', 'avg_cost' => '100.00', 'current_price' => '100.00'],
+            ]);
+
+            $response = ucFrom001TestSubmit($this, [
+                'jp_stock_file' => ucFrom001TestFakeCsvFile('jp_stock.csv', ucFrom001TestUtf8ToShiftJis($jpCsv)),
                 'us_stock_file' => ucFrom001TestFakeCsvFile('us_stock.csv', ucFrom001TestUtf8ToShiftJis($usCsv)),
             ]);
 

@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Services\Import;
 
+use App\Exceptions\Import\CsvStructureException;
 use App\Services\Import\JpStockCsvParser;
 
 /*
@@ -74,7 +75,7 @@ test('■特定口座セクションの保有銘柄はaccountTypeがspecificに�
         ]],
     ]);
 
-    $parsed = (new JpStockCsvParser())->parse($csv);
+    $parsed = (new JpStockCsvParser)->parse($csv);
 
     expect($parsed->rows)->toHaveCount(1);
     expect($parsed->rows[0]->accountType)->toBe('specific');
@@ -87,7 +88,7 @@ test('■NISA成長投資枠セクションの保有銘柄はaccountTypeがnisa_
         ]],
     ]);
 
-    $parsed = (new JpStockCsvParser())->parse($csv);
+    $parsed = (new JpStockCsvParser)->parse($csv);
 
     expect($parsed->rows)->toHaveCount(1);
     expect($parsed->rows[0]->accountType)->toBe('nisa_growth');
@@ -103,34 +104,20 @@ test('複数の口座区分セクションにまたがる場合、各行が自�
         ]],
     ]);
 
-    $parsed = (new JpStockCsvParser())->parse($csv);
+    $parsed = (new JpStockCsvParser)->parse($csv);
 
     expect($parsed->rows)->toHaveCount(2);
     expect($parsed->rows[0]->accountType)->toBe('specific');
     expect($parsed->rows[1]->accountType)->toBe('nisa_growth');
 });
 
-test('未知の口座区分ラベルの見出し行がある場合はエラーとして扱われる', function () {
+test('未知の口座区分ラベルの見出し行がある場合はCsvStructureExceptionが投げられ取込全体が失敗する', function () {
     $csv = jpAccCsvBuild([
         ['label' => '■謎の口座区分', 'rows' => [
             ['code' => '9999', 'name' => '謎銘柄', 'qty' => '10', 'avg' => '1000', 'price' => '1000'],
         ]],
     ]);
 
-    $exceptionThrown = false;
-    $codes = [];
-    $errorCount = 0;
-
-    try {
-        $parsed = (new JpStockCsvParser())->parse($csv);
-        $codes = array_map(fn ($row) => $row->code, $parsed->rows);
-        $errorCount = $parsed->errorCount;
-    } catch (\Throwable) {
-        $exceptionThrown = true;
-    }
-
-    // Whichever error-handling strategy the Green phase picks (throw vs.
-    // skip-and-count), the unknown-label row must never surface as a
-    // normal successfully parsed row.
-    expect($exceptionThrown || (! in_array('9999', $codes, true) && $errorCount > 0))->toBeTrue();
+    expect(fn () => (new JpStockCsvParser)->parse($csv))
+        ->toThrow(CsvStructureException::class);
 });

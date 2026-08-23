@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Services\Import;
 
+use App\Exceptions\Import\CsvStructureException;
 use App\Services\Import\UsStockCsvParser;
 
 /*
@@ -68,7 +69,7 @@ test('■特定口座セクションの保有銘柄はaccountTypeがspecificに�
         ]],
     ]);
 
-    $parsed = (new UsStockCsvParser())->parse($csv);
+    $parsed = (new UsStockCsvParser)->parse($csv);
 
     expect($parsed->rows)->toHaveCount(1);
     expect($parsed->rows[0]->accountType)->toBe('specific');
@@ -81,7 +82,7 @@ test('■一般口座セクションの保有銘柄はaccountTypeがgeneralに�
         ]],
     ]);
 
-    $parsed = (new UsStockCsvParser())->parse($csv);
+    $parsed = (new UsStockCsvParser)->parse($csv);
 
     expect($parsed->rows)->toHaveCount(1);
     expect($parsed->rows[0]->accountType)->toBe('general');
@@ -94,7 +95,7 @@ test('■NISA成長投資枠セクションの保有銘柄はaccountTypeがnisa_
         ]],
     ]);
 
-    $parsed = (new UsStockCsvParser())->parse($csv);
+    $parsed = (new UsStockCsvParser)->parse($csv);
 
     expect($parsed->rows)->toHaveCount(1);
     expect($parsed->rows[0]->accountType)->toBe('nisa_growth');
@@ -113,7 +114,7 @@ test('特定口座・一般口座・NISA成長投資枠の3セクションにま
         ]],
     ]);
 
-    $parsed = (new UsStockCsvParser())->parse($csv);
+    $parsed = (new UsStockCsvParser)->parse($csv);
 
     expect($parsed->rows)->toHaveCount(3);
     expect($parsed->rows[0]->accountType)->toBe('specific');
@@ -121,24 +122,13 @@ test('特定口座・一般口座・NISA成長投資枠の3セクションにま
     expect($parsed->rows[2]->accountType)->toBe('nisa_growth');
 });
 
-test('未知の口座区分ラベルの見出し行がある場合はエラーとして扱われる', function () {
+test('未知の口座区分ラベルの見出し行がある場合はCsvStructureExceptionが投げられ取込全体が失敗する', function () {
     $csv = usAccCsvBuild([
         ['label' => '■謎の口座区分', 'rows' => [
             ['ticker' => 'ZZZZ', 'name' => '謎銘柄', 'qty' => '1', 'avg' => '10', 'price' => '10'],
         ]],
     ]);
 
-    $exceptionThrown = false;
-    $tickers = [];
-    $errorCount = 0;
-
-    try {
-        $parsed = (new UsStockCsvParser())->parse($csv);
-        $tickers = array_map(fn ($row) => $row->code, $parsed->rows);
-        $errorCount = $parsed->errorCount;
-    } catch (\Throwable) {
-        $exceptionThrown = true;
-    }
-
-    expect($exceptionThrown || (! in_array('ZZZZ', $tickers, true) && $errorCount > 0))->toBeTrue();
+    expect(fn () => (new UsStockCsvParser)->parse($csv))
+        ->toThrow(CsvStructureException::class);
 });
