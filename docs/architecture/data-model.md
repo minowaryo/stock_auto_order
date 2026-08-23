@@ -338,6 +338,8 @@
 
 > **Phase1先行実装（ADR-0004）**: 本来UC-007（Phase2）専用のテーブルだが、`technical_indicators.relative_strength_vs_market`（UC-003）の算出に必要なため、`index_name`が`nikkei225`/`sp500`の2件分のみ「取得・保存」ロジックをPhase1で先行実装する（`us10y`/`vix`/`usdjpy`はUC-007画面本体〔Phase2〕着手時にあわせて実装）。F-009がF-005/F-008の軽量ロジックを先行実装したのと同じパターン（`requirements.md` 7章参照）。
 
+> **実装完了（表示エンドポイント、2026-08-23、Gate4）**: `GET /market-indicators`で直近スナップショットの5指標（`nikkei225`/`sp500`/`us10y`/`vix`/`usdjpy`）を固定順で返す。`us10y`/`vix`/`usdjpy`は取得・保存ロジック自体が未実装のため、当面は常に`value`/`change_rate`/`ma_deviation`が`null`のプレースホルダとして返る（use-cases.mdエラーケース「該当指標のみ『取得不可』と表示」のAPI表現）。この3指標の外部データ取得は別タスクとして先送り（`PLAN.md`「今後の対応」参照）。
+
 ---
 
 ### import_summary_reports（取込後サマリーレポート・UC-009）
@@ -456,3 +458,4 @@
 | 2026-08-23 | Phase2 Cycle4（UC-006）のCycle A: `financial_statements`テーブルをドラフト通りのカラム構成で実装（`2026_08_23_000000_create_financial_statements_table.php`）。`FetchExternalMarketDataAction`を改修し、JP株について既に取得済みの`jQuantsClient->fetchStatements()`の5期分を新規の外部API呼び出しなしで`financial_statements`に保存するようにした。`revenue_yoy_change`/`operating_income_yoy_change`は最新期（index 0）のみ算出し、過去の期（index 1〜4）はフェッチ範囲外のためnullとする方針をGate4で確定 | - |
 | 2026-08-23 | UC-006 Cycle Aの`/review`拡張レベル指摘（MEDIUM）を修正。`financial_statements.revenue`/`operating_income`をNOT NULLからnullableに変更（`2026_08_23_000001_nullable_revenue_operating_income_on_financial_statements_table.php`）。データソース（J-Quants `net_sales`/`operating_profit`）自体がnullを返しうるにもかかわらずNOT NULLだったため、該当銘柄で`financial_statements`のINSERT失敗が同一トランザクション内の`technical_indicators`/`fundamental_indicators`/`signals`更新まで巻き添えでロールバックさせていた | ADR-0008 |
 | 2026-08-23 | Phase2 Cycle4（UC-006）のCycle B（本体）実装完了、これでPhase2「UC-008→UC-005→UC-006」全サイクル完了。`watch_records`テーブル・`WatchRecord`モデルを`holding_memos`と同じ追記のみパターンで新規実装。`GET /candidate-check`（`overlap_rate`/`diversification_comment`をUC-005の`SectorAllocationCalculator`から流用、UC-003と同一のテクニカル/ファンダメンタルズ指標一式、`historical_performance`、`watch_status`/`watch_memo_history`）・`POST /candidate-check/watch-records`を新規追加。未知の`symbol_code`はFormRequestの`Rule::exists`で422拒否する方針・`overlap_rate`の一致なし時`0`扱い・ウォッチステータス/メモ両方省略時422をGate4で確定 | - |
+| 2026-08-23 | UC-007（市場全体指標表示）の表示エンドポイント`GET /market-indicators`を実装、これでPhase2（F-005/F-006/F-007/F-008）が全完了。直近スナップショットの5指標（`nikkei225`/`sp500`/`us10y`/`vix`/`usdjpy`）を固定順で返す。`us10y`/`vix`/`usdjpy`は取得ロジック自体が未実装のため常に`null`のプレースホルダとして返す方針をユーザー確認の上で確定（3指標の外部データ取得自体は別タスクとして先送り） | - |

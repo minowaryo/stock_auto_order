@@ -5,6 +5,7 @@ use App\Http\Controllers\CsvImportController;
 use App\Http\Controllers\HoldingDetailController;
 use App\Http\Controllers\HoldingListController;
 use App\Http\Controllers\ImportSummaryReportController;
+use App\Http\Controllers\MarketIndicatorController;
 use App\Http\Controllers\NewCandidateController;
 use App\Http\Controllers\SectorDashboardController;
 use App\Http\Controllers\SignalListController;
@@ -27,3 +28,4 @@ Route::middleware('auth')->get('/new-candidates', [NewCandidateController::class
 Route::middleware('auth')->get('/sector-dashboard', [SectorDashboardController::class, 'index']);
 Route::middleware('auth')->get('/candidate-check', [CandidateCheckController::class, 'show']);
 Route::middleware('auth')->post('/candidate-check/watch-records', [CandidateCheckController::class, 'storeWatchRecord']);
+Route::middleware('auth')->get('/market-indicators', [MarketIndicatorController::class, 'index']);

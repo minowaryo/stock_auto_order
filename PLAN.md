@@ -2,10 +2,28 @@
 
 > 2026-08-21以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 
-## 今後の対応（未着手・スコープ確認済み）（2026-08-23追記）
+## 今後の対応（未着手・スコープ確認済み）（2026-08-23追記、UC-007完了時点で更新）
 
-- **フロントエンドUI（Livewire画面化）**: UC-001〜UC-009はこれまで全てAPIのみで実装してきた（`app/Livewire/`・`resources/views/`配下のBladeビューは0件、`docs/product/mockups/`は静的HTMLモックのみで実際に動く画面ではない）。ユーザーへの状況確認の結果、**まずPhase2（F-005/F-006/F-007/F-008）をAPIレベルで完了させてから**、Livewireコンポーネント・Bladeビューの実装（実際にブラウザでCSV取込〜各画面確認ができる状態にする）に着手する方針を確認した
-- **F-007（UC-007 市場全体指標表示）の3指標が未実装**: `market_indicator_snapshots`テーブルは存在し、`FetchExternalMarketDataAction`が日経平均・S&P500の2指標は既に取得・保存しているが、**米国10年債利回り・VIX指数・USD/JPY為替レートの3指標は取得ロジック自体が無い**（J-Quantsの範囲外のデータで、別途新規の外部APIクライアント選定〔ADR要〕が必要）。ユーザー確認の結果、今回のUC-007サイクルは日経平均・S&P500の2指標のみで先に実装し（残り3指標はuse-cases.mdの業務ルール「一部の指標の外部データ取得に失敗→該当指標のみ『取得不可』と表示」に従い常にnullで返す）、3指標の外部データ取得自体は別タスクとして先送りする
+- **フロントエンドUI（Livewire画面化）**: UC-001〜UC-009はこれまで全てAPIのみで実装してきた（`app/Livewire/`・`resources/views/`配下のBladeビューは0件、`docs/product/mockups/`は静的HTMLモックのみで実際に動く画面ではない）。Phase2（F-005/F-006/F-007/F-008）がAPIレベルで全完了したため、**次はLivewireコンポーネント・Bladeビューの実装（実際にブラウザでCSV取込〜各画面確認ができる状態にする）に着手する**方針をユーザーと確認済み
+- **F-007（UC-007 市場全体指標表示）の3指標が未実装**: `GET /market-indicators`エンドポイント自体は実装完了したが、**米国10年債利回り・VIX指数・USD/JPY為替レートの3指標は取得ロジック自体が無く**（J-Quantsの範囲外のデータで、別途新規の外部APIクライアント選定〔ADR要〕が必要）、常に`null`のプレースホルダを返す。3指標の外部データ取得自体は別タスクとして先送り
+
+## Phase2: UC-007（市場全体指標表示）実装完了、Phase2（F-005/F-006/F-007/F-008）全完了（2026-08-23）
+
+### Decision
+
+- UC-006（Cycle A/B）に続きPhase2最後の項目、UC-007（市場全体指標表示）を実装。`market_indicator_snapshots`テーブル・日経平均/S&P500の取得ロジック自体はPhase1（ADR-0004）で先行実装済みだったため、今回は表示エンドポイントのみが対象
+- 調査の結果、米国10年債利回り・VIX指数・USD/JPY為替レートの3指標は取得ロジック自体がコードベースのどこにも存在しないことが判明（J-Quantsの範囲外データで新規の外部APIクライアント選定が必要）。ユーザーに確認し、**日経平均・S&P500の2指標のみ先に実装し、残り3指標は常にnullのプレースホルダとして返す**方針で合意（use-cases.mdエラーケース「該当指標のみ『取得不可』と表示」のAPI表現。3指標の外部データ取得は別タスクとして先送り、上記「今後の対応」に記録）
+- `test-writer`が6件のFeature Testを作成。設計はAskUserQuestionで事前確定済みのためGate4での追加確認は無く、そのままGreenへ
+- `tdd-implementer`がGreenフェーズを実装: `ShowMarketIndicatorAction`（直近スナップショットから5指標を固定順`nikkei225/sp500/us10y/vix/usdjpy`で返す。存在しない指標・スナップショット自体が無い場合もnullで安全に返す）、`MarketIndicatorController`（`GET /market-indicators`）、ルート追加。対象6件・フルスイート227件全てGreen
+- 実データで実挙動確認（トランザクションロールバック）: nikkei225/sp500は実際のvalue/change_rate/ma_deviationが正しく返り、us10y/vix/usdjpyは想定通りnullで返ることを確認
+
+### Files touched
+
+`app/Actions/Market/ShowMarketIndicatorAction.php`（新規）、`app/Http/Controllers/MarketIndicatorController.php`（新規）、`routes/web.php`（ルート追加）、`tests/Feature/UC007MarketIndicatorTest.php`（新規、6件）、`docs/architecture/data-model.md`（実装完了注記・変更履歴）、`PLAN.md`（本エントリ・今後の対応の更新）
+
+### Status
+
+Green確認・実データ動作確認完了。フルスイート227件Green。これでPhase2（F-005/F-006/F-007/F-008）が全て完了。次はフロントエンドUI（Livewire画面化）に着手する（上記「今後の対応」参照）。
 
 ## Phase2: UC-006 Cycle B（本体）完了、Phase2「UC-008→UC-005→UC-006」全完了（2026-08-23）
 
