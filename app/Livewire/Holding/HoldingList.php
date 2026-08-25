@@ -4,6 +4,7 @@ namespace App\Livewire\Holding;
 
 use App\Actions\Holding\ListHoldingsAction;
 use App\Actions\Market\ShowMarketIndicatorAction;
+use App\Models\SectorClassification;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -23,10 +24,12 @@ class HoldingList extends Component
     {
         $holdings = app(ListHoldingsAction::class)->execute($this->sector, $this->signalOnly);
         $marketIndicators = app(ShowMarketIndicatorAction::class)->execute();
+        $sectorOptions = SectorClassification::query()->orderBy('name')->pluck('name');
 
         return view('livewire.holding.holding-list', [
             'holdings' => $holdings,
             'marketIndicators' => $marketIndicators,
+            'sectorOptions' => $sectorOptions,
         ]);
     }
 }

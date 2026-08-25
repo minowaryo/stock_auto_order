@@ -30,7 +30,7 @@
                 セクター
                 <select wire:model.live="sector" class="ml-1 border border-app-border rounded px-2 py-1 text-[13px]">
                     <option value="">すべて</option>
-                    @foreach (\App\Models\SectorClassification::query()->orderBy('name')->pluck('name') as $sectorName)
+                    @foreach ($sectorOptions as $sectorName)
                         <option value="{{ $sectorName }}">{{ $sectorName }}</option>
                     @endforeach
                     <option value="未分類">未分類</option>
