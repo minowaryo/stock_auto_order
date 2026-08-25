@@ -2,6 +2,23 @@
 
 > 2026-08-21以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 
+## Phase3の`/review`拡張レベルを実施、コミット汚染とビュー内クエリを修正（2026-08-25）
+
+### Decision
+
+- push前にユーザーから`/review`の依頼を受け、コミット`b493a18`（Phase3、origin/main比7ファイル・673行・review-score約41≧閾値30）に対し拡張レベルのレビューを実施
+- **重大な指摘**: `routes/web.php`は`PLAN.md`/`data-model.md`と異なり安全な退避・再適用手順（他セッションの未コミット変更を巻き込まないための手順）を踏まずに`git add`していたため、別セッションが並行して作業中の未コミットF-010（UC-010買い増しレコメンド）由来の`BuySignalListController`インポート・`/buy-signals`ルート登録がコミット`b493a18`に紛れ込んでいたことが判明した。当該コントローラ実体ファイルは未コミットのままディスク上に存在するため、`b493a18`単体をpull/参照した場合に存在しないクラスを参照する不整合なコミットになっていた
+- **軽微な指摘**: セクターフィルタのプルダウン用データ取得（`SectorClassification::query()`）がコンポーネントではなくBladeビュー内で直接実行されており、他の全画面（`render()`/`mount()`でデータ取得しビューへ渡す設計）と一貫していなかった
+- 両指摘を修正: `routes/web.php`から該当2行（インポート・ルート登録）を削除し汚染を解消（コントローラファイル自体は他セッションの作業として触れず維持）。セクター取得ロジックを`HoldingList::render()`に移動しビューへ`sectorOptions`として渡すよう変更。フルスイート302件Green（他セッション進行中のUC-010関連15件失敗は本修正と無関係、リグレッションでないことを確認）
+
+### Files touched
+
+`routes/web.php`（汚染除去）、`app/Livewire/Holding/HoldingList.php`・`resources/views/livewire/holding/holding-list.blade.php`（セクター取得ロジックのコンポーネント移動）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認完了。フルスイート302件Green。今後、コード（Blade/ルート等）を含む共有ファイルへのコミット前は`git diff origin/main..HEAD`等でPLAN.md/data-model.md以外の共有ファイルにも他セッションの混入が無いか確認する運用とする。次はPhase4（UC-003銘柄詳細画面）に進む。
+
 ## フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット）完了、共通レイアウトの重大バグ修正（2026-08-25）
 
 ### Decision
