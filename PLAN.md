@@ -2,6 +2,24 @@
 
 > 2026-08-21以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 
+## フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット）完了、共通レイアウトの重大バグ修正（2026-08-25）
+
+### Decision
+
+- Phase1+2に続き、Phase3（UC-002保有銘柄一覧画面、UC-007市場全体指標ウィジェットを内包）を実施
+- `test-writer`が12件のLivewireコンポーネントテストを作成。Gate4で2点確認: (1) セクターフィルタのプルダウンに「未分類」を選択肢として手動追加（`ListHoldingsAction`は文字列一致でフィルタするだけなので追加ロジック不要）、(2) NEWバッジ・一覧行のリンク先（`/candidate-check`・`/holdings/{id}`）はまだ実装されていないPhase4/7の画面を先行して参照する（その間は404、Phase1+2と同じ進め方）— いずれも「妥当」で承認
+- `tdd-implementer`がGreenフェーズを実装: `app/Livewire/Holding/HoldingList.php`（`ListHoldingsAction`・`ShowMarketIndicatorAction`を`render()`で毎回呼び出す純粋読み取り設計）。対象12件・フルスイート271件Green（他セッション進行中のUC-010関連の失敗は無関係と確認済み）
+- **実ブラウザ確認（Playwright MCP）で重大バグを発見・修正**: 共通レイアウト（`resources/views/components/layouts/app.blade.php`、Phase0で作成）に`<meta name="csrf-token">`が欠落しており、Livewireの`wire:submit`/`wire:model.live`等のAJAX通信が実ブラウザでは無反応になっていた。`Livewire::test()`はブラウザのJS/AJAX層を経由しないため、Phase0のログイン機能を含めこれまでの全Feature Testでは検出できていなかった不具合。CSRFメタタグを追加し修正、回帰防止テスト（`tests/Feature/LayoutTest.php`）を追加し、実ブラウザでログイン→ログアウトの往復が正常に機能することを確認した
+- Phase3自体は実データ（134銘柄超）で市場全体指標ウィジェット（日経平均・S&P500は実値、残り3指標は「取得不可」表示）・セクターフィルタ（未分類含む）・一覧表示が正しく動作することをPlaywrightで確認
+
+### Files touched
+
+`app/Livewire/Holding/HoldingList.php`（新規）、`resources/views/livewire/holding/holding-list.blade.php`（新規）、`routes/web.php`（`/holdings`ルート追加）、`tests/Feature/HoldingListTest.php`（新規、12件）、`resources/views/components/layouts/app.blade.php`（csrf-tokenメタタグ追加、バグ修正）、`tests/Feature/LayoutTest.php`（新規、回帰防止テスト1件）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実ブラウザ動作確認完了（実データ）。フルスイート284件（271+13、他セッションのUC-010関連を除く）Green。CSRFバグ修正によりログイン画面（Phase0）を含む全Livewire画面のAJAX通信が実ブラウザで正しく機能するようになった。次はPhase4（UC-003銘柄詳細画面）に進む。
+
 ## フロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了（2026-08-23）
 
 ### Decision

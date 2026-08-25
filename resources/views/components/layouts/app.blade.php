@@ -9,6 +9,10 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        {{-- LivewireのJSがAJAXリクエストにX-CSRF-TOKENを添付するために必須。
+             欠落するとwire:submit/wire:model.live等が実ブラウザでは無反応に
+             なる（Livewire::test()はブラウザJS層を経由しないため検出不可）。 --}}
+        <meta name="csrf-token" content="{{ csrf_token() }}">
         <title>{{ $title ? $title.' | ポートフォリオ管理' : 'ポートフォリオ管理' }}</title>
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         @livewireStyles
