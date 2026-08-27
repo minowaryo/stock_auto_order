@@ -61,6 +61,7 @@ class ShowSignalListAction
         $signals = $holdingSnapshot->signals;
 
         return [
+            'id' => $holding->id,
             'symbol_code' => $holding->symbol_code,
             'symbol_name' => $holding->symbol_name,
             'unrealized_gain_rate' => $holdingSnapshot->unrealized_gain_rate,

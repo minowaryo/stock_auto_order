@@ -16,6 +16,7 @@ use App\Livewire\CsvImport\Upload;
 use App\Livewire\Holding\HoldingDetail;
 use App\Livewire\Holding\HoldingList;
 use App\Livewire\ImportSummaryReport\Show;
+use App\Livewire\Signal\SignalList;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -37,6 +38,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/holdings', HoldingList::class);
     Route::get('/holdings/{holding}', HoldingDetail::class);
     Route::get('/import-batches/{importBatch}/summary-report', Show::class);
+    Route::get('/signals', SignalList::class);
 });
 
 // JSON API（フロントエンドのLivewireページはこれらをHTTP経由で呼ばず、

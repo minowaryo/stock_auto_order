@@ -3,6 +3,24 @@
 > 2026-08-23以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、およびPhase2 UC-008（Cycle1・Cycle2）完了等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 > **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。
 
+## フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了（2026-08-27）
+
+### Decision
+
+- Phase4に続き、Phase5（UC-004売買シグナル一覧画面、`GET /signals`）を実施。モックアップは買い増し候補（UC-010）セクションも含む2段構成だが、UC-010バックエンドは別セッション（`BuySignalDeterminationService`等）の担当スコープのため、今回は利確検討セクションのみを実装しUC-010セクションは対象外とした（別セッションのマージ完了後、別サイクルで追加する）
+- `test-writer`が8件のLivewireコンポーネントテストを作成。Gate4で2点確認: (1) シグナルバッジは`signal_types`の生の文字列（`rsi_reversal`等）をそのまま表示（日本語ラベル変換は別タスク）、(2) 分割指値3段目（price=null、トレンド追従枠）の表示文言は「現在値以降」— いずれも「推奨」で承認
+- `tdd-implementer`がGreenフェーズを実装: `ShowSignalListAction`に`id`（holdings.id、一覧→詳細画面のリンク生成用）を追加（Phase0の`ListHoldingsAction`と同じ先例）。`app/Livewire/Signal/SignalList.php`（`render()`で毎回呼び出す純粋読み取り設計）。対象8件・フルスイート344件全てGreen
+- **並行セッション対応**: 別セッションが同日中にUC-010バックエンド一式をコミット（`ba239fe`）したことで、`routes/web.php`の同時編集競合が解消された（従来は`/buy-signals`が未コミットのまま`routes/web.php`に残り続けていたため、Phase3/4のたびに退避・再適用が必要だった）。今回は競合なくシンプルに完了
+- 実ブラウザ確認（Playwright MCP、実データ）: `/signals`で実際の利確検討対象銘柄（マイクロン テクノロジー含み益+555%等、40件超）が正しく一覧表示され、各行が`/holdings/{id}`へのリンクを持つこと、シグナルなし銘柄・複数シグナル銘柄・分割指値3段（トレンド追従枠の「現在値以降」表示含む）が正しく表示されることを確認。コンソールエラーなし
+
+### Files touched
+
+`app/Actions/Signal/ShowSignalListAction.php`（`id`フィールド追加）、`app/Livewire/Signal/SignalList.php`（新規）、`resources/views/livewire/signal/signal-list.blade.php`（新規）、`routes/web.php`（`/signals`ルート追加）、`tests/Feature/SignalListTest.php`（新規、8件）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実ブラウザ動作確認完了（実データ）。フルスイート344件Green。次はPhase6（UC-005セクター配分ダッシュボード画面）に進む。
+
 ## UC-010（既存保有株の買い増しタイミングレコメンド）Gate4完了・コミット（2026-08-27）
 
 ### Decision
