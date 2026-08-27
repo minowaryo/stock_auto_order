@@ -2,6 +2,24 @@
 
 > 2026-08-21以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 
+## フロントエンド実装Phase4（UC-003銘柄詳細画面）完了（2026-08-26）
+
+### Decision
+
+- Phase3に続き、Phase4（UC-003銘柄詳細画面、`GET /holdings/{holding}`。Phase3の一覧行が既にこのパスへリンクしていた先）を実施
+- `test-writer`が14件のLivewireコンポーネントテストを作成。Gate4で2点確認: (1) 手書きSVGチャートのテスト可能性確保のため`price_history`の各データ点に`data-testid="price-chart-point"`マーカーを付与する（視覚的なpolylineとは別のテスト用要素）、(2) `ShowHoldingDetailAction`は現在値を返さないため、`price_history`最新値のclose_priceを「現在値」として表示する — いずれも「推奨」で承認
+- `tdd-implementer`がGreenフェーズを実装: `app/Livewire/Holding/HoldingDetail.php`（`ShowHoldingDetailAction`を`render()`で毎回呼び出す純粋読み取り設計、`SaveHoldingMemoAction`によるメモ追記保存）。ADR-0004分の指標（出来高・52週高値安値・相対力・EPS成長率・PEGレシオ）も含め全指標を表示（モックアップはこれらの項目追加前の古い版のため参照せず、Actionの実際のレスポンス形状を正とした）。対象14件・フルスイート336件全てGreen
+- **並行セッション対応**: `routes/web.php`が別セッションの未コミット`/buy-signals`ルートと混在した状態だったため、PLAN.mdと同じ安全な退避・再適用手順（HEAD復元→自分の追加分のみ適用→差分確認→コミット→退避内容を復元→再適用）を今回から`routes/web.php`にも適用し、Phase3で発生したような汚染を防止した
+- 実ブラウザ確認（Playwright MCP、実データ）: `/holdings/2`（トヨタ自動車）で実際のテクニカル/ファンダメンタルズ指標が正しく表示され、EPS成長率がマイナスのためPEGレシオが正しく「取得不可」になること、利確シグナル判定（「52週高値3,825から3,132まで下落しました」）が実データに基づき表示されること、メモ保存が実際に永続化され画面に反映されることを確認（検証用に作成したテストメモは確認後に削除済み）
+
+### Files touched
+
+`app/Livewire/Holding/HoldingDetail.php`（新規）、`resources/views/livewire/holding/holding-detail.blade.php`（新規）、`routes/web.php`（`/holdings/{holding}`ルート追加）、`tests/Feature/HoldingDetailTest.php`（新規、14件）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実ブラウザ動作確認完了（実データ）。フルスイート336件Green。次はPhase5（UC-004売買シグナル一覧画面、利確検討セクションのみ。UC-010買い増し候補セクションは別セッションのマージ完了後に追加）に進む。
+
 ## Phase3の`/review`拡張レベルを実施、コミット汚染とビュー内クエリを修正（2026-08-25）
 
 ### Decision

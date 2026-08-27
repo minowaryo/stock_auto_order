@@ -12,6 +12,7 @@ use App\Http\Controllers\SignalListController;
 use App\Http\Controllers\WatchedThemeController;
 use App\Livewire\Auth\Login;
 use App\Livewire\CsvImport\Upload;
+use App\Livewire\Holding\HoldingDetail;
 use App\Livewire\Holding\HoldingList;
 use App\Livewire\ImportSummaryReport\Show;
 use Illuminate\Support\Facades\Auth;
@@ -33,6 +34,7 @@ Route::post('/logout', function () {
 Route::middleware('auth')->group(function () {
     Route::get('/csv-import', Upload::class);
     Route::get('/holdings', HoldingList::class);
+    Route::get('/holdings/{holding}', HoldingDetail::class);
     Route::get('/import-batches/{importBatch}/summary-report', Show::class);
 });
 
