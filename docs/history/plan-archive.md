@@ -1,6 +1,132 @@
-# PLAN.md アーカイブ（〜2026-08-23 NISA区分内訳の書き込み・UC-004消費完了前）
+# PLAN.md アーカイブ（〜2026-08-23 UC-005 Cycle3〜Integrationテスト網羅性監査完了前）
 
-PLAN.md から退避した完了済みエントリ。Gate0セットアップ〜Phase1（UC-001/002/003/009）Gate4サイクル完了・ADR-0002 NISA区分CR・投資方針背景整理・ADR-0004（分析エンジンの指標セット拡張、設計確定〜TechnicalIndicatorCalculator〜MarketData層〜JQuantsClient〜SignalDeterminationService〜FundamentalIndicatorMapperの各TDDサイクル、UC-001への配線・UC-004画面実装・UC-003/UC-009への新指標反映を含む）完了、関連する`/review`指摘修正2件・UC-009サンプルレポート生成・per-holding非アトミック性修正、F-010（UC-010）のGate1〜3ドキュメント叩き台整備（ADR-0007新規作成、requirements.md/use-cases.md/data-model.md改訂）、およびNISA区分（口座区分）内訳の書き込み経路・UC-004消費側の実装完了までの記録。現在進行中のタスクとは直接関係しないため参照頻度は低いが、経緯確認が必要な場合はここを見る。
+PLAN.md から退避した完了済みエントリ。Gate0セットアップ〜Phase1（UC-001/002/003/009）Gate4サイクル完了・ADR-0002 NISA区分CR・投資方針背景整理・ADR-0004（分析エンジンの指標セット拡張、設計確定〜TechnicalIndicatorCalculator〜MarketData層〜JQuantsClient〜SignalDeterminationService〜FundamentalIndicatorMapperの各TDDサイクル、UC-001への配線・UC-004画面実装・UC-003/UC-009への新指標反映を含む）完了、関連する`/review`指摘修正2件・UC-009サンプルレポート生成・per-holding非アトミック性修正、F-010（UC-010）のGate1〜3ドキュメント叩き台整備（ADR-0007新規作成、requirements.md/use-cases.md/data-model.md改訂）、NISA区分（口座区分）内訳の書き込み経路・UC-004消費側の実装完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査までの記録。現在進行中のタスクとは直接関係しないため参照頻度は低いが、経緯確認が必要な場合はここを見る。
+
+## 実装済み全エンドポイントのリクエスト/レスポンスIntegrationテスト網羅性監査・不足分追加（2026-08-23）
+
+### Decision
+
+- ユーザーから「実装済みの範囲で、データリクエスト、レスポンスにおいてIntegrationテストで漏れがないか確認して」との依頼を受け、実装済み全11ルート（`routes/web.php`）のController・FormRequest・対応するFeature Testを1件ずつ突き合わせ、リクエストのバリデーション分岐とレスポンスJSON契約の両面でテスト漏れを監査した
+- 最大の漏れとして、UC-001（`POST /csv-import`）の成功時レスポンス本文（`CsvImportController::store`が返す`import_batch_id`/`status`/`imported_count`/`error_count`/`imported_at`/`newly_detected_symbols`）が、Red phase時点の意図的な設計判断（「DB側の副作用のみ検証し、レスポンス形状はGate4未確定のため見送る」）のままGreen実装完了後も検証されていなかったことを特定した。同様に、パース不能CSV・未知の口座区分見出しの422（`ImportResult::failure()`由来のカスタム`{"message": ...}`ボディ）もDBの`failure_reason`のみ検証されメッセージ自体は未検証だった
+- 加えて、FormRequestにバリデーションルールが存在するのに対応する異常系分岐が一度もテストされていない箇所を5件特定: UC-002 `signal_only`（真偽値以外）、UC-003 `chart_period`（enum範囲外）・`memo`必須違反、UC-006 `watch_status`（enum範囲外）・`symbol_code`必須省略（GET/POST両方）
+- ユーザー承認のもと、上記の欠落を埋める8件のテストケースを既存Feature Testファイルへ追加した（新規エンドポイント実装を伴わない、既存の完成済み実装に対する回帰防止テストの追加であるため、通常の`/tdd` Red→Gate4→Green分離は行わず直接追加）。追加はいずれも既存実装が返す値をそのまま検証するものであり、実装コードの変更は一切発生していない
+- 対象8件・フルスイート233件全てGreenを確認（追加前225件 + 8件）
+
+### Files touched
+
+`tests/Feature/UC001CsvImportTest.php`（レスポンス本文アサーション追加×2箇所・422メッセージアサーション追加×2箇所）、`tests/Feature/UC002HoldingListTest.php`（`signal_only`異常系1件追加）、`tests/Feature/UC003HoldingDetailTest.php`（`chart_period`異常系・`memo`必須違反の2件追加）、`tests/Feature/UC006CandidateCheckTest.php`（`symbol_code`必須違反2件・`watch_status`異常系1件の3件追加）、`PLAN.md`（本エントリ追加、300行超過に伴い旧エントリ7件を`docs/history/plan-archive.md`へ退避）
+
+### Status
+
+Green確認完了。フルスイート233件Green。監査で識別した軽微な残課題（POST /holdings/{holding}/memosの存在しないholding ID時404、POST /watched-themes・POST /holdings/{holding}/memosの成功レスポンス本文の直接検証、UC-001の`us_stock_file`/`mutual_fund_file`個別の拡張子・サイズ境界値）は影響が小さいため今回は対応を見送り、必要になった時点で別途対応する。
+
+## Phase2: UC-007（市場全体指標表示）実装完了、Phase2（F-005/F-006/F-007/F-008）全完了（2026-08-23）
+
+### Decision
+
+- UC-006（Cycle A/B）に続きPhase2最後の項目、UC-007（市場全体指標表示）を実装。`market_indicator_snapshots`テーブル・日経平均/S&P500の取得ロジック自体はPhase1（ADR-0004）で先行実装済みだったため、今回は表示エンドポイントのみが対象
+- 調査の結果、米国10年債利回り・VIX指数・USD/JPY為替レートの3指標は取得ロジック自体がコードベースのどこにも存在しないことが判明（J-Quantsの範囲外データで新規の外部APIクライアント選定が必要）。ユーザーに確認し、**日経平均・S&P500の2指標のみ先に実装し、残り3指標は常にnullのプレースホルダとして返す**方針で合意（use-cases.mdエラーケース「該当指標のみ『取得不可』と表示」のAPI表現。3指標の外部データ取得は別タスクとして先送り、上記「今後の対応」に記録）
+- `test-writer`が6件のFeature Testを作成。設計はAskUserQuestionで事前確定済みのためGate4での追加確認は無く、そのままGreenへ
+- `tdd-implementer`がGreenフェーズを実装: `ShowMarketIndicatorAction`（直近スナップショットから5指標を固定順`nikkei225/sp500/us10y/vix/usdjpy`で返す。存在しない指標・スナップショット自体が無い場合もnullで安全に返す）、`MarketIndicatorController`（`GET /market-indicators`）、ルート追加。対象6件・フルスイート227件全てGreen
+- 実データで実挙動確認（トランザクションロールバック）: nikkei225/sp500は実際のvalue/change_rate/ma_deviationが正しく返り、us10y/vix/usdjpyは想定通りnullで返ることを確認
+
+### Files touched
+
+`app/Actions/Market/ShowMarketIndicatorAction.php`（新規）、`app/Http/Controllers/MarketIndicatorController.php`（新規）、`routes/web.php`（ルート追加）、`tests/Feature/UC007MarketIndicatorTest.php`（新規、6件）、`docs/architecture/data-model.md`（実装完了注記・変更履歴）、`PLAN.md`（本エントリ・今後の対応の更新）
+
+### Status
+
+Green確認・実データ動作確認完了。フルスイート227件Green。これでPhase2（F-005/F-006/F-007/F-008）が全て完了。次はフロントエンドUI（Livewire画面化）に着手する（上記「今後の対応」参照）。
+
+## Phase2: UC-006 Cycle B（本体）完了、Phase2「UC-008→UC-005→UC-006」全完了（2026-08-23）
+
+### Decision
+
+- Cycle A（`financial_statements`書き込み経路）に続き、UC-006本体（`GET /candidate-check`・`POST /candidate-check/watch-records`）を実装。計画は`C:\Users\minow\.claude\plans\stock_auto_order-uc006-implementation-phase.md`
+- `test-writer`が13件のFeature Testを作成。Gate4で3点確認: (1) `overlap_rate`/`diversification_comment`はUC-005の`SectorAllocationCalculator`を流用し、対象銘柄のセクターに一致する行の`allocation_rate`/`allocation_status`から決定（一致行が無い＝現在保有が無いセクターの場合は`overlap_rate=0`）— 「妥当」で承認、(2) `watch_status`・`watch_memo`が両方省略されたPOSTは422で拒否 — 承認、(3) `GET /candidate-check`の未認証時は302リダイレクト（既存UCと統一）— 承認。いずれもテストの仮定通りで確定したためテスト修正なしでGreenへ進んだ
+- `tdd-implementer`がGreenフェーズを実装: `WatchRecord`モデル・マイグレーション（`holding_memos`と同じ追記のみパターン）、`CandidateOverlapCalculator`（`SectorAllocationCalculator`を呼び出しセクター名一致行から算出。新規計算式は作らない）、`ShowCandidateCheckAction`（UC-003`ShowHoldingDetailAction`と同一の指標フィールド・null安全パターンを踏襲）、`SaveWatchRecordAction`、`ShowCandidateCheckRequest`/`SaveWatchRecordRequest`（`symbol_code`未存在を`Rule::exists`で422化）、`CandidateCheckController`、ルート追加。対象13件・フルスイート221件全てGreen
+- 実データで実挙動確認（トランザクションロールバックでDBは汚さず）: (a) 直近スナップショットに存在しない保有銘柄（トヨタ自動車）で`overlap_rate=0`・「現在このセクターの保有はありません」コメントになることを確認（該当セクターの現在保有が無いケースの実例）、(b) 直近スナップショットに存在する銘柄（ソフトバンクグループ、情報通信・サービスその他セクター）で`overlap_rate`が`SectorAllocationCalculator::calculate()`の該当行の`allocation_rate`と完全一致することを確認、(c) `SaveWatchRecordAction`での保存→`ShowCandidateCheckAction`での再取得が正しく連動することを確認
+
+### Files touched
+
+`database/migrations/2026_08_23_000002_create_watch_records_table.php`（新規）、`app/Models/WatchRecord.php`（新規）、`app/Services/Candidate/CandidateOverlapCalculator.php`（新規）、`app/Actions/Candidate/ShowCandidateCheckAction.php`（新規）、`app/Actions/Candidate/SaveWatchRecordAction.php`（新規）、`app/Http/Requests/ShowCandidateCheckRequest.php`（新規）、`app/Http/Requests/SaveWatchRecordRequest.php`（新規）、`app/Http/Controllers/CandidateCheckController.php`（新規）、`app/Models/Holding.php`（`watchRecords()`リレーション追加）、`routes/web.php`（ルート追加）、`tests/Feature/UC006CandidateCheckTest.php`（新規、13件）、`docs/architecture/data-model.md`（実装完了注記・変更履歴）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実データ動作確認完了。フルスイート221件Green。これでPhase2（F-005/F-008/F-006、「UC-008→UC-005→UC-006」の順）が全て完了。次のスコープはユーザーと相談の上で決定する（F-007市場全体指標ダッシュボードUI、他のPhase2/3項目、または別セッションで進行中のF-010〔ADR-0007、押し目買いシグナル〕への合流等、未確定）。
+
+## UC-006 Cycle Aの`/review`拡張レベル指摘（MEDIUM）を修正（2026-08-23）
+
+### Decision
+
+- コミット`2712167`（UC-006 Cycle A）に対し`/review`拡張レベル（review-score 43 ≧ 閾値30、`database/migrations/`が該当したため）を実施
+- 指摘（MEDIUM）: `financial_statements.revenue`/`operating_income`をNOT NULLで定義していたが、データソースである`JQuantsClient::fetchStatements()`の`net_sales`/`operating_profit`は`float|null`として型付けされており、`FundamentalIndicatorMapper`側は既にこのnullを一貫して考慮済みだった。この非対称性により、J-Quantsが該当期のSales/OPを欠損で返す銘柄で`financial_statements`のINSERTが`QueryException`となり、`DB::transaction()`配下の同一銘柄の`technical_indicators`/`fundamental_indicators`/`signals`更新まで巻き添えでロールバックしてしまう不具合があった
+- 修正方針は「修正してから、Cycle Bへ」の指示に従い即座に対応。再発防止として先に回帰テスト（Red）を自分で書き、現状のNOT NULL制約で実際にロールバックが発生する（`FinancialStatement::count()`が0になる）ことを確認してから、新規マイグレーション`2026_08_23_000001_nullable_revenue_operating_income_on_financial_statements_table.php`で`revenue`/`operating_income`をnullable化（Green）。既存の`2026_08_23_000000_create_financial_statements_table`は編集せず`change()`で列制約のみ変更（`.claude/rules/20-mysql.md`）
+- 列制約変更は`.claude/rules/60-docs.md`の「危険な操作（ADR必須）」に該当するため、先行するeps_growth拡張（ADR-0006）と同じ形式でADR-0008を新規作成
+- フルスイート208件Green（207→208、回帰テスト1件追加）を確認
+
+### Files touched
+
+`database/migrations/2026_08_23_000001_nullable_revenue_operating_income_on_financial_statements_table.php`（新規）、`docs/adr/ADR-0008-nullable-financial-statement-columns.md`（新規）、`tests/Feature/FetchExternalMarketDataActionTest.php`（回帰テスト1件追加）、`docs/architecture/data-model.md`（`financial_statements`のnullable反映・変更履歴）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認完了。フルスイート208件Green。次はUC-006 Cycle B（`watch_records`テーブル＋`GET /candidate-check`・`POST /candidate-check/watch-records`）に進む。
+
+## Phase2: UC-006 Cycle A（financial_statements書き込み経路）完了（2026-08-23）
+
+### Decision
+
+- Cycle4（UC-006）に着手。他3サイクルと異なり`financial_statements`/`watch_records`という未実装の2テーブルに依存するため、計画（`C:\Users\minow\.claude\plans\stock_auto_order-uc006-implementation-phase.md`）で2サイクルに分割し、まずCycle A（`financial_statements`）を実施した
+- Planフェーズでユーザーに確認: (1) `holdings`に一度も存在しない銘柄コードは422エラーで拒否（外部APIでの新規find-or-createは実装しない）、(2) 指標データはキャッシュ済みのみ参照（ライブ外部APIコールはしない）、(3) `financial_statements`は`FetchExternalMarketDataAction`が既に取得済みの`jQuantsClient->fetchStatements()`結果を保存先追加するだけ（新規API呼び出しなし）
+- `test-writer`が5件のFeature Testを`FetchExternalMarketDataActionTest.php`に追加しGate4承認。過去期（index1〜4）のYoY成長率は5期分の取得データだけでは4期前を遡れないためnullにする設計を確認
+- `tdd-implementer`がGreenフェーズを実装: 新規マイグレーション・モデル`FinancialStatement`、`FetchExternalMarketDataAction`のJP株処理ブロック内に5期分の`updateOrCreate()`を追加。`revenue_yoy_change`/`operating_income_yoy_change`は最新期（index0）のみ`FundamentalIndicatorMapper::calculateGrowth()`と同一ロジックで算出。対象5件・フルスイート207件全てGreen（実装完了後、セッションのAPI制限で報告前に中断したが、成果物を直接確認し完了を確認した）
+- 実データで実挙動確認: 既存の再取込み済みバッチに対し`FetchExternalMarketDataAction`を再実行し、225件の`financial_statements`が実際のJ-Quants財務データ（売上高・営業利益・YoY成長率）で正しく保存されることを確認
+
+### Files touched
+
+`database/migrations/2026_08_23_000000_create_financial_statements_table.php`（新規）、`app/Models/FinancialStatement.php`（新規）、`app/Actions/Analysis/FetchExternalMarketDataAction.php`、`tests/Feature/FetchExternalMarketDataActionTest.php`（5件追加）、`docs/architecture/data-model.md`（実装完了注記・変更履歴）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実データ動作確認完了。フルスイート207件Green。次はCycle B（`watch_records`テーブル＋UC-006本体`GET /candidate-check`・`POST /candidate-check/watch-records`）に進む。
+
+## `/review`拡張レベルの指摘（NewCandidateFinderのN+1）を修正（2026-08-23）
+
+### Decision
+
+- Cycle3完了後、Cycle4着手前に`/review`を実施（Cycle1〜3累積差分16ファイル・+1767/-4行に対しスコア105〔閾値30超過〕→拡張レベル）
+- MEDIUM指摘: `NewCandidateFinder::find()`が`portfolioEvaluationTotal()`算出用の`$allHoldingSnapshots`を`holding`リレーションをeager loadせずに取得しており、`instrument_type`参照のたびに遅延ロードクエリが発生するN+1だった。UC-005（`ShowSectorDashboardAction`）も内部で`NewCandidateFinder::find()`を呼ぶため影響が波及していた
+- `HoldingSnapshot::query()->where(...)->with('holding')->get()`に1行修正。既存のテスト値・挙動は変わらないため新規テストは追加せず、フルスイート202件Greenで回帰なしを確認
+- LOW指摘（`NewCandidateFinder`と`SectorAllocationCalculator`の評価額計算ロジック重複）はユーザー判断で今回見送り
+
+### Files touched
+
+`app/Services/Candidate/NewCandidateFinder.php`、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認完了。フルスイート202件Green。次はCycle4のUC-006（新規投資候補の重複チェック）に進む。
+
+## Phase2: UC-005 Cycle3（セクター配分ダッシュボード）完了（2026-08-23）
+
+### Decision
+
+- Cycle2（UC-008）に続き、UC-005（セクター配分ダッシュボード）を実装した。計画は`C:\Users\minow\.claude\plans\stock_auto_order-uc005-implementation-phase.md`（Planモードで作成、ユーザー承認済み）
+- use-cases.mdの出力表は`sector_name`/`allocation_rate`等をフラットに列挙しているが、モックアップ（`screen-UC005-sector-dashboard.html`）は「セクター配分バー一覧」と「リバランス提案」の2セクション構成だったため、レスポンス形状を`{"data": {"sectors": [...], "rebalance_candidates": [...]}}`の入れ子構造として設計し、Gate4でユーザー承認を得た
+- セクター集計はUC-008/UC-009と異なり**全instrument_type（stock/etf/mutual_fund）を対象**とする設計とした（use-cases.md「セクター分類が取得できていない銘柄は『未分類』として集計に含める」という文言が保有全体を前提にしているため）
+- `test-writer`が7件のFeature Testを作成しGate4承認。`suggested_sell_quantity`の按分方法（セクター内課税口座保有銘柄の加重平均現在値で除算）は叩き台として承認
+- `tdd-implementer`がGreenフェーズを実装: `SectorAllocationCalculator`（新規、投資信託の単位補正込み評価額集計・40%/70%閾値判定・NISA区分除外〔`holding_snapshot_accounts`経由、UC-004と同じフォールバックパターン〕）・`ShowSectorDashboardAction`（`NewCandidateFinder`をそのまま呼び出しフィールドをリマップ、偏り警告セクター所属候補を除外）・`SectorDashboardController`（`GET /sector-dashboard`）を新規作成。対象7件・フルスイート202件全てGreen
+- 実データで実挙動確認: `allocation_rate`合計が100%になることを確認。既知の制約（J-Quantsレート制限によるセクター分類カバレッジ不足）により保有の96.7%が「未分類」に集約され偏り警告（売却提案額¥4,266,160）になることを確認。ロジック自体は正常
+- `data-model.md`の「保留・確定が必要な初期パラメータ値」表を更新: セクター配分閾値・目標配分率・財務健全性フィルタ・NISA推奨基準のUC-005分を確定、売却株数按分方法を新規追記
+
+### Files touched
+
+`app/Services/Sector/SectorAllocationCalculator.php`（新規）、`app/Actions/Sector/ShowSectorDashboardAction.php`（新規）、`app/Http/Controllers/SectorDashboardController.php`（新規）、`routes/web.php`（ルート追加）、`tests/Feature/UC005SectorDashboardTest.php`（新規）、`docs/architecture/data-model.md`（初期パラメータ確定・変更履歴）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実データ動作確認完了。フルスイート202件Green。これでPhase2「UC-008→UC-005」が完了。次はCycle4のUC-006（新規投資候補の重複チェック、UC-008と同一画面の下部セクション）に進む。
 
 ## Phase2: UC-008 Cycle2（候補一覧本体・NewCandidateFinder）完了（2026-08-23）
 
