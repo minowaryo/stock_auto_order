@@ -140,6 +140,13 @@ function ucFrom008CandidateTestFundamental(Holding $holding, array $attributes =
         'holding_id' => $holding->id,
         'equity_ratio' => 45.0,
         'roe' => 12.0,
+        // CR (2026-08-27, CHG-0005): 財務健全性フィルタに成長率条件（売上高
+        // または営業利益成長率のいずれかがプラス）が追加されるため、既存の
+        // 「合格して候補に出る」テストが無改変でGreenのまま通るよう、デフォ
+        // ルトにプラスの売上高成長率を設定する（UC009ImportSummaryReportTest
+        // の ucFrom009TestFundamentalIndicator() が既に revenue_growth: 5.0
+        // をデフォルトに持つのと同じ考え方）。
+        'revenue_growth' => 8.0,
         'fetched_at' => now(),
     ], $attributes));
 }
@@ -386,6 +393,69 @@ describe('UC-008: 新規投資候補レコメンド（軽量版）候補一覧',
 
             $response->assertSuccessful();
             expect(ucFrom008CandidateTestFindRow($response, '1234'))->toBeNull();
+        });
+
+        // -----------------------------------------------------------
+        // CR (2026-08-27, CHG-0005): 財務健全性フィルタへの成長率条件統一
+        // -----------------------------------------------------------
+        // use-cases.md UC-008業務ルール改訂・data-model.md「財務健全性
+        // フィルタ」行により、自己資本比率・ROEに加えて成長率（売上高
+        // または営業利益成長率のいずれかがプラス）が候補抽出条件に追加
+        // される。現状のNewCandidateFinderはDBクエリで自己資本比率・ROEの
+        // 2条件のみをチェックしており、成長率を一切見ないため、以下は
+        // 現状の実装に対して失敗する（Red）。
+        test('自己資本比率・ROEは基準を満たすが、売上高成長率・営業利益成長率が両方ともマイナスの銘柄は候補一覧から除外される', function () {
+            WatchedTheme::create(['name' => 'AI半導体']);
+
+            [, $snapshot] = ucFrom008CandidateTestImportBatch();
+            $heldStock = ucFrom008CandidateTestHolding(['symbol_code' => '9999', 'symbol_name' => '既存保有株']);
+            ucFrom008CandidateTestHoldingSnapshot($snapshot, $heldStock, ['quantity' => 100, 'current_price' => 1000.00]);
+
+            $sector = ucFrom008CandidateTestSector('AI半導体');
+            $negativeGrowth = ucFrom008CandidateTestHolding([
+                'symbol_code' => '5678',
+                'symbol_name' => '成長率マイナス株',
+                'sector_classification_id' => $sector->id,
+            ]);
+            ucFrom008CandidateTestFundamental($negativeGrowth, [
+                'equity_ratio' => 45.0,
+                'roe' => 12.0,
+                'revenue_growth' => -5.0,
+                'operating_income_growth' => -3.0,
+            ]);
+
+            $response = ucFrom008CandidateTestFetch($this);
+
+            $response->assertSuccessful();
+            expect(ucFrom008CandidateTestFindRow($response, '5678'))->toBeNull();
+        });
+
+        test('自己資本比率・ROEは基準を満たすが、成長率データ（売上高・営業利益とも）が未取得（null）の銘柄は候補一覧から除外される', function () {
+            // UC-008はUC-010と異なり「該当しないものは静かに除外する」設計
+            // （unavailable相当の状態を表示する仕様は持たない）。
+            WatchedTheme::create(['name' => 'AI半導体']);
+
+            [, $snapshot] = ucFrom008CandidateTestImportBatch();
+            $heldStock = ucFrom008CandidateTestHolding(['symbol_code' => '9999', 'symbol_name' => '既存保有株']);
+            ucFrom008CandidateTestHoldingSnapshot($snapshot, $heldStock, ['quantity' => 100, 'current_price' => 1000.00]);
+
+            $sector = ucFrom008CandidateTestSector('AI半導体');
+            $noGrowthData = ucFrom008CandidateTestHolding([
+                'symbol_code' => '5679',
+                'symbol_name' => '成長率未取得株',
+                'sector_classification_id' => $sector->id,
+            ]);
+            ucFrom008CandidateTestFundamental($noGrowthData, [
+                'equity_ratio' => 45.0,
+                'roe' => 12.0,
+                'revenue_growth' => null,
+                'operating_income_growth' => null,
+            ]);
+
+            $response = ucFrom008CandidateTestFetch($this);
+
+            $response->assertSuccessful();
+            expect(ucFrom008CandidateTestFindRow($response, '5679'))->toBeNull();
         });
 
         test('セクターが登録済みテーマ名と一致しない銘柄は候補一覧から除外される', function () {

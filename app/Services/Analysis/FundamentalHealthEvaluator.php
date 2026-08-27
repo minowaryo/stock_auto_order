@@ -32,6 +32,14 @@ final class FundamentalHealthEvaluator
             return 'unavailable';
         }
 
+        // equity_ratio/roeのいずれかが基準未満であれば、成長率データの有無に
+        // 関わらず即座にfailedとする（/review 修正1: 成長率データが両方
+        // 未取得なだけでunavailableが優先され、財務的に不健全な銘柄が
+        // unavailable扱いになってしまうバグの再発防止）。
+        if ($equityRatio < self::MIN_EQUITY_RATIO || $roe < self::MIN_ROE) {
+            return 'failed';
+        }
+
         if ($revenueGrowth === null && $operatingIncomeGrowth === null) {
             return 'unavailable';
         }
@@ -39,10 +47,6 @@ final class FundamentalHealthEvaluator
         $growthPositive = ($revenueGrowth !== null && $revenueGrowth > 0.0)
             || ($operatingIncomeGrowth !== null && $operatingIncomeGrowth > 0.0);
 
-        if ($equityRatio >= self::MIN_EQUITY_RATIO && $roe >= self::MIN_ROE && $growthPositive) {
-            return 'passed';
-        }
-
-        return 'failed';
+        return $growthPositive ? 'passed' : 'failed';
     }
 }

@@ -167,6 +167,7 @@ function sectorDashboardTestFundamental(Holding $holding, array $attributes = []
         'holding_id' => $holding->id,
         'equity_ratio' => 45.0,
         'roe' => 12.0,
+        'revenue_growth' => 8.0,
         'fetched_at' => now(),
     ], $attributes));
 }

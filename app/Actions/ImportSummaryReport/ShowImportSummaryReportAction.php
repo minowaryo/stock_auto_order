@@ -9,6 +9,7 @@ use App\Models\ImportSummaryReportItem;
 use App\Models\Signal;
 use App\Models\Snapshot;
 use App\Models\WatchedTheme;
+use App\Services\Analysis\FundamentalHealthEvaluator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -45,6 +46,8 @@ class ShowImportSummaryReportAction
     private const TOP_COUNT = 10;
 
     private const TOTAL_COUNT = 20;
+
+    public function __construct(private readonly FundamentalHealthEvaluator $evaluator) {}
 
     /**
      * @return array<string, mixed>
@@ -225,8 +228,20 @@ class ShowImportSummaryReportAction
         $items = [];
 
         foreach ($candidateHoldings as $holding) {
-            $equityRatio = (float) $holding->fundamentalIndicator->equity_ratio;
-            $roe = (float) $holding->fundamentalIndicator->roe;
+            $fundamentalIndicator = $holding->fundamentalIndicator;
+            $equityRatio = (float) $fundamentalIndicator->equity_ratio;
+            $roe = (float) $fundamentalIndicator->roe;
+            $revenueGrowth = $fundamentalIndicator->revenue_growth !== null ? (float) $fundamentalIndicator->revenue_growth : null;
+            $operatingIncomeGrowth = $fundamentalIndicator->operating_income_growth !== null ? (float) $fundamentalIndicator->operating_income_growth : null;
+
+            // CHG-0005: 財務健全性フィルタに成長率条件（売上高または営業利益
+            // 成長率のいずれかがプラス）を追加する。equity_ratio/roeのDB
+            // クエリでの事前絞り込みに加え、FundamentalHealthEvaluatorを
+            // Source of Truthとして'passed'（unavailable/failedはいずれも
+            // 除外）の銘柄のみを新規投資候補として残す。
+            if ($this->evaluator->evaluate($equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth) !== 'passed') {
+                continue;
+            }
 
             $items[] = [
                 'recommendation_type' => '新規投資候補',

@@ -222,6 +222,29 @@ describe('FundamentalHealthEvaluator: 財務健全性フィルタ判定', functi
 
             expect($result)->toBe('failed');
         });
+
+        // -------------------------------------------------------------
+        // CR (2026-08-27): /review 指摘・修正1 — チェック順序バグの再発防止
+        // -------------------------------------------------------------
+        // 現在の実装は、成長率が両方nullかどうかのチェック（'unavailable'を
+        // 返す）を、equityRatio/roeの閾値判定より先に行っている。
+        // equityRatio/roeが明らかに閾値未満（failedになるべき）であっても、
+        // 成長率データが両方未取得なだけで'unavailable'が返ってしまい、
+        // UC-010の一覧表示では'unavailable'が表示対象・'failed'が除外対象
+        // であるため、財務的に不健全な銘柄が候補として表示されてしまう。
+        // 以下2件は、equityRatio/roeの閾値判定が成長率のnullチェックより
+        // 優先されるべきことを検証する（現状は誤って'unavailable'が返る）。
+        test('自己資本比率が9.99%（閾値未満）で成長率データが両方ともnull（未取得）の場合、unavailableではなくfailedを返す', function () {
+            $result = fheEvaluator()->evaluate(9.99, 50.0, null, null);
+
+            expect($result)->toBe('failed');
+        });
+
+        test('ROEが9.99%（閾値未満）で成長率データが両方ともnull（未取得）の場合、unavailableではなくfailedを返す', function () {
+            $result = fheEvaluator()->evaluate(50.0, 9.99, null, null);
+
+            expect($result)->toBe('failed');
+        });
     });
 
     describe('指標が未取得の場合（unavailable）', function () {

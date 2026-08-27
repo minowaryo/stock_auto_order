@@ -679,6 +679,55 @@ describe('UC-009: 取込後サマリーレポート', function () {
         });
     });
 
+    describe('新規投資候補の財務健全性フィルタ（CHG-0005: 成長率条件の統一）', function () {
+        // CR (2026-08-27, CHG-0005): use-cases.md UC-008業務ルール改訂・
+        // data-model.md「財務健全性フィルタ」行により、
+        // ShowImportSummaryReportAction::buildNewCandidateItems()の新規投資
+        // 候補抽出条件にも、自己資本比率・ROEに加えて成長率（売上高または
+        // 営業利益成長率のいずれかがプラス）が要求されるようになる。現状の
+        // buildNewCandidateItems()はDBクエリで自己資本比率・ROEの2条件のみを
+        // チェックしており成長率を一切見ないため、以下は現状の実装に対して
+        // 失敗する（Red）。
+        test('自己資本比率・ROEは基準を満たすが売上高成長率・営業利益成長率が両方ともマイナスの新規投資候補銘柄は、レポートの新規投資候補セクションから除外される', function () {
+            [$batch, $snapshot] = ucFrom009TestImportBatch();
+
+            $heldSector = ucFrom009TestSectorClassification('情報・通信業', '5250');
+            $heldHolding = ucFrom009TestHolding([
+                'symbol_code' => '9432', 'market' => 'jp', 'symbol_name' => 'NTT',
+                'sector_classification_id' => $heldSector->id,
+            ]);
+            ucFrom009TestHoldingSnapshot($snapshot, $heldHolding, [
+                'unrealized_gain_amount' => 500.0,
+                'unrealized_gain_rate' => 5.0,
+            ]);
+
+            ucFrom009TestWatchedTheme('AI半導体');
+            $themeSector = ucFrom009TestSectorClassification('AI半導体', '9999');
+
+            $candidateHolding = ucFrom009TestHolding([
+                'symbol_code' => '6920', 'market' => 'jp', 'symbol_name' => 'レーザーテック',
+                'sector_classification_id' => $themeSector->id,
+            ]);
+            // Deliberately no holding_snapshots row for the candidate (未保有).
+            ucFrom009TestFundamentalIndicator($candidateHolding, [
+                'equity_ratio' => 60.0, // filter: equity_ratio >= 40 を満たす
+                'roe' => 15.0,          // filter: roe >= 10 を満たす
+                'revenue_growth' => -5.0,
+                'operating_income_growth' => -3.0,
+            ]);
+
+            $response = ucFrom009TestFetchReport($this, $batch);
+
+            $response->assertSuccessful();
+
+            $allItems = collect($response->json('data.top_recommendations'))
+                ->merge($response->json('data.supplementary_recommendations'));
+
+            $candidateItem = $allItems->first(fn ($item) => str_contains((string) ($item['target'] ?? ''), '6920'));
+            expect($candidateItem)->toBeNull();
+        });
+    });
+
     describe('異常系・境界値', function () {
         test('対象となる保有銘柄が存在しない場合は空状態のレポートになる', function () {
             [$batch] = ucFrom009TestImportBatch();

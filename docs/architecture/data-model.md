@@ -418,7 +418,7 @@
 | セクター配分の判定閾値 | 40%未満=健全、40〜70%=やや偏り、70%以上=偏り警告 | UC-005 | **確定済み**（2026-08-23、`SectorAllocationCalculator`Gate4でそのまま採用） |
 | 目標配分率 | 70%（偏り警告閾値と同一） | UC-005 | **確定済み**（2026-08-23、`SectorAllocationCalculator`Gate4でそのまま採用。`suggested_sell_amount`＝`(現在配分率-70)/100×保有評価額合計〔全体〕`） |
 | 売却株数の按分方法（`suggested_sell_quantity`） | セクター内の課税口座（specific/general）保有銘柄の加重平均`current_price`で`suggested_sell_amount`を除算 | UC-005 | **確定済み**（2026-08-23、`SectorAllocationCalculator`Gate4） |
-| 財務健全性フィルタ | 自己資本比率40%以上・ROE10%以上 | UC-005/UC-008 | **確定済み**（UC-008分2026-08-23`NewCandidateFinder`Gate4、UC-005分2026-08-23`SectorAllocationCalculator`Gate4で同一値をそのまま流用） |
+| 財務健全性フィルタ | 自己資本比率40%以上・ROE10%以上・成長率（売上高または営業利益成長率のいずれか）プラス | UC-005/UC-008/UC-009 | **確定済み**（UC-008分2026-08-23`NewCandidateFinder`Gate4、UC-005分2026-08-23`SectorAllocationCalculator`Gate4で同一値をそのまま流用。成長率条件は2026-08-27、CHG-0005でUC-010と統一するため追加。`FundamentalHealthEvaluator`を`NewCandidateFinder`・`ShowImportSummaryReportAction`から共通利用する形に統合し、UC-005〔`ShowSectorDashboardAction`が`NewCandidateFinder`を直接利用〕にも自動的に反映される） |
 | 小口購入額の目安率（`suggested_amount`） | 保有評価額合計の1%（投資信託は`quantity×current_price÷10000`で単位補正して合算） | UC-008 | **確定済み**（2026-08-23、`NewCandidateFinder`Gate4） |
 | NISA推奨（`nisa_recommended`）の追加基準 | 財務健全性フィルタの基準に加え、自己資本比率50%以上・ROE15%以上 | UC-005/UC-008 | **確定済み**（UC-008分2026-08-23`NewCandidateFinder`Gate4。UC-005分は`rebalance_candidates`が`NewCandidateFinder`をそのまま流用するため同一基準、2026-08-23`SectorAllocationCalculator`Gate4） |
 | 過去業績推移の取得期数 | 5期 | UC-006 | 叩き台のまま承認 |
@@ -464,6 +464,7 @@
 |---|---|---|---|
 | 2026-08-15 | minowaryo | 承認 | テーブル構成・カラム設計を承認。「財務健全性フィルタ」「合成スコアの重み付け」の2項目は叩き台の値のまま承認し、Phase 1実装（`/tdd`サイクル）時に確定する方針とした。他の初期パラメータ値（分割指値閾値・セクター配分閾値・目標配分率・業績推移取得期数・レポート件数区分）も同様に叩き台のまま承認。セクター分類の粒度（17業種）は本承認に先立ち確定済み |
 | 2026-08-23 | minowaryo | 承認 | `buy_signals`テーブル定義（UC-010、ADR-0007）を新規承認。use-cases.md Gate2承認と同時に、全シグナル共通の前提条件（直近13週以内の`week52_high`-15%以内到達歴、`relative_strength_vs_market`-5pt以上）を追加した上で承認。数値パラメータは他UC同様、叩き台のままGate4実装時に確定する方針 |
+| 2026-08-27 | minowaryo | 承認（CR） | UC-010実装完了後の`/review`で、UC-010のみ成長率条件を追加した結果UC-008/UC-009と判定基準が乖離することが判明（CHG-0005）。「財務健全性フィルタ」行にUC-008/UC-009分の成長率条件を追加し、UC-005/UC-008/UC-009/UC-010の4UC全てで自己資本比率・ROE・成長率の3条件に統一する方針を承認 |
 
 ## 変更履歴
 

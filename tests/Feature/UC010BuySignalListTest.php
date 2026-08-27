@@ -367,6 +367,47 @@ describe('UC-010: 既存保有株の買い増しタイミングレコメンド�
             expect(trim((string) $row['nisa_recommended_reason']))->not->toBe('');
         });
 
+        // ---------------------------------------------------------------
+        // CR (2026-08-27): /review 指摘・修正2 — fundamental_summaryの
+        // 成長率表示バグの再発防止
+        // ---------------------------------------------------------------
+        // evaluate()の合格条件は「売上高成長率または営業利益成長率のいずれか
+        // がプラス」というOR条件だが、fundamentalSummary()は符号を見ずに
+        // 営業利益成長率を無条件優先表示するため、「売上高成長率のプラスで
+        // 合格したのに、要約文にはマイナスの営業利益成長率が表示される」と
+        // いう矛盾が起こり得る。合格の実際の根拠になった方（プラスである方）
+        // の成長率を優先表示すべき。
+        test('売上高成長率がプラス・営業利益成長率がマイナスの場合、健全性判定はpassedになるがfundamental_summaryには合格根拠のプラスの売上高成長率が表示されるべき', function () {
+            [, $snapshot] = ucFrom010TestImportBatch();
+            $holding = ucFrom010TestHolding(['symbol_code' => '4523', 'market' => 'jp', 'symbol_name' => 'エーザイ']);
+            $holdingSnapshot = ucFrom010TestHoldingSnapshot($snapshot, $holding);
+            ucFrom010TestBuySignal($holdingSnapshot);
+            ucFrom010TestFundamentalIndicator($holding, [
+                'equity_ratio' => 58.0,
+                'roe' => 15.2,
+                'revenue_growth' => 5.0,
+                'operating_income_growth' => -2.0,
+            ]);
+
+            $response = ucFrom010TestFetch($this);
+
+            $response->assertSuccessful();
+            $row = ucFrom010TestFindRow($response, '4523');
+            expect($row)->not->toBeNull();
+
+            // OR条件は売上高成長率+5.0のプラスで満たされているため、判定は
+            // passedになる（この部分はFundamentalHealthEvaluator側は既に
+            // 正しく動作する）。
+            expect($row['fundamental_status'])->toBe('passed');
+
+            // 現状のfundamentalSummary()は営業利益成長率を符号に関わらず
+            // 無条件優先するため-2.0が表示されてしまう（バグ）。合格の実際の
+            // 根拠になったプラスの売上高成長率+5.0が表示されるべきで、
+            // マイナスの営業利益成長率-2.0は表示されるべきではない。
+            expect($row['fundamental_summary'])->toContain('+5.0');
+            expect($row['fundamental_summary'])->not->toContain('-2.0');
+        });
+
         test('健全性フィルタはぎりぎり満たすがNISA推奨基準には遠く届かない場合、nisa_recommendedがfalseになる', function () {
             [, $snapshot] = ucFrom010TestImportBatch();
             $holding = ucFrom010TestHolding(['symbol_code' => '8306', 'market' => 'jp', 'symbol_name' => '三菱UFJフィナンシャル・グループ']);

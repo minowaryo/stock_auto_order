@@ -148,9 +148,21 @@ class ShowBuySignalListAction
         }
 
         // use-cases.md UC-010出力例「ROE15.2%・自己資本比率58.0%・営業利益成長率
-        // +12.3%」に合わせ、営業利益成長率を優先して表示し、未取得の場合のみ
-        // 売上高成長率を表示する（evaluate()のOR条件と同じ優先順位）。
-        if ($operatingIncomeGrowth !== null) {
+        // +12.3%」に合わせ、営業利益成長率を優先して表示する。ただし
+        // evaluate()の合格条件は「プラスの成長率がいずれか一方でもあればOK」
+        // というOR条件のため、実際にプラスだった方（合格の根拠になった方）を
+        // 優先表示する（/review 修正2: 符号を見ずに営業利益成長率を無条件
+        // 優先すると、売上高成長率のプラスで合格したのにマイナスの営業利益
+        // 成長率が表示されてしまう矛盾が起こり得るバグの再発防止）。
+        if ($operatingIncomeGrowth !== null && $operatingIncomeGrowth > 0.0) {
+            $growthLabel = '営業利益成長率';
+            $growthValue = $operatingIncomeGrowth;
+        } elseif ($revenueGrowth !== null && $revenueGrowth > 0.0) {
+            $growthLabel = '売上高成長率';
+            $growthValue = $revenueGrowth;
+        } elseif ($operatingIncomeGrowth !== null) {
+            // フォールバック（fundamental_status='passed'である以上通常
+            // 発生しないはずだが、念のため既存の優先順位を維持する）。
             $growthLabel = '営業利益成長率';
             $growthValue = $operatingIncomeGrowth;
         } else {

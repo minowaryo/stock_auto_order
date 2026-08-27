@@ -6,6 +6,7 @@ use App\Models\Holding;
 use App\Models\HoldingSnapshot;
 use App\Models\Snapshot;
 use App\Models\WatchedTheme;
+use App\Services\Analysis\FundamentalHealthEvaluator;
 use App\Services\Portfolio\PortfolioEvaluationCalculator;
 
 /**
@@ -38,7 +39,10 @@ class NewCandidateFinder
      */
     private const SUGGESTED_AMOUNT_RATE = 0.01;
 
-    public function __construct(private readonly PortfolioEvaluationCalculator $portfolioEvaluationCalculator) {}
+    public function __construct(
+        private readonly PortfolioEvaluationCalculator $portfolioEvaluationCalculator,
+        private readonly FundamentalHealthEvaluator $evaluator,
+    ) {}
 
     /**
      * @return array<int, array<string, mixed>>
@@ -78,9 +82,28 @@ class NewCandidateFinder
             ->get();
 
         return $candidateHoldings
+            ->filter(fn (Holding $holding) => $this->passesHealthFilter($holding))
             ->map(fn (Holding $holding) => $this->toRow($holding, $suggestedAmount))
             ->values()
             ->all();
+    }
+
+    /**
+     * CHG-0005: 財務健全性フィルタに成長率条件（売上高または営業利益成長率の
+     * いずれかがプラス）を追加する。equity_ratio/roeのDBクエリでの事前絞り込み
+     * に加え、FundamentalHealthEvaluatorをSource of Truthとして
+     * 'passed'（unavailable/failedはいずれも除外）の銘柄のみを候補として残す。
+     */
+    private function passesHealthFilter(Holding $holding): bool
+    {
+        $fundamentalIndicator = $holding->fundamentalIndicator;
+
+        $equityRatio = $fundamentalIndicator?->equity_ratio !== null ? (float) $fundamentalIndicator->equity_ratio : null;
+        $roe = $fundamentalIndicator?->roe !== null ? (float) $fundamentalIndicator->roe : null;
+        $revenueGrowth = $fundamentalIndicator?->revenue_growth !== null ? (float) $fundamentalIndicator->revenue_growth : null;
+        $operatingIncomeGrowth = $fundamentalIndicator?->operating_income_growth !== null ? (float) $fundamentalIndicator->operating_income_growth : null;
+
+        return $this->evaluator->evaluate($equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth) === 'passed';
     }
 
     /**

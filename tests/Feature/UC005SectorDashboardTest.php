@@ -170,6 +170,13 @@ function ucFrom005SectorTestFundamental(Holding $holding, array $attributes = []
         'holding_id' => $holding->id,
         'equity_ratio' => 45.0,
         'roe' => 12.0,
+        // CR (2026-08-27, CHG-0005): NewCandidateFinder（UC-005の
+        // rebalance_candidatesが流用するサービス）の財務健全性フィルタに
+        // 成長率条件が追加されるため、既存の「候補として出る」テストが
+        // 無改変でGreenのまま通るよう、デフォルトにプラスの売上高成長率を
+        // 設定する（UC008NewCandidateListTest.phpの
+        // ucFrom008CandidateTestFundamental()と同じフィクスチャ調整）。
+        'revenue_growth' => 8.0,
         'fetched_at' => now(),
     ], $attributes));
 }
