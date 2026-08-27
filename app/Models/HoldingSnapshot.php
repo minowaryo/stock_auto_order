@@ -62,6 +62,11 @@ class HoldingSnapshot extends Model
         return $this->hasMany(Signal::class);
     }
 
+    public function buySignals(): HasMany
+    {
+        return $this->hasMany(BuySignal::class);
+    }
+
     public function accounts(): HasMany
     {
         return $this->hasMany(HoldingSnapshotAccount::class);

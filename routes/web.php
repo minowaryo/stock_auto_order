@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BuySignalListController;
 use App\Http\Controllers\CandidateCheckController;
 use App\Http\Controllers\CsvImportController;
 use App\Http\Controllers\HoldingDetailController;
@@ -49,6 +50,7 @@ Route::prefix('api')->middleware('auth')->group(function () {
     Route::post('/holdings/{holding}/memos', [HoldingDetailController::class, 'storeMemo']);
     Route::get('/import-batches/{importBatch}/summary-report', [ImportSummaryReportController::class, 'show']);
     Route::get('/signals', [SignalListController::class, 'index']);
+    Route::get('/buy-signals', [BuySignalListController::class, 'index']);
     Route::post('/watched-themes', [WatchedThemeController::class, 'store']);
     Route::get('/watched-themes', [WatchedThemeController::class, 'index']);
     Route::get('/new-candidates', [NewCandidateController::class, 'index']);

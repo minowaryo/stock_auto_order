@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>利確シグナル一覧 | ポートフォリオ管理</title>
+<title>売買シグナル | ポートフォリオ管理</title>
 <link rel="stylesheet" href="_shared.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
   <div class="logo">📊 ポートフォリオ管理</div>
   <nav class="app-nav">
     <a href="screen-UC002-holding-list.html">保有一覧</a>
-    <a href="screen-UC004-signal-list.html" class="active">利確シグナル</a>
+    <a href="screen-UC004-signal-list.html" class="active">売買シグナル</a>
     <a href="screen-UC005-sector-dashboard.html">セクター配分</a>
     <a href="screen-UC006-candidate-check.html">新規投資候補</a>
     <a href="screen-UC001-csv-import.html">CSV取込</a>
@@ -19,10 +19,90 @@
 </header>
 
 <main class="app-main">
-  <h1>利確シグナル一覧</h1>
-  <p class="page-caption">含み益+20%を超えた銘柄のうち、利確検討が必要なものを表示しています（UC-004）</p>
+  <h1>売買シグナル</h1>
+  <p class="page-caption">買い増し候補の提示（UC-010）と、利確検討が必要な銘柄（UC-004）を1画面にまとめています</p>
 
   <div class="card">
+    <h2>買い増し候補（UC-010）</h2>
+    <p class="text-secondary" style="font-size:13px; margin:0 0 12px;">一時的な下落で割安になっており、かつファンダメンタルズ（ROE・自己資本比率・成長率等）が良好な保有銘柄です。分割買い下がりの指値提案とともに表示しています。</p>
+    <table>
+      <thead>
+        <tr>
+          <th>銘柄</th>
+          <th>含み益率</th>
+          <th>発生シグナル</th>
+          <th>財務健全性</th>
+          <th>分割買い下がりの提案</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
+          <td><strong>サンプル素材</strong><br><span class="text-secondary" style="font-size:12px;">5201</span></td>
+          <td class="text-danger">-8.5%</td>
+          <td>
+            <div style="display:flex; gap:4px; flex-wrap:wrap; margin-bottom:6px;">
+              <span class="badge badge-success">RSI低水準反発</span>
+              <span class="badge badge-neutral">BB -2σ圏</span>
+            </div>
+            <div style="font-size:13px; line-height:1.5;">RSIが28から34へ反発し、終値がボリンジャーバンド下限を下回っています。一時的な下落からの反転が見られます。</div>
+          </td>
+          <td class="text-secondary" style="font-size:13px;">
+            ROE15.2%・自己資本比率58.0%<br>
+            <span class="badge badge-success" style="margin-top:4px;">NISA枠推奨</span>
+          </td>
+          <td class="text-secondary" style="font-size:13px;">
+            現在値／-7%地点／-15%地点で3分割
+          </td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
+          <td><strong>サンプル化学</strong><br><span class="text-secondary" style="font-size:12px;">4901</span></td>
+          <td class="text-danger">-3.2%</td>
+          <td>
+            <div style="display:flex; gap:4px; flex-wrap:wrap; margin-bottom:6px;">
+              <span class="badge badge-success">MACDゴールデンクロス</span>
+            </div>
+            <div style="font-size:13px; line-height:1.5;">下落トレンドを示していたMACDがゴールデンクロスに転換。反発の初動サインです。</div>
+          </td>
+          <td class="text-secondary" style="font-size:13px;">
+            ROE11.0%・自己資本比率42.0%
+          </td>
+          <td class="text-secondary" style="font-size:13px;">
+            現在値／-7%地点／-15%地点で3分割
+          </td>
+        </tr>
+        <tr class="clickable" onclick="location.href='screen-UC003-holding-detail.html'">
+          <td><strong>サンプル電子部品（米国株）</strong><br><span class="text-secondary" style="font-size:12px;">EXMP</span></td>
+          <td class="text-danger">-12.0%</td>
+          <td>
+            <div style="display:flex; gap:4px; flex-wrap:wrap; margin-bottom:6px;">
+              <span class="badge badge-success">52週安値圏</span>
+              <span class="badge badge-success">出来高急増反発</span>
+            </div>
+            <div style="font-size:13px; line-height:1.5;">52週安値付近まで下落した後、出来高を伴って反発しています。</div>
+          </td>
+          <td class="text-secondary" style="font-size:13px;">
+            <span class="badge badge-neutral">財務指標 取得不可</span><br>
+            米国株のためファンダメンタルズ指標は未算出です
+          </td>
+          <td class="text-secondary" style="font-size:13px;">
+            現在値／-7%地点／-15%地点で3分割
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="text-secondary" style="font-size:12px; margin-top:8px;">※ NISA枠の残量（年間・生涯の非課税投資枠の残り）はシステムでは把握していないため、推奨は参考情報です</p>
+  </div>
+
+  <!-- 空状態の例（買い増しを検討できる押し目銘柄が0件の場合。実装時はデータ有無で出し分け） -->
+  <!--
+  <div class="card">
+    <div class="empty-state">買い増しを検討できる押し目銘柄はありません</div>
+  </div>
+  -->
+
+  <div class="card">
+    <h2>利確検討（UC-004）</h2>
+    <p class="text-secondary" style="font-size:13px; margin:0 0 12px;">含み益+20%を超えた銘柄のうち、利確検討が必要なものを表示しています。</p>
     <table>
       <thead>
         <tr>
@@ -75,14 +155,12 @@
         </tr>
       </tbody>
     </table>
-  </div>
 
-  <!-- 空状態の例（+20%超の銘柄が0件の場合。実装時はデータ有無で出し分け） -->
-  <!--
-  <div class="card">
+    <!-- 空状態の例（+20%超の銘柄が0件の場合。実装時はデータ有無で出し分け） -->
+    <!--
     <div class="empty-state">+20%を超える含み益の銘柄はありません</div>
+    -->
   </div>
-  -->
 </main>
 
 </body>

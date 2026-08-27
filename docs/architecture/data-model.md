@@ -21,6 +21,7 @@
                               |
                               └──1:N── [market_indicator_snapshots]
 [holding_snapshots] ──1:N── [signals]
+[holding_snapshots] ──1:N── [buy_signals]
 [holding_snapshots] ──1:N── [holding_snapshot_accounts]
 
 [import_batches] ──1:1── [import_summary_reports] ──1:N── [import_summary_report_items]
@@ -254,6 +255,26 @@
 
 ---
 
+### buy_signals（買い増しシグナル・UC-010）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| holding_snapshot_id | bigint | NO | - | `holding_snapshots.id` への参照 |
+| signal_type | enum('rsi_oversold_rebound','macd_golden_cross','bollinger_oversold','week52_low_proximity','ma_deviation_oversold','volume_spike_rebound','peg_undervalued') | NO | - | 買い増しシグナル種別（ADR-0007） |
+| reason_summary | varchar(255) | NO | - | 判定根拠の一言サマリ（例: "RSIが28から34へ反発"） |
+| created_at | timestamp | NO | now() | 検出日時 |
+
+**Index**: `(holding_snapshot_id, signal_type)` unique（再計算・再取込時の重複行作成を防ぐ）
+**FK**: `holding_snapshot_id` → `holding_snapshots(id)`
+
+> `signals`（利確シグナル）とはあえて別テーブルに分離している（ADR-0007）。`signals`にenum拡張＋方向カラムを追加する案も検討したが、`FetchExternalMarketDataAction`の再判定時の削除処理・`ShowSignalListAction`の一覧抽出・`ShowImportSummaryReportAction`の`composite_score`加点ロジックの3箇所に買いシグナルが混入するリスクがあり、別テーブルへの分離によってこれらの既存ロジックを一切変更せずに済む設計とした。
+> `split_buy_down_suggestion`（分割買い下がり提案）は`signals`の`split_limit_suggestion`と同様、テーブルには持たずアプリケーション層で都度計算する。**初期パラメータ値**: 現在値×1.00／×0.93（-7%）／×0.85（-15%）の3段階、各段の目安金額はポートフォリオ評価総額×2%（UC-008の小口方針を流用）。含み益率による対象銘柄の絞り込みは行わない（`signals`の「+20%未満は対象外」とは非対称。ADR-0007）。
+> **全シグナル共通の前提条件（2026-08-23追加、use-cases.md UC-010業務ルール参照）**: 長期低迷銘柄・個別要因での下落銘柄を誤って拾わないよう、7種いずれのシグナルも(1)直近13週以内に`week52_high`の-15%以内に到達していたこと、(2)`relative_strength_vs_market`が-5pt以上であること、の2条件を満たした場合のみ検出する。(1)は`TechnicalIndicatorCalculator`が計算時に保持する週次価格系列から追加の外部データ取得なしに算出可能（`technical_indicators`には永続化せず、MA20乖離率と同様に判定時にアプリケーション層で計算する）。(2)は既存の`relative_strength_vs_market`カラムをそのまま流用する。
+> `signal_type`のENUM定義は新規追加のため`.claude/rules/20-mysql.md`が定める「危険な操作」に該当しない（既存カラムの型変更ではなく、`CREATE TABLE`による新規追加）。
+
+---
+
 ### sector_classifications（UC-002/005）
 
 | カラム | 型 | Nullable | デフォルト | 説明 |
@@ -408,6 +429,12 @@
 | PEGレシオの割高判定閾値 | 2.0以上で`peg_overvalued`検出 | UC-004 | **確定済み**（2026-08-22、`SignalDeterminationService`Gate4でそのまま採用） |
 | 相対力の算出期間・低下判定基準 | 直近13週の騰落率差。~~直近4週でプラス→マイナス転換時に検出~~→**確定: 現在の相対力（対市場）が0未満で`relative_strength_weakening`検出**（単時点の閾値判定に簡略化。トレンド判定には過去時点のベンチマーク騰落率が別途必要になり複雑化するため） | UC-003/004 | **確定済み**（2026-08-22、`SignalDeterminationService`Gate4） |
 | 出来高急増の判定閾値 | 20週平均比1.5倍以上、かつ株価が前週比下落で`volume_spike_decline`検出 | UC-004 | **確定済み**（2026-08-22、`SignalDeterminationService`Gate4でそのまま採用） |
+| 買い増しシグナル7種の判定閾値 | RSI30以下からの反発／MACDゴールデンクロス／`bb_lower`割れ／52週安値+10%以内／MA20から-10%以上の下方乖離／出来高20週平均比1.5倍以上かつ前週比上昇／PEGレシオ1.0以下 | UC-010 | 叩き台のまま承認（ADR-0007）。`BuySignalDeterminationService`のGate4実装時に`/tdd`サイクルで確定 |
+| 買い増し用ファンダメンタルズ健全性フィルタ | 自己資本比率40%以上・ROE10%以上・成長率（売上高または営業利益）プラス | UC-010 | 叩き台のまま承認（ADR-0007）。UC-009の財務健全性フィルタと同一値を用いる。`FundamentalHealthEvaluator`のGate4実装時に`/tdd`サイクルで確定 |
+| 買い増し側NISA推奨（`nisa_recommended`）の追加基準 | 財務健全性フィルタの基準に加え、ROE15%以上・自己資本比率50%以上（具体的な閾値は未定） | UC-010 | 未確定。ADR-0007に伴い新規追加。`/tdd`サイクルで確定 |
+| 分割買い下がりの閾値・比率 | 現在値×1.00／×0.93（-7%）／×0.85（-15%）の3段階 | UC-010 | 叩き台のまま承認（ADR-0007）。将来`bb_lower`/`week52_low`を価格アンカーにする代替案もあるが、負値リスク・データ不足リスクを避けるため初期値は固定率とした |
+| 買い増し追加投資額の目安率 | ポートフォリオ評価総額×2%（UC-008の1〜2%小口方針を流用） | UC-010 | 叩き台のまま承認（ADR-0007） |
+| 買い増しシグナル共通の前提条件（直前の好調さ・連れ安確認） | (1)直近13週以内に`week52_high`の-15%以内到達、(2)`relative_strength_vs_market`が-5pt以上 | UC-010 | 叩き台のまま承認（2026-08-23、ADR-0007）。`BuySignalDeterminationService`のGate4実装時に`/tdd`サイクルで確定 |
 
 ## 分析ロジックの計算仕様（`TechnicalIndicatorCalculator`、Gate4確定・2026-08-21）
 
@@ -429,11 +456,14 @@
 
 > 上記の計算式・データ件数閾値はGate4（テストケース承認、2026-08-21）で確定済み。変更する場合は`tests/Unit/Services/Analysis/TechnicalIndicatorCalculatorTest.php`の該当テストとあわせて改訂すること。
 
+**MA20乖離率（`BuySignalDeterminationService`、UC-010・ADR-0007）**: `(終値 − ma20) ÷ ma20 × 100`。`TechnicalIndicatorCalculator::calculate()`が返す`ma20`（20件必要、不足時`null`）を用いて`BuySignalDeterminationService`内で都度算出する。**`technical_indicators`テーブルには永続化しない**（ADR-0004で確定済みの指標セットを改訂しないため。計算式の先例は`FetchExternalMarketDataAction`の`market_indicator_snapshots.ma_deviation`算出ロジックと同じ）。
+
 ## 承認記録
 
 | 日付 | レビュアー | 結果 | コメント |
 |---|---|---|---|
 | 2026-08-15 | minowaryo | 承認 | テーブル構成・カラム設計を承認。「財務健全性フィルタ」「合成スコアの重み付け」の2項目は叩き台の値のまま承認し、Phase 1実装（`/tdd`サイクル）時に確定する方針とした。他の初期パラメータ値（分割指値閾値・セクター配分閾値・目標配分率・業績推移取得期数・レポート件数区分）も同様に叩き台のまま承認。セクター分類の粒度（17業種）は本承認に先立ち確定済み |
+| 2026-08-23 | minowaryo | 承認 | `buy_signals`テーブル定義（UC-010、ADR-0007）を新規承認。use-cases.md Gate2承認と同時に、全シグナル共通の前提条件（直近13週以内の`week52_high`-15%以内到達歴、`relative_strength_vs_market`-5pt以上）を追加した上で承認。数値パラメータは他UC同様、叩き台のままGate4実装時に確定する方針 |
 
 ## 変更履歴
 
@@ -452,6 +482,7 @@
 | 2026-08-22 | `app/Actions/Analysis/FetchExternalMarketDataAction`実装に伴い、CHG-0003で設計した`technical_indicators`/`fundamental_indicators`の列追加・`signals.signal_type`のENUM拡張・`market_indicator_snapshots`テーブルを実際にマイグレーション化（`2026_08_22_000000`〜`000003`）。`market_indicator_snapshots.ma_deviation`の移動平均期間を26週に確定（MACD低速EMA期間と揃えた） | ADR-0004 |
 | 2026-08-21 | UC-009 Gate4 Greenフェーズ実装に伴い`watched_themes`/`import_summary_report_items`をドラフト通りのカラム構成で実装。Gate4承認によりPhase1スコープではNISA区分除外（ADR-0002）を対象外とし、全保有数量ベースで優先順位を算出する方針とした（`holding_snapshot_accounts`との連携は別途UC-004/005/008実装時に対応）。新規投資候補の注目テーマ合致判定は`watched_themes.name`と`sector_classifications.name`の完全一致、財務健全性フィルタ・件数区分（上位10件/補足10件）は本ファイルの叩き台の値をそのまま採用 | - |
 | 2026-08-22 | 実際のユーザーCSV（134銘柄）をUC-001経由でインポートした際、ほぼゼロ近辺からの回復銘柄でEPS成長率が1136%に達し`fundamental_indicators.eps_growth`（`decimal(7,4)`、最大±999.9999%）がMySQLの`Out of range`エラーになる実バグが判明。`eps_growth`/`revenue_growth`/`operating_income_growth`を`decimal(10,4)`に拡張するマイグレーションを追加（既存マイグレーションは編集せず、`change()`による新規ALTER TABLE）。あわせて`FetchExternalMarketDataAction`のper-holding例外分離が2つ目のループ・`fetchSectorInfo()`呼び出しに及んでいなかった非対称バグも修正（1銘柄の失敗が同一バッチ内の他銘柄の処理を巻き込んで中断させていた） | ADR-0006 |
+| 2026-08-23 | 既存保有株の買い増し（押し目）タイミングレコメンド機能を新規追加（Gate 1で承認済みだったOUTスコープ方針を覆すCR）。`buy_signals`テーブルを新設（`signals`とは意図的に分離。理由はADR-0007参照）。「保留・確定が必要な初期パラメータ値」表に買いシグナル7種の閾値・ファンダ健全性フィルタ・NISA推奨基準・分割買い下がり比率・追加投資額目安率を追加。「分析ロジックの計算仕様」節にMA20乖離率の算出式を追加（`technical_indicators`には永続化しない） | ADR-0007（CHG-0004） |
 | 2026-08-23 | `holding_snapshot_accounts`（口座区分別内訳、ADR-0002）の書き込み経路（CSVパーサー3本・`ImportCsvAction`）と消費側（UC-004 `ShowSignalListAction`）を実装完了。書き込み: `AccountTypeMapper`（新規、ラベル→enum変換）を追加し、JP/US株パーサーは`■`見出し行のラベルを、投資信託パーサーは`口座区分`列を読み取って`holding_snapshot_accounts`に口座区分ごとの内訳を保存する。消費: `ShowSignalListAction`の`split_limit_suggestion`は課税口座（specific/general）分の数量のみを基準に算出し、全額NISA（内訳が`nisa_growth`/`nisa_tsumitate`のみ）の銘柄は一覧から除外する。価格帯（+20%/+35%）は変更せず全体の`average_cost`基準のまま。内訳が1件も無い銘柄（後方互換）は保有数量全体を課税口座扱いとしてフォールバックする。テーブル・モデル・リレーションは2026-08-21時点で既存のため変更なし | ADR-0002 |
 | 2026-08-23 | Phase2着手（UC-008 Cycle2）。`NewCandidateFinder`サービス実装に伴い、「保留・確定が必要な初期パラメータ値」表の財務健全性フィルタ・NISA推奨追加基準のUC-008分を確定（自己資本比率40%/ROE10%以上、NISA推奨は自己資本比率50%/ROE15%以上）。小口購入額の目安率（保有評価額合計の1%）を新規に確定・追記。保有評価額合計の算出には投資信託の基準価額単位補正（`quantity×current_price÷10000`）が必要であることを実データで確認し明記した | - |
 | 2026-08-23 | Phase2 Cycle3（UC-005セクター配分ダッシュボード）実装完了。「保留・確定が必要な初期パラメータ値」表のセクター配分判定閾値（40%/70%）・目標配分率（70%）を確定し、`suggested_sell_amount`の算出式（(現在配分率-70)/100×保有評価額合計）を明記。売却株数の按分方法（セクター内課税口座保有銘柄の加重平均現在値で除算）を新規に確定・追記。財務健全性フィルタ・NISA推奨基準のUC-005分もUC-008と同一値で確定（`rebalance_candidates`が`NewCandidateFinder`をそのまま流用するため）。セクター集計はUC-008/UC-009と異なり全instrument_type（stock/etf/mutual_fund）を対象とする点を明記 | - |

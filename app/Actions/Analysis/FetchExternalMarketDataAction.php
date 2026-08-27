@@ -2,6 +2,7 @@
 
 namespace App\Actions\Analysis;
 
+use App\Models\BuySignal;
 use App\Models\FinancialStatement;
 use App\Models\FundamentalIndicator;
 use App\Models\HoldingSnapshot;
@@ -11,6 +12,7 @@ use App\Models\SectorClassification;
 use App\Models\Signal;
 use App\Models\Snapshot;
 use App\Models\TechnicalIndicator;
+use App\Services\Analysis\BuySignalDeterminationService;
 use App\Services\Analysis\FundamentalIndicatorMapper;
 use App\Services\Analysis\SignalDeterminationService;
 use App\Services\Analysis\TechnicalIndicatorCalculator;
@@ -61,6 +63,7 @@ class FetchExternalMarketDataAction
         private readonly TechnicalIndicatorCalculator $technicalIndicatorCalculator,
         private readonly FundamentalIndicatorMapper $fundamentalIndicatorMapper,
         private readonly SignalDeterminationService $signalDeterminationService,
+        private readonly BuySignalDeterminationService $buySignalDeterminationService,
     ) {}
 
     public function execute(ImportBatch $batch): void
@@ -237,6 +240,32 @@ class FetchExternalMarketDataAction
                                 'reason_summary' => $signal['reason_summary'],
                             ]);
                         }
+                    }
+
+                    // UC-010業務ルール（ADR-0007）: 買い増しシグナル判定は
+                    // 利確シグナル（含み益+20%ゲート）とは判定対象・保存先
+                    // ともに独立しており、含み益率による対象銘柄の絞り込みは
+                    // 行わない。そのため上記ゲートの外側で全銘柄に対して常に
+                    // 実行する。
+                    $buySignals = $this->buySignalDeterminationService->determine(
+                        $priceHistory,
+                        $marketReturn13w,
+                        $sectorReturn13w,
+                        $pegRatio,
+                    );
+
+                    // Re-determination: same drop-then-recreate pattern as the
+                    // take-profit signals above, kept in its own table
+                    // (buy_signals) so this never touches Signal/`signals`
+                    // (ADR-0007 D2).
+                    BuySignal::where('holding_snapshot_id', $holdingSnapshot->id)->delete();
+
+                    foreach ($buySignals as $buySignal) {
+                        BuySignal::create([
+                            'holding_snapshot_id' => $holdingSnapshot->id,
+                            'signal_type' => $buySignal['signal_type'],
+                            'reason_summary' => $buySignal['reason_summary'],
+                        ]);
                     }
                 });
             } catch (Throwable $e) {

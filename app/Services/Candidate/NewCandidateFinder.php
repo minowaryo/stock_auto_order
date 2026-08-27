@@ -6,7 +6,7 @@ use App\Models\Holding;
 use App\Models\HoldingSnapshot;
 use App\Models\Snapshot;
 use App\Models\WatchedTheme;
-use Illuminate\Support\Collection;
+use App\Services\Portfolio\PortfolioEvaluationCalculator;
 
 /**
  * UC-008 (新規投資候補レコメンド・軽量版): finds unheld stock holdings whose
@@ -38,6 +38,8 @@ class NewCandidateFinder
      */
     private const SUGGESTED_AMOUNT_RATE = 0.01;
 
+    public function __construct(private readonly PortfolioEvaluationCalculator $portfolioEvaluationCalculator) {}
+
     /**
      * @return array<int, array<string, mixed>>
      */
@@ -60,7 +62,7 @@ class NewCandidateFinder
 
         $heldHoldingIds = $allHoldingSnapshots->pluck('holding_id')->all();
 
-        $portfolioTotal = $this->portfolioEvaluationTotal($allHoldingSnapshots);
+        $portfolioTotal = $this->portfolioEvaluationCalculator->total($allHoldingSnapshots);
         $suggestedAmount = $portfolioTotal * self::SUGGESTED_AMOUNT_RATE;
 
         $candidateHoldings = Holding::query()
@@ -79,22 +81,6 @@ class NewCandidateFinder
             ->map(fn (Holding $holding) => $this->toRow($holding, $suggestedAmount))
             ->values()
             ->all();
-    }
-
-    /**
-     * @param  Collection<int, HoldingSnapshot>  $holdingSnapshots
-     */
-    private function portfolioEvaluationTotal(Collection $holdingSnapshots): float
-    {
-        return (float) $holdingSnapshots->sum(function (HoldingSnapshot $holdingSnapshot) {
-            $value = (float) $holdingSnapshot->quantity * (float) $holdingSnapshot->current_price;
-
-            if ($holdingSnapshot->holding->instrument_type === 'mutual_fund') {
-                $value /= 10000;
-            }
-
-            return $value;
-        });
     }
 
     /**

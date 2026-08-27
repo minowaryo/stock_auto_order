@@ -20,7 +20,7 @@
 | パス | 役割 | 注意 |
 |---|---|---|
 | `app/Services/Import/` | 楽天証券CSV（JP株/US株/投資信託）のパース | Shift-JISエンコード・カンマ区切りクォート付き数値に対応 |
-| `app/Services/Analysis/` | テクニカル指標（RSI/MACD/BB/移動平均）・ファンダメンタルズ指標（PER/PBR/ROE等）の計算 | 閾値・パラメータの持たせ方は `docs/architecture/data-model.md`（Gate 3）で確定 |
+| `app/Services/Analysis/` | テクニカル指標（RSI/MACD/BB/移動平均）・ファンダメンタルズ指標（PER/PBR/ROE等）の計算、利確シグナル判定（`SignalDeterminationService`）・買い増しシグナル判定（`BuySignalDeterminationService`）・ファンダメンタルズ健全性評価（`FundamentalHealthEvaluator`） | 閾値・パラメータの持たせ方は `docs/architecture/data-model.md`（Gate 3）で確定。売り側と買い側は別クラスに分離（ADR-0007） |
 | `app/Services/MarketData/` | J-Quants API・Yahoo Finance相当の外部データ取得クライアント（個別銘柄の株価・指標に加え、日経平均・S&P500・米国10年債利回り・VIX指数・USD/JPY為替レート等の市場全体指標も取得する） | APIキー等は `docs/ai-context/do-not-touch.md` の外部連携セクション参照 |
 
 ## Frontend（選定結果: **Livewire**。`docs/adr/ADR-0001-frontend-stack-selection.md` 参照）
