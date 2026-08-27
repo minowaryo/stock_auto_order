@@ -3,6 +3,27 @@
 > 2026-08-23（実装済み全エンドポイントのIntegrationテスト網羅性監査完了時点）以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、Phase2 UC-008（Cycle1・Cycle2）完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査完了等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 > **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。
 
+## UC-010 `/review`指摘3件の修正完了（CHG-0005含む）（2026-08-28）
+
+### Decision
+
+- UC-010 Green実装完了後にユーザーの依頼で`/review`を実施（8観点の並列エージェント）。確定バグ2件・consistency指摘1件をユーザーに詳細説明し、全て修正する方針で承認を得た
+- **バグ1**: `FundamentalHealthEvaluator::evaluate()`が成長率データ両方null判定をequity_ratio/roeの閾値判定より先に行っていたため、equity_ratio/roeが明らかに基準未満（本来`failed`）の銘柄でも成長率未取得なだけで`unavailable`が返り、一覧に表示されてしまうバグを修正。equity_ratio/roeいずれかが基準未満なら即座に`failed`を返す順序に変更
+- **バグ2**: `ShowBuySignalListAction::fundamentalSummary()`が符号を見ずに営業利益成長率を無条件優先表示していたため、売上高成長率のプラスで合格したのにマイナスの営業利益成長率が表示される矛盾を修正。実際にプラスだった方を優先表示するよう変更
+- **CHG-0005（consistency指摘）**: ADR-0007 D4は「UC-008/UC-009と同一値」と謳っていたが、成長率条件を追加したのはUC-010のみで、UC-008/UC-009（`NewCandidateFinder`・`ShowImportSummaryReportAction`）は自己資本比率・ROEの2条件のみだったため、同一銘柄がUC-008では候補に出るがUC-010では出ない（またはその逆）という乖離が起こり得た。ユーザーと相談し、UC-008/UC-009にも成長率条件を追加して統一する方針で合意。`use-cases.md`（UC-008業務ルール改訂・承認記録）、`data-model.md`（財務健全性フィルタ行・承認記録）、`traceability-matrix.md`（CHG-0005、F-010ステータス修正、CHG-0004承認者の記載漏れ修正）を先に整備
+- `test-writer`がRedフェーズで5ファイルを改訂・作成（`FundamentalHealthEvaluatorTest`2件・`UC010BuySignalListTest`1件・`UC008NewCandidateListTest`2件・`UC005SectorDashboardTest`0件〔フィクスチャ調整のみ〕・`UC009ImportSummaryReportTest`1件、計6件Red）。並行セッションによるテストDB競合（migrate中のdeadlock等）でフルスイート実行が不安定だったため、ファイル単位で個別実行して意図通りのRed原因であることを確認しGate4承認
+- `tdd-implementer`がGreenフェーズを実装: `FundamentalHealthEvaluator`（判定順序修正）、`ShowBuySignalListAction::fundamentalSummary()`（表示優先順位修正）、`NewCandidateFinder`・`ShowImportSummaryReportAction`（`FundamentalHealthEvaluator`をDI注入し`evaluate()==='passed'`のみ候補として残す。`ShowSectorDashboardAction`〔UC-005〕は`NewCandidateFinder`を直接利用しているため無改修で自動的に反映）
+- Green実装により、Gate4対象外だった`tests/Feature/SectorDashboardTest.php`（UC-005のLivewire画面テスト、別セッション所有・Phase6で新規作成されたばかり）で2件の回帰を検出（フィクスチャが成長率データを設定しておらず、CHG-0005の仕様通りの正しい副作用として除外されてしまっていた）。Gate4承認済みの`UC005SectorDashboardTest.php`（API版）に適用したのと全く同じ最小フィクスチャ修正（`revenue_growth: 8.0`追加）を適用し解消。新しい業務ルールのテストではなく既存フィクスチャの整合性維持のみのため、新規Gate4サイクルは経由せず対応
+- フルスイート357件Green確認後、コミット（`bfe29da`、未push）
+
+### Files touched
+
+`app/Services/Analysis/FundamentalHealthEvaluator.php`、`app/Actions/Signal/ShowBuySignalListAction.php`、`app/Services/Candidate/NewCandidateFinder.php`、`app/Actions/ImportSummaryReport/ShowImportSummaryReportAction.php`、`docs/product/use-cases.md`（UC-008業務ルール改訂・承認記録）、`docs/architecture/data-model.md`（財務健全性フィルタ行・承認記録）、`docs/rcid/traceability-matrix.md`（CHG-0005、F-010/CHG-0004のステータス修正）、`tests/Unit/Services/Analysis/FundamentalHealthEvaluatorTest.php`、`tests/Feature/UC010BuySignalListTest.php`、`tests/Feature/UC008NewCandidateListTest.php`、`tests/Feature/UC005SectorDashboardTest.php`、`tests/Feature/UC009ImportSummaryReportTest.php`、`tests/Feature/SectorDashboardTest.php`（フィクスチャ修正のみ）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Gate4完了（Red→Gate4承認→Green）。フルスイート357件Green。コミット済み（`bfe29da`、未push）。`/review`指摘のうち残る低優先度項目（効率性の重複計算、NISA推奨ロジック・`Signal`/`BuySignal`永続化の重複等）は対応保留、必要になった時点で再検討
+
 ## 今後の対応（未着手）（2026-08-27追記、Phase5の実ブラウザ確認時に発見）
 
 - **数値の未整形表示（Phase3〜5共通）**: `HoldingList`（保有一覧、Phase3）・`SignalList`（利確検討、Phase5）の含み益率・取得単価・現在値・分割指値の価格が、`{{ $value }}`で生の浮動小数点値をそのまま出力しており（例: 含み益率が`89.5793`と%記号なし表示、価格が`3632.676`のような小数点3桁表示）、実際にPlaywrightで画面を目視確認した際に発見した。レイアウト崩れではなく数値の可読性の問題。既存テストは生の数値部分文字列を検証する設計のため、これらのテストを含め画面3つ（Phase3/4/5）をまとめて後日別タスクで整形する（%サフィックス・価格の四捨五入・桁区切り等）方針とし、今回のPhase5サイクルでは対応を見送る
