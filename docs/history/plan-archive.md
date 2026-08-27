@@ -1,6 +1,78 @@
-# PLAN.md アーカイブ（〜2026-08-23 F-010 Gate1〜3ドキュメント整備完了前）
+# PLAN.md アーカイブ（〜2026-08-23 NISA区分内訳の書き込み・UC-004消費完了前）
 
-PLAN.md から退避した完了済みエントリ。Gate0セットアップ〜Phase1（UC-001/002/003/009）Gate4サイクル完了・ADR-0002 NISA区分CR・投資方針背景整理・ADR-0004（分析エンジンの指標セット拡張、設計確定〜TechnicalIndicatorCalculator〜MarketData層〜JQuantsClient〜SignalDeterminationService〜FundamentalIndicatorMapperの各TDDサイクル、UC-001への配線・UC-004画面実装・UC-003/UC-009への新指標反映を含む）完了、関連する`/review`指摘修正2件・UC-009サンプルレポート生成・per-holding非アトミック性修正、およびF-010（UC-010）のGate1〜3ドキュメント叩き台整備（ADR-0007新規作成、requirements.md/use-cases.md/data-model.md改訂）までの記録。現在進行中のタスクとは直接関係しないため参照頻度は低いが、経緯確認が必要な場合はここを見る。
+PLAN.md から退避した完了済みエントリ。Gate0セットアップ〜Phase1（UC-001/002/003/009）Gate4サイクル完了・ADR-0002 NISA区分CR・投資方針背景整理・ADR-0004（分析エンジンの指標セット拡張、設計確定〜TechnicalIndicatorCalculator〜MarketData層〜JQuantsClient〜SignalDeterminationService〜FundamentalIndicatorMapperの各TDDサイクル、UC-001への配線・UC-004画面実装・UC-003/UC-009への新指標反映を含む）完了、関連する`/review`指摘修正2件・UC-009サンプルレポート生成・per-holding非アトミック性修正、F-010（UC-010）のGate1〜3ドキュメント叩き台整備（ADR-0007新規作成、requirements.md/use-cases.md/data-model.md改訂）、およびNISA区分（口座区分）内訳の書き込み経路・UC-004消費側の実装完了までの記録。現在進行中のタスクとは直接関係しないため参照頻度は低いが、経緯確認が必要な場合はここを見る。
+
+## Phase2: UC-008 Cycle2（候補一覧本体・NewCandidateFinder）完了（2026-08-23）
+
+### Decision
+
+- Cycle1（注目テーマ登録）に続き、UC-008本体（登録済みテーマに合致・財務健全性フィルタを満たす未保有銘柄の候補一覧）を実装した
+- `test-writer`が10件のFeature Testを作成。Gate4で2点確認: (1) `suggested_amount`（小口購入額の目安）は保有評価額合計の**1%**（use-cases.mdの「1〜2%」の下限を採用）、(2) `nisa_recommended`の閾値は**自己資本比率50%以上・ROE15%以上**（F-010〔UC-010〕の買い増し側NISA推奨基準と同一値、将来の一貫性のため）
+- テスト作成過程でtest-writer自身の計算ミス（投資信託の評価額補正 `quantity×current_price÷10000` の算出結果をコメントで10倍誤記し、期待値がそれに引きずられていた）が`tdd-implementer`のGreenフェーズ時に発覚。実装ではなくテストの誤りと判明したため、私が直接テストの期待値を修正（350,000→215,000、3,500→2,150等）
+- `tdd-implementer`がGreenフェーズを実装: `NewCandidateFinder`サービス（`ShowImportSummaryReportAction::buildNewCandidateItems()`の抽出条件をベースに拡張）・`ShowNewCandidateListAction`・`NewCandidateController`（`GET /new-candidates`）を新規作成。`ShowImportSummaryReportAction`自体は変更せずUC-009は既存のまま据え置き。対象10件・フルスイート195件全てGreen
+- 実データで実挙動確認: セクター分類済みの未保有銘柄（トヨタ自動車、自己資本比率37.8%）が財務健全性フィルタ（40%以上）をわずかに下回り除外されることを確認。候補0件という結果自体は、既知の制約（J-Quantsレート制限でセクター分類が85銘柄中6件のみ）に起因する正しい挙動であり、ロジック自体は正常に機能していることを確認した
+- `data-model.md`の「保留・確定が必要な初期パラメータ値」表を更新: 財務健全性フィルタ・NISA推奨基準のUC-008分を確定、小口購入額の目安率（1%）を新規追記
+
+### Files touched
+
+`app/Services/Candidate/NewCandidateFinder.php`（新規）、`app/Actions/Candidate/ShowNewCandidateListAction.php`（新規）、`app/Http/Controllers/NewCandidateController.php`（新規）、`routes/web.php`（ルート追加）、`tests/Feature/UC008NewCandidateListTest.php`（新規）、`docs/architecture/data-model.md`（初期パラメータ確定・変更履歴）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実データ動作確認完了。フルスイート195件Green。これでUC-008（Cycle1・2とも）完了。次はCycle3のUC-005（セクター配分ダッシュボード、`NewCandidateFinder`のリバランス候補抽出への流用を含む）に進む。
+
+## Phase2着手: UC-008 Cycle1（注目テーマ・セクターの登録・更新）完了（2026-08-23）
+
+### Decision
+
+- Phase2（F-005〜008）の着手順として「UC-008→UC-005→UC-006」の順で別々のTDDサイクルを回す方針をユーザーと合意（計画: `C:\Users\minow\.claude\plans\stock_auto_order-uc008-implementation-phase.md`）。UC-005のリバランス候補抽出がUC-008の抽出ロジックを流用する設計のため、UC-008を先に実装する
+- Cycle1として、UC-008の前提機能である「注目テーマ・セクター」の登録・更新を実装した。`WatchedTheme`モデル・マイグレーションは既存だったが、登録する手段（Controller/Route）が一切なかった
+- `test-writer`が8件のFeature Testを作成。Gate4で重複登録時の挙動（use-cases.mdに明記がなかった）をユーザーに確認し、**「422エラーで明示的に拒否」**を選択。テストをその内容に固定して承認
+- `tdd-implementer`がGreenフェーズを実装: `StoreWatchedThemeRequest`（バリデーション＋`withValidator`での重複チェック、DB unique制約由来の500エラーを防ぐ）・`StoreWatchedThemeAction`・`ShowWatchedThemeListAction`・`WatchedThemeController`を新規作成。`update`/`delete`はuse-cases.mdに定義がないためスコープ外。対象8件・フルスイート185件全てGreen
+- `php artisan tinker`で実際にテーマ登録→一覧取得が動作することを確認（トランザクションロールバックでDBは汚していない）
+
+### Files touched
+
+`app/Http/Requests/StoreWatchedThemeRequest.php`（新規）、`app/Actions/WatchedTheme/StoreWatchedThemeAction.php`（新規）、`app/Actions/WatchedTheme/ShowWatchedThemeListAction.php`（新規）、`app/Http/Controllers/WatchedThemeController.php`（新規）、`routes/web.php`（ルート追加）、`tests/Feature/UC008WatchedThemeTest.php`（新規）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実挙動確認完了。フルスイート185件Green。次はCycle2（`NewCandidateFinder`サービス＋UC-008候補一覧エンドポイント本体、保有評価額合計の投信単位補正・NISA推奨基準をGate4で確定）に進む。
+
+## `/review`拡張レベルの指摘（未知の口座区分ラベルの扱い）を修正（2026-08-23）
+
+### Decision
+
+- 前エントリ（NISA区分内訳の書き込み・UC-004消費）に対して`/review`を実施（origin/main未反映の差分に対して手動スコア算出、スコア64〔閾値30超過〕→拡張レベル）
+- HIGH指摘: Planフェーズでユーザーが明示的に選んだ「未知の口座区分ラベルは例外を投げて取込を失敗させる」という決定が、実装では反映されていなかった。3パーサー（`JpStockCsvParser`/`UsStockCsvParser`/`MutualFundCsvParser`）とも`AccountTypeMapper`が投げる`InvalidArgumentException`を握りつぶし`$errorCount++`でスキップするだけで、取込全体は`status='completed'`のまま完了していた。これは私自身がCycle AのRed phase委任時に「スキップかthrowかは固定しない」と緩めて指示したことが原因で、Planフェーズの決定を正しく反映できていなかった
+- 3パーサーの「未知ラベルは緩くどちらでもよい」テストを`toThrow(CsvStructureException::class)`の明確なアサーションに置き換え、`ImportCsvAction`統合テストに「未知の口座区分見出しを含むCSVは取込全体を失敗として扱い422エラーになる」を追加。Redを確認したうえで、3パーサーとも未知ラベル検出時に`CsvStructureException`を投げるよう修正（`$accountTypeError`フラグによるスキップ処理を撤去）。フルスイート177件全てGreen
+
+### Files touched
+
+`app/Services/Import/JpStockCsvParser.php`、`app/Services/Import/UsStockCsvParser.php`、`app/Services/Import/MutualFundCsvParser.php`、`tests/Unit/Services/Import/JpStockCsvParserTest.php`・`UsStockCsvParserTest.php`・`MutualFundCsvParserTest.php`（既存テストの厳格化）、`tests/Feature/UC001CsvImportTest.php`（1件追加）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認完了。フルスイート177件Green。コミット・プッシュ済み。
+
+## NISA区分（口座区分）内訳の書き込み・UC-004消費 完了（2026-08-23）
+
+### Decision
+
+- ADR-0002（2026-08-16）決定以来の保留事項だった`holding_snapshot_accounts`（口座区分別内訳）の書き込み経路と、UC-004（`ShowSignalListAction`）での消費側を実装した。計画は`C:\Users\minow\.claude\plans\stock_auto_order-nisa-account-implementation-phase.md`（Planモードで作成、ユーザー承認済み）
+- Planフェーズで3点をユーザーに確認: (1) 分割指値提案の価格帯は全体〔NISA含む〕の平均取得単価を基準にする、(2) 投資信託CSVでも口座区分をパース・保存する（現状消費側はないが将来のため）、(3) 未知の口座区分ラベルは例外を投げて取込を失敗させる
+- **サイクルA（書き込み経路）**: 新規`AccountTypeMapper`（ラベル→enum変換）を追加し、JP/US株CSVパーサーは`■特定口座`等の見出し行のラベルを、投資信託CSVパーサーは`口座区分`列を読み取って`ParsedCsvRow->accountType`に付与。`ImportCsvAction::aggregate()`で`(market, code, accountType)`単位の内訳も算出し、`execute()`で`HoldingSnapshotAccount::create()`を実行。`test-writer`が22件のテスト（`AccountTypeMapper`・3パーサー・`ImportCsvAction`統合）を作成しGate4承認、`tdd-implementer`がGreenフェーズを実装。対象22件・フルスイート173件全てGreen
+- **サイクルB（UC-004消費側）**: `ShowSignalListAction`の`split_limit_suggestion`の数量基準を課税口座（specific/general）分のみに変更し、全額NISA銘柄を一覧から除外するよう改修。`holding_snapshot_accounts`の内訳が1件も無い銘柄（後方互換）は保有数量全体を課税口座扱いとしてフォールバックする設計とし、既存9件のテストが無改変でGreenのままであることで回帰確認とした。`test-writer`が3件追加しGate4承認、`tdd-implementer`がGreenフェーズを実装。対象3件・フルスイート176件全てGreen
+- 両サイクルとも実データ（今回のセッションで取り込んだユーザーの実CSV、134銘柄を再取込みしたバッチID15）で実挙動確認済み: 複数口座区分にまたがる銘柄（例: TSLA=特定8株+一般4株+NISA成長投資枠59株）が正しく分割保存され、`/signals`のレスポンスで混在銘柄の`split_limit_suggestion`が課税口座分のみの数量になること、全額NISA銘柄（例: AAPL）が一覧から正しく除外されることを確認した
+- 作業と並行して別セッションがF-010（既存保有株の買い増しタイミングレコメンド、ADR-0007）のGate1〜3ドキュメント整備を進めていたため、着手前にファイル・ドメインの競合有無を確認した。両セッションの変更は完全に独立(テーブル・Action・use-cases.mdのセクションいずれも重複なし）であることを確認し、そのまま進行した
+
+### Files touched
+
+`app/Services/Import/Support/AccountTypeMapper.php`（新規）、`app/Services/Import/Support/ParsedCsvRow.php`、`app/Services/Import/JpStockCsvParser.php`、`app/Services/Import/UsStockCsvParser.php`、`app/Services/Import/MutualFundCsvParser.php`、`app/Actions/Import/Support/AggregatedHoldingRow.php`、`app/Actions/Import/ImportCsvAction.php`、`app/Actions/Signal/ShowSignalListAction.php`、`tests/Unit/Services/Import/`（新規4ファイル）、`tests/Feature/UC001CsvImportTest.php`、`tests/Feature/UC004SignalListTest.php`、`docs/architecture/data-model.md`（変更履歴）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実データ動作確認完了。フルスイート176件Green。UC-004/005/008共通の保留事項だったNISA区分除外のうち、UC-004分が完了。UC-005・UC-008はPhase2未着手のため、実装時に`holding_snapshot_accounts`をそのまま利用できる状態になった。マージ前に`/review`の実施を推奨（未実施）。
 
 ## F-010（既存保有株の買い増しタイミングレコメンド）Gate 1〜3ドキュメント整備完了（2026-08-23）
 
