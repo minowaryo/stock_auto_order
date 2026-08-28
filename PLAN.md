@@ -11,16 +11,18 @@
 - `test-writer`が8件のLivewireコンポーネントテストを作成。Gate4で2点確認: (1) 他画面（SignalList/SectorDashboard）からの`/candidate-check?symbol_code=XXXX`リンク遷移時、`#[Url(as:'symbol_code')]`でクエリパラメータをsymbolCodeプロパティに束縛し、`mount()`時点で自動的に個別チェックを実行する設計、(2) 存在しないsymbol_codeでのチェック時は「銘柄コードを確認してください」をインライン表示し指標は一切表示しない（クラッシュ・リダイレクトなし）— いずれも「推奨」で承認
 - `tdd-implementer`がGreenフェーズを実装: `app/Livewire/Candidate/CandidateCheck.php`（おすすめ候補は`render()`で毎回呼び直す純粋読み取り、個別チェック・ウォッチ記録保存は`checkCandidate()`/`saveWatchRecord()`メソッド）。対象8件・フルスイート365件全てGreen（回帰なし）
 - 実装上の注意点（軽微、次点の課題として記録）: (a) おすすめ候補テーブルの自己資本比率・ROE生値表示のため`render()`内で`Holding`を追加クエリしており、`ShowNewCandidateListAction`の`fundamental_summary`（四捨五入済み文字列）とは別に生データを取得している。新規計算式ではなく既存カラムの表示専用の再取得のため許容、(b) 判定結果カードの重複度ラベル（「やや偏り」等）は、`ShowCandidateCheckAction`/`CandidateOverlapCalculator`がラベルを返さないため、Blade側で`SectorAllocationCalculator`（UC-005）と同一の40%/70%閾値をコメント付きで再定義して導出している。**この閾値がBlade側とService側の2箇所に分散する形になっており、将来どちらかだけ変更されると表示が乖離するリスクがある**。是正するなら`CandidateOverlapCalculator`にラベル算出を寄せる小さなリファクタが必要（Action改修を伴うため別途Red→Gate4→Greenサイクル）。実害は表示ラベルのみ（`overlap_rate`自体の数値は実データのまま）のため今回は許容し先送りとした
-- 実ブラウザ確認（Playwright MCP）: ログイン→`/candidate-check`へ正常遷移、コンソールエラーなし。開発DBの保有データ・ウォッチテーマが空のため（Phase6から継続、下記「今後の対応」参照）、おすすめ候補は空状態表示を確認。個別チェックは実データが無いため「有効なsymbol_code」のケースは未確認だが、「存在しないsymbol_code」のエラーパス（「銘柄コードを確認してください」のインライン表示）は実際に画面上で発火・表示されることを確認した（`.click()`がセッション経過による既知のPlaywright側の反応不良を示したため、`window.Livewire.find(wireId).call('checkCandidate')`で直接呼び出して確認 — アプリ側の不具合ではないことは`/api/holdings`等の既知の切り分け手順と同様に確認済み）
-- これで計画（`stock_auto_order-frontend-implementation-phase.md`）のPhase0〜7が全て完了。UC-001〜UC-009（UC-007はUC-002内ウィジェット、UC-008はUC-006と統合画面）を一通りブラウザで操作・確認できる状態になった（保有データが復元され次第、実データでのEnd-to-End最終確認を行う）
+- 実ブラウザ確認（Playwright MCP、1回目）: ログイン→`/candidate-check`へ正常遷移、コンソールエラーなし。開発DBの保有データ・ウォッチテーマが空のため、おすすめ候補は空状態表示を確認。「存在しないsymbol_code」のエラーパス（「銘柄コードを確認してください」）は画面上で確認できたが、有効データでの判定結果表示・ウォッチ記録保存は未確認のまま完了報告した
+- `/verify`スキルによる追加検証（2026-08-28）: `.claude/skills/verify/SKILL.md`を新規作成した上で、tinkerで最小限の実データ（既存保有1件・合致候補1件・注目テーマ1件）を一時投入し、happy pathを実ブラウザで網羅的に確認: (1) おすすめ候補テーブルの表示（NISA推奨バッジ・合致テーマ・財務健全性サマリ・購入額目安）、(2) 候補行クリック→Alpineフック（`$wire.symbolCode`設定→URL同期→入力欄反映）が正しく動作すること（Livewireコンポーネントテストでは検証不可能だった箇所の初の実機確認）、(3) 個別チェック実行→判定結果（重複度・分散影響コメント・テクニカル/ファンダメンタルズ指標・過去の業績推移）が正しく表示されること、(4) ウォッチ記録の保存→即座に履歴へ反映されること、(5) 両方空でのバリデーションエラー→保存されないこと。検証後は投入した実データを全て削除しDBを空の状態に復元した
+- 検証中、「重複をチェック」「保存」ボタンの`.click()`が反応しない事象が発生したため、当初は「アプリ側の潜在バグの疑い」として報告した。ユーザーの指摘を受けて追加切り分けを実施した結果、ボタンのDOM状態（非表示・被覆・disabled等）に異常はなく、**全く同じ操作を再試行すると成功する**ことを確認した。同一マークアップ・同一配線で結果が変わることから、Playwright側のクリック合成のタイミングに起因する既知の不安定さであり、**アプリ側の不具合ではない**と結論づけた。コード側の修正は行わず、`.claude/skills/verify/SKILL.md`に「クリックが反応しない場合はまずリトライする」手順を記録するに留めた
+- これで計画（`stock_auto_order-frontend-implementation-phase.md`）のPhase0〜7が全て完了。UC-001〜UC-009（UC-007はUC-002内ウィジェット、UC-008はUC-006と統合画面）を一通りブラウザで操作・確認できる状態になった。開発DBの保有データは検証後に空へ戻したため（下記「今後の対応」参照）、実際のCSV再取込による本番相当データでのEnd-to-End最終確認は改めて別途行う
 
 ### Files touched
 
-`app/Livewire/Candidate/CandidateCheck.php`（新規）、`resources/views/livewire/candidate/candidate-check.blade.php`（新規）、`routes/web.php`（`/candidate-check`ルート追加）、`tests/Feature/CandidateCheckTest.php`（新規、8件）、`PLAN.md`（本エントリ追加）
+`app/Livewire/Candidate/CandidateCheck.php`（新規）、`resources/views/livewire/candidate/candidate-check.blade.php`（新規）、`routes/web.php`（`/candidate-check`ルート追加）、`tests/Feature/CandidateCheckTest.php`（新規、8件）、`.claude/skills/verify/SKILL.md`（新規、実ブラウザ検証手順の記録）、`PLAN.md`（本エントリ追加）
 
 ### Status
 
-Green確認完了。フルスイート365件Green。実ブラウザ確認はエラーパスのみ実施（開発DBの保有データ欠落のため、「今後の対応」参照）。フロントエンド実装計画の全7Phase完了。次は開発DBへの実データ復元（CSV再取込）とEnd-to-End最終確認、または別タスク（数値未整形表示の是正・重複度ラベルの閾値統合リファクタ等）に進む。
+Green確認完了。フルスイート365件Green。`/verify`スキルによる一時データ投入検証で、おすすめ候補表示・Alpine連携・個別チェック判定結果・ウォッチ記録保存（正常系・異常系）を全て実ブラウザで確認済み（検証後DBは空に復元）。フロントエンド実装計画の全7Phase完了。次は開発DBへの本番相当データ復元（CSV再取込）とEnd-to-End最終確認、または別タスク（数値未整形表示の是正・重複度ラベルの閾値統合リファクタ等）に進む。
 
 ## UC-010 `/review`指摘3件の修正完了（CHG-0005含む）（2026-08-28）
 
@@ -47,7 +49,7 @@ Gate4完了（Red→Gate4承認→Green）。フルスイート357件Green。コ
 
 - **数値の未整形表示（Phase3〜5共通）**: `HoldingList`（保有一覧、Phase3）・`SignalList`（利確検討、Phase5）の含み益率・取得単価・現在値・分割指値の価格が、`{{ $value }}`で生の浮動小数点値をそのまま出力しており（例: 含み益率が`89.5793`と%記号なし表示、価格が`3632.676`のような小数点3桁表示）、実際にPlaywrightで画面を目視確認した際に発見した。レイアウト崩れではなく数値の可読性の問題。既存テストは生の数値部分文字列を検証する設計のため、これらのテストを含め画面3つ（Phase3/4/5）をまとめて後日別タスクで整形する（%サフィックス・価格の四捨五入・桁区切り等）方針とし、今回のPhase5サイクルでは対応を見送る
 - **UC-004のE2Eテスト**: 一覧→詳細遷移のみの標準的な閲覧フローであり、`.claude/rules/31-e2e-testing.md`が対象とする「クリティカルフロー」に該当しないと判断し追加しない（Phase3/UC-002・Phase4/UC-003の同種の遷移もE2E化していないこととの一貫性を優先）
-- **開発DBの保有データが空になっている**: Phase6の実ブラウザ確認時に発覚。`test@example.com`ユーザー自体も消えており(`db:seed`で復元済み)、CSV再取込等の保有データは未復元。並行セッションが`migrate:fresh`等を実行した際の巻き添えと推測されるが未確定。今回はセクター配分ダッシュボードの空状態表示（「リバランス候補はありません」）の確認に留め、実データでの再確認は保有データが復元された時点で改めて行う。Phase7でも同様の制約により、`/candidate-check`のエラーパス（存在しないsymbol_code）のみ実ブラウザ確認済みで、有効データでの判定結果表示・ウォッチ記録保存は未確認
+- **開発DBの保有データが空になっている**: Phase6の実ブラウザ確認時に発覚。`test@example.com`ユーザー自体も消えており(`db:seed`で復元済み)、CSV再取込等の保有データは未復元。並行セッションが`migrate:fresh`等を実行した際の巻き添えと推測されるが未確定。セクター配分ダッシュボードは空状態表示（「リバランス候補はありません」）のみ実ブラウザ確認済み。Phase7（`/candidate-check`）は`/verify`スキルで一時的にtinker投入した実データによりhappy path含め確認済み（検証後は削除しDBは空のまま）だが、いずれの画面も**本番相当のCSV再取込データでの確認はまだ行っていない**。実データでの最終End-to-End確認は保有データが復元された時点で改めて行う
 - **重複度ラベルの閾値がBlade側とService側に分散（Phase7で発生）**: `resources/views/livewire/candidate/candidate-check.blade.php`が判定結果カードの「健全」/「やや偏り」/「偏り警告」ラベルを、`SectorAllocationCalculator`（UC-005）と同一の40%/70%閾値をBladeの`@php`ブロック内に再定義して導出している（`ShowCandidateCheckAction`/`CandidateOverlapCalculator`はラベルを返さず`overlap_rate`の数値のみ返すため）。閾値が2箇所に分散しており、将来どちらか一方だけ変更されるとラベル表示が実際の判定基準と乖離するリスクがある。是正するには`CandidateOverlapCalculator`にラベル算出を寄せるリファクタが必要（`ShowCandidateCheckAction`の出力契約変更を伴うため別途Red→Gate4→Greenサイクルが必要）。実害は表示ラベルのみ（`overlap_rate`の数値自体は正しい）のため優先度は低いが、次にこの画面に手を入れる際に解消する
 
 ## フロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了（2026-08-28）
