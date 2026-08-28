@@ -1,6 +1,49 @@
-# PLAN.md アーカイブ（〜2026-08-23 UC-005 Cycle3〜Integrationテスト網羅性監査完了前）
+# PLAN.md アーカイブ（〜2026-08-23 フロントエンド実装Phase0完了前）
 
-PLAN.md から退避した完了済みエントリ。Gate0セットアップ〜Phase1（UC-001/002/003/009）Gate4サイクル完了・ADR-0002 NISA区分CR・投資方針背景整理・ADR-0004（分析エンジンの指標セット拡張、設計確定〜TechnicalIndicatorCalculator〜MarketData層〜JQuantsClient〜SignalDeterminationService〜FundamentalIndicatorMapperの各TDDサイクル、UC-001への配線・UC-004画面実装・UC-003/UC-009への新指標反映を含む）完了、関連する`/review`指摘修正2件・UC-009サンプルレポート生成・per-holding非アトミック性修正、F-010（UC-010）のGate1〜3ドキュメント叩き台整備（ADR-0007新規作成、requirements.md/use-cases.md/data-model.md改訂）、NISA区分（口座区分）内訳の書き込み経路・UC-004消費側の実装完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査までの記録。現在進行中のタスクとは直接関係しないため参照頻度は低いが、経緯確認が必要な場合はここを見る。
+PLAN.md から退避した完了済みエントリ。Gate0セットアップ〜Phase1（UC-001/002/003/009）Gate4サイクル完了・ADR-0002 NISA区分CR・投資方針背景整理・ADR-0004（分析エンジンの指標セット拡張、設計確定〜TechnicalIndicatorCalculator〜MarketData層〜JQuantsClient〜SignalDeterminationService〜FundamentalIndicatorMapperの各TDDサイクル、UC-001への配線・UC-004画面実装・UC-003/UC-009への新指標反映を含む）完了、関連する`/review`指摘修正2件・UC-009サンプルレポート生成・per-holding非アトミック性修正、F-010（UC-010）のGate1〜3ドキュメント叩き台整備（ADR-0007新規作成、requirements.md/use-cases.md/data-model.md改訂）、NISA区分（口座区分）内訳の書き込み経路・UC-004消費側の実装完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査、およびフロントエンド実装Phase0（基盤整備）完了までの記録。現在進行中のタスクとは直接関係しないため参照頻度は低いが、経緯確認が必要な場合はここを見る。
+
+## フロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了（2026-08-23）
+
+### Decision
+
+- Phase0に続き、Phase1（UC-001 CSV取込画面）とPhase2（UC-009サマリーレポート画面）を1サイクルとして実施。理由: Phase1の取込成功時フローがPhase2の画面へ直接リダイレクトするため、別々に作ると存在しないルートへのリダイレクトが残ってしまう
+- `test-writer`が2画面分のLivewireコンポーネントテスト20件を作成。Gate4で2点確認: (1) サマリーレポート画面の行リンクは暫定的に`/holdings?symbol_code=...`（利確検討・新規投資候補）・`/sector-dashboard`（リバランス）とし、Phase3/4実装後に正式な`/holdings/{id}`リンクへ置き換える、(2) `ShowImportSummaryReportAction`に`symbol_code`フィールドを追加（利確検討・新規投資候補のみ、リバランスは対象外）— いずれも「妥当」で承認
+- `tdd-implementer`がGreenフェーズを実装: `app/Livewire/CsvImport/Upload.php`（`WithFileUploads`、`StoreCsvImportRequest`と同一のバリデーション、`ImportCsvAction`を直接呼び出し成功時はサマリーレポート画面へリダイレクト、取込履歴一覧表示）、`app/Livewire/ImportSummaryReport/Show.php`（`mount()`で`ShowImportSummaryReportAction`を1回だけ呼び出し、`render()`では再呼び出ししない副作用安全設計）。`symbol_code`フィールドはAPIレスポンス（`toResponseItem()`）のみに追加し、`import_summary_report_items`テーブルへの永続化は対象外（DBスキーマ変更なし）。対象20件・フルスイート259件全てGreen
+- 実ブラウザ確認（Playwright MCP）: `/csv-import`で実際の取込履歴（134銘柄・実ファイル名）が正しく表示されること、`/import-batches/15/summary-report`で実データに基づく利確検討候補20件（マイクロン テクノロジー含み益+555%等、実際の保有銘柄）が正しくランキング表示され、`symbol_code`ベースの暫定リンク（`/holdings?symbol_code=MU`等）が正しく生成されることを確認。コンソールエラーなし
+
+### Files touched
+
+`app/Livewire/CsvImport/Upload.php`（新規）、`resources/views/livewire/csv-import/upload.blade.php`（新規）、`app/Livewire/ImportSummaryReport/Show.php`（新規）、`resources/views/livewire/import-summary-report/show.blade.php`（新規）、`app/Actions/ImportSummaryReport/ShowImportSummaryReportAction.php`（`symbol_code`フィールド追加）、`routes/web.php`（`/csv-import`・`/import-batches/{importBatch}/summary-report`ルート追加）、`tests/Feature/CsvImportUploadTest.php`（新規、14件）、`tests/Feature/ImportSummaryReportShowTest.php`（新規、6件）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実ブラウザ動作確認完了（実データ）。フルスイート259件Green。次はPhase3（UC-002保有銘柄一覧画面＋UC-007市場全体指標ウィジェット）に進む。
+
+## フロントエンド実装Phase0（基盤整備）完了（2026-08-23）
+
+### Decision
+
+- Phase2完了後、ユーザーから「CSVを投入してレポートを見て、その裏付けを画面で取れる状態か」と問われ、UC-001〜009は全てAPIバックエンドのみでUI（Livewireコンポーネント・Bladeビュー）が0件であることを確認。Planモードでフロントエンド実装計画（`stock_auto_order-frontend-implementation-phase.md`）を作成しユーザー承認を得た
+- Plan時に3点をAskUserQuestionで確認済み: (1) 既存JSON API（10ルート・233件のテストが依存）は`/api`配下に移動し、Livewireページが元のURLを使う（推奨採用）、(2) `composer.json`が既にインストール済みのLivewire 4.xを採用しドキュメント側〔ADR-0001・`.claude/rules/15-frontend.md`〕の3.x記述を修正（推奨採用）、(3) UC-004画面のUC-010（買い増し候補）セクションは別セッション進行中・未マージのF-010に依存するため今回のPhase0/Phase1〜7スコープからは除外し、利確検討セクションのみで進める
+- Phase0（全画面の前提となる基盤整備）を実施:
+  - `routes/web.php`の既存13ルートを`Route::prefix('api')->middleware('auth')->group(...)`に再編。対応する10本のFeature TestファイルのURL文字列を`/api/...`に一括置換（ロジック変更なし）
+  - `.claude/rules/15-frontend.md`・`docs/adr/ADR-0001-frontend-stack-selection.md`のLivewireバージョン記述を3.x→4.xに修正（新規ライブラリ採用ではないため新規ADR無し）
+  - `ListHoldingsAction`のレスポンスに`id`（一覧→詳細画面のリンク生成用）を追加。回帰テスト1件追加
+  - `ImportCsvAction::execute()`のシグネチャを`StoreCsvImportRequest`直接受け取りから、プレーンな`UploadedFile`3引数（Livewireの`TemporaryUploadedFile`は`Illuminate\Http\UploadedFile`のサブクラスのため互換）に変更。`CsvImportController`は薄いアダプタ化。既存テストへの影響なし（HTTP経由のみで検証されているため）
+  - 共通レイアウト`resources/views/components/layouts/app.blade.php`（ui-guidelines.md確定の5タブナビゲーション）と共通Bladeコンポーネント6種（card/badge/stat-box/btn/empty-state/page-header）を新規作成。カラーパレットはui-guidelines.mdの値をTailwind v4の`@theme`セマンティックトークンとして`resources/css/app.css`に追加
+  - 最小限の自作Livewireログイン画面（`app/Livewire/Auth/Login.php`、Breeze/Fortify等は導入せず）+ ログアウトルートを新規追加。既存シード（`test@example.com`/`password`）を使用。Feature Test 6件（Livewire::test()ベース）
+  - `npm install && npm run build`でVite/Tailwindアセットをビルド（既存の`@vite`参照に必要）
+  - Playwright MCPで実ブラウザ確認: `/login`にログインフォームが正しく表示され、正しい認証情報でログイン→`/holdings`へのリダイレクトが発火し、認証セッションが実際に確立されていること（`/api/holdings`への直接アクセスで実データJSON応答を確認）を確認。`/holdings`自体はPhase3未着手のため404だが想定通り
+  - `docs/architecture/overview.md`に初めて実質的な内容を記載（フロントエンド構成の方針、/api分離の理由等）
+- 対象6件（ログイン関連）+ 既存233件の回帰確認、フルスイート239件全てGreen
+
+### Files touched
+
+`routes/web.php`、`tests/Feature/UC001CsvImportTest.php`・`UC002HoldingListTest.php`・`UC003HoldingDetailTest.php`・`UC004SignalListTest.php`・`UC005SectorDashboardTest.php`・`UC006CandidateCheckTest.php`・`UC007MarketIndicatorTest.php`・`UC008WatchedThemeTest.php`・`UC008NewCandidateListTest.php`・`UC009ImportSummaryReportTest.php`（URL文字列を`/api/...`に変更）、`.claude/rules/15-frontend.md`、`docs/adr/ADR-0001-frontend-stack-selection.md`（バージョン記述修正）、`app/Actions/Holding/ListHoldingsAction.php`（`id`追加）、`app/Actions/Import/ImportCsvAction.php`・`app/Http/Controllers/CsvImportController.php`（シグネチャ変更）、`resources/views/components/layouts/app.blade.php`（新規）、`resources/views/components/{card,badge,stat-box,btn,empty-state,page-header}.blade.php`（新規）、`resources/css/app.css`（テーマトークン追加）、`app/Livewire/Auth/Login.php`（新規）、`resources/views/livewire/auth/login.blade.php`（新規）、`tests/Feature/LoginTest.php`（新規、6件）、`docs/architecture/overview.md`（初の実質的記載）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実ブラウザ動作確認完了。フルスイート239件Green。次はPhase1（UC-001 CSV取込画面）に進む。
 
 ## 実装済み全エンドポイントのリクエスト/レスポンスIntegrationテスト網羅性監査・不足分追加（2026-08-23）
 
