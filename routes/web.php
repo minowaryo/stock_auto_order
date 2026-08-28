@@ -12,6 +12,7 @@ use App\Http\Controllers\SectorDashboardController;
 use App\Http\Controllers\SignalListController;
 use App\Http\Controllers\WatchedThemeController;
 use App\Livewire\Auth\Login;
+use App\Livewire\Candidate\CandidateCheck;
 use App\Livewire\CsvImport\Upload;
 use App\Livewire\Holding\HoldingDetail;
 use App\Livewire\Holding\HoldingList;
@@ -35,6 +36,7 @@ Route::post('/logout', function () {
 })->middleware('auth')->name('logout');
 
 Route::middleware('auth')->group(function () {
+    Route::get('/candidate-check', CandidateCheck::class);
     Route::get('/csv-import', Upload::class);
     Route::get('/holdings', HoldingList::class);
     Route::get('/holdings/{holding}', HoldingDetail::class);
