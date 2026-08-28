@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Actions\Signal\ShowSignalListAction;
 use App\Livewire\Signal\SignalList;
+use App\Models\BuySignal;
+use App\Models\FundamentalIndicator;
 use App\Models\Holding;
 use App\Models\HoldingSnapshot;
 use App\Models\ImportBatch;
@@ -181,6 +183,102 @@ function signalListTestSignal(HoldingSnapshot $holdingSnapshot, array $attribute
     ], $attributes));
 }
 
+/*
+|--------------------------------------------------------------------------
+| UC-010 addendum (later cycle): 買い増し候補セクションの統合 — Red phase
+|--------------------------------------------------------------------------
+|
+| The file-level docblock above predates UC-010's backend merge (F-010,
+| App\Models\BuySignal, App\Actions\Signal\ShowBuySignalListAction,
+| GET /api/buy-signals) and explicitly deferred the 買い増し候補（UC-010）
+| section of docs/product/mockups/screen-UC004-signal-list.html to "a
+| future cycle". That backend is now Green and merged to main
+| (tests/Feature/UC010BuySignalListTest.php), so this cycle adds that
+| deferred section to App\Livewire\Signal\SignalList /
+| resources/views/livewire/signal/signal-list.blade.php per the mockup's
+| two-section layout (買い増し候補 on top, 利確検討 below).
+|
+| Current state: SignalList::render() only calls ShowSignalListAction and
+| the Blade view has no reference to buy-signal data at all. Every test
+| below is expected to fail because the 買い増し候補 markup (symbol rows,
+| signal badges, fundamental summary, split buy-down suggestion, empty
+| state, section heading) simply does not exist in the rendered HTML yet —
+| not because of a missing class/route (both already exist and are Green).
+|
+| Helper naming: `signalListTestBuySignal()` / `signalListTestFundamentalIndicator()`
+| are new additions to this file's existing `signalListTest*` helper family
+| (no collision with the `ucFrom010Test*` prefix used by
+| tests/Feature/UC010BuySignalListTest.php, nor with this file's own
+| existing `signalListTest*` helpers, which do not cover BuySignal/
+| FundamentalIndicator yet).
+|
+| Assumptions made while writing these tests (flag at Gate 4 review if a
+| different contract is preferred):
+|   - render() also calls ShowBuySignalListAction fresh every time and
+|     passes the result to the view as `buySignals` (same "call on every
+|     render" convention already used for `signals`/ShowSignalListAction).
+|   - buy_signal_types badges render the raw signal_type string as-is
+|     (e.g. "rsi_oversold_rebound"), mirroring the existing 利確検討
+|     section's raw signal_type badge convention (no translated/localized
+|     label).
+|   - fundamental_summary is displayed as the plain sentence
+|     ShowBuySignalListAction already produces (e.g. "ROE15.2%・自己資本
+|     比率58.0%・..."); this file only asserts substrings ("ROE", the
+|     equity_ratio value), not exact wording.
+|   - NISA推奨 is surfaced via some text containing "NISA" (mirroring
+|     SectorDashboard's existing `<x-badge variant="info">NISA推奨</x-badge>`
+|     convention) — this file does not pin the exact wording beyond that
+|     substring.
+|   - fundamental_status=unavailable is surfaced via text containing
+|     "取得不可" (mirroring the mockup's `財務指標 取得不可` badge) — this
+|     file does not pin exact wording beyond that substring.
+|   - Empty state message for the 買い増し候補 section:
+|     "買い増しを検討できる押し目銘柄はありません" (per use-cases.md UC-010
+|     エラーケース and the mockup's commented-out empty-state block).
+|   - Section headings distinguishing the two blocks contain the literal
+|     strings "買い増し候補" and "利確検討" (per the mockup's `<h2>` text),
+|     used here only to confirm both sections coexist on one screen.
+|
+*/
+
+/**
+ * Creates a `buy_signals` row (UC-010; App\Models\BuySignal — already
+ * merged/Green, see tests/Feature/UC010BuySignalListTest.php).
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function signalListTestBuySignal(HoldingSnapshot $holdingSnapshot, array $attributes = []): BuySignal
+{
+    return BuySignal::create(array_merge([
+        'holding_snapshot_id' => $holdingSnapshot->id,
+        'signal_type' => 'rsi_oversold_rebound',
+        'reason_summary' => 'RSIが28から34へ反発しました',
+    ], $attributes));
+}
+
+/**
+ * @param  array<string, mixed>  $attributes
+ */
+function signalListTestFundamentalIndicator(Holding $holding, array $attributes = []): FundamentalIndicator
+{
+    return FundamentalIndicator::updateOrCreate(
+        ['holding_id' => $holding->id],
+        array_merge([
+            'per' => 15.0,
+            'pbr' => 1.5,
+            'roe' => 15.2,
+            'revenue_growth' => 8.0,
+            'operating_income_growth' => 12.3,
+            'equity_ratio' => 58.0,
+            'dividend_yield' => 2.0,
+            'dividend_payout_ratio' => 30.0,
+            'eps_growth' => 10.0,
+            'peg_ratio' => 1.2,
+            'fetched_at' => now(),
+        ], $attributes),
+    );
+}
+
 describe('UC-004: 利確検討画面（Livewire）', function () {
     describe('正常系: 利確検討一覧表示', function () {
         test('含み益+20%超・シグナルありの銘柄が一覧表示される（銘柄情報/含み益率/シグナルバッジ/理由サマリ/分割指値3段）', function () {
@@ -315,6 +413,121 @@ describe('UC-004: 利確検討画面（Livewire）', function () {
     describe('権限', function () {
         test('未認証ユーザーは/signalsにアクセスできない', function () {
             $this->get('/signals')->assertRedirect('/login');
+        });
+    });
+});
+
+describe('UC-010: 買い増し候補セクション（売買シグナル画面への統合）', function () {
+    describe('正常系: 買い増し候補一覧表示', function () {
+        test('押し目買いシグナルが1件以上あり財務健全性passedの銘柄が、買い増し候補セクションに表示される（銘柄名/含み益率/シグナルバッジ/理由サマリ/財務健全性サマリ/分割買い下がり3段階）', function () {
+            $user = User::factory()->create();
+            [, $snapshot] = signalListTestImportBatch();
+
+            $holding = signalListTestHolding([
+                'symbol_code' => '5201', 'market' => 'jp', 'symbol_name' => 'サンプル素材',
+            ]);
+            $holdingSnapshot = signalListTestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 300, 'average_cost' => 1200.00, 'current_price' => 1000.00, 'unrealized_gain_rate' => -8.5,
+            ]);
+            signalListTestBuySignal($holdingSnapshot, [
+                'signal_type' => 'rsi_oversold_rebound',
+                'reason_summary' => 'RSIが28から34へ反発しました',
+            ]);
+            signalListTestFundamentalIndicator($holding, ['equity_ratio' => 58.0, 'roe' => 15.2]);
+
+            $component = Livewire::actingAs($user)->test(SignalList::class);
+
+            $component->assertSee('サンプル素材');
+            $component->assertSee('5201');
+
+            $html = $component->html();
+            expect($html)->toContain('-8.5'); // unrealized_gain_rate
+            expect($html)->toContain('rsi_oversold_rebound'); // buy_signal_types badge (raw signal_type)
+            expect($html)->toContain('RSIが28から34へ反発しました'); // buy_signal_reason_summary
+            expect($html)->toContain('ROE'); // fundamental_summary（財務健全性サマリ）
+            expect($html)->toContain('58'); // equity_ratio appearing within fundamental_summary
+
+            // 分割買い下がりの提案（3段階）: 現在値(1000)／-7%地点(930)／-15%地点(850)
+            expect($html)->toContain('1000');
+            expect($html)->toContain('930');
+            expect($html)->toContain('850');
+        });
+    });
+
+    describe('NISA推奨表示', function () {
+        test('nisa_recommended=trueの銘柄には、NISA推奨に関する文言が表示される', function () {
+            $user = User::factory()->create();
+            [, $snapshot] = signalListTestImportBatch();
+
+            $holding = signalListTestHolding(['symbol_code' => '6758', 'market' => 'jp', 'symbol_name' => 'ソニーグループ']);
+            $holdingSnapshot = signalListTestHoldingSnapshot($snapshot, $holding, ['unrealized_gain_rate' => -3.2]);
+            signalListTestBuySignal($holdingSnapshot);
+            signalListTestFundamentalIndicator($holding, ['equity_ratio' => 58.0, 'roe' => 15.2]);
+
+            $component = Livewire::actingAs($user)->test(SignalList::class);
+
+            $component->assertSee('ソニーグループ');
+            $component->assertSee('NISA');
+        });
+    });
+
+    describe('財務指標取得不可表示', function () {
+        test('fundamental_status=unavailableの銘柄（米国株等）には、財務指標取得不可を示す文言が表示される', function () {
+            $user = User::factory()->create();
+            [, $snapshot] = signalListTestImportBatch();
+
+            $holding = signalListTestHolding([
+                'symbol_code' => 'EXMP', 'market' => 'us', 'symbol_name' => 'サンプル電子部品',
+            ]);
+            $holdingSnapshot = signalListTestHoldingSnapshot($snapshot, $holding, [
+                'current_price' => 100.00, 'fx_rate_used' => 150.0, 'unrealized_gain_rate' => -12.0,
+            ]);
+            signalListTestBuySignal($holdingSnapshot, ['signal_type' => 'week52_low_proximity']);
+            // Deliberately no FundamentalIndicator row created.
+
+            $component = Livewire::actingAs($user)->test(SignalList::class);
+
+            $component->assertSee('EXMP');
+            $component->assertSee('取得不可');
+        });
+    });
+
+    describe('空状態', function () {
+        test('買い増し候補が0件の場合、空状態メッセージが表示される', function () {
+            $user = User::factory()->create();
+
+            $component = Livewire::actingAs($user)->test(SignalList::class);
+
+            $component->assertSee('買い増しを検討できる押し目銘柄はありません');
+        });
+    });
+
+    describe('画面構成: 2セクション同時表示', function () {
+        test('買い増し候補セクションと利確検討セクションが同一画面内に両方とも表示される', function () {
+            $user = User::factory()->create();
+            [, $snapshot] = signalListTestImportBatch();
+
+            // 買い増し候補側: 押し目買いシグナルあり・利確シグナルなし
+            $buyHolding = signalListTestHolding(['symbol_code' => '5201', 'market' => 'jp', 'symbol_name' => 'サンプル素材']);
+            $buyHoldingSnapshot = signalListTestHoldingSnapshot($snapshot, $buyHolding, ['unrealized_gain_rate' => -8.5]);
+            signalListTestBuySignal($buyHoldingSnapshot);
+            signalListTestFundamentalIndicator($buyHolding);
+
+            // 利確検討側: 含み益+20%超・利確シグナルあり
+            $sellHolding = signalListTestHolding(['symbol_code' => '7203', 'market' => 'jp', 'symbol_name' => 'トヨタ自動車']);
+            $sellHoldingSnapshot = signalListTestHoldingSnapshot($snapshot, $sellHolding, [
+                'quantity' => 300, 'average_cost' => 1000.00, 'current_price' => 1300.00, 'unrealized_gain_rate' => 30.0,
+            ]);
+            signalListTestSignal($sellHoldingSnapshot, [
+                'signal_type' => 'rsi_reversal', 'reason_summary' => 'RSIが72から65に反落',
+            ]);
+
+            $component = Livewire::actingAs($user)->test(SignalList::class);
+
+            $component->assertSee('買い増し候補');
+            $component->assertSee('利確検討');
+            $component->assertSee('サンプル素材');
+            $component->assertSee('トヨタ自動車');
         });
     });
 });

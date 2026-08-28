@@ -1,12 +1,66 @@
 <div>
-    <x-page-header title="利確検討" />
+    <x-page-header title="売買シグナル" />
 
-    @if (empty($signals))
-        <x-card>
+    <x-card>
+        <h2 class="text-lg font-semibold mb-1">買い増し候補（UC-010）</h2>
+        <p class="text-[13px] text-text-secondary mb-3">一時的な下落で割安になっており、かつファンダメンタルズ（ROE・自己資本比率・成長率等）が良好な保有銘柄です。分割買い下がりの指値提案とともに表示しています。</p>
+
+        @if (empty($buySignals))
+            <x-empty-state>買い増しを検討できる押し目銘柄はありません</x-empty-state>
+        @else
+            <table class="w-full text-[13px]">
+                <thead>
+                    <tr class="text-left text-text-secondary border-b border-app-border">
+                        <th class="py-2 pr-4">銘柄</th>
+                        <th class="py-2 pr-4">含み益率</th>
+                        <th class="py-2 pr-4">発生シグナル</th>
+                        <th class="py-2 pr-4">財務健全性</th>
+                        <th class="py-2 pr-4">分割買い下がりの提案</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($buySignals as $row)
+                        <tr class="border-b border-app-border last:border-b-0">
+                            <td class="py-2 pr-4">
+                                {{ $row['symbol_name'] }}
+                                {{ $row['symbol_code'] }}
+                            </td>
+                            <td class="py-2 pr-4">{{ $row['unrealized_gain_rate'] }}</td>
+                            <td class="py-2 pr-4">
+                                @foreach ($row['buy_signal_types'] as $buySignalType)
+                                    <x-badge>{{ $buySignalType }}</x-badge>
+                                @endforeach
+                                <div>{{ $row['buy_signal_reason_summary'] }}</div>
+                            </td>
+                            <td class="py-2 pr-4">
+                                @if ($row['fundamental_status'] === 'unavailable')
+                                    <x-badge variant="neutral">財務指標 取得不可</x-badge>
+                                @else
+                                    <div>{{ $row['fundamental_summary'] }}</div>
+                                @endif
+                                @if ($row['nisa_recommended'])
+                                    <x-badge variant="info">NISA推奨</x-badge>
+                                    <div>{{ $row['nisa_recommended_reason'] }}</div>
+                                @endif
+                            </td>
+                            <td class="py-2 pr-4">
+                                <div>現在値: {{ $row['split_buy_down_suggestion'][0]['price'] }} / {{ $row['split_buy_down_suggestion'][0]['quantity'] }}</div>
+                                <div>-7%地点: {{ $row['split_buy_down_suggestion'][1]['price'] }} / {{ $row['split_buy_down_suggestion'][1]['quantity'] }}</div>
+                                <div>-15%地点: {{ $row['split_buy_down_suggestion'][2]['price'] }} / {{ $row['split_buy_down_suggestion'][2]['quantity'] }}</div>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        @endif
+    </x-card>
+
+    <x-card>
+        <h2 class="text-lg font-semibold mb-4">利確検討</h2>
+
+        @if (empty($signals))
             <x-empty-state>利確検討が必要な銘柄はありません</x-empty-state>
-        </x-card>
-    @else
-        <x-card>
+        @else
             <table class="w-full text-[13px]">
                 <thead>
                     <tr class="text-left text-text-secondary border-b border-app-border">
@@ -40,6 +94,6 @@
                     @endforeach
                 </tbody>
             </table>
-        </x-card>
-    @endif
+        @endif
+    </x-card>
 </div>
