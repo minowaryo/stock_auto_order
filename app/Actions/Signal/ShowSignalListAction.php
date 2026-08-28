@@ -4,14 +4,22 @@ namespace App\Actions\Signal;
 
 use App\Models\HoldingSnapshot;
 use App\Models\Snapshot;
+use App\Services\Analysis\TakeProfitThresholdEvaluator;
 
 /**
  * UC-004 (利確シグナル一覧): lists holdings from the most recent weekly
  * snapshot whose unrealized gain rate exceeds +20% (stocks only), together
  * with their detected signals and a suggested split take-profit plan.
+ *
+ * CHG-0006: the actual threshold applied per-holding (+20%超 normal /
+ * +150%超 high_water_mark) is determined dynamically via
+ * TakeProfitThresholdEvaluator; see splitLimitSuggestion() and the
+ * post-query filtering in execute().
  */
 class ShowSignalListAction
 {
+    public function __construct(private readonly TakeProfitThresholdEvaluator $takeProfitThresholdEvaluator) {}
+
     /**
      * @return array<int, array<string, mixed>>
      */
@@ -43,22 +51,58 @@ class ShowSignalListAction
                     ->orWhereHas('accounts', fn ($accounts) => $accounts
                         ->whereIn('account_type', ['specific', 'general']));
             })
-            ->with(['holding', 'signals', 'accounts'])
+            ->with(['holding', 'holding.fundamentalIndicator', 'signals', 'accounts'])
             ->get();
 
         return $holdingSnapshots
-            ->map(fn (HoldingSnapshot $holdingSnapshot) => $this->toRow($holdingSnapshot))
+            ->map(function (HoldingSnapshot $holdingSnapshot) {
+                $threshold = $this->resolveThreshold($holdingSnapshot);
+
+                return [$holdingSnapshot, $threshold];
+            })
+            ->filter(fn (array $pair) => (float) $pair[0]->unrealized_gain_rate > $pair[1]['target_gain_rate_threshold'])
+            ->map(fn (array $pair) => $this->toRow($pair[0], $pair[1]))
             ->values()
             ->all();
     }
 
     /**
+     * @return array{mode: string, target_gain_rate_threshold: float, first_tier_price_multiplier: float, second_tier_price_multiplier: float}
+     */
+    private function resolveThreshold(HoldingSnapshot $holdingSnapshot): array
+    {
+        $fundamentalIndicator = $holdingSnapshot->holding->fundamentalIndicator;
+
+        $equityRatio = $fundamentalIndicator?->equity_ratio !== null ? (float) $fundamentalIndicator->equity_ratio : null;
+        $roe = $fundamentalIndicator?->roe !== null ? (float) $fundamentalIndicator->roe : null;
+        $revenueGrowth = $fundamentalIndicator?->revenue_growth !== null ? (float) $fundamentalIndicator->revenue_growth : null;
+        $operatingIncomeGrowth = $fundamentalIndicator?->operating_income_growth !== null ? (float) $fundamentalIndicator->operating_income_growth : null;
+
+        return $this->takeProfitThresholdEvaluator->evaluate(
+            $holdingSnapshot->signals->count(),
+            $equityRatio,
+            $roe,
+            $revenueGrowth,
+            $operatingIncomeGrowth,
+        );
+    }
+
+    /**
+     * @param  array{mode: string, target_gain_rate_threshold: float, first_tier_price_multiplier: float, second_tier_price_multiplier: float}  $threshold
      * @return array<string, mixed>
      */
-    private function toRow(HoldingSnapshot $holdingSnapshot): array
+    private function toRow(HoldingSnapshot $holdingSnapshot, array $threshold): array
     {
         $holding = $holdingSnapshot->holding;
         $signals = $holdingSnapshot->signals;
+
+        $signalReasonSummary = $signals->isEmpty()
+            ? '利確検討が必要なシグナルは検出されていません'
+            : $signals->pluck('reason_summary')->implode('、');
+
+        if ($threshold['mode'] === 'high_water_mark') {
+            $signalReasonSummary .= '（利確ラインを+150%まで引き上げています）';
+        }
 
         return [
             'id' => $holding->id,
@@ -66,10 +110,8 @@ class ShowSignalListAction
             'symbol_name' => $holding->symbol_name,
             'unrealized_gain_rate' => $holdingSnapshot->unrealized_gain_rate,
             'signal_types' => $signals->pluck('signal_type')->values()->all(),
-            'signal_reason_summary' => $signals->isEmpty()
-                ? '利確検討が必要なシグナルは検出されていません'
-                : $signals->pluck('reason_summary')->implode('、'),
-            'split_limit_suggestion' => $this->splitLimitSuggestion($holdingSnapshot),
+            'signal_reason_summary' => $signalReasonSummary,
+            'split_limit_suggestion' => $this->splitLimitSuggestion($holdingSnapshot, $threshold),
         ];
     }
 
@@ -83,9 +125,14 @@ class ShowSignalListAction
      * 価格帯（+20%/+35%）はホールディング全体のaverage_cost基準のまま
      * 変更しない。
      *
+     * Price bands (+20%/+35% normal, +100%/+150% high_water_mark, per
+     * $threshold's multipliers) are based on the whole position's
+     * average_cost, unchanged.
+     *
+     * @param  array{mode: string, target_gain_rate_threshold: float, first_tier_price_multiplier: float, second_tier_price_multiplier: float}  $threshold
      * @return array<int, array{price: float|null, quantity: float}>
      */
-    private function splitLimitSuggestion(HoldingSnapshot $holdingSnapshot): array
+    private function splitLimitSuggestion(HoldingSnapshot $holdingSnapshot, array $threshold): array
     {
         $accounts = $holdingSnapshot->accounts;
         $quantity = $accounts->isEmpty()
@@ -100,8 +147,8 @@ class ShowSignalListAction
         $remainingQuantity = $quantity - $firstTierQuantity - $secondTierQuantity;
 
         return [
-            ['price' => $averageCost * 1.20, 'quantity' => $firstTierQuantity],
-            ['price' => $averageCost * 1.35, 'quantity' => $secondTierQuantity],
+            ['price' => $averageCost * $threshold['first_tier_price_multiplier'], 'quantity' => $firstTierQuantity],
+            ['price' => $averageCost * $threshold['second_tier_price_multiplier'], 'quantity' => $secondTierQuantity],
             ['price' => null, 'quantity' => $remainingQuantity],
         ];
     }

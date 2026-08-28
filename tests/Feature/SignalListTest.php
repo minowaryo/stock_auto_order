@@ -78,6 +78,28 @@ use Livewire\Livewire;
 | する」ことだけを確認する — 30-testing.md CRUD網羅ルール／このタスクの指示に
 | 従う）。
 |
+| -------------------------------------------------------------------------
+| CR (2026-08-29, CHG-0006): 利確検討ラインの動的分岐 — 既存テストへの影響確認
+| -------------------------------------------------------------------------
+| docs/product/use-cases.md UC-004業務ルール「利確検討ラインの動的分岐」の
+| 動的分岐ロジック自体はtests/Unit/Services/Analysis/
+| TakeProfitThresholdEvaluatorTest.php / tests/Feature/UC004SignalListTest.php
+| 側で検証するため、このファイルでは再テストしない（上記と同じ方針）。
+| 既存フィクスチャへの影響を確認した結果、調整は不要と判断した:
+|   - 利確検討（signalListTest*）側のフィクスチャは、いずれも
+|     FundamentalIndicatorレコードを作成していない
+|     （signalListTestFundamentalIndicator()は買い増し候補/UC-010セクション
+|     専用のヘルパーで、利確検討側のフィクスチャからは呼ばれていない）。
+|     そのため利確検討側のholdingは常に財務健全性'unavailable'となり、高水準
+|     モードの条件（シグナル0件 かつ 財務健全性'passed'）を満たし得ない。
+|   - 買い増し候補（UC-010）側のフィクスチャはsignalListTestFundamentalIndicator()
+|     （equity_ratio=58.0, roe=15.2, 成長率とも正値 → 'passed'相当）を使うが、
+|     いずれもunrealized_gain_rateが負値（-8.5/-3.2/-12.0）であり、通常モード
+|     （+20%超）・高水準モード（+150%超）のいずれの対象抽出条件も満たさない
+|     ため、動的分岐ロジックの導入有無に関わらず利確検討一覧には現れない。
+|   - 以上より、本ファイルの既存13テストケースは全て無調整のまま実行して
+|     PASSすることを確認済み（新規テストケースの追加は不要）。
+|
 | Assumptions made while writing these tests (not yet confirmed by an
 | implementation — flag at Gate 4 review if a different contract is
 | preferred):

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\FundamentalIndicator;
 use App\Models\Holding;
 use App\Models\HoldingSnapshot;
 use App\Models\HoldingSnapshotAccount;
@@ -88,6 +89,44 @@ use Tests\TestCase;
 |   - decimal-cast numeric fields are compared as floats regardless of
 |     whether JSON encodes them as string or number (same convention as
 |     UC002/UC003).
+|
+| -------------------------------------------------------------------------
+| CR (2026-08-28, CHG-0006): 利確検討ラインの動的分岐
+| -------------------------------------------------------------------------
+| docs/product/use-cases.md UC-004業務ルール「利確検討ラインの動的分岐」/
+| docs/architecture/data-model.md「利確検討ラインの動的分岐（高水準モード）」
+| 行により、ShowSignalListAction はホールディングごとに「シグナル0件 かつ
+| App\Services\Analysis\FundamentalHealthEvaluator が'passed'」の場合のみ
+| 「高水準モード」（対象抽出+150%超、分割指値+100%/+150%）を適用し、それ以外は
+| 従来通り「通常モード」（対象抽出+20%超、分割指値+20%/+35%）のまま扱う想定
+| （設計判断・具体的な閾値の妥当性検証は
+| tests/Unit/Services/Analysis/TakeProfitThresholdEvaluatorTest.php 側で
+| 行う。本ファイルはAction層〔クエリ条件・splitLimitSuggestion()の呼び出し〕
+| 経由の統合的な振る舞いのみを検証する）。
+|
+| 既存テストへの影響確認（全件を目視確認済み・実行して確認済み）: 本ファイルの
+| 既存フィクスチャ（ucFrom004TestHolding/ucFrom004TestHoldingSnapshot呼び出し
+| 全箇所）は、いずれもFundamentalIndicatorレコードを作成していない
+| （ucFrom004Test*ヘルパー群にFundamentalIndicator関連の呼び出しは元々存在
+| しない）。$holding->fundamentalIndicator が常にnullとなるため、
+| FundamentalHealthEvaluator::evaluate(null, null, null, null) は必ず
+| 'unavailable' を返し、どのホールディングも高水準モードの条件
+| （シグナル0件 かつ 財務健全性'passed'）を満たし得ない。したがって既存の
+| 全12テストケースは全て「通常モードのまま」判定され、この変更による意図しない
+| 結果変化は無い（実行して確認済み — 既存12件はいずれもPASSのまま）。
+|
+| 本CR追加分5件のRed実行結果（実行して確認済み。詳細はエージェント完了報告の
+| 実行結果ログを参照）:
+|   - 「含み益+120%...一覧から除外される」「...split_limit_suggestionが
+|     +100%/+150%地点になる」の2件は、現状の固定+20%/+35%閾値のままでは
+|     成立し得ないアサーションのため、意図通りFAIL（アサーション不一致）する。
+|   - 「シグナル1件以上」「財務健全性failed」「財務健全性unavailable」の3件は
+|     いずれも「通常モードのまま据え置かれる」ことを検証するテストであり、
+|     現状の実装（動的分岐が未実装＝常に通常モード相当の固定閾値）でも偶然
+|     PASSする。これは意図した設計（動的分岐ロジック導入後もこれらのケースは
+|     通常モードのまま変わらない）の回帰防止テストとして機能するものであり、
+|     テストが誤っているわけではない（FundamentalHealthEvaluatorTest.phpの
+|     "3件のみ本当にRedになる"パターンと同種の状況）。
 |
 */
 
@@ -176,6 +215,31 @@ function ucFrom004TestAccount(HoldingSnapshot $holdingSnapshot, array $attribute
         'account_type' => 'specific',
         'quantity' => 100,
         'average_cost' => 1000.00,
+    ], $attributes));
+}
+
+/**
+ * Create a `fundamental_indicators` row that
+ * App\Services\Analysis\FundamentalHealthEvaluator judges as 'passed'
+ * (same values as FundamentalHealthEvaluatorTest's "大きく上回る" case /
+ * TakeProfitThresholdEvaluatorTest's `tpteHealthyFundamentals()`:
+ * equity_ratio=58.0, roe=15.2, both growth figures comfortably positive).
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function ucFrom004TestHealthyFundamentalIndicator(Holding $holding, array $attributes = []): FundamentalIndicator
+{
+    return FundamentalIndicator::create(array_merge([
+        'holding_id' => $holding->id,
+        'per' => 15.0,
+        'pbr' => 1.5,
+        'roe' => 15.2,
+        'revenue_growth' => 8.0,
+        'operating_income_growth' => 12.3,
+        'equity_ratio' => 58.0,
+        'dividend_yield' => 2.0,
+        'dividend_payout_ratio' => 30.0,
+        'fetched_at' => now(),
     ], $attributes));
 }
 
@@ -466,6 +530,153 @@ describe('UC-004: 利確シグナル一覧', function () {
 
             $row = ucFrom004TestFindRow($response, '9432');
             expect($row)->toBeNull();
+        });
+    });
+
+    describe('利確検討ラインの動的分岐（CHG-0006）', function () {
+        test('含み益+120%・シグナル0件・財務健全性passedの銘柄は、高水準モード適用（+150%未満）のため一覧から除外される', function () {
+            [, $snapshot] = ucFrom004TestImportBatch();
+            $holding = ucFrom004TestHolding(['symbol_code' => '4901', 'market' => 'jp', 'symbol_name' => '富士フイルム']);
+            ucFrom004TestHealthyFundamentalIndicator($holding);
+            ucFrom004TestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 300,
+                'average_cost' => 1000.00,
+                'current_price' => 2200.00,
+                'unrealized_gain_rate' => 120.0,
+            ]);
+            // Deliberately no Signal row created (シグナル0件).
+
+            $response = ucFrom004TestFetch($this);
+
+            $response->assertSuccessful();
+
+            $row = ucFrom004TestFindRow($response, '4901');
+            expect($row)->toBeNull();
+        });
+
+        test('含み益+160%・シグナル0件・財務健全性passedの銘柄は一覧に含まれ、split_limit_suggestionが+100%/+150%地点になる', function () {
+            [, $snapshot] = ucFrom004TestImportBatch();
+            $holding = ucFrom004TestHolding(['symbol_code' => '4902', 'market' => 'jp', 'symbol_name' => '高水準銘柄']);
+            ucFrom004TestHealthyFundamentalIndicator($holding);
+            ucFrom004TestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 300,
+                'average_cost' => 1000.00,
+                'current_price' => 2600.00,
+                'unrealized_gain_rate' => 160.0,
+            ]);
+            // Deliberately no Signal row created (シグナル0件).
+
+            $response = ucFrom004TestFetch($this);
+
+            $response->assertSuccessful();
+
+            $row = ucFrom004TestFindRow($response, '4902');
+            expect($row)->not->toBeNull();
+
+            $suggestion = $row['split_limit_suggestion'];
+            expect($suggestion)->toBeArray();
+
+            // +100% tier: price == average_cost * 2.00 (data-model.md
+            // 高水準モード: +100%地点で1/3).
+            $firstTier = $suggestion[0];
+            expect((float) $firstTier['price'])->toEqualWithDelta(2000.0, 0.01);
+
+            // +150% tier: price == average_cost * 2.50 (data-model.md
+            // 高水準モード: +150%地点で1/3).
+            $secondTier = $suggestion[1];
+            expect((float) $secondTier['price'])->toEqualWithDelta(2500.0, 0.01);
+
+            // 高水準モードである旨がsignal_reason_summaryに含まれる
+            // （「+150%」「引き上げ」等のキーワードを緩く検証。正確な文言は
+            // Gate4で確認する）。
+            $reasonSummary = (string) $row['signal_reason_summary'];
+            expect(
+                str_contains($reasonSummary, '+150%')
+                || str_contains($reasonSummary, '引き上げ')
+            )->toBeTrue();
+        });
+
+        test('含み益+120%・シグナル1件以上・財務健全性passedの銘柄は、通常モードのまま一覧に含まれる（シグナルありなら財務健全性に関わらず通常モード）', function () {
+            [, $snapshot] = ucFrom004TestImportBatch();
+            $holding = ucFrom004TestHolding(['symbol_code' => '4903', 'market' => 'jp', 'symbol_name' => 'シグナルあり銘柄']);
+            ucFrom004TestHealthyFundamentalIndicator($holding);
+            $holdingSnapshot = ucFrom004TestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 300,
+                'average_cost' => 1000.00,
+                'current_price' => 2200.00,
+                'unrealized_gain_rate' => 120.0,
+            ]);
+            ucFrom004TestSignal($holdingSnapshot, [
+                'signal_type' => 'rsi_reversal',
+                'reason_summary' => 'RSIが72から65に反落',
+            ]);
+
+            $response = ucFrom004TestFetch($this);
+
+            $response->assertSuccessful();
+
+            $row = ucFrom004TestFindRow($response, '4903');
+            expect($row)->not->toBeNull();
+
+            // 通常モードのままなので分割指値は+20%/+35%地点のまま。
+            $suggestion = $row['split_limit_suggestion'];
+            $firstTier = $suggestion[0];
+            expect((float) $firstTier['price'])->toEqualWithDelta(1200.0, 0.01);
+        });
+
+        test('含み益+120%・シグナル0件・財務健全性failedの銘柄は、通常モードのまま一覧に含まれる', function () {
+            [, $snapshot] = ucFrom004TestImportBatch();
+            $holding = ucFrom004TestHolding(['symbol_code' => '4904', 'market' => 'jp', 'symbol_name' => '財務不健全銘柄']);
+            // FundamentalHealthEvaluatorTest「自己資本比率・ROEともに閾値を
+            // 下回る場合、failedを返す」と同一値。
+            ucFrom004TestHealthyFundamentalIndicator($holding, [
+                'equity_ratio' => 20.0,
+                'roe' => 3.0,
+                'revenue_growth' => -5.0,
+                'operating_income_growth' => -2.0,
+            ]);
+            ucFrom004TestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 300,
+                'average_cost' => 1000.00,
+                'current_price' => 2200.00,
+                'unrealized_gain_rate' => 120.0,
+            ]);
+            // Deliberately no Signal row created (シグナル0件).
+
+            $response = ucFrom004TestFetch($this);
+
+            $response->assertSuccessful();
+
+            $row = ucFrom004TestFindRow($response, '4904');
+            expect($row)->not->toBeNull();
+
+            $suggestion = $row['split_limit_suggestion'];
+            $firstTier = $suggestion[0];
+            expect((float) $firstTier['price'])->toEqualWithDelta(1200.0, 0.01);
+        });
+
+        test('含み益+120%・シグナル0件・ファンダメンタルズ指標未設定（unavailable）の銘柄は、通常モードのまま一覧に含まれる', function () {
+            [, $snapshot] = ucFrom004TestImportBatch();
+            $holding = ucFrom004TestHolding(['symbol_code' => '4905', 'market' => 'jp', 'symbol_name' => '指標未取得銘柄']);
+            // Deliberately no FundamentalIndicator row created (unavailable).
+            ucFrom004TestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 300,
+                'average_cost' => 1000.00,
+                'current_price' => 2200.00,
+                'unrealized_gain_rate' => 120.0,
+            ]);
+            // Deliberately no Signal row created (シグナル0件).
+
+            $response = ucFrom004TestFetch($this);
+
+            $response->assertSuccessful();
+
+            $row = ucFrom004TestFindRow($response, '4905');
+            expect($row)->not->toBeNull();
+
+            $suggestion = $row['split_limit_suggestion'];
+            $firstTier = $suggestion[0];
+            expect((float) $firstTier['price'])->toEqualWithDelta(1200.0, 0.01);
         });
     });
 

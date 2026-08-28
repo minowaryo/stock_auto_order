@@ -10,6 +10,7 @@ use App\Models\Signal;
 use App\Models\Snapshot;
 use App\Models\WatchedTheme;
 use App\Services\Analysis\FundamentalHealthEvaluator;
+use App\Services\Analysis\TakeProfitThresholdEvaluator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -27,11 +28,6 @@ use Illuminate\Support\Facades\DB;
 class ShowImportSummaryReportAction
 {
     /**
-     * 利確検討 threshold (data-model.md「保留・確定が必要な初期パラメータ値」draft).
-     */
-    private const TAKE_PROFIT_GAIN_RATE_THRESHOLD = 20.0;
-
-    /**
      * セクター配分の偏り警告閾値 (data-model.md draft: 70%以上=偏り警告).
      */
     private const SECTOR_ALLOCATION_WARNING_THRESHOLD = 70.0;
@@ -47,7 +43,10 @@ class ShowImportSummaryReportAction
 
     private const TOTAL_COUNT = 20;
 
-    public function __construct(private readonly FundamentalHealthEvaluator $evaluator) {}
+    public function __construct(
+        private readonly FundamentalHealthEvaluator $evaluator,
+        private readonly TakeProfitThresholdEvaluator $takeProfitThresholdEvaluator,
+    ) {}
 
     /**
      * @return array<string, mixed>
@@ -91,7 +90,7 @@ class ShowImportSummaryReportAction
     {
         $holdingSnapshots = HoldingSnapshot::query()
             ->where('snapshot_id', $snapshot->id)
-            ->with(['holding.sectorClassification', 'holding.technicalIndicator'])
+            ->with(['holding.sectorClassification', 'holding.technicalIndicator', 'holding.fundamentalIndicator'])
             ->get();
 
         // UC-009業務ルール: 投資信託は対象外とする（UC-002業務ルールに準拠し、
@@ -118,17 +117,35 @@ class ShowImportSummaryReportAction
         foreach ($stockHoldingSnapshots as $holdingSnapshot) {
             $gainRate = (float) $holdingSnapshot->unrealized_gain_rate;
 
-            if ($gainRate <= self::TAKE_PROFIT_GAIN_RATE_THRESHOLD) {
-                continue;
-            }
-
             $holding = $holdingSnapshot->holding;
-            $rsi = $holding->technicalIndicator?->rsi !== null ? (float) $holding->technicalIndicator->rsi : null;
 
             // ADR-0004: reflect saved signals (UC-004's 7 signal types) into
             // both the reason_summary wording and the composite score, on
             // top of the existing gain-rate/RSI-only ranking.
             $signals = Signal::query()->where('holding_snapshot_id', $holdingSnapshot->id)->get();
+
+            // CHG-0006: the +20%超 threshold dynamically switches to +150%超
+            // ("高水準モード") when the holding has zero signals and passes
+            // the financial health filter (TakeProfitThresholdEvaluator).
+            $fundamentalIndicator = $holding->fundamentalIndicator;
+            $equityRatio = $fundamentalIndicator?->equity_ratio !== null ? (float) $fundamentalIndicator->equity_ratio : null;
+            $roe = $fundamentalIndicator?->roe !== null ? (float) $fundamentalIndicator->roe : null;
+            $revenueGrowth = $fundamentalIndicator?->revenue_growth !== null ? (float) $fundamentalIndicator->revenue_growth : null;
+            $operatingIncomeGrowth = $fundamentalIndicator?->operating_income_growth !== null ? (float) $fundamentalIndicator->operating_income_growth : null;
+
+            $threshold = $this->takeProfitThresholdEvaluator->evaluate(
+                $signals->count(),
+                $equityRatio,
+                $roe,
+                $revenueGrowth,
+                $operatingIncomeGrowth,
+            );
+
+            if ($gainRate <= $threshold['target_gain_rate_threshold']) {
+                continue;
+            }
+
+            $rsi = $holding->technicalIndicator?->rsi !== null ? (float) $holding->technicalIndicator->rsi : null;
 
             $reasonSummary = $rsi !== null
                 ? sprintf('含み益+%s%%・RSI%sが中心的根拠', $this->fmt($gainRate), $this->fmt($rsi))

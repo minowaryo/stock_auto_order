@@ -133,6 +133,44 @@ use Tests\TestCase;
 |     Confirm both the exact reason_summary-composition rule and the
 |     signal-count-to-score weighting at Gate 4.
 |
+| -------------------------------------------------------------------------
+| CR (2026-08-29, CHG-0006): 利確検討ラインの動的分岐
+| -------------------------------------------------------------------------
+| docs/product/use-cases.md UC-004業務ルール「利確検討ラインの動的分岐」/
+| docs/architecture/data-model.md「利確検討ラインの動的分岐（高水準モード）」
+| 行は、UC-009業務ルールからも同一の分岐ロジックを参照する
+| （ShowImportSummaryReportAction::buildTakeProfitCandidates()の対象抽出
+| 閾値`TAKE_PROFIT_GAIN_RATE_THRESHOLD`も、シグナル0件かつ財務健全性'passed'
+| のホールディングについては+150%超に切り替わる想定）。動的分岐そのものの
+| 判定ロジック検証はtests/Unit/Services/Analysis/
+| TakeProfitThresholdEvaluatorTest.php側で行うため、本ファイルでは
+| buildTakeProfitCandidates()の対象抽出閾値への反映のみを検証する
+| （`composite_score`の算出式自体は変更対象外のため新規テスト不要 — 対象に
+| 含まれるかどうかの閾値のみが変更点）。
+|
+| 既存テストへの影響確認（全件を目視確認済み・実行して確認済み）: 本ファイルの
+| 利確検討関連の既存フィクスチャ（ucFrom009TestHoldingSnapshot経由で
+| unrealized_gain_rateが+20%を超えるもの: 30.0/38.0/21.0〜45.0/50.0/21.0）は
+| いずれもFundamentalIndicatorレコードを作成していない
+| （ucFrom009TestFundamentalIndicator()は「新規投資候補」セクションの
+| candidateHolding専用に呼ばれており、いずれもholding_snapshotsの行を持たない
+| ＝unrealized_gain_rateの評価対象にならない未保有銘柄である）。したがって
+| 利確検討側のholdingは常に財務健全性'unavailable'となり、高水準モードの条件
+| （シグナル0件 かつ 財務健全性'passed'）を満たし得ず、既存の全テストケースは
+| 全て「通常モードのまま」判定される（実行して確認済み — 既存15件はいずれも
+| PASSのまま）。
+|
+| 本CR追加分2件のRed実行結果（実行して確認済み）:
+|   - 「含み益+120%...レポートに含まれない」は、現状の固定+20%閾値のままでは
+|     +120%が対象に含まれてしまうため、意図通りFAIL（アサーション不一致:
+|     期待値null、実際は'4901 富士フイルム'の利確検討アイテムが返る）する。
+|   - 「含み益+160%...レポートに含まれる」は、現状の固定+20%閾値でも+160%は
+|     既に対象に含まれるため偶然PASSする。これは動的分岐導入後も成立し続ける
+|     べき正常系（高水準モードの対象抽出+150%超を満たす）の回帰防止テストとして
+|     機能するものであり、テストが誤っているわけではない
+|     （tests/Feature/UC004SignalListTest.phpの同種CHG-0006ブロックと同じ
+|     パターン）。
+|
 */
 
 /**
@@ -725,6 +763,69 @@ describe('UC-009: 取込後サマリーレポート', function () {
 
             $candidateItem = $allItems->first(fn ($item) => str_contains((string) ($item['target'] ?? ''), '6920'));
             expect($candidateItem)->toBeNull();
+        });
+    });
+
+    describe('利確検討ラインの動的分岐（CHG-0006）', function () {
+        test('含み益+120%・シグナル0件・財務健全性passedの銘柄は、高水準モード適用（+150%未満）のため利確検討候補としてレポートに含まれない', function () {
+            [$batch, $snapshot] = ucFrom009TestImportBatch();
+
+            $holding = ucFrom009TestHolding(['symbol_code' => '4901', 'market' => 'jp', 'symbol_name' => '富士フイルム']);
+            // FundamentalHealthEvaluatorが'passed'を返す値
+            // （equity_ratio=58.0, roe=15.2, 成長率とも正値）。
+            ucFrom009TestFundamentalIndicator($holding, [
+                'equity_ratio' => 58.0,
+                'roe' => 15.2,
+                'revenue_growth' => 8.0,
+                'operating_income_growth' => 12.3,
+            ]);
+            ucFrom009TestHoldingSnapshot($snapshot, $holding, [
+                'average_cost' => 1000.0,
+                'current_price' => 2200.0,
+                'unrealized_gain_amount' => 12000.0,
+                'unrealized_gain_rate' => 120.0,
+            ]);
+            // Deliberately no Signal row created (シグナル0件).
+
+            $response = ucFrom009TestFetchReport($this, $batch);
+
+            $response->assertSuccessful();
+
+            $allItems = collect($response->json('data.top_recommendations'))
+                ->merge($response->json('data.supplementary_recommendations'));
+
+            $candidateItem = $allItems->first(fn ($item) => str_contains((string) ($item['target'] ?? ''), '4901'));
+            expect($candidateItem)->toBeNull();
+        });
+
+        test('含み益+160%・シグナル0件・財務健全性passedの銘柄は、利確検討候補としてレポートに含まれる', function () {
+            [$batch, $snapshot] = ucFrom009TestImportBatch();
+
+            $holding = ucFrom009TestHolding(['symbol_code' => '4902', 'market' => 'jp', 'symbol_name' => '高水準銘柄']);
+            ucFrom009TestFundamentalIndicator($holding, [
+                'equity_ratio' => 58.0,
+                'roe' => 15.2,
+                'revenue_growth' => 8.0,
+                'operating_income_growth' => 12.3,
+            ]);
+            ucFrom009TestHoldingSnapshot($snapshot, $holding, [
+                'average_cost' => 1000.0,
+                'current_price' => 2600.0,
+                'unrealized_gain_amount' => 16000.0,
+                'unrealized_gain_rate' => 160.0,
+            ]);
+            // Deliberately no Signal row created (シグナル0件).
+
+            $response = ucFrom009TestFetchReport($this, $batch);
+
+            $response->assertSuccessful();
+
+            $allItems = collect($response->json('data.top_recommendations'))
+                ->merge($response->json('data.supplementary_recommendations'));
+
+            $candidateItem = $allItems->first(fn ($item) => str_contains((string) ($item['target'] ?? ''), '4902')
+                && $item['recommendation_type'] === '利確検討');
+            expect($candidateItem)->not->toBeNull();
         });
     });
 
