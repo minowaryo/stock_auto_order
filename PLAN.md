@@ -3,6 +3,24 @@
 > 2026-08-23（実装済み全エンドポイントのIntegrationテスト網羅性監査完了時点）以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、Phase2 UC-008（Cycle1・Cycle2）完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査完了等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 > **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。
 
+## UC-010買い増し候補セクションのフロントエンド統合完了、実データE2E確認（2026-08-28）
+
+### Decision
+
+- UC-010バックエンド（`/review`修正・CHG-0005含む）がmainにマージ済みとなったため、残っていたフロントエンド統合（`/signals`画面へ買い増し候補セクションを追加）に着手した。モックアップ（`screen-UC004-signal-list.html`）通り、上部＝買い増し候補（UC-010）・下部＝利確検討（UC-004）の2段構成
+- `test-writer`が`tests/Feature/SignalListTest.php`に5件追加（既存UC-004分8件は無改変）。正常系（銘柄名/含み益率/シグナルバッジ/理由サマリ/財務健全性/分割買い下がり3段階の一括表示）・NISA推奨表示・財務指標取得不可表示・空状態・2セクション同時表示をカバー。5件Red・8件Green確認しGate4承認
+- `tdd-implementer`がGreenフェーズを実装: `SignalList::render()`に`ShowBuySignalListAction`の呼び出しを追加、`signal-list.blade.php`先頭にモックアップ準拠の買い増し候補セクションを追加。ページタイトルを「利確検討」→「売買シグナル」に変更（モックアップに整合、既存テストと非衝突）。対象13件・フルスイート374件Green
+- **実データE2E確認**: `docs/original-docs/`の元CSV3ファイル（JP株・US株・投資信託）を実際に`/csv-import`画面から取り込み、134銘柄・エラー0件で取込完了することを確認（1回目はUI操作のタイミングにより投資信託分が反映されない取込〔128銘柄〕になったため、各ファイルのアップロード完了を待ってから再実行し134銘柄で成功。原因はテスト実装の不備ではなく手動操作側の待ち時間不足）
+- 取込後、`/import-batches/{id}/summary-report`・`/holdings`・`/holdings/{id}`・`/signals`（買い増し候補セクション含む）・`/sector-dashboard`・`/candidate-check`（個別銘柄チェック含む）の全画面をPlaywrightで実際に確認し、実データに基づく表示（シグナル種別・財務健全性サマリ・成長率・NISA推奨・分割買い下がり提案・セクター配分・重複度判定等）が正しく反映されることを確認した。セクター「未分類」96.8%・新規投資候補「おすすめ候補はありません」は、既知の制約（J-Quantsレート制限によるセクター分類未取得の多さ、注目テーマ未登録）による想定通りの挙動であり、本タスクの不具合ではない
+
+### Files touched
+
+`app/Livewire/Signal/SignalList.php`（`ShowBuySignalListAction`呼び出し追加、タイトル変更）、`resources/views/livewire/signal/signal-list.blade.php`（買い増し候補セクション追加）、`tests/Feature/SignalListTest.php`（UC-010統合テスト5件追加）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実データE2E確認完了（コミット`dd30650`、未push）。フルスイート374件Green。これでUC-010はバックエンド・フロントエンドとも完結（`docs/rcid/traceability-matrix.md`のF-010ステータス更新要）
+
 ## Phase7「新規投資候補」画面 `/review`指摘（MEDIUM 3件）修正完了（2026-08-28）
 
 ### Decision
