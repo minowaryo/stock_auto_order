@@ -17,30 +17,43 @@
 
     $chartPeriods = ['1y' => '1年', '3y' => '3年', '5y' => '5年', '10y' => '10年'];
 
+    // Numeric display formatting helpers (null-safe; null values are left as
+    // null so the existing `?? '取得不可'` fallback in the view keeps handling them).
+    $fmtPrice = fn ($value) => $value === null ? null : number_format((float) $value, 2);
+    $fmtVolume = fn ($value) => $value === null ? null : number_format((float) $value, 0);
+    $fmtUnsignedPercent = fn ($value) => $value === null ? null : number_format((float) $value, 1).'%';
+    $fmt1Decimal = fn ($value) => $value === null ? null : number_format((float) $value, 1);
+    $fmt2Decimal = fn ($value) => $value === null ? null : number_format((float) $value, 2);
+
     $technicalFields = [
-        'RSI' => $detail['rsi'],
-        'MACD' => $detail['macd'],
-        'ボリンジャーバンド（上限）' => $detail['bollinger_band']['bb_upper'],
-        'ボリンジャーバンド（下限）' => $detail['bollinger_band']['bb_lower'],
-        'MA20' => $detail['ma20'],
-        'MA75' => $detail['ma75'],
-        '出来高' => $detail['volume'],
-        '出来高MA20' => $detail['volume_ma20'],
-        '52週高値' => $detail['week52_high'],
-        '52週安値' => $detail['week52_low'],
-        '相対強度（対市場）' => $detail['relative_strength_vs_market'],
-        '相対強度（対セクター）' => $detail['relative_strength_vs_sector'],
+        'RSI' => $fmt1Decimal($detail['rsi']),
+        'MACD' => $fmt2Decimal($detail['macd']),
+        'ボリンジャーバンド（上限）' => $fmtPrice($detail['bollinger_band']['bb_upper']),
+        'ボリンジャーバンド（下限）' => $fmtPrice($detail['bollinger_band']['bb_lower']),
+        'MA20' => $fmtPrice($detail['ma20']),
+        'MA75' => $fmtPrice($detail['ma75']),
+        '出来高' => $fmtVolume($detail['volume']),
+        '出来高MA20' => $fmtVolume($detail['volume_ma20']),
+        '52週高値' => $fmtPrice($detail['week52_high']),
+        '52週安値' => $fmtPrice($detail['week52_low']),
+        '相対強度（対市場）' => $fmtUnsignedPercent($detail['relative_strength_vs_market']),
+        '相対強度（対セクター）' => $fmtUnsignedPercent($detail['relative_strength_vs_sector']),
     ];
 
     $fundamentalFields = [
-        'PER' => $detail['per'],
-        'PBR' => $detail['pbr'],
-        'ROE' => $detail['roe'],
-        '売上成長率' => $detail['revenue_growth'],
-        '自己資本比率' => $detail['equity_ratio'],
-        '配当利回り' => $detail['dividend_yield'],
-        'EPS成長率' => $detail['eps_growth'],
-        'PEGレシオ' => $detail['peg_ratio'],
+        'PER' => $fmt1Decimal($detail['per']),
+        // NOTE: PBR is rendered with the same 1-decimal rule as PER/RSI, not
+        // MACD's 2-decimal rule, because tests/Feature/HoldingDetailTest.php
+        // (Gate4-approved, not editable) asserts '<dd>1.3</dd>' for a pbr
+        // fixture value of 1.3 (stored as "1.30" via the decimal:2 cast) —
+        // 2 decimals would render "1.30" and fail that exact-match assertion.
+        'PBR' => $fmt1Decimal($detail['pbr']),
+        'ROE' => $fmtUnsignedPercent($detail['roe']),
+        '売上成長率' => $fmtUnsignedPercent($detail['revenue_growth']),
+        '自己資本比率' => $fmtUnsignedPercent($detail['equity_ratio']),
+        '配当利回り' => $fmtUnsignedPercent($detail['dividend_yield']),
+        'EPS成長率' => $fmtUnsignedPercent($detail['eps_growth']),
+        'PEGレシオ' => $fmt2Decimal($detail['peg_ratio']),
     ];
 @endphp
 <div>
@@ -53,8 +66,8 @@
 
     <x-card>
         <div class="grid grid-cols-2 gap-2">
-            <x-stat-box label="取得単価">{{ $detail['average_cost'] ?? '取得不可' }}</x-stat-box>
-            <x-stat-box label="現在値">{{ $lastPrice ?? '取得不可' }}</x-stat-box>
+            <x-stat-box label="取得単価">{{ $detail['average_cost'] !== null ? number_format($detail['average_cost'], 2) : '取得不可' }}</x-stat-box>
+            <x-stat-box label="現在値">{{ $lastPrice !== null ? number_format($lastPrice, 2) : '取得不可' }}</x-stat-box>
         </div>
     </x-card>
 

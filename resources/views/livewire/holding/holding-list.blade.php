@@ -83,9 +83,9 @@
                             <td class="py-2 pr-4">{{ $holding['market'] }}</td>
                             <td class="py-2 pr-4">{{ $holding['instrument_type'] }}</td>
                             <td class="py-2 pr-4">{{ $holding['quantity'] }}</td>
-                            <td class="py-2 pr-4">{{ $holding['average_cost'] }}</td>
-                            <td class="py-2 pr-4">{{ $holding['current_price'] }}</td>
-                            <td class="py-2 pr-4">{{ $holding['unrealized_gain_rate'] }}</td>
+                            <td class="py-2 pr-4">{{ number_format($holding['average_cost'], 2) }}</td>
+                            <td class="py-2 pr-4">{{ number_format($holding['current_price'], 2) }}</td>
+                            <td class="py-2 pr-4">{{ sprintf('%+.1f%%', $holding['unrealized_gain_rate']) }}</td>
                             <td class="py-2 pr-4">
                                 @if ($holding['instrument_type'] !== 'stock')
                                     対象外
@@ -97,7 +97,7 @@
                                         <x-badge>PER {{ $holding['per'] }}</x-badge>
                                     @endif
                                     @if ($holding['revenue_growth'] !== null)
-                                        <x-badge>売上成長 {{ $holding['revenue_growth'] }}</x-badge>
+                                        <x-badge>売上成長 {{ number_format($holding['revenue_growth'], 1) }}%</x-badge>
                                     @endif
                                 @endif
                             </td>

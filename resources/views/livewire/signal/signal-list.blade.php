@@ -8,31 +8,31 @@
         @if (empty($buySignals))
             <x-empty-state>買い増しを検討できる押し目銘柄はありません</x-empty-state>
         @else
-            <table class="w-full text-[13px]">
+            <table class="w-full text-[13px] border border-app-border [&_th]:border [&_th]:border-app-border [&_td]:border [&_td]:border-app-border [&_td]:align-top">
                 <thead>
                     <tr class="text-left text-text-secondary border-b border-app-border">
-                        <th class="py-2 pr-4">銘柄</th>
-                        <th class="py-2 pr-4">含み益率</th>
-                        <th class="py-2 pr-4">発生シグナル</th>
-                        <th class="py-2 pr-4">財務健全性</th>
-                        <th class="py-2 pr-4">分割買い下がりの提案</th>
+                        <th class="py-2 px-2">銘柄</th>
+                        <th class="py-2 px-2">含み益率</th>
+                        <th class="py-2 px-2">発生シグナル</th>
+                        <th class="py-2 px-2">財務健全性</th>
+                        <th class="py-2 px-2">分割買い下がりの提案</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach ($buySignals as $row)
                         <tr class="border-b border-app-border last:border-b-0">
-                            <td class="py-2 pr-4">
+                            <td class="py-2 px-2">
                                 {{ $row['symbol_name'] }}
                                 {{ $row['symbol_code'] }}
                             </td>
-                            <td class="py-2 pr-4">{{ $row['unrealized_gain_rate'] }}</td>
-                            <td class="py-2 pr-4">
+                            <td class="py-2 px-2">{{ sprintf('%+.1f%%', $row['unrealized_gain_rate']) }}</td>
+                            <td class="py-2 px-2">
                                 @foreach ($row['buy_signal_types'] as $buySignalType)
-                                    <x-badge>{{ $buySignalType }}</x-badge>
+                                    <x-badge variant="success">{{ $buySignalType }}</x-badge>
                                 @endforeach
                                 <div>{{ $row['buy_signal_reason_summary'] }}</div>
                             </td>
-                            <td class="py-2 pr-4">
+                            <td class="py-2 px-2">
                                 @if ($row['fundamental_status'] === 'unavailable')
                                     <x-badge variant="neutral">財務指標 取得不可</x-badge>
                                 @else
@@ -43,10 +43,10 @@
                                     <div>{{ $row['nisa_recommended_reason'] }}</div>
                                 @endif
                             </td>
-                            <td class="py-2 pr-4">
-                                <div>現在値: {{ $row['split_buy_down_suggestion'][0]['price'] }} / {{ $row['split_buy_down_suggestion'][0]['quantity'] }}</div>
-                                <div>-7%地点: {{ $row['split_buy_down_suggestion'][1]['price'] }} / {{ $row['split_buy_down_suggestion'][1]['quantity'] }}</div>
-                                <div>-15%地点: {{ $row['split_buy_down_suggestion'][2]['price'] }} / {{ $row['split_buy_down_suggestion'][2]['quantity'] }}</div>
+                            <td class="py-2 px-2">
+                                <div>現在値: {{ number_format($row['split_buy_down_suggestion'][0]['price'], 2) }} / {{ $row['split_buy_down_suggestion'][0]['quantity'] }}</div>
+                                <div>-7%地点: {{ number_format($row['split_buy_down_suggestion'][1]['price'], 2) }} / {{ $row['split_buy_down_suggestion'][1]['quantity'] }}</div>
+                                <div>-15%地点: {{ number_format($row['split_buy_down_suggestion'][2]['price'], 2) }} / {{ $row['split_buy_down_suggestion'][2]['quantity'] }}</div>
                             </td>
                         </tr>
                     @endforeach
@@ -61,33 +61,33 @@
         @if (empty($signals))
             <x-empty-state>利確検討が必要な銘柄はありません</x-empty-state>
         @else
-            <table class="w-full text-[13px]">
+            <table class="w-full text-[13px] border border-app-border [&_th]:border [&_th]:border-app-border [&_td]:border [&_td]:border-app-border [&_td]:align-top">
                 <thead>
                     <tr class="text-left text-text-secondary border-b border-app-border">
-                        <th class="py-2 pr-4">銘柄</th>
-                        <th class="py-2 pr-4">含み益率</th>
-                        <th class="py-2 pr-4">発生シグナル</th>
-                        <th class="py-2 pr-4">理由サマリ</th>
-                        <th class="py-2 pr-4">分割指値の提案</th>
+                        <th class="py-2 px-2">銘柄</th>
+                        <th class="py-2 px-2">含み益率</th>
+                        <th class="py-2 px-2">発生シグナル</th>
+                        <th class="py-2 px-2">理由サマリ</th>
+                        <th class="py-2 px-2">分割指値の提案</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach ($signals as $row)
                         <tr class="border-b border-app-border last:border-b-0">
-                            <td class="py-2 pr-4">
+                            <td class="py-2 px-2">
                                 <a href="/holdings/{{ $row['id'] }}" wire:navigate class="text-primary hover:underline">{{ $row['symbol_name'] }}</a>
                                 {{ $row['symbol_code'] }}
                             </td>
-                            <td class="py-2 pr-4">{{ $row['unrealized_gain_rate'] }}</td>
-                            <td class="py-2 pr-4">
+                            <td class="py-2 px-2">{{ sprintf('%+.1f%%', $row['unrealized_gain_rate']) }}</td>
+                            <td class="py-2 px-2">
                                 @foreach ($row['signal_types'] as $signalType)
-                                    <x-badge>{{ $signalType }}</x-badge>
+                                    <x-badge variant="warning">{{ $signalType }}</x-badge>
                                 @endforeach
                             </td>
-                            <td class="py-2 pr-4">{{ $row['signal_reason_summary'] }}</td>
-                            <td class="py-2 pr-4">
-                                <div>+20%地点: {{ $row['split_limit_suggestion'][0]['price'] }} / {{ $row['split_limit_suggestion'][0]['quantity'] }}</div>
-                                <div>+35%地点: {{ $row['split_limit_suggestion'][1]['price'] }} / {{ $row['split_limit_suggestion'][1]['quantity'] }}</div>
+                            <td class="py-2 px-2">{{ $row['signal_reason_summary'] }}</td>
+                            <td class="py-2 px-2">
+                                <div>+20%地点: {{ number_format($row['split_limit_suggestion'][0]['price'], 2) }} / {{ $row['split_limit_suggestion'][0]['quantity'] }}</div>
+                                <div>+35%地点: {{ number_format($row['split_limit_suggestion'][1]['price'], 2) }} / {{ $row['split_limit_suggestion'][1]['quantity'] }}</div>
                                 <div>現在値以降: {{ $row['split_limit_suggestion'][2]['quantity'] }}</div>
                             </td>
                         </tr>

@@ -302,13 +302,15 @@ describe('UC-004: 利確検討画面（Livewire）', function () {
             $component->assertSee('7203');
 
             $html = $component->html();
-            expect($html)->toContain('30'); // unrealized_gain_rate
+            // unrealized_gain_rate（符号付きパーセントルール: sprintf('%+.1f%%', $value)相当）
+            expect($html)->toContain('+30.0%');
             expect($html)->toContain('rsi_reversal'); // signal badge (raw signal_type)
             expect($html)->toContain('RSIが72から65に反落'); // signal_reason_summary
 
-            // 分割指値3段: +20%地点(1200)・+35%地点(1350)の価格が表示される。
-            expect($html)->toContain('1200');
-            expect($html)->toContain('1350');
+            // 分割指値3段: +20%地点(1200)・+35%地点(1350)の価格が表示される
+            // （価格ルール: number_format($value, 2)相当。カンマ区切り + 小数点2桁）。
+            expect($html)->toContain('1,200.00');
+            expect($html)->toContain('1,350.00');
         });
 
         test('含み益+20%超・シグナルなしの銘柄も一覧に含まれ、理由サマリがActionの「シグナル未検出」文言のまま表示される', function () {
@@ -441,16 +443,18 @@ describe('UC-010: 買い増し候補セクション（売買シグナル画面�
             $component->assertSee('5201');
 
             $html = $component->html();
-            expect($html)->toContain('-8.5'); // unrealized_gain_rate
+            // unrealized_gain_rate（符号付きパーセントルール: sprintf('%+.1f%%', $value)相当）
+            expect($html)->toContain('-8.5%');
             expect($html)->toContain('rsi_oversold_rebound'); // buy_signal_types badge (raw signal_type)
             expect($html)->toContain('RSIが28から34へ反発しました'); // buy_signal_reason_summary
             expect($html)->toContain('ROE'); // fundamental_summary（財務健全性サマリ）
             expect($html)->toContain('58'); // equity_ratio appearing within fundamental_summary
 
             // 分割買い下がりの提案（3段階）: 現在値(1000)／-7%地点(930)／-15%地点(850)
-            expect($html)->toContain('1000');
-            expect($html)->toContain('930');
-            expect($html)->toContain('850');
+            // （価格ルール: number_format($value, 2)相当。カンマ区切り + 小数点2桁）。
+            expect($html)->toContain('1,000.00');
+            expect($html)->toContain('930.00');
+            expect($html)->toContain('850.00');
         });
     });
 

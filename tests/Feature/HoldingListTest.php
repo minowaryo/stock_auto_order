@@ -258,12 +258,17 @@ describe('UC-002/UC-007: 保有銘柄一覧画面（Livewire）', function () {
 
             $html = $component->html();
             expect($html)->toContain('100'); // quantity
-            expect($html)->toContain('2000'); // average_cost（生の小数キャスト値の一部として出現する想定）
-            expect($html)->toContain('2500'); // current_price
-            expect($html)->toContain('25'); // unrealized_gain_rate
-            expect($html)->toContain('65'); // RSI代表値
-            expect($html)->toContain('24'); // PER代表値
-            expect($html)->toContain('12'); // 売上高成長率代表値
+            // average_cost / current_price（価格ルール: number_format($value, 2)
+            // 相当。カンマ区切り + 小数点2桁）。DBのdecimal(15,2)キャスト由来の
+            // "2000.00"/"2500.00" がそのまま出ている現状は非対応。
+            expect($html)->toContain('2,000.00'); // average_cost
+            expect($html)->toContain('2,500.00'); // current_price
+            // unrealized_gain_rate（符号付きパーセントルール: sprintf('%+.1f%%', $value)相当）
+            expect($html)->toContain('+25.0%');
+            expect($html)->toContain('65'); // RSI代表値（フォーマットルール対象外・据え置き）
+            expect($html)->toContain('24'); // PER代表値（フォーマットルール対象外・据え置き）
+            // 売上高成長率バッジ（符号なしパーセントルール: 小数点1桁+%、符号は値のまま）
+            expect($html)->toContain('12.0%');
         });
 
         test('直近の週次スナップショットのみが表示対象となる', function () {

@@ -264,32 +264,49 @@ describe('UC-003: 銘柄詳細画面（Livewire）', function () {
 
             $html = $component->html();
 
-            // average_cost
-            expect($html)->toContain('2000');
+            // average_cost / 現在値（価格ルール: number_format($value, 2) 相当。
+            // カンマ区切り + 小数点2桁。DBのdecimal(15,2)キャスト由来の
+            // "2000.00"/"2500.00" がそのまま出ている現状は非対応。
+            expect($html)->toContain('2,000.00'); // average_cost
+            expect($html)->toContain('2,500.00'); // 現在値（price_historyの最終close_price）
 
             // テクニカル指標一式（既存項目 + ADR-0004追加分）
-            expect($html)->toContain('65.5'); // rsi
-            expect($html)->toContain('1.2345'); // macd
-            expect($html)->toContain('2600'); // bb_upper
-            expect($html)->toContain('2200'); // bb_lower
-            expect($html)->toContain('2400'); // ma20
-            expect($html)->toContain('2300'); // ma75
-            expect($html)->toContain('1200000'); // volume
-            expect($html)->toContain('950000'); // volume_ma20
-            expect($html)->toContain('2900'); // week52_high
-            expect($html)->toContain('1800'); // week52_low
-            expect($html)->toContain('3.25'); // relative_strength_vs_market
-            expect($html)->toContain('-1.5'); // relative_strength_vs_sector
+            // RSI/MACD: 無単位指標値ルール（RSIは小数点1桁・MACDは小数点2桁）。
+            // decimalキャスト由来の生値 "65.50"/"1.2345" は素朴なtoContainだと
+            // フォーマット後の"65.5"/"1.23"を部分文字列として偶然含んでしまう
+            // ため、<dd>タグ単位の完全一致で検証する。
+            expect($html)->toContain('<dd>65.5</dd>'); // rsi（65.50 → 65.5）
+            expect($html)->toContain('<dd>1.23</dd>'); // macd（1.2345 → 1.23）
+
+            // 価格ルール（カンマ区切り + 小数点2桁）
+            expect($html)->toContain('2,600.00'); // bb_upper
+            expect($html)->toContain('2,200.00'); // bb_lower
+            expect($html)->toContain('2,400.00'); // ma20
+            expect($html)->toContain('2,300.00'); // ma75
+            expect($html)->toContain('2,900.00'); // week52_high
+            expect($html)->toContain('1,800.00'); // week52_low
+
+            // 出来高ルール（カンマ区切り・小数点なし。number_format($value, 0)相当）
+            expect($html)->toContain('1,200,000'); // volume
+            expect($html)->toContain('950,000'); // volume_ma20（950000.00 → 四捨五入して950,000）
+
+            // 相対強度（符号なしパーセントルール: 小数点1桁+%、符号は値のまま）
+            expect($html)->toContain('3.3%'); // relative_strength_vs_market（3.2500 → 3.3%）
+            expect($html)->toContain('-1.5%'); // relative_strength_vs_sector
 
             // ファンダメンタルズ指標一式（既存項目 + ADR-0004追加分）
-            expect($html)->toContain('15.2'); // per
-            expect($html)->toContain('1.3'); // pbr
-            expect($html)->toContain('12.5'); // roe
-            expect($html)->toContain('8.4'); // revenue_growth
-            expect($html)->toContain('55'); // equity_ratio
-            expect($html)->toContain('2.1'); // dividend_yield
-            expect($html)->toContain('12.4'); // eps_growth
-            expect($html)->toContain('1.23'); // peg_ratio
+            // PER/PBR/PEGレシオ: 無単位指標値ルール。rsi/macdと同じ理由で
+            // <dd>タグ単位の完全一致で検証する。
+            expect($html)->toContain('<dd>15.2</dd>'); // per（15.20 → 15.2）
+            expect($html)->toContain('<dd>1.3</dd>'); // pbr（1.30 → 1.3）
+            expect($html)->toContain('<dd>1.23</dd>'); // peg_ratio（1.2300 → 1.23）
+
+            // 符号なしパーセントルール（小数点1桁+%、符号は値のまま強制付与しない）
+            expect($html)->toContain('12.5%'); // roe
+            expect($html)->toContain('8.4%'); // revenue_growth（成長率系: 既存の符号をそのまま活かす）
+            expect($html)->toContain('55.0%'); // equity_ratio
+            expect($html)->toContain('2.1%'); // dividend_yield
+            expect($html)->toContain('12.4%'); // eps_growth（成長率系: 既存の符号をそのまま活かす）
         });
 
         test('指標が取得不可（null）の場合、該当項目が明示的な「取得不可」表示になる', function () {
