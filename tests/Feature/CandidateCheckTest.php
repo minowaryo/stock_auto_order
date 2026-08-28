@@ -344,6 +344,32 @@ describe('UC-006/UC-008: 新規投資候補（Livewire統合画面）', function
             $component->assertSeeHtml('data-symbol-code="6920"');
             $component->assertSeeHtml('data-symbol-code="4568"');
         });
+
+        test('財務健全性サマリはモック形式（小数第1位）で1回だけ表示され、丸め版との二重表示にならない', function () {
+            // review指摘 MEDIUM-3: fundamental_summary（整数丸め）と生値の括弧書きを
+            // 同一セルに二重表示していた。モック screen-UC006-candidate-check.html は
+            // 単一文字列（自己資本比率52%・ROE14.5%）。
+            $user = User::factory()->create();
+            WatchedTheme::create(['name' => 'AI半導体']);
+
+            [, $snapshot] = candidateCheckTestImportBatch();
+            $heldStock = candidateCheckTestHolding(['symbol_code' => '9999', 'symbol_name' => '既存保有株']);
+            candidateCheckTestHoldingSnapshot($snapshot, $heldStock, ['quantity' => 100, 'current_price' => 2000.00]);
+
+            $sector = candidateCheckTestSector('AI半導体');
+            $candidate = candidateCheckTestHolding([
+                'symbol_code' => '6920',
+                'symbol_name' => 'レーザーテック',
+                'sector_classification_id' => $sector->id,
+            ]);
+            candidateCheckTestFundamental($candidate, ['equity_ratio' => 52.0, 'roe' => 14.5]);
+
+            $component = Livewire::actingAs($user)->test(CandidateCheck::class);
+
+            $component->assertSee('自己資本比率52.0%・ROE14.5%');
+            $component->assertDontSee('ROE15%');       // 整数丸め版サマリが残っていない
+            $component->assertDontSee('（自己資本比率'); // 冗長な括弧書きが残っていない
+        });
     });
 
     describe('おすすめ候補が0件の場合', function () {
@@ -508,6 +534,67 @@ describe('UC-006/UC-008: 新規投資候補（Livewire統合画面）', function
             $component->assertSee('watch_statusまたはwatch_memoのいずれかを指定してください');
 
             expect(WatchRecord::where('holding_id', $candidate->id)->count())->toBe(0);
+        });
+
+        test('メモが2000文字を超える場合はバリデーションエラーになり保存されない', function () {
+            // review指摘 MEDIUM-1: use-cases.md（メモ最大2000文字・「メモは2000文字
+            // 以内で入力してください」）/ SaveWatchRecordRequest と同じ契約を
+            // Livewire経路でも守る。
+            $user = User::factory()->create();
+            $candidate = candidateCheckTestHolding([
+                'symbol_code' => '4589',
+                'symbol_name' => 'オンコリスバイオファーマ',
+            ]);
+
+            $component = Livewire::actingAs($user)->test(CandidateCheck::class)
+                ->set('symbolCode', '4589')
+                ->call('checkCandidate')
+                ->set('watchStatus', '')
+                ->set('watchMemo', str_repeat('あ', 2001))
+                ->call('saveWatchRecord');
+
+            $component->assertSee('メモは2000文字以内で入力してください');
+
+            expect(WatchRecord::where('holding_id', $candidate->id)->count())->toBe(0);
+        });
+
+        test('メモがちょうど2000文字の場合は保存できる（境界値）', function () {
+            $user = User::factory()->create();
+            $candidate = candidateCheckTestHolding([
+                'symbol_code' => '4589',
+                'symbol_name' => 'オンコリスバイオファーマ',
+            ]);
+
+            $component = Livewire::actingAs($user)->test(CandidateCheck::class)
+                ->set('symbolCode', '4589')
+                ->call('checkCandidate')
+                ->set('watchMemo', str_repeat('あ', 2000))
+                ->call('saveWatchRecord');
+
+            $component->assertHasNoErrors();
+
+            expect(WatchRecord::where('holding_id', $candidate->id)->count())->toBe(1);
+        });
+
+        test('チェック後にsymbol_codeを存在しない値へ変更して保存しても、エラー表示のみで保存されない', function () {
+            // review指摘 MEDIUM-2: $holding が null のまま
+            // SaveWatchRecordAction::execute() を呼び 500 になっていた。
+            $user = User::factory()->create();
+            candidateCheckTestHolding([
+                'symbol_code' => '4589',
+                'symbol_name' => 'オンコリスバイオファーマ',
+            ]);
+
+            $component = Livewire::actingAs($user)->test(CandidateCheck::class)
+                ->set('symbolCode', '4589')
+                ->call('checkCandidate')
+                ->set('symbolCode', '0000')
+                ->set('watchMemo', '押し目待ち')
+                ->call('saveWatchRecord');
+
+            $component->assertSee('銘柄コードを確認してください');
+
+            expect(WatchRecord::count())->toBe(0);
         });
     });
 

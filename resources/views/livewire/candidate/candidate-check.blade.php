@@ -72,13 +72,7 @@
                                 @endif
                             </td>
                             <td class="py-2 pr-4">{{ $candidate['matched_theme'] }}</td>
-                            <td class="py-2 pr-4 text-text-secondary">
-                                {{ $candidate['fundamental_summary'] }}
-                                @php $rawFundamental = $rawFundamentals[$candidate['symbol_code']]->fundamentalIndicator ?? null; @endphp
-                                @if ($rawFundamental)
-                                    <span class="text-xs">（自己資本比率{{ number_format($rawFundamental->equity_ratio, 1) }}%・ROE{{ number_format($rawFundamental->roe, 1) }}%）</span>
-                                @endif
-                            </td>
+                            <td class="py-2 pr-4 text-text-secondary">{{ $candidate['fundamental_summary'] }}</td>
                             <td class="py-2 pr-4">¥{{ number_format($candidate['suggested_amount']) }}</td>
                         </tr>
                     @endforeach

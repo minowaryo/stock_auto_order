@@ -3,6 +3,26 @@
 > 2026-08-23（実装済み全エンドポイントのIntegrationテスト網羅性監査完了時点）以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、Phase2 UC-008（Cycle1・Cycle2）完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査完了等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 > **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。
 
+## Phase7「新規投資候補」画面 `/review`指摘（MEDIUM 3件）修正完了（2026-08-28）
+
+### Decision
+
+- Phase7（`5e24137`）に対しユーザー依頼で`/review`を実施（review-score=0・通常レベル）。MEDIUM 3件・LOW 4件を報告し、ユーザーの指示でMEDIUM 3件のみ対応（LOWは先送り）
+- **MEDIUM-1（要件不一致）**: `CandidateCheck::saveWatchRecord()`が`watch_memo`の2000文字上限を検証しておらず、`use-cases.md`（メモ最大2000文字・「メモは2000文字以内で入力してください」）および`SaveWatchRecordRequest`（`max:2000`）とLivewire経路で契約が乖離。`memo`カラムが`text`のためDBエラーにもならず無検証で保存されていた
+- **MEDIUM-2（500エラー経路）**: `saveWatchRecord()`が`$holding`のnullガードを持たず、チェック成功後に証券コード入力欄を存在しない値へ書き換えてから保存すると`SaveWatchRecordAction::execute()`に`null`が渡り`TypeError`（500）。`checkCandidate()`側はガード済みだった
+- **MEDIUM-3（モック不一致・二重表示）**: おすすめ候補テーブルの「財務健全性サマリ」列が`fundamental_summary`（`NewCandidateFinder`で整数丸め、例`ROE15%`）と生値の括弧書き（例`（自己資本比率52.0%・ROE14.5%）`）を同一セルに二重表示していた。モック`screen-UC006-candidate-check.html`は単一文字列（`自己資本比率52%・ROE14.5%`）
+- Red→Green（TDDサイクル、Gate4相当は本レビュー指摘の合意で代替）: `CandidateCheckTest.php`に回帰テスト4件追加（2000文字超で拒否・ちょうど2000文字は保存可の境界値・存在しないsymbol_codeでの保存はエラー表示のみ・サマリ二重表示なし）。追加直後に3件Red（MEDIUM-2はTypeError）を確認してから実装
+- 修正内容: `saveWatchRecord()`に既存の`addError('watchRecord', ...)`スタイルと揃えた3段ガード（`watch_status`許可値・`watch_memo`文字数上限・`$holding`存在）を追加。許可値・上限は`WATCH_STATUS_OPTIONS`/`WATCH_MEMO_MAX`定数として`SaveWatchRecordRequest`と同値で定義。`render()`ではおすすめ候補の`fundamental_summary`を生`FundamentalIndicator`値から小数第1位で組み直し（表示専用の再フォーマット、新規計算ルールなし）、Bladeの二重表示ブロックを単一の`{{ $candidate['fundamental_summary'] }}`に置換
+- `.claude/rules/15-frontend.md`は「バリデーションは`rules()`に定義」を推奨するが、既存コードが`addError()`直書きだったこと・MEDIUM限定スコープ・既存承認済みテストへの回帰リスクを踏まえ、今回は既存スタイルを踏襲。`rules()`への一本化はLOW指摘として先送り
+
+### Files touched
+
+`app/Livewire/Candidate/CandidateCheck.php`（`saveWatchRecord()`ガード3件追加・定数2件・`render()`のサマリ再フォーマット）、`resources/views/livewire/candidate/candidate-check.blade.php`（財務健全性サマリ列の二重表示を解消・`rawFundamentals`受け取り削除）、`tests/Feature/CandidateCheckTest.php`（回帰テスト4件追加）、`PLAN.md`（本エントリ）
+
+### Status
+
+Green確認完了。`CandidateCheckTest.php` 12件Green（既存8＋新規4）。pint適用済み。フルスイート369件Green（13 deprecatedは既存・回帰なし）。LOW指摘4件（`rules()`一本化・`watch_status`のクライアント改変耐性は`Rule::in`未使用のまま・候補一覧の毎リクエスト再計算・Alpineハンドラ内`querySelector`）は未対応で先送り。未コミット。
+
 ## フロントエンド実装Phase7（UC-006/UC-008統合「新規投資候補」画面）完了、全7Phase完了（2026-08-28）
 
 ### Decision
