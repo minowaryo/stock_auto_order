@@ -2,12 +2,19 @@
 setlocal enabledelayedexpansion
 title stock_auto_order - START
 
+rem =====================================================================
+rem  Starts the WSL2-native stack (fast). The project lives inside WSL at
+rem  %WSL_PROJECT_DIR%; running "docker compose" from the Windows path
+rem  instead would recreate the container on the slow Windows bind mount
+rem  (see docs/ai-context/known-pitfalls.md). Docker Desktop is shared
+rem  between Windows and WSL, so the "docker info" check below still works.
+rem =====================================================================
+
 rem === settings ===
-set "PROJECT_DIR=c:\workspace\stock_auto_order"
+set "WSL_DISTRO=Ubuntu"
+set "WSL_PROJECT_DIR=/root/workspace/stock_auto_order"
 set "DOCKER_EXE=C:\Program Files\Docker\Docker\Docker Desktop.exe"
 set "APP_URL=http://localhost"
-
-cd /d "%PROJECT_DIR%" || (echo [ERROR] Project folder not found: %PROJECT_DIR% & pause & exit /b 1)
 
 echo [1/4] Checking Docker...
 docker info >nul 2>&1
@@ -33,8 +40,9 @@ goto wait_docker
 :docker_ok
 echo   Docker OK
 
-echo [2/4] Starting containers (docker compose up -d)...
-docker compose up -d || (echo   [ERROR] docker compose up failed. & pause & exit /b 1)
+echo [2/4] Starting containers in WSL (%WSL_DISTRO%:%WSL_PROJECT_DIR%)...
+wsl -d %WSL_DISTRO% -- bash -lc "cd %WSL_PROJECT_DIR% && docker compose up -d"
+if errorlevel 1 (echo   [ERROR] docker compose up failed in WSL. & pause & exit /b 1)
 
 echo [3/4] Waiting for app to respond...
 set /a n=0
@@ -53,7 +61,7 @@ echo   App responded OK
 start "" "%APP_URL%"
 echo.
 echo ============================================================
-echo   START COMPLETE
+echo   START COMPLETE  (WSL-native / fast)
 echo     URL   : %APP_URL%
 echo     Login : test@example.com  /  password
 echo ============================================================

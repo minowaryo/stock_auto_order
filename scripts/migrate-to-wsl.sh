@@ -117,6 +117,8 @@ fi
 # --- 5. ownership so the container's sail user (uid 1000) can write ---
 say "5/7  ファイル所有者を ${APP_UID}:${APP_UID} に調整"
 chown -R "${APP_UID}:${APP_UID}" "$DEST" 2>/dev/null || echo "  WARN: chown 失敗 (root 以外で実行中?)。storage/ の書き込みで詰まったら手動で対応"
+# The repo is now owned by uid 1000 but git runs as root -> "dubious ownership".
+git config --global --add safe.directory "$DEST" 2>/dev/null || true
 
 # --- 6. bring the stack up -------------------------------------------
 say "6/7  Docker スタック起動 + 依存インストール"
@@ -132,6 +134,11 @@ docker compose exec -T laravel.test php artisan migrate --force
 docker compose exec -T laravel.test npm ci
 docker compose exec -T laravel.test npm run build
 docker compose exec -T laravel.test php artisan optimize:clear
+# The first `up` above starts `php artisan serve` before composer install has
+# produced vendor/autoload.php, so supervisor crash-loops and permanently
+# gives up on it. Restart once deps exist so the web server actually runs.
+docker compose restart laravel.test
+sleep 5
 
 # --- 7. speed check -------------------------------------------------
 say "7/7  応答速度チェック (GET /holdings ×3)"
