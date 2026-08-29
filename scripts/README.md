@@ -1,4 +1,6 @@
-# scripts — アプリ起動 / 停止バッチ
+# scripts — 開発環境スクリプト
+
+## アプリ起動 / 停止バッチ（Windows）
 
 ローカル開発環境（Docker Sail）をダブルクリックで起動・停止するための Windows バッチ。
 
@@ -6,6 +8,20 @@
 |---|---|---|
 | `start-app.bat` | `stock_auto_order 起動.bat` | Docker Desktop 起動 → `docker compose up -d` → 応答待ち → ブラウザで http://localhost を開く |
 | `stop-app.bat` | `stock_auto_order 停止.bat` | `docker compose stop`（コンテナ停止のみ。DB・データは保持） |
+
+## `migrate-to-wsl.sh` — WSLネイティブ環境への複製移設（1回限り）
+
+Windows bind-mount による実HTTPリクエストの遅さ（`docs/ai-context/known-pitfalls.md` 参照）を解消するため、
+開発環境一式を WSL2 ネイティブ側 `/root/workspace/stock_auto_order` へ複製する。
+手順・引き継ぎ内容は `docs/ai-context/wsl-migration-handoff.md` を参照。
+
+```bash
+# WSL (Ubuntu) の VS Code 統合ターミナルで実行
+bash /mnt/c/workspace/stock_auto_order/scripts/migrate-to-wsl.sh
+```
+
+Windows 側（`c:\workspace\stock_auto_order`）は読み取りのみで変更しない。移設完了後、Windows 用バッチ
+（`start-app.bat` / `stop-app.bat`）は WSL 運用では使わない（内容を WSL 向けに直すか非推奨とする）。
 
 ## 使い方
 
