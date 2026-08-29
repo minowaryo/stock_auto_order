@@ -12,6 +12,10 @@ docs/credentials/*
 docs/original-docs/*
 !docs/original-docs/*.md
 
+# Playwright MCP session artifacts (console logs, page snapshots) from manual
+# verification sessions — debug output, not source.
+/.playwright-mcp/
+
 # Laravel application (scaffolded via docs/adr/ADR-0001-frontend-stack-selection.md)
 *.log
 .DS_Store
