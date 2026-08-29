@@ -75,6 +75,22 @@ cp -v "$WIN_REPO/.env" "$DEST/.env"
 mkdir -p "$DEST/.claude"
 cp -v "$WIN_REPO/.claude/settings.local.json" "$DEST/.claude/settings.local.json"
 
+# Isolate this checkout's compose project from the Windows one (both derive
+# the name from the dir "stock_auto_order" otherwise, so a `docker compose`
+# run from the Windows path silently recreates this container on the slow
+# bind mount). Separate project name => separate containers + volume.
+if ! grep -q '^COMPOSE_PROJECT_NAME=' "$DEST/.env"; then
+  printf '\nCOMPOSE_PROJECT_NAME=stock_auto_order_wsl\n' >> "$DEST/.env"
+  echo "  .env に COMPOSE_PROJECT_NAME=stock_auto_order_wsl を追記"
+fi
+# Carry the existing MySQL data into the isolated project's volume.
+if docker volume inspect stock_auto_order_sail-mysql >/dev/null 2>&1 \
+   && ! docker volume inspect stock_auto_order_wsl_sail-mysql >/dev/null 2>&1; then
+  docker volume create stock_auto_order_wsl_sail-mysql >/dev/null
+  docker run --rm -v stock_auto_order_sail-mysql:/from:ro -v stock_auto_order_wsl_sail-mysql:/to \
+    alpine sh -c 'cd /from && cp -a . /to/' && echo "  MySQLボリュームを複製 (旧ボリュームは保持)"
+fi
+
 # --- 4. Claude user data (transcripts / plans / global config) --------
 say "4/7  Claude 会話ログ・plans・グローバル設定を移送"
 mkdir -p "$HOME/.claude/projects/$NEW_SLUG" "$HOME/.claude/plans"

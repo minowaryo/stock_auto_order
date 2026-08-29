@@ -16,7 +16,7 @@ Docker Desktop (WSL2 backend) が Windows 側パス `c:\workspace\stock_auto_ord
 | 移設方式 | **複製**（move ではない）。Windows 側 `c:\workspace\stock_auto_order` はバックアップとして残す |
 | 移設先パス | `/root/workspace/stock_auto_order`（WSL Ubuntu、デフォルトユーザー = root） |
 | 会話ログ | **全 47 件（約 82MB）を移送** |
-| Docker | compose プロジェクト名がフォルダ名由来で Windows 側と同じ `stock_auto_order` → **コンテナ / MySQL ボリュームを共有**。保有データは自動で維持される。Windows 側と同時起動は不可（ポート 80/3306 競合） |
+| Docker | **2026-08-29 恒久対処済み**: WSL側 `.env` に `COMPOSE_PROJECT_NAME=stock_auto_order_wsl` を追加し Windows側（project=`stock_auto_order`）と完全分離。MySQLボリュームは `stock_auto_order_sail-mysql` → `stock_auto_order_wsl_sail-mysql` に複製済み（旧ボリューム保持）。Windows パスから compose が走っても WSL 版は無傷。両方同時起動時はポート80衝突で明示エラー |
 | Claude Code | WSL 側に未導入 → ネイティブインストーラで導入（node 不要） |
 
 ## 実行手順
@@ -67,5 +67,5 @@ Docker Desktop (WSL2 backend) が Windows 側パス `c:\workspace\stock_auto_ord
 - **認証**: `.credentials.json` / `.claude.json` を移送しても WSL 側で認証が通らない場合は `claude login`（または対話中に `/login`）。
 - **GitHub push/pull**: ローカル clone のため直後は GitHub 認証が未設定。`gh auth login` か git credential helper を WSL 側で設定するまで push できない。
 - **Sail 権限問題**: `known-pitfalls.md`「storage/配下に書き込めず 500」と同種。スクリプトは `chown -R 1000:1000` と `chown -R sail:sail storage bootstrap/cache` を実施済みだが、`docker compose exec` を root で叩いて新規ファイルを作ると再発する。都度 `chown` する。
-- **Windows 側との同時起動禁止**: 同じ compose プロジェクトのため。片方を使うときは他方を `docker compose down`。
+- **Windows 側との同時起動**: プロジェクト分離済みなので静かな劣化は起きないが、両方起動するとポート80/3306が衝突して後発が起動失敗する。片方に統一すること（Windows 側は撤去推奨）。
 - **Windows 側フォルダ**: 動作確認が完全に済むまで削除しない。

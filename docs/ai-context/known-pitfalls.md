@@ -33,7 +33,10 @@
 
 - 現象: `curl`で`http://localhost`上のLaravelアプリを叩くと、1リクエストあたり2〜14秒程度かかる（`docker compose exec`経由のPHPUnit/Pestテスト実行は数百ms〜1秒程度と高速なままで、実HTTPリクエストのみ遅い）
 - 原因【2026-08-21 検証確定】: WSL2バックエンドのDocker Desktopで、Windows側パス（`c:\workspace\stock_auto_order`）を`.:/var/www/html`としてbind mountしていることによるWindows⇄WSL2間のファイルI/O変換オーバーヘッド。1リクエストで数百〜数千のPHPファイルに`stat`/`open`が走るLaravelの特性上、このオーバーヘッドが顕著に乗る。検証: リポジトリをWSL2ネイティブ側（`~/`配下）にコピーし、同じdocker composeスタック・同じエンドポイント（`GET /holdings`）で計測したところ、Windows側 2.3〜14.0秒 → WSL2ネイティブ側 0.015〜0.4秒（100倍以上高速化）。コンテナ化自体・`php artisan serve`自体が原因ではないことを確認済み（コンテナ実行速度＝テスト速度は元々高速だった）
-- 対処: 現時点では実害小さく（`docs/product/requirements.md`の非機能要件「厳密なレスポンス要件は設けない」）緊急対応不要のため、**現状のWindows側配置のまま様子見を継続**。体感が悪化する・実害が出るタイミングが来たら、リポジトリをWSL2ネイティブ側（`\\wsl$\...`配下）に移設する対応を第一候補とする（コンテナ化撤廃は不要。原因はbind mountの配置場所であり、コンテナ化そのものではないため）
+- 対処（当初）: 現時点では実害小さく（`docs/product/requirements.md`の非機能要件「厳密なレスポンス要件は設けない」）緊急対応不要のため、**現状のWindows側配置のまま様子見を継続**。体感が悪化する・実害が出るタイミングが来たら、リポジトリをWSL2ネイティブ側（`\\wsl$\...`配下）に移設する対応を第一候補とする（コンテナ化撤廃は不要。原因はbind mountの配置場所であり、コンテナ化そのものではないため）
+- **2026-08-29 解消**: 体感悪化のため WSL2 ネイティブ（`/root/workspace/stock_auto_order`、WSL Ubuntu / root）へ開発環境一式を複製移設（`scripts/migrate-to-wsl.sh` / `docs/ai-context/wsl-migration-handoff.md`）。`GET /holdings` が Windows側 3〜9秒 → WSL側 **0.015〜0.025秒**（実測、200/302とも）。`php artisan test` 389 passed。
+- **移設後にハマった点（重要）**: Windows側チェックアウト（`c:\workspace\stock_auto_order`）と WSL側は compose プロジェクト名が同じ（どちらもディレクトリ名由来の `stock_auto_order`）だったため、**デスクトップの起動バッチ等で Windows パスから `docker compose up` が走るたびに、高速な WSL 版コンテナが遅い Windows bind mount 版へ静かに作り直されていた**（体感だけ遅く戻り、原因が分かりにくい）。
+- **恒久対処（2026-08-29）**: WSL側の `.env` に `COMPOSE_PROJECT_NAME=stock_auto_order_wsl` を追加してプロジェクトを完全分離。MySQLボリュームは `stock_auto_order_sail-mysql` → `stock_auto_order_wsl_sail-mysql` に複製（`docker run --rm -v old:/from:ro -v new:/to alpine cp -a /from/. /to/`、旧ボリュームはバックアップ保持）。以後 Windows パスから compose が走っても別プロジェクト（`stock_auto_order`）になり WSL 版（`stock_auto_order_wsl`）は無傷。両方同時起動時はポート80衝突で**明示エラー**になる（静かな劣化ではなくなる）。`scripts/*.bat` は WSL 内で `docker compose` を実行する形に修正済み（`COMPOSE_PROJECT_NAME` は `.env` から自動適用）。Windows側の旧デスクトップショートカット・旧スタックは撤去推奨。
 
 ### Laravel `auth`ミドルウェア（ログイン画面未実装） — ブラウザ的な未認証アクセスが500になる
 
