@@ -394,6 +394,32 @@ describe('UC-004: 利確検討画面（Livewire）', function () {
             expect($html)->toContain('現在値以降');
             expect($html)->not->toContain('>null<');
         });
+
+        test('高水準モード適用銘柄（CHG-0006）の分割指値ラベルは+100%/+150%地点になり、+20%/+35%のラベルのままにはならない', function () {
+            $user = User::factory()->create();
+            [, $snapshot] = signalListTestImportBatch();
+
+            $holding = signalListTestHolding(['symbol_code' => '4902', 'market' => 'jp', 'symbol_name' => '高水準銘柄']);
+            signalListTestFundamentalIndicator($holding); // デフォルトで財務健全性passed相当の値。
+            signalListTestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 300, 'average_cost' => 1000.00, 'current_price' => 2600.00, 'unrealized_gain_rate' => 160.0,
+            ]);
+            // Signal行は無し（シグナル0件）。equity_ratio=58.0/roe=15.2/成長率プラスの
+            // デフォルト値と合わせて高水準モード（+150%超・+100%/+150%地点）が適用される。
+
+            $component = Livewire::actingAs($user)->test(SignalList::class);
+
+            $html = $component->html();
+
+            // 高水準モードでは分割指値のラベル自体も+100%/+150%地点に読み替わるべきで、
+            // 通常モードの+20%/+35%地点というラベルのまま残ってはならない
+            // （signal_reason_summaryには「+150%まで引き上げ」等の文言が別途出るが、
+            // 隣の価格ラベルが古いままだと内部矛盾した表示になってしまうため）。
+            expect($html)->toContain('+100%地点');
+            expect($html)->toContain('+150%地点');
+            expect($html)->not->toContain('+20%地点');
+            expect($html)->not->toContain('+35%地点');
+        });
     });
 
     describe('銘柄詳細へのリンク（Green phase TODO: ShowSignalListAction への id 追加が必要）', function () {

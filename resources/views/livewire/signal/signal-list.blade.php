@@ -86,8 +86,13 @@
                             </td>
                             <td class="py-2 px-2">{{ $row['signal_reason_summary'] }}</td>
                             <td class="py-2 px-2">
-                                <div>+20%地点: {{ number_format($row['split_limit_suggestion'][0]['price'], 2) }} / {{ $row['split_limit_suggestion'][0]['quantity'] }}</div>
-                                <div>+35%地点: {{ number_format($row['split_limit_suggestion'][1]['price'], 2) }} / {{ $row['split_limit_suggestion'][1]['quantity'] }}</div>
+                                @php
+                                    // CHG-0006: label must follow the row's actual mode,
+                                    // not always the normal-mode +20%/+35% wording.
+                                    [$firstTierLabel, $secondTierLabel] = $row['is_high_water_mark'] ? ['+100%', '+150%'] : ['+20%', '+35%'];
+                                @endphp
+                                <div>{{ $firstTierLabel }}地点: {{ number_format($row['split_limit_suggestion'][0]['price'], 2) }} / {{ $row['split_limit_suggestion'][0]['quantity'] }}</div>
+                                <div>{{ $secondTierLabel }}地点: {{ number_format($row['split_limit_suggestion'][1]['price'], 2) }} / {{ $row['split_limit_suggestion'][1]['quantity'] }}</div>
                                 <div>現在値以降: {{ $row['split_limit_suggestion'][2]['quantity'] }}</div>
                             </td>
                         </tr>

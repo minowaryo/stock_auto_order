@@ -39,7 +39,7 @@ class ShowSignalListAction
 
         $holdingSnapshots = HoldingSnapshot::query()
             ->where('snapshot_id', $latestSnapshot->id)
-            ->where('unrealized_gain_rate', '>', 20)
+            ->where('unrealized_gain_rate', '>', TakeProfitThresholdEvaluator::MIN_POSSIBLE_GAIN_RATE_THRESHOLD)
             ->whereHas('holding', fn ($query) => $query->where('instrument_type', 'stock'))
             ->where(function ($query) {
                 // Exclude holdings whose holding_snapshot_accounts breakdown
@@ -58,10 +58,13 @@ class ShowSignalListAction
             ->map(function (HoldingSnapshot $holdingSnapshot) {
                 $threshold = $this->resolveThreshold($holdingSnapshot);
 
-                return [$holdingSnapshot, $threshold];
+                if ((float) $holdingSnapshot->unrealized_gain_rate <= $threshold['target_gain_rate_threshold']) {
+                    return null;
+                }
+
+                return $this->toRow($holdingSnapshot, $threshold);
             })
-            ->filter(fn (array $pair) => (float) $pair[0]->unrealized_gain_rate > $pair[1]['target_gain_rate_threshold'])
-            ->map(fn (array $pair) => $this->toRow($pair[0], $pair[1]))
+            ->filter(fn (?array $row) => $row !== null)
             ->values()
             ->all();
     }
@@ -71,12 +74,8 @@ class ShowSignalListAction
      */
     private function resolveThreshold(HoldingSnapshot $holdingSnapshot): array
     {
-        $fundamentalIndicator = $holdingSnapshot->holding->fundamentalIndicator;
-
-        $equityRatio = $fundamentalIndicator?->equity_ratio !== null ? (float) $fundamentalIndicator->equity_ratio : null;
-        $roe = $fundamentalIndicator?->roe !== null ? (float) $fundamentalIndicator->roe : null;
-        $revenueGrowth = $fundamentalIndicator?->revenue_growth !== null ? (float) $fundamentalIndicator->revenue_growth : null;
-        $operatingIncomeGrowth = $fundamentalIndicator?->operating_income_growth !== null ? (float) $fundamentalIndicator->operating_income_growth : null;
+        [$equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth] = $holdingSnapshot->holding->fundamentalIndicator?->healthEvaluatorArgs()
+            ?? [null, null, null, null];
 
         return $this->takeProfitThresholdEvaluator->evaluate(
             $holdingSnapshot->signals->count(),
@@ -112,6 +111,10 @@ class ShowSignalListAction
             'signal_types' => $signals->pluck('signal_type')->values()->all(),
             'signal_reason_summary' => $signalReasonSummary,
             'split_limit_suggestion' => $this->splitLimitSuggestion($holdingSnapshot, $threshold),
+            // CHG-0006: lets the view render the correct price-band labels
+            // (+100%/+150% vs +20%/+35%) instead of hardcoding the normal
+            // mode's labels regardless of which mode actually applied.
+            'is_high_water_mark' => $threshold['mode'] === 'high_water_mark',
         ];
     }
 

@@ -6,7 +6,6 @@ use App\Models\Holding;
 use App\Models\HoldingSnapshot;
 use App\Models\ImportBatch;
 use App\Models\ImportSummaryReportItem;
-use App\Models\Signal;
 use App\Models\Snapshot;
 use App\Models\WatchedTheme;
 use App\Services\Analysis\FundamentalHealthEvaluator;
@@ -90,7 +89,7 @@ class ShowImportSummaryReportAction
     {
         $holdingSnapshots = HoldingSnapshot::query()
             ->where('snapshot_id', $snapshot->id)
-            ->with(['holding.sectorClassification', 'holding.technicalIndicator', 'holding.fundamentalIndicator'])
+            ->with(['holding.sectorClassification', 'holding.technicalIndicator', 'holding.fundamentalIndicator', 'signals'])
             ->get();
 
         // UC-009業務ルール: 投資信託は対象外とする（UC-002業務ルールに準拠し、
@@ -121,17 +120,18 @@ class ShowImportSummaryReportAction
 
             // ADR-0004: reflect saved signals (UC-004's 7 signal types) into
             // both the reason_summary wording and the composite score, on
-            // top of the existing gain-rate/RSI-only ranking.
-            $signals = Signal::query()->where('holding_snapshot_id', $holdingSnapshot->id)->get();
+            // top of the existing gain-rate/RSI-only ranking. Eager-loaded
+            // on $holdingSnapshot (buildCandidates()'s with()) rather than
+            // queried per-iteration, to avoid an N+1 now that the signal
+            // count is needed unconditionally (CHG-0006) instead of only
+            // for holdings already past the old fixed +20% gate.
+            $signals = $holdingSnapshot->signals;
 
             // CHG-0006: the +20%超 threshold dynamically switches to +150%超
             // ("高水準モード") when the holding has zero signals and passes
             // the financial health filter (TakeProfitThresholdEvaluator).
-            $fundamentalIndicator = $holding->fundamentalIndicator;
-            $equityRatio = $fundamentalIndicator?->equity_ratio !== null ? (float) $fundamentalIndicator->equity_ratio : null;
-            $roe = $fundamentalIndicator?->roe !== null ? (float) $fundamentalIndicator->roe : null;
-            $revenueGrowth = $fundamentalIndicator?->revenue_growth !== null ? (float) $fundamentalIndicator->revenue_growth : null;
-            $operatingIncomeGrowth = $fundamentalIndicator?->operating_income_growth !== null ? (float) $fundamentalIndicator->operating_income_growth : null;
+            [$equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth] = $holding->fundamentalIndicator?->healthEvaluatorArgs()
+                ?? [null, null, null, null];
 
             $threshold = $this->takeProfitThresholdEvaluator->evaluate(
                 $signals->count(),

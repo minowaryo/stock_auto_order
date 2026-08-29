@@ -12,6 +12,16 @@ namespace App\Services\Analysis;
  */
 final class TakeProfitThresholdEvaluator
 {
+    /**
+     * The lowest `target_gain_rate_threshold` this class can ever return
+     * (currently the "normal" mode's own threshold). Callers that need a
+     * cheap SQL-level pre-filter before per-holding evaluation (e.g.
+     * ShowSignalListAction) should filter against this constant rather than
+     * a bare literal, so the two stay in sync if a future CR changes either
+     * mode's threshold.
+     */
+    public const MIN_POSSIBLE_GAIN_RATE_THRESHOLD = 20.0;
+
     public function __construct(private readonly FundamentalHealthEvaluator $evaluator) {}
 
     /**
@@ -30,7 +40,7 @@ final class TakeProfitThresholdEvaluator
 
         return [
             'mode' => 'normal',
-            'target_gain_rate_threshold' => 20.0,
+            'target_gain_rate_threshold' => self::MIN_POSSIBLE_GAIN_RATE_THRESHOLD,
             'first_tier_price_multiplier' => 1.20,
             'second_tier_price_multiplier' => 1.35,
         ];

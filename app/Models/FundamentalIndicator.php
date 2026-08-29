@@ -54,4 +54,23 @@ class FundamentalIndicator extends Model
     {
         return $this->belongsTo(Holding::class);
     }
+
+    /**
+     * equity_ratio/roe/revenue_growth/operating_income_growth as plain
+     * nullable floats, in the parameter order FundamentalHealthEvaluator::
+     * evaluate() and TakeProfitThresholdEvaluator::evaluate() expect.
+     * Centralizes the decimal-cast-string-to-float/null-safe extraction that
+     * every caller of those two evaluators otherwise has to repeat.
+     *
+     * @return array{0: ?float, 1: ?float, 2: ?float, 3: ?float}
+     */
+    public function healthEvaluatorArgs(): array
+    {
+        return [
+            $this->equity_ratio !== null ? (float) $this->equity_ratio : null,
+            $this->roe !== null ? (float) $this->roe : null,
+            $this->revenue_growth !== null ? (float) $this->revenue_growth : null,
+            $this->operating_income_growth !== null ? (float) $this->operating_income_growth : null,
+        ];
+    }
 }
