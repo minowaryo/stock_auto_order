@@ -1,7 +1,33 @@
 # PLAN.md
 
-> 2026-08-23（実装済み全エンドポイントのIntegrationテスト網羅性監査完了時点）以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、Phase2 UC-008（Cycle1・Cycle2）完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査完了、フロントエンド実装Phase0（基盤整備）完了、およびフロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
+> 2026-08-23（実装済み全エンドポイントのIntegrationテスト網羅性監査完了時点）以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、Phase2 UC-008（Cycle1・Cycle2）完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査完了、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了、および利確・リバランス閾値の動的分岐ロジック検討〔検討事項の記録のみ、実装はCHG-0006として2026-08-28〜29に別途完了〕等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 > **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。
+
+## 利確検討ラインの動的分岐（CHG-0006）実装完了（2026-08-28〜29）
+
+### Decision
+
+- 「【検討事項・未着手】利確・リバランス閾値の動的分岐ロジック検討」（2026-08-22記録）をPlanモードで具体化し、ユーザー承認を得た: 「現在シグナル0件」かつ「`FundamentalHealthEvaluator`が`passed`」の銘柄のみ「高水準モード」（対象抽出+150%超、分割指値+100%/+150%）を適用し、それ以外は「通常モード」（従来の+20%/+35%）のまま。閾値の具体値（+100%/+150%）は検討メモの例をそのまま採用
+- 判定は表示・集計レイヤー（`ShowSignalListAction`・`ShowImportSummaryReportAction`）のみで完結させ、`FetchExternalMarketDataAction`のシグナル判定・永続化条件（含み益+20%超）は変更しない設計とし、UC-010（買い増しレコメンド）への影響を設計時点で排除した
+- use-cases.md（UC-004/UC-009業務ルール改訂）・data-model.md（初期パラメータ表）・traceability-matrix.md（CHG-0006）を先に整備しGate2/3承認
+- `test-writer`がRedフェーズで新規`TakeProfitThresholdEvaluatorTest`（7件）＋`UC004SignalListTest`/`UC009ImportSummaryReportTest`への追加テストを作成。10件Red・44件Green確認しGate4承認
+- `tdd-implementer`がGreenフェーズを実装: 新規`TakeProfitThresholdEvaluator`（シグナル数0件を先にショートサーキットし、0件のときのみ財務健全性を評価）、両Actionへの組み込み。対象54件・フルスイート388件Green
+- 実データ（134銘柄）で実ブラウザ確認: 含み益94%・シグナル0件・財務健全な銘柄（6098等）が高水準モード適用により`/signals`・サマリーレポート双方から正しく除外されることを確認（サマリーレポートの候補数が54→52件に減少）
+- `/review`（5観点の並列エージェント）で1件の確定バグ・3件の品質指摘が判明。全て修正:
+  - **確定バグ**: `signal-list.blade.php`が「+20%地点」「+35%地点」ラベルをハードコードしており、高水準モード適用銘柄でも古いラベルのまま実際の価格（+100%/+150%地点）を表示してしまう内部矛盾があった。Livewire画面側のテストに高水準モードのケースが無かったためGreen時点ですり抜けていた。`ShowSignalListAction`に`is_high_water_mark`フィールドを追加しBlade側でラベルを動的に切り替えるよう修正。再発防止テストを`SignalListTest.php`に追加
+  - **N+1回帰**: `buildTakeProfitCandidates()`でシグナル数が判定に必要になった結果、`Signal::query()`が全保有銘柄に対して実行されるようになっていた。`signals`リレーションのEager Loadに変更し解消
+  - **重複コード**: `FundamentalIndicator`からのequity_ratio/roe/成長率抽出処理が今回の変更で2箇所増えていた。`FundamentalIndicator::healthEvaluatorArgs()`を新設し集約（既存の2箇所〔`NewCandidateFinder`・`ShowBuySignalListAction`〕は今回のスコープ外として維持）
+  - **マジックナンバーの結合リスク**: `ShowSignalListAction`のSQL事前絞り込み`> 20`を`TakeProfitThresholdEvaluator::MIN_POSSIBLE_GAIN_RATE_THRESHOLD`定数参照に変更
+  - （プロセス違反という指摘が1件あったが、実際にはGate4承認を別ターンで得ておりコミット粒度の見た目だけの誤検知のため対応不要と判断）
+- フルスイート389件Green確認後、コミット（`c3a3752`、`8f7ac51`、いずれも未push）
+
+### Files touched
+
+`app/Services/Analysis/TakeProfitThresholdEvaluator.php`（新規）、`app/Actions/Signal/ShowSignalListAction.php`、`app/Actions/ImportSummaryReport/ShowImportSummaryReportAction.php`、`app/Models/FundamentalIndicator.php`（`healthEvaluatorArgs()`追加）、`resources/views/livewire/signal/signal-list.blade.php`、`docs/product/use-cases.md`（UC-004/UC-009業務ルール改訂・承認記録）、`docs/architecture/data-model.md`（初期パラメータ表・承認記録）、`docs/rcid/traceability-matrix.md`（CHG-0006）、`tests/Unit/Services/Analysis/TakeProfitThresholdEvaluatorTest.php`（新規）、`tests/Feature/UC004SignalListTest.php`、`tests/Feature/UC009ImportSummaryReportTest.php`、`tests/Feature/SignalListTest.php`、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Gate4完了（Red→Gate4承認→Green→`/review`→修正）。フルスイート389件Green、実データ実ブラウザ確認済み。コミット済み（未push）。
 
 ## 売買シグナル画面の可読性改善（表の縦罫線＋シグナルの色分け）（2026-08-28）
 
@@ -261,30 +287,4 @@ Green確認・実ブラウザ動作確認完了（実データ）。フルスイ
 - **フロントエンドUI（Livewire画面化）**: UC-001〜UC-009はこれまで全てAPIのみで実装してきた（`app/Livewire/`・`resources/views/`配下のBladeビューは0件、`docs/product/mockups/`は静的HTMLモックのみで実際に動く画面ではない）。Phase2（F-005/F-006/F-007/F-008）がAPIレベルで全完了したため、**次はLivewireコンポーネント・Bladeビューの実装（実際にブラウザでCSV取込〜各画面確認ができる状態にする）に着手する**方針をユーザーと確認済み
 - **F-007（UC-007 市場全体指標表示）の3指標が未実装**: `GET /market-indicators`エンドポイント自体は実装完了したが、**米国10年債利回り・VIX指数・USD/JPY為替レートの3指標は取得ロジック自体が無く**（J-Quantsの範囲外のデータで、別途新規の外部APIクライアント選定〔ADR要〕が必要）、常に`null`のプレースホルダを返す。3指標の外部データ取得自体は別タスクとして先送り
 
-## 【検討事項・未着手】利確・リバランス閾値の動的分岐ロジック検討（2026-08-22）
-
-### Decision
-
-まだ設計未着手の検討事項として記録のみ行う（実装・use-cases.md本文の確定変更はしない）。
-
-- **課題認識（ユーザー提起）**: 現状、利確検討の閾値は一律の固定値になっている（UC-004の対象抽出・分割指値提案は含み益+20%/+35%固定、UC-009の`buildTakeProfitCandidates()`も`TAKE_PROFIT_GAIN_RATE_THRESHOLD = 20.0`の固定値）。本システムは中長期目線での運用を想定しているため、この一律20%〜35%という水準は緩すぎる可能性がある。下落トレンド中の銘柄に対する「20%戻ったら利確」という基準と、上昇が継続しそうな銘柄に対する基準を同じにするのはナンセンスで、後者はもっと高い水準（例: +100%〜+150%程度）まで引き上げるべきではないか、という指摘
-- **検討の方向性（未確定）**: 一律閾値ではなく、銘柄の状態に応じて利確検討ラインを動的に分岐させる。分岐軸の候補としてユーザーと合意した出発点は以下2軸の組み合わせ:
-  1. **シグナル軸**: ADR-0004で実装済みの7種シグナル（`SignalDeterminationService`: RSI高値反落・MACDデッドクロス・BB過熱・52週高値反落・PEG割高・相対力弱含み・出来高急増下落）の発生有無・件数。下落兆候シグナルが出ていない銘柄は「まだ上昇モメンタムが続いている」とみなし利確ラインを引き上げ、シグナルが1件以上出ている銘柄は従来通り早めの水準で利確検討を促す
-  2. **ファンダメンタルズ軸**: UC-003で既に算出・表示しているROE・利益成長率等の成長性指標。ファンダメンタルズが良好な銘柄は中長期の「地力」があるとみなし閾値を引き上げる
-  - イメージ: シグナルなし＋ファンダメンタルズ良好 → 利確検討ラインを+100%〜+150%程度まで引き上げ／シグナルあり、またはファンダメンタルズ悪化 → 従来通り+20%〜+35%程度で早期に利確検討
-- **未確定事項（次にこのテーマに着手する際、Planフェーズで具体化する）**:
-  - 分岐の具体的な閾値レンジ・段階数（2段階か3段階以上か）
-  - シグナル軸とファンダメンタルズ軸の組み合わせ方（AND/ORか、スコア加算方式か）
-  - UC-004（分割指値提案・対象抽出）とUC-009（`buildTakeProfitCandidates()`の`composite_score`・対象抽出閾値）両方への反映要否・反映方法の異同
-  - `docs/product/use-cases.md`・`docs/architecture/data-model.md`（「保留・確定が必要な初期パラメータ値」表）への正式な反映はGate 2/3を経てから行う
-- 現時点では`docs/product/use-cases.md`のUC-004/UC-009に「検討中」の注記のみ追加した（本文の閾値記述自体は未変更）。着手判断はユーザーの指示待ち
-- **【申し送り、2026-08-23追記】** F-010（既存保有株の買い増しタイミングレコメンド、ADR-0007）の設計時に本検討事項との整合性を確認した。動的分岐の「売りシグナル0件なら利確ラインを引き上げる」判定は`signals`（利確シグナル）の件数を数える設計になる想定だが、F-010の買いシグナルは意図的に別テーブル（`buy_signals`）に分離してあるため混入しない。一方で、動的分岐により`FetchExternalMarketDataAction`の利確シグナル生成ゲート（含み益+20%超）の閾値が銘柄ごとに20〜150%へ変動するようになると、**UC-010（買い増し候補）の対象範囲が連動して広がる**（`signals`行が作られない銘柄が増える→`whereDoesntHave('signals')`の対象が増える）。動的分岐の実装時にはこの副作用を踏まえ、UC-010側の対象件数の変化を実データで確認すること
-
-### Files touched
-
-`PLAN.md`（本エントリ追加）、`docs/product/use-cases.md`（UC-004・UC-009に検討中の注記追加）
-
-### Status
-
-検討事項として記録のみ。設計・実装は未着手。次にこのテーマに着手する際はPlanフェーズから開始する。
 
