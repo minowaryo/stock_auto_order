@@ -14,7 +14,7 @@ use Livewire\Component;
  * を削除・再挿入する副作用を持つ（同Actionのdocblock参照）ため、
  * mount()で1回だけ実行し、render()では保存済みの$reportを再利用する。
  */
-#[Layout('components.layouts.app', ['title' => '取込後サマリーレポート'])]
+#[Layout('components.layouts.app', ['title' => '取込後サマリーレポート', 'active' => 'summary-report'])]
 class Show extends Component
 {
     /**
@@ -22,9 +22,12 @@ class Show extends Component
      */
     public array $report = [];
 
+    public ?string $importedAtLabel = null;
+
     public function mount(ImportBatch $importBatch, ShowImportSummaryReportAction $showImportSummaryReportAction): void
     {
         $this->report = $showImportSummaryReportAction->execute($importBatch);
+        $this->importedAtLabel = $importBatch->imported_at?->format('Y-m-d H:i');
     }
 
     public function render()

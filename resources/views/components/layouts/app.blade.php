@@ -1,7 +1,7 @@
 {{--
-    docs/product/ui-guidelines.md確定のナビゲーション方針（5タブ上限）に基づく
-    共通レイアウト。UC-003（銘柄詳細）・UC-009（サマリーレポート）は
-    ナビゲーションタブを持たないため $active を渡さない。
+    docs/product/ui-guidelines.md確定のナビゲーション方針（6タブ上限）に基づく
+    共通レイアウト。UC-003（銘柄詳細）はナビゲーションタブを持たないため
+    $active を渡さない（CHG-0008でUC-009にはサマリーレポートタブを追加）。
 --}}
 @props(['title' => null, 'active' => null])
 <!DOCTYPE html>
@@ -35,6 +35,7 @@
                             'sector-dashboard' => ['label' => 'セクター配分', 'url' => '/sector-dashboard'],
                             'candidate-check' => ['label' => '新規投資候補', 'url' => '/candidate-check'],
                             'csv-import' => ['label' => 'CSV取込', 'url' => '/csv-import'],
+                            'summary-report' => ['label' => 'サマリーレポート', 'url' => '/summary-report'],
                         ];
                     @endphp
                     @foreach ($navItems as $key => $item)

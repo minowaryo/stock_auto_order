@@ -1,6 +1,24 @@
-# PLAN.md アーカイブ（〜2026-08-23 フロントエンド実装Phase0完了前）
+# PLAN.md アーカイブ（〜2026-08-25 フロントエンド実装Phase3完了前）
 
-PLAN.md から退避した完了済みエントリ。Gate0セットアップ〜Phase1（UC-001/002/003/009）Gate4サイクル完了・ADR-0002 NISA区分CR・投資方針背景整理・ADR-0004（分析エンジンの指標セット拡張、設計確定〜TechnicalIndicatorCalculator〜MarketData層〜JQuantsClient〜SignalDeterminationService〜FundamentalIndicatorMapperの各TDDサイクル、UC-001への配線・UC-004画面実装・UC-003/UC-009への新指標反映を含む）完了、関連する`/review`指摘修正2件・UC-009サンプルレポート生成・per-holding非アトミック性修正、F-010（UC-010）のGate1〜3ドキュメント叩き台整備（ADR-0007新規作成、requirements.md/use-cases.md/data-model.md改訂）、NISA区分（口座区分）内訳の書き込み経路・UC-004消費側の実装完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査、およびフロントエンド実装Phase0（基盤整備）完了までの記録。現在進行中のタスクとは直接関係しないため参照頻度は低いが、経緯確認が必要な場合はここを見る。
+PLAN.md から退避した完了済みエントリ。Gate0セットアップ〜Phase1（UC-001/002/003/009）Gate4サイクル完了・ADR-0002 NISA区分CR・投資方針背景整理・ADR-0004（分析エンジンの指標セット拡張、設計確定〜TechnicalIndicatorCalculator〜MarketData層〜JQuantsClient〜SignalDeterminationService〜FundamentalIndicatorMapperの各TDDサイクル、UC-001への配線・UC-004画面実装・UC-003/UC-009への新指標反映を含む）完了、関連する`/review`指摘修正2件・UC-009サンプルレポート生成・per-holding非アトミック性修正、F-010（UC-010）のGate1〜3ドキュメント叩き台整備（ADR-0007新規作成、requirements.md/use-cases.md/data-model.md改訂）、NISA区分（口座区分）内訳の書き込み経路・UC-004消費側の実装完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査、フロントエンド実装Phase0（基盤整備）完了、およびフロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了までの記録。現在進行中のタスクとは直接関係しないため参照頻度は低いが、経緯確認が必要な場合はここを見る。
+
+## フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット）完了、共通レイアウトの重大バグ修正（2026-08-25）
+
+### Decision
+
+- Phase1+2に続き、Phase3（UC-002保有銘柄一覧画面、UC-007市場全体指標ウィジェットを内包）を実施
+- `test-writer`が12件のLivewireコンポーネントテストを作成。Gate4で2点確認: (1) セクターフィルタのプルダウンに「未分類」を選択肢として手動追加（`ListHoldingsAction`は文字列一致でフィルタするだけなので追加ロジック不要）、(2) NEWバッジ・一覧行のリンク先（`/candidate-check`・`/holdings/{id}`）はまだ実装されていないPhase4/7の画面を先行して参照する（その間は404、Phase1+2と同じ進め方）— いずれも「妥当」で承認
+- `tdd-implementer`がGreenフェーズを実装: `app/Livewire/Holding/HoldingList.php`（`ListHoldingsAction`・`ShowMarketIndicatorAction`を`render()`で毎回呼び出す純粋読み取り設計）。対象12件・フルスイート271件Green（他セッション進行中のUC-010関連の失敗は無関係と確認済み）
+- **実ブラウザ確認（Playwright MCP）で重大バグを発見・修正**: 共通レイアウト（`resources/views/components/layouts/app.blade.php`、Phase0で作成）に`<meta name="csrf-token">`が欠落しており、Livewireの`wire:submit`/`wire:model.live`等のAJAX通信が実ブラウザでは無反応になっていた。`Livewire::test()`はブラウザのJS/AJAX層を経由しないため、Phase0のログイン機能を含めこれまでの全Feature Testでは検出できていなかった不具合。CSRFメタタグを追加し修正、回帰防止テスト（`tests/Feature/LayoutTest.php`）を追加し、実ブラウザでログイン→ログアウトの往復が正常に機能することを確認した
+- Phase3自体は実データ（134銘柄超）で市場全体指標ウィジェット（日経平均・S&P500は実値、残り3指標は「取得不可」表示）・セクターフィルタ（未分類含む）・一覧表示が正しく動作することをPlaywrightで確認
+
+### Files touched
+
+`app/Livewire/Holding/HoldingList.php`（新規）、`resources/views/livewire/holding/holding-list.blade.php`（新規）、`routes/web.php`（`/holdings`ルート追加）、`tests/Feature/HoldingListTest.php`（新規、12件）、`resources/views/components/layouts/app.blade.php`（csrf-tokenメタタグ追加、バグ修正）、`tests/Feature/LayoutTest.php`（新規、回帰防止テスト1件）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実ブラウザ動作確認完了（実データ）。フルスイート284件（271+13、他セッションのUC-010関連を除く）Green。CSRFバグ修正によりログイン画面（Phase0）を含む全Livewire画面のAJAX通信が実ブラウザで正しく機能するようになった。次はPhase4（UC-003銘柄詳細画面）に進む。
 
 ## フロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了（2026-08-23）
 

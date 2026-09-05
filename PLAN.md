@@ -1,7 +1,54 @@
 # PLAN.md
 
-> 2026-08-23（実装済み全エンドポイントのIntegrationテスト網羅性監査完了時点）以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、Phase2 UC-008（Cycle1・Cycle2）完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査完了、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了、および利確・リバランス閾値の動的分岐ロジック検討〔検討事項の記録のみ、実装はCHG-0006として2026-08-28〜29に別途完了〕等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
+> 2026-08-25（フロントエンド実装Phase3完了時点）以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、Phase2 UC-008（Cycle1・Cycle2）完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査完了、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了、利確・リバランス閾値の動的分岐ロジック検討〔検討事項の記録のみ、実装はCHG-0006として2026-08-28〜29に別途完了〕、およびフロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 > **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。
+
+## 取込後サマリーレポートのグローバルナビタブ化（CHG-0008）完了（2026-09-05）
+
+### Decision
+
+- ユーザー要望: 取込後サマリーレポート（UC-009）は取込直後のリダイレクトでしか見られず、他画面へ移動すると取込バッチIDを知らない限り戻れない。「最新レポートだけでいいので、いつでも見られるようタブを作ってほしい」との依頼
+- Planフェーズで承認。設計（プランファイル: `~/.claude/plans/stock_auto_order-latest-summary-report-tab-implementation-phase.md`）:
+  - 新規ルート`GET /summary-report`（`app/Livewire/ImportSummaryReport/Latest.php`）を追加し、グローバルナビの右端（CSV取込の後、6タブ目）に「サマリーレポート」タブを新設
+  - 中身はスナップショットを持つ**最新の取込バッチ**を`ImportBatch::query()->whereHas('snapshot')->orderByDesc('imported_at')->orderByDesc('id')->first()`で特定し、既存`ShowImportSummaryReportAction`をそのまま呼んで毎回再計算（過去バッチの履歴閲覧は対象外）。DBスキーマ変更なし
+  - 既存`show.blade.php`のヘッドライン・上位10件・補足レコメンドの描画部を`resources/views/components/summary-report-body.blade.php`に切り出し、新旧2画面（取込直後リダイレクト先／恒常タブ）で共有。既存の`ImportSummaryReportShowTest`・`UC009ImportSummaryReportTest`・`CsvImportUploadTest`は無改変のままGreenを維持し、出力が変わっていないことを担保
+  - 取込バッチが1件も無い場合は「まだCSVの取込がありません」＋CSV取込導線を表示
+  - 取込直後リダイレクト先（`/import-batches/{id}/summary-report`）でも「サマリーレポート」タブがハイライトされるよう`Show.php`にも`active`指定を追加。あわせて両画面に取込日時のキャプション（`$importedAtLabel`）を追加
+- Gate2（`docs/product/use-cases.md` UC-009フロー7・業務ルール「タブからの再表示」・エラーケース）・`ui-guidelines.md`（5タブ→6タブ）・`traceability-matrix.md`（CHG-0008）を先に更新・承認。Gate3はDBスキーマ変更が無いため対象外
+- `test-writer`がRedフェーズで新規`ImportSummaryReportLatestTest.php`6件（最新バッチ選択・古いバッチ非表示・スナップショット無し失敗バッチのスキップ・空状態＋Action不実行・Action1回のみ呼び出し・未認証リダイレクト）＋`LayoutTest.php`にナビ回帰1件を作成。7件Red確認しGate4承認
+- `tdd-implementer`がGreenフェーズを実装。対象7件・関連する既存3ファイル（`ImportSummaryReportShowTest`/`UC009ImportSummaryReportTest`/`CsvImportUploadTest`、計37件）無改変Green・フルスイート422件Green
+- 実データ（保有134銘柄・取込バッチ3件）で実HTTP確認: Playwright MCPが接続不能だったため、`artisan tinker`から実際のセッションCookie（`CookieValuePrefix`＋`Crypt`でLaravelの暗号化Cookieを再現）を発行し、実行中のDockerコンテナへ本物のHTTP経由でアクセスして検証。(1) 全画面のナビ右端に「サマリーレポート」タブが表示される、(2) `/summary-report`で最新バッチ（id=133）のレポート（おすすめ上位10件含む）が表示されタブがハイライトされる、(3) `/import-batches/133/summary-report`（取込直後リダイレクト先）でも同タブがハイライトされる、(4) 応答にエラーマーカーなし、を確認。検証用に作成した一時セッション行は削除済み
+- UC-009タブ化は一覧→詳細遷移と同種の標準的な閲覧フローであり、`.claude/rules/31-e2e-testing.md`が対象とする「クリティカルフロー」に該当しないと判断しPlaywright E2Eテストは追加しない（UC-004のE2E見送り判断と同一の考え方）
+
+### Files touched
+
+`app/Livewire/ImportSummaryReport/Latest.php`（新規）、`app/Livewire/ImportSummaryReport/Show.php`（`active`指定・`importedAtLabel`追加）、`resources/views/components/summary-report-body.blade.php`（新規、描画部の移設）、`resources/views/livewire/import-summary-report/latest.blade.php`（新規）、`resources/views/livewire/import-summary-report/show.blade.php`（共通部品呼び出しへ置換・キャプション追加）、`resources/views/components/layouts/app.blade.php`（ナビタブ追加）、`routes/web.php`（`/summary-report`ルート追加）、`docs/product/use-cases.md`（UC-009フロー7・業務ルール・エラーケース・承認記録）、`docs/product/ui-guidelines.md`（6タブ化）、`docs/rcid/traceability-matrix.md`（CHG-0008）、`tests/Feature/ImportSummaryReportLatestTest.php`（新規、6件）、`tests/Feature/LayoutTest.php`（回帰テスト1件追加）、`PLAN.md`（本エントリ追加、300行超過に伴い「フロントエンド実装Phase3」エントリを`docs/history/plan-archive.md`へ退避）
+
+### Status
+
+Gate4完了（Red→Gate4承認→Green）。フルスイート422件Green（13 deprecatedは既存・無関係）。pint適用済み・実HTTP確認済み。`/review`未実施・未コミット。次は`/review`実施後にコミット（pushはユーザーの明示的指示があるまで行わない）。
+
+## 売買シグナル画面 判定チェックリスト表示（CHG-0007）（2026-08-29〜）
+
+### Decision
+
+- ユーザー要望: `/signals`（利確検討・買い増し候補の両セクション）で、良し悪しの判断根拠を「基準点 × その銘柄の実測値 × 達成状態」の形で一覧に出したい。達成は緑、基準の8割まで来ていれば達成より淡い緑、で見づらくならない程度に。ファンダメンタルズ・財務健全性・シグナル基準から大事な項目を過不足なくピックアップ。横に長くなるのは許容
+- Planフェーズで承認。設計（プランファイル: `~/.claude/plans/stock_auto_order-signal-criteria-panel-implementation-phase.md`）:
+  - 各銘柄行の直下にフル幅サブ行（`<tr><td colspan>`）で判定チェックリストを敷く（列は増やさない）
+  - **テクニカル7項目**（利確: 含み益率>ライン/RSI≧70/52週高値下落率≦-10%/BB上限乖離≧0%/MACD−シグナル線<0/PEG≧2.0/相対力<0。買い増し: RSI≦30/52週安値距離≦+10%/BB下限乖離≦0%/MACD−シグナル線>0/MA20乖離≦-10%/PEG≦1.0/出来高倍率≧1.5）＋ **財務健全性3項目**（ROE≧10%/自己資本比率≧40%/成長率>0%）を別グループで表示・別集計
+  - 基準値は既存の確定済みシグナル判定閾値・`FundamentalHealthEvaluator`の閾値をそのまま可視化（新設なし）。`near`（あと一歩）= 基準値の±20%手前、基準値0の項目は達成/未達の2値（`data-model.md`で新規確定）
+  - 新設 `SignalCriteriaEvaluator`（表示専用の純粋計算クラス）＋ Bladeコンポーネント2つ（`criteria-chip`/`criteria-panel`）。`SignalDeterminationService`/`BuySignalDeterminationService`/`FundamentalHealthEvaluator`のハードコード閾値を`public const`に抽出して共有（CHG-0005型の二重管理を防ぐ。判定ロジックは不変）
+  - 両Actionに`holding.technicalIndicator`のEager Load追加（CHG-0006のN+1回帰と同じ轍を踏まない）
+  - DBスキーマ変更なし
+- Gate2（use-cases.md UC-004/UC-010）・Gate3（data-model.md `near`バッファ）・`ui-guidelines.md`（「一覧に全指標の内訳を出さない」方針の例外化＋チップ配色規約）・traceability-matrix.md（CHG-0007）を先に更新済み
+
+### Files touched（予定）
+
+`app/Services/Analysis/SignalCriteriaEvaluator.php`（新規）、`app/Services/Analysis/SignalDeterminationService.php`（閾値をpublic const化）、`app/Services/Analysis/BuySignalDeterminationService.php`（同）、`app/Services/Analysis/FundamentalHealthEvaluator.php`（同）、`app/Actions/Signal/ShowSignalListAction.php`、`app/Actions/Signal/ShowBuySignalListAction.php`、`resources/views/components/criteria-chip.blade.php`（新規）、`resources/views/components/criteria-panel.blade.php`（新規）、`resources/views/livewire/signal/signal-list.blade.php`、`docs/product/use-cases.md`、`docs/architecture/data-model.md`、`docs/product/ui-guidelines.md`、`docs/rcid/traceability-matrix.md`、`tests/Unit/Services/Analysis/SignalCriteriaEvaluatorTest.php`（新規）、`tests/Feature/UC004SignalListTest.php`、`tests/Feature/UC010BuySignalListTest.php`、`tests/Feature/SignalListTest.php`、`PLAN.md`（本エントリ）
+
+### Status
+
+ドキュメント更新（Gate2/3）完了。Redフェーズ完了・Gate4承認待ち: `tests/Unit/Services/Analysis/SignalCriteriaEvaluatorTest.php`（新規16件）、`tests/Feature/UC004SignalListTest.php`（+4件）、`tests/Feature/UC010BuySignalListTest.php`（+3件）、`tests/Feature/SignalListTest.php`（+3件）。フルスイート実行で新規26件が意図通りRed（`Class ... not found` / `Undefined array key "criteria"` / HTML未描画）、既存389件は引き続きGreenであることを確認済み。次: Gate4承認 → Green（最小実装）→ `run`スキルで実ブラウザ確認 → `/review` → コミット（push禁止）。
 
 ## 利確検討ラインの動的分岐（CHG-0006）実装完了（2026-08-28〜29）
 
@@ -262,25 +309,6 @@ Green確認・実ブラウザ動作確認完了（実データ）。フルスイ
 ### Status
 
 Green確認完了。フルスイート302件Green。今後、コード（Blade/ルート等）を含む共有ファイルへのコミット前は`git diff origin/main..HEAD`等でPLAN.md/data-model.md以外の共有ファイルにも他セッションの混入が無いか確認する運用とする。次はPhase4（UC-003銘柄詳細画面）に進む。
-
-## フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット）完了、共通レイアウトの重大バグ修正（2026-08-25）
-
-### Decision
-
-- Phase1+2に続き、Phase3（UC-002保有銘柄一覧画面、UC-007市場全体指標ウィジェットを内包）を実施
-- `test-writer`が12件のLivewireコンポーネントテストを作成。Gate4で2点確認: (1) セクターフィルタのプルダウンに「未分類」を選択肢として手動追加（`ListHoldingsAction`は文字列一致でフィルタするだけなので追加ロジック不要）、(2) NEWバッジ・一覧行のリンク先（`/candidate-check`・`/holdings/{id}`）はまだ実装されていないPhase4/7の画面を先行して参照する（その間は404、Phase1+2と同じ進め方）— いずれも「妥当」で承認
-- `tdd-implementer`がGreenフェーズを実装: `app/Livewire/Holding/HoldingList.php`（`ListHoldingsAction`・`ShowMarketIndicatorAction`を`render()`で毎回呼び出す純粋読み取り設計）。対象12件・フルスイート271件Green（他セッション進行中のUC-010関連の失敗は無関係と確認済み）
-- **実ブラウザ確認（Playwright MCP）で重大バグを発見・修正**: 共通レイアウト（`resources/views/components/layouts/app.blade.php`、Phase0で作成）に`<meta name="csrf-token">`が欠落しており、Livewireの`wire:submit`/`wire:model.live`等のAJAX通信が実ブラウザでは無反応になっていた。`Livewire::test()`はブラウザのJS/AJAX層を経由しないため、Phase0のログイン機能を含めこれまでの全Feature Testでは検出できていなかった不具合。CSRFメタタグを追加し修正、回帰防止テスト（`tests/Feature/LayoutTest.php`）を追加し、実ブラウザでログイン→ログアウトの往復が正常に機能することを確認した
-- Phase3自体は実データ（134銘柄超）で市場全体指標ウィジェット（日経平均・S&P500は実値、残り3指標は「取得不可」表示）・セクターフィルタ（未分類含む）・一覧表示が正しく動作することをPlaywrightで確認
-
-### Files touched
-
-`app/Livewire/Holding/HoldingList.php`（新規）、`resources/views/livewire/holding/holding-list.blade.php`（新規）、`routes/web.php`（`/holdings`ルート追加）、`tests/Feature/HoldingListTest.php`（新規、12件）、`resources/views/components/layouts/app.blade.php`（csrf-tokenメタタグ追加、バグ修正）、`tests/Feature/LayoutTest.php`（新規、回帰防止テスト1件）、`PLAN.md`（本エントリ追加）
-
-### Status
-
-Green確認・実ブラウザ動作確認完了（実データ）。フルスイート284件（271+13、他セッションのUC-010関連を除く）Green。CSRFバグ修正によりログイン画面（Phase0）を含む全Livewire画面のAJAX通信が実ブラウザで正しく機能するようになった。次はPhase4（UC-003銘柄詳細画面）に進む。
-
 
 ## 今後の対応（未着手・スコープ確認済み）（2026-08-23追記、UC-007完了時点で更新）
 

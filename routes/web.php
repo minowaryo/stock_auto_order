@@ -16,6 +16,7 @@ use App\Livewire\Candidate\CandidateCheck;
 use App\Livewire\CsvImport\Upload;
 use App\Livewire\Holding\HoldingDetail;
 use App\Livewire\Holding\HoldingList;
+use App\Livewire\ImportSummaryReport\Latest;
 use App\Livewire\ImportSummaryReport\Show;
 use App\Livewire\Sector\SectorDashboard;
 use App\Livewire\Signal\SignalList;
@@ -43,6 +44,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/import-batches/{importBatch}/summary-report', Show::class);
     Route::get('/sector-dashboard', SectorDashboard::class);
     Route::get('/signals', SignalList::class);
+    Route::get('/summary-report', Latest::class);
 });
 
 // JSON API（フロントエンドのLivewireページはこれらをHTTP経由で呼ばず、

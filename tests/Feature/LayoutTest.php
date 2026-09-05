@@ -27,4 +27,28 @@ describe('共通レイアウト', function () {
         $response->assertSuccessful();
         $response->assertSee('<meta name="csrf-token" content="', false);
     });
+
+    /*
+    |----------------------------------------------------------------------
+    | CHG-0008: 最新サマリーレポートのタブ化 — ナビゲーション回帰テスト
+    |----------------------------------------------------------------------
+    |
+    | resources/views/components/layouts/app.blade.php の $navItems に
+    | 'summary-report' エントリ（href="/summary-report" ・ ラベル
+    | 「サマリーレポート」）がまだ追加されていないため、Red state では
+    | assertSee('href="/summary-report"', false) が「そのような文字列は
+    | レスポンスに含まれない」という理由で失敗する想定（既存の5タブの
+    | href/ラベルはこのテスト追加時点でも変更していないため、他の既存
+    | LayoutTestのテストケースには影響しない）。
+    |
+    */
+    test('ナビゲーションに「サマリーレポート」タブ（/summary-report）が表示される', function () {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get('/holdings');
+
+        $response->assertSuccessful();
+        $response->assertSee('href="/summary-report"', false);
+        $response->assertSee('サマリーレポート');
+    });
 });
