@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Services\MarketData\FinnhubClient;
+use App\Services\MarketData\FinnhubClientInterface;
 use App\Services\MarketData\JpStockPriceClient;
 use App\Services\MarketData\JpStockPriceClientInterface;
 use App\Services\MarketData\JQuantsClient;
@@ -27,6 +29,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(UsStockPriceClientInterface::class, UsStockPriceClient::class);
         $this->app->bind(MarketIndexClientInterface::class, MarketIndexClient::class);
         $this->app->bind(JQuantsClientInterface::class, JQuantsClient::class);
+        $this->app->bind(FinnhubClientInterface::class, FinnhubClient::class);
     }
 
     /**

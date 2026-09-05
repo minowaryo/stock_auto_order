@@ -16,6 +16,8 @@ use App\Services\Analysis\BuySignalDeterminationService;
 use App\Services\Analysis\FundamentalIndicatorMapper;
 use App\Services\Analysis\SignalDeterminationService;
 use App\Services\Analysis\TechnicalIndicatorCalculator;
+use App\Services\Analysis\UsFundamentalIndicatorMapper;
+use App\Services\MarketData\FinnhubClientInterface;
 use App\Services\MarketData\JpStockPriceClientInterface;
 use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\MarketData\MarketIndexClientInterface;
@@ -60,8 +62,10 @@ class FetchExternalMarketDataAction
         private readonly UsStockPriceClientInterface $usStockPriceClient,
         private readonly MarketIndexClientInterface $marketIndexClient,
         private readonly JQuantsClientInterface $jQuantsClient,
+        private readonly FinnhubClientInterface $finnhubClient,
         private readonly TechnicalIndicatorCalculator $technicalIndicatorCalculator,
         private readonly FundamentalIndicatorMapper $fundamentalIndicatorMapper,
+        private readonly UsFundamentalIndicatorMapper $usFundamentalIndicatorMapper,
         private readonly SignalDeterminationService $signalDeterminationService,
         private readonly BuySignalDeterminationService $buySignalDeterminationService,
     ) {}
@@ -216,6 +220,22 @@ class FetchExternalMarketDataAction
                                 ],
                             );
                         }
+                    } elseif ($holding->market === 'us') {
+                        // US個別株ファンダメンタルズ（ADR-0009）: Finnhubから
+                        // 取得したmetrics/reportedFinancialsをUsFundamentalIndicatorMapper
+                        // で変換して保存する。financial_statements（UC-006向け）は
+                        // ADR-0009のスコープ外のためUS株には保存しない。
+                        $metrics = $this->finnhubClient->fetchMetrics($holding->symbol_code) ?? [];
+                        $reportedFinancials = $this->finnhubClient->fetchReportedFinancials($holding->symbol_code);
+
+                        $fundamental = $this->usFundamentalIndicatorMapper->map($metrics, $reportedFinancials);
+
+                        FundamentalIndicator::updateOrCreate(
+                            ['holding_id' => $holding->id],
+                            [...$fundamental, 'fetched_at' => now()],
+                        );
+
+                        $pegRatio = $fundamental['peg_ratio'];
                     }
 
                     // UC-004業務ルール: 含み益+20%未満は利確シグナル判定の対象外.

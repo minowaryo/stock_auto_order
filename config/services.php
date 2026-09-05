@@ -42,4 +42,10 @@ return [
         'api_key' => env('JQUANTS_API_KEY'),
     ],
 
+    // Finnhub API。US株ファンダメンタルズのデータソース（ADR-0009参照）
+    // （docs/ai-context/do-not-touch.md「外部連携」参照。値は.envのみで管理する）。
+    'finnhub' => [
+        'key' => env('FINNHUB_API_KEY'),
+    ],
+
 ];

@@ -1,7 +1,28 @@
 # PLAN.md
 
-> 2026-08-25（フロントエンド実装Phase3完了時点）以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、Phase2 UC-008（Cycle1・Cycle2）完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査完了、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了、利確・リバランス閾値の動的分岐ロジック検討〔検討事項の記録のみ、実装はCHG-0006として2026-08-28〜29に別途完了〕、およびフロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
+> 2026-08-27（フロントエンド実装Phase5完了時点。UC-010 Gate4完了・コミット`ba239fe`分も含む）以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、Phase2 UC-008（Cycle1・Cycle2）完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査完了、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了、利確・リバランス閾値の動的分岐ロジック検討〔検討事項の記録のみ、実装はCHG-0006として2026-08-28〜29に別途完了〕、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、フロントエンド実装Phase4（UC-003銘柄詳細画面）完了、UC-010 Gate2/Gate3正式承認（買いシグナル7種の前提条件追加）完了、UC-010 Gate4完了・コミット（`ba239fe`）、およびフロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 > **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。
+
+## 米国株ファンダメンタルズ指標データソースとしてFinnhub採用（CHG-0009）Gate2/3承認完了（2026-09-05〜）
+
+### Decision
+
+- ユーザー要望: 米国株のファンダメンタルズ指標が取得困難（J-Quantsは日本株専用のため、ADR-0004/ADR-0007以来ずっと`unavailable`固定）な状態を解消し、日本株と対等に比較できるようにしたい
+- 候補データソース（Alpha Vantage/Financial Modeling Prep/Finnhub/Twelve Data）を調査し、Finnhubを最有力候補として提案。実際にAPIキーを発行してもらい（`.env`の`FINNHUB_API_KEY`、`.gitignore`対象・確認済み）、`docker compose exec laravel.test php artisan tinker`から実HTTPで疎通確認した:
+  - `stock/metric`（`metric=all`）でAAPLを実際に取得し、PER(`peTTM`)・PBR(`pbAnnual`)・ROE(`roeTTM`)・売上高成長率(`revenueGrowthTTMYoy`)・EPS成長率(`epsGrowthTTMYoy`)・配当利回り(`dividendYieldIndicatedAnnual`)・配当性向(`payoutRatioTTM`)・PEGレシオ(`pegTTM`)が無料枠（60リクエスト/分）で取得できることを確認
+  - 自己資本比率は当初`totalDebt/totalEquity`からの近似（`1/(1+D/E)`）を検討したが、AAPL/ACN/AMD/AMZN/ACHRの5銘柄で実測値と比較したところ最大約2倍の過大評価（AAPL: 実測20.52% vs 近似42.47%）が判明し不採用。代わりに`stock/financials-reported`（10-KのXBRL実データ、無料枠でアクセス可）から総資産・自己資本の実額を取得し実測計算する方式に変更。AAPLの実測値はSEC提出10-Kの公表値（Web検索で確認）と完全一致し、貸借対照表の内部整合性（資産＝負債＋資本）も一致することを確認済み
+  - 営業利益成長率もFinnhubの`metric`に直接のYoYフィールドが無いため、同じく`financials-reported`の`ic`セクション（`us-gaap_OperatingIncomeLoss`）を直近期・前期で比較して算出する方式とした（16期分のデータが取得できることを確認済み）
+- ユーザー承認: 対象8指標（PER・PBR・ROE・売上高/営業利益成長率・自己資本比率・配当利回り/性向・EPS成長率・PEGレシオ）を段階導入ではなく一括で実数値化する
+- `docs/adr/ADR-0009-us-stock-fundamentals-finnhub.md`を新規作成（`/adr`スキル使用、Status: Accepted）。JP用`FundamentalIndicatorMapper`とは入力形状が根本的に異なるため、新規`UsFundamentalIndicatorMapper`（仮称）を別クラスとして並立させる設計方針とし、既存のJP側実装・テストは無改修とする方針を明記
+- Gate2（`use-cases.md` UC-001フロー7・UC-003/UC-004/UC-010のファンダメンタルズ記述、CHG-0009承認記録）・Gate3（`data-model.md` `fundamental_indicators`節、自己資本比率/営業利益成長率の算出方法を「実装完了」注記として追記）・`traceability-matrix.md`（CHG-0009）・`docs/ai-context/do-not-touch.md`「外部連携」節（Finnhub APIキーの扱い）を更新・承認済み。`fundamental_indicators`テーブルは市場非依存の既存スキーマのままでDBマイグレーション不要（Gate3は影響範囲確認のみ）
+
+### Files touched
+
+`.env.example`（`FINNHUB_API_KEY`プレースホルダ追加）、`docs/adr/ADR-0009-us-stock-fundamentals-finnhub.md`（新規）、`docs/product/use-cases.md`（UC-001/UC-003/UC-004/UC-010の記述改訂・承認記録追加）、`docs/architecture/data-model.md`（`fundamental_indicators`節・承認記録追加）、`docs/rcid/traceability-matrix.md`（CHG-0009）、`docs/ai-context/do-not-touch.md`（Finnhub APIキー追記）、`PLAN.md`（本エントリ追加、300行超過に伴い「UC-010 Gate4完了・コミット」エントリを`docs/history/plan-archive.md`へ退避）
+
+### Status
+
+Gate2/Gate3承認完了。DBスキーマ変更なし。次はGate4（`/tdd`のRed→Green→Refactorサイクル）で`UsFundamentalIndicatorMapper`（仮称）・Finnhub用HTTPクライアント（レート制限の自己スロットリング・429リトライ含む）・`FetchExternalMarketDataAction`への組み込みを実装する。未着手・未コミット。
 
 ## 取込後サマリーレポートのグローバルナビタブ化（CHG-0008）完了（2026-09-05）
 
@@ -26,7 +47,7 @@
 
 ### Status
 
-Gate4完了（Red→Gate4承認→Green）。フルスイート422件Green（13 deprecatedは既存・無関係）。pint適用済み・実HTTP確認済み。`/review`未実施・未コミット。次は`/review`実施後にコミット（pushはユーザーの明示的指示があるまで行わない）。
+Gate4完了（Red→Gate4承認→Green→`/review`→修正）。フルスイート422件Green（13 deprecatedは既存・無関係）。pint適用済み・実HTTP確認済み。`/review`でFat Livewireコンポーネント指摘（`Latest::mount()`への「最新バッチ」クエリ直書き）を修正（`ImportBatch::scopeLatestWithSnapshot()`に切り出し）。コミット済み（`bf3c0da`、`c43e1a2`、いずれも未push）。
 
 ## 売買シグナル画面 判定チェックリスト表示（CHG-0007）（2026-08-29〜）
 
@@ -42,13 +63,46 @@ Gate4完了（Red→Gate4承認→Green）。フルスイート422件Green（13 
   - DBスキーマ変更なし
 - Gate2（use-cases.md UC-004/UC-010）・Gate3（data-model.md `near`バッファ）・`ui-guidelines.md`（「一覧に全指標の内訳を出さない」方針の例外化＋チップ配色規約）・traceability-matrix.md（CHG-0007）を先に更新済み
 
-### Files touched（予定）
+### Files touched
 
-`app/Services/Analysis/SignalCriteriaEvaluator.php`（新規）、`app/Services/Analysis/SignalDeterminationService.php`（閾値をpublic const化）、`app/Services/Analysis/BuySignalDeterminationService.php`（同）、`app/Services/Analysis/FundamentalHealthEvaluator.php`（同）、`app/Actions/Signal/ShowSignalListAction.php`、`app/Actions/Signal/ShowBuySignalListAction.php`、`resources/views/components/criteria-chip.blade.php`（新規）、`resources/views/components/criteria-panel.blade.php`（新規）、`resources/views/livewire/signal/signal-list.blade.php`、`docs/product/use-cases.md`、`docs/architecture/data-model.md`、`docs/product/ui-guidelines.md`、`docs/rcid/traceability-matrix.md`、`tests/Unit/Services/Analysis/SignalCriteriaEvaluatorTest.php`（新規）、`tests/Feature/UC004SignalListTest.php`、`tests/Feature/UC010BuySignalListTest.php`、`tests/Feature/SignalListTest.php`、`PLAN.md`（本エントリ）
+`app/Services/Analysis/SignalCriteriaEvaluator.php`（新規）、`app/Services/Analysis/SignalDeterminationService.php`（閾値をpublic const化）、`app/Services/Analysis/BuySignalDeterminationService.php`（同）、`app/Services/Analysis/FundamentalHealthEvaluator.php`（同）、`app/Actions/Signal/ShowSignalListAction.php`、`app/Actions/Signal/ShowBuySignalListAction.php`、`resources/views/components/criteria-chip.blade.php`（新規、サイズ縮小のため後日修正）、`resources/views/components/signal-table-colgroup.blade.php`（新規）、`resources/views/components/signal-table-head.blade.php`（新規）、`resources/views/components/signal-criteria-cells.blade.php`（新規）、`resources/views/components/signal-criteria-summary-badges.blade.php`（新規）、`resources/views/livewire/signal/signal-list.blade.php`、`docs/product/use-cases.md`、`docs/architecture/data-model.md`、`docs/product/ui-guidelines.md`、`docs/rcid/traceability-matrix.md`、`tests/Unit/Services/Analysis/SignalCriteriaEvaluatorTest.php`（新規）、`tests/Feature/UC004SignalListTest.php`、`tests/Feature/UC010BuySignalListTest.php`、`tests/Feature/SignalListTest.php`、`.claude/skills/verify/SKILL.md`（Tailwindリビルド必須の注記・Playwright MCP不通時のcurlログインfallback手順を追記）、`docs/ai-context/known-pitfalls.md`（Tailwind CSS v4の同様の記録を追記）、`PLAN.md`（本エントリ）
 
 ### Status
 
-ドキュメント更新（Gate2/3）完了。Redフェーズ完了・Gate4承認待ち: `tests/Unit/Services/Analysis/SignalCriteriaEvaluatorTest.php`（新規16件）、`tests/Feature/UC004SignalListTest.php`（+4件）、`tests/Feature/UC010BuySignalListTest.php`（+3件）、`tests/Feature/SignalListTest.php`（+3件）。フルスイート実行で新規26件が意図通りRed（`Class ... not found` / `Undefined array key "criteria"` / HTML未描画）、既存389件は引き続きGreenであることを確認済み。次: Gate4承認 → Green（最小実装）→ `run`スキルで実ブラウザ確認 → `/review` → コミット（push禁止）。
+Gate4承認・Green実装完了（フルスイート73件Green、うちSignalCriteriaEvaluatorTest 16件・UC004/UC010/SignalList各Feature Test追加分含む）。Green完了後、実画面レビューで判定チェックリストのレイアウトをユーザーフィードバックに基づき2段階で改訂:
+1. 当初実装（`resources/views/components/criteria-panel.blade.php`を新設し、銘柄行直下のフル幅サブ行に1個のパネルとして配置）は1銘柄=2行になり視認しづらいとの指摘で、パネルを銘柄行の末尾に1列で集約する1銘柄=1行構成に変更
+2. その1列集約案も、列内でチップが折り返され銘柄ごとに折返し位置がずれて見づらいとの追加指摘で、**チップ1項目=テーブル1列**に分解する最終形に変更。`criteria-panel.blade.php`は不要になったため削除し、`criteria-chip.blade.php`を`signal-list.blade.php`から直接、2段ヘッダー（グループ`colspan`＋項目ラベル）付きで列ごとに呼び出す構成に変更
+`ui-guidelines.md`のCHG-0007該当箇所を最終形に合わせて更新済み。フルスイート422件Green再確認。
+- 実データ（保有134銘柄・シグナル187件）で実HTTP確認: Playwright MCPが接続不能だったため、CHG-0008と同じ手法（`artisan tinker`で実セッションCookieを発行し実行中コンテナへ本物のHTTP経由でアクセス）で検証。最終形（チップ1項目=1列、2段ヘッダー）が意図通り描画され、met（緑濃）/near（緑薄）/unmet（グレー）/unavailable（薄グレー、値`—`）の4状態が実データで正しく出現することを確認。検証用の一時セッション行は削除済み
+- `/review`（medium）で2件判明、両方修正: (1) **確定バグ**: 「相対力(対市場)」チップが基準0に対し`lte`（≤0）で判定しており、`SignalDeterminationService::determineRelativeStrengthWeakening()`の厳密な`<0`判定と境界値0.0で食い違っていた（Red時点のテスト仕様コメントは`<0`と明記済みだったが、Green実装が`lte`を誤って流用）。`SignalCriteriaEvaluator::classify()`に`lt`（厳密未満）方向を追加し、当該項目のみ`lt`＋ラベル`<0`に修正。(2) **効率**: `evaluateTakeProfit()`/`evaluateBuy()`がそれぞれ`fundamentalRows()`を2回呼んでいたのをローカル変数に一度だけ格納する形に修正。修正後フルスイート422件Green再確認・実HTTP確認で反映を再確認（相対力チップの基準ラベルが`<0`表示に変わり、境界値-6.8等が正しくmet判定）・pint適用済み
+- UC-004/UC-010の一覧→チェックリスト表示は`.claude/rules/31-e2e-testing.md`が対象とする「クリティカルフロー」に該当しないと判断しPlaywright E2Eテストは追加しない（UC-004本編・UC-009タブ化と同一の考え方）
+
+**実画面確認（2026-09-05）**: 上記コミット準備が整った後、ユーザーから「デザイン崩れが激しい」と報告あり、Playwright MCPで確認しようとしたが本セッションでは接続不通（`CONNECT_TIMEOUT`）、コンテナ内に`chromium-cli`・ブラウザ・表示系フォールバックも無し。代わりに`verify`スキルへ追記した手順で、Livewireのログイン画面（`wire:submit`コンポーネント）に対して実際のLivewire update AJAXプロトコルをcurl+pythonで再現してログインし、本物のセッションCookieで`/signals`の実HTMLを取得して確認した。
+- 判明した実際の原因: `compose.yaml`にVite dev serverが無く、CSSは`npm run build`による静的ビルド。Tailwind v4はビルド時点でBladeをスキャンするJIT方式のため、今回のレイアウト変更で新規に使い始めた`overflow-x-auto`・`whitespace-nowrap`クラスが、直近のビルド済みCSS（ビルド日時がこの変更より前）に含まれておらず、テーブルの横スクロール・ヘッダーの折返し防止が効かないまま配信されていた（`php artisan test`はコンパイル済みCSSを見ないため検出不可）
+- 対処: `docker compose exec laravel.test bash -c "cd /var/www/html && npm run build"`でCSSを再ビルド（`app-C9OyCJfb.css`43KB→`app-Czb6vJjq.css`62KB、両クラスの定義を確認）。取得した実HTMLをパースし、両テーブルとも2段ヘッダーの実効列数（5+7+3=15）とtbody各行（買い増し9行・利確48行）のcolspan合計が全て一致することを確認済み（構造上の崩れは無し）。再ビルド後にフルスイート422件Green再確認
+- 再発防止として`docs/ai-context/known-pitfalls.md`に本件を記録し、`verify`スキルに「Blade変更時は`npm run build`必須」「Playwright不通時のcurlログインfallback手順」を追記
+
+**表フォーマットの統一・固定表示・縮小（2026-09-05）**: 続けてユーザーから「利確検討と買い増し候補のフォーマットが異なる」「ヘッダー・銘柄名を固定表示にしてほしい」「セル全体を10〜20%程度縮小して画面に収まりやすくしてほしい」と依頼あり
+- 原因分析: 2表は列数・列順は同じだが列ごとの内容（財務健全性／理由サマリ等）が異なり、個別にBladeを手書きしていたため対応列の実測幅（ブラウザの自動レイアウト）が表ごとにずれていた
+- 対処: `<colgroup>`（`resources/views/components/signal-table-colgroup.blade.php`、新規）・2段ヘッダー（`signal-table-head.blade.php`、新規）・判定チェックリストの`<td>`群（`signal-criteria-cells.blade.php`、新規）を共通コンポーネント化し、両テーブルが完全に同一の列幅定義を共有する構成に変更（`table-fixed`＋`colgroup`で列幅を内容量に依存させず固定）。取得した実HTMLで両テーブルの`colgroup`が完全一致することを確認済み
+- 固定表示: `<thead>`に`sticky top-0 z-20 bg-surface`、銘柄列（ヘッダー・本文とも）に`sticky left-0`を付与し、縦スクロールでヘッダーが、横スクロールで銘柄名列が常に見える状態にした
+- 縮小: 表全体`text-[13px]`→`text-[11px]`、セルpadding`py-2 px-2`→`py-1.5 px-1.5`、`criteria-chip`の固定`min-w-[88px]`を廃止しセル幅（`w-[72px]`）に追従させ内部フォントも1段階縮小。列幅固定に伴い長いシグナル種別名がはみ出さないよう`[&_td]:break-words`を追加
+- `docs/product/ui-guidelines.md`のCHG-0007該当箇所に本改訂を追記。再ビルド後、実データで両テーブルの`colgroup`一致・列数一致（構造崩れ無し）を確認、フルスイート422件Green再確認
+
+**達成数サマリの復活・固定表示の実効化（2026-09-05）**: ユーザーが実ブラウザのスクリーンショットで確認したところ2点の追加指摘: (1) 判定チェックリストを横スクロールすると達成数（テクニカル/財務それぞれ何項目達成か）が分からなくなる、(2) ヘッダー行（銘柄・含み益率等のラベル行）が縦スクロールで固定されていない
+- (1)への対処: 一度「列見出しと冗長」として省略した「◯/N 達成」テキストサマリを`x-signal-criteria-summary-badges`（新規）として復活。判定チェックリスト列側ではなく、横スクロールしても常に見える**銘柄セル（sticky left-0）内・銘柄名の直下**に「技術 3/7」「財務 2/3」の2行で表示し、達成率に応じて簡易配色（全達成=緑／0件=グレー／それ以外=amber）。値は既に`criteria.summary`としてAction側で計算済みだったため追加計算は不要
+- (2)への原因調査: 実HTMLには`sticky top-0`のクラス自体は正しく出力されており、静的HTML確認だけでは検出できない**実ブラウザのレンダリング挙動の不具合**だった。原因はテーブルの横スクロール用ラッパー`<div class="overflow-x-auto">`が`overflow-y`を指定していなかったこと。CSS仕様上、`overflow-x`と`overflow-y`の片方が`visible`でもう片方がそうでない場合は両方`auto`に補正されるルールがあり、このdivが（実際は縦オーバーフローしないにも関わらず）縦スクロールの祖先要素とみなされてしまい、`position: sticky`の基準がページではなくこのdivになって効かなくなっていた
+- (2)への対処（1回目、誤り）: ラッパーに`overflow-y-hidden`を追加（`overflow-x-auto overflow-y-hidden`）し補正ルールの発動条件を外せば解消すると考えたが、ユーザーが実ブラウザで再確認したところ「まだヘッダーが固定されない」と再度指摘があり誤りと判明
+- **原因の再調査と正しい対処**: `overflow: hidden`は`auto`と同様それ自体がスクロールコンテナを成立させる値であり、`visible`から`hidden`に変えても「このdivが`sticky`の基準になってしまう」問題自体は解消していなかった（`visible`⇄`auto`の補正ルールは事実だが、「`visible`以外なら何でも良い」という結論部分が誤りだった）。正しくは`overflow-y-clip`（`overflow-y: clip`）を使う必要がある。`clip`は`hidden`と異なりスクロールコンテナを一切成立させない仕様上明確に区別された値で、`overflow-x-auto overflow-y-clip`とすることで水平方向は実際にスクロールコンテナとして機能しつつ、垂直方向は`sticky`の基準として無視されページ本体まで正しく伝播する。修正後、再ビルドし実データ取得したHTMLで両ラッパーのクラスが`overflow-x-auto overflow-y-clip`になっていること・コンパイル済みCSSに`.overflow-y-clip{overflow-y:clip}`が生成されていることを確認
+- `docs/product/ui-guidelines.md`・`docs/ai-context/known-pitfalls.md`を`hidden`ではなく`clip`が正しい理由込みで訂正・追記。フルスイート422件Green再確認
+- **さらにユーザーから「まだ直っていなそう」と3度目の指摘**。`overflow-y-clip`も実ブラウザでは効果がなかった（後述の通り根本原因の理解自体が誤りだった）。この時点で理論だけで直すのをやめ、実ブラウザでの検証手段を確保する方針に切替: Sailコンテナ内で`npx playwright install chromium`を実行したところ実際にChromiumをダウンロード・インストールでき（`storage/app/pw-scratch/`に`npm install playwright`し、Node.jsスクリプトから実際にログイン・スクロール・スクリーンショット取得が可能になった。Playwright MCP接続不可の際の恒久的な代替手段として`.claude/skills/verify/SKILL.md`に手順を追記
+- **実ブラウザでの計測により判明した真因**: `getComputedStyle()`で確認すると、`overflow-y-clip`を指定していたにも関わらず実際の計算値は`"hidden"`だった。CSS仕様上「`overflow-x`/`overflow-y`の片方が`clip`でもう片方が`visible`でも`clip`でもない場合、`clip`側は`hidden`に補正される」という追加ルールがあり、`overflow-x: auto`と組み合わせた時点でこの補正が発動していた。**`overflow-x: auto`な要素は、`overflow-y`の値を`hidden`/`auto`/`clip`のどれにしても必ずそれ自体がスクロールコンテナになり、子孫の`sticky`の基準がページ本体ではなくこの要素になってしまう**——CSSの`overflow`プロパティだけでは「横スクロールは本物のスクロールコンテナ」かつ「縦方向はスクロールコンテナにしない」を同一要素上で両立できないという構造的な限界だった
+- **最終対処（構造変更）**: 1個の`<table>`に固執するのをやめ、**ヘッダー用（`<colgroup>`+`<thead>`のみ）と本文用（`<colgroup>`+`<tbody>`のみ）で`<table>`を2つに分割**。ヘッダー用`<table>`を包むdiv自身に`overflow-x-auto`と`sticky top-0`を両方付与（`sticky`は「このdivの祖先」を基準に解決されるため、div自身がスクロールコンテナであることとは無関係にページ本体への固定が効く）。本文用`<table>`は別の`overflow-x-auto`なdivに入れ`sticky`は付けない。2つのdivの横スクロール位置を同期する数行のJS（`resources/js/app.js`新規、`data-scroll-sync-with`属性で対象指定、`livewire:navigated`で初期化）を追加。ヘッダー側の重複する横スクロールバーは`[scrollbar-width:none]`等で視覚的に隠した
+- **この構造変更に伴い連鎖的に発覚・修正した2つの不具合**（実ブラウザでの計測で発見。静的HTML確認では検出不可能だった）:
+  1. `table-fixed`に付けていた`w-max`（`width: max-content`）が、折り返せない長いヘッダーラベル（`52週安値からの距離`等、`whitespace-nowrap`付き）を持つ列だけ`<colgroup>`指定幅を無視して広げてしまい、ヘッダー用・本文用の実際の描画幅が食い違っていた（例: 1446px vs 1350px）。テーブルの`width`を`<colgroup>`合計値と一致する具体的なpx値（`w-[1296px]`）に変更し、ヘッダー側の`whitespace-nowrap`も本文側と同じ`break-words`に統一して解消。修正後、両`<table>`の`scrollWidth`が1297pxで完全一致することを実測確認
+  2. `<x-badge>`（`inline-block`、共有コンポーネント）内の折り返せない1単語のシグナル種別名（`week52_high_pullback`等）が、親`<td>`の`break-words`だけでは折り返されずセル幅（130px）を超えて（151px）隣接要素と視覚的に重なっていた。`overflow-wrap`は継承されるが`inline-block`自身の「内容で幅が決まる」性質までは変えないため。`badge.blade.php`自体に`max-w-full break-words`を追加（他画面で使う短いテキストには無害）し解消。修正後117px（130px以内）に収まることを実測確認
+- 上記全てを実際にPlaywrightで`/signals`にログイン・スクロールしてスクリーンショットで最終確認（ページ最上部・買い増し候補ヘッダー固定中・利確検討ヘッダーへの引き継ぎ後の3枚、ユーザーにも送付）。`docs/ai-context/known-pitfalls.md`に3件の不具合（sticky構造上の限界／table-fixed+w-maxの幅食い違い／inline-blockの折り返し）、`docs/product/ui-guidelines.md`のCHG-0007該当箇所を最終構造に合わせて全面的に訂正、`verify`スキルにコンテナ内Playwrightのセットアップ手順を追記。検証用の`storage/app/pw-scratch/`（Chromiumバイナリ・node_modules）は削除済み。フルスイート422件Green再確認
+- 次: `/review` → コミット（push禁止）
 
 ## 利確検討ラインの動的分岐（CHG-0006）実装完了（2026-08-28〜29）
 
@@ -219,96 +273,6 @@ Gate4完了（Red→Gate4承認→Green）。フルスイート357件Green。コ
 ### Status
 
 Green確認完了。実ブラウザ動作確認は空状態のみ（開発DBの保有データ欠落のため、上記「今後の対応」参照）。フルスイート335件Green（他UC由来の既存失敗22件は無関係）。次はPhase7（UC-006/UC-008統合「新規投資候補」画面）に進む。
-
-## フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了（2026-08-27）
-
-### Decision
-
-- Phase4に続き、Phase5（UC-004売買シグナル一覧画面、`GET /signals`）を実施。モックアップは買い増し候補（UC-010）セクションも含む2段構成だが、UC-010バックエンドは別セッション（`BuySignalDeterminationService`等）の担当スコープのため、今回は利確検討セクションのみを実装しUC-010セクションは対象外とした（別セッションのマージ完了後、別サイクルで追加する）
-- `test-writer`が8件のLivewireコンポーネントテストを作成。Gate4で2点確認: (1) シグナルバッジは`signal_types`の生の文字列（`rsi_reversal`等）をそのまま表示（日本語ラベル変換は別タスク）、(2) 分割指値3段目（price=null、トレンド追従枠）の表示文言は「現在値以降」— いずれも「推奨」で承認
-- `tdd-implementer`がGreenフェーズを実装: `ShowSignalListAction`に`id`（holdings.id、一覧→詳細画面のリンク生成用）を追加（Phase0の`ListHoldingsAction`と同じ先例）。`app/Livewire/Signal/SignalList.php`（`render()`で毎回呼び出す純粋読み取り設計）。対象8件・フルスイート344件全てGreen
-- **並行セッション対応**: 別セッションが同日中にUC-010バックエンド一式をコミット（`ba239fe`）したことで、`routes/web.php`の同時編集競合が解消された（従来は`/buy-signals`が未コミットのまま`routes/web.php`に残り続けていたため、Phase3/4のたびに退避・再適用が必要だった）。今回は競合なくシンプルに完了
-- 実ブラウザ確認（Playwright MCP、実データ）: `/signals`で実際の利確検討対象銘柄（マイクロン テクノロジー含み益+555%等、40件超）が正しく一覧表示され、各行が`/holdings/{id}`へのリンクを持つこと、シグナルなし銘柄・複数シグナル銘柄・分割指値3段（トレンド追従枠の「現在値以降」表示含む）が正しく表示されることを確認。コンソールエラーなし
-
-### Files touched
-
-`app/Actions/Signal/ShowSignalListAction.php`（`id`フィールド追加）、`app/Livewire/Signal/SignalList.php`（新規）、`resources/views/livewire/signal/signal-list.blade.php`（新規）、`routes/web.php`（`/signals`ルート追加）、`tests/Feature/SignalListTest.php`（新規、8件）、`PLAN.md`（本エントリ追加）
-
-### Status
-
-Green確認・実ブラウザ動作確認完了（実データ）。フルスイート344件Green。次はPhase6（UC-005セクター配分ダッシュボード画面）に進む。
-
-## UC-010（既存保有株の買い増しタイミングレコメンド）Gate4完了・コミット（2026-08-27）
-
-### Decision
-
-- `test-writer`がRedフェーズで4ファイル45件を作成（`BuySignalDeterminationServiceTest`18件・`FundamentalHealthEvaluatorTest`8件・`UC010BuySignalListTest`15件・`FetchExternalMarketDataActionBuySignalTest`4件）。全て意図通りクラス未検出／ルート未定義／テーブル未検出で失敗することを確認しGate4承認
-- `tdd-implementer`がGreenフェーズを実装: `buy_signals`マイグレーション、`BuySignal`モデル、`BuySignalDeterminationService`（7シグナル＋前提条件A/B）、`FundamentalHealthEvaluator`、`ShowBuySignalListAction`＋`BuySignalListController`（`GET /api/buy-signals`）、`FetchExternalMarketDataAction`への買いシグナル永続化組み込み（含み益率ゲートの外側で全銘柄対象、売り側`signals`ロジックは無改修）。対象45件・フルスイート316件Green
-- `/review`で指摘2件: (1) `FundamentalHealthEvaluator`が業務ルールの「成長率」条件を欠いている、(2) `NewCandidateFinder`と`portfolioEvaluationTotal()`が重複。(1)はユーザーと協議の結果、追加実装を選択（use-cases.md/ADR-0007 D4の「UC-008/009と同一値」を字面通り2条件と誤解していたことが判明）。小さなCRとしてRed→Gate4→Green（`evaluate()`を4引数化、成長率が両方null→unavailable、いずれかプラスでpassed）を実施、既存13+新規5件のUnitテスト・Feature側1件のアサーション追加、全件Green
-- (2)はRefactorとして対応: `app/Services/Portfolio/PortfolioEvaluationCalculator`を新設し`NewCandidateFinder`・`ShowBuySignalListAction`から重複コードを除去（DI経由）。`SectorAllocationCalculator`にも同型の3つ目の重複があることを発見したが、今サイクルのスコープ外として現状維持（将来の統合候補として記録）
-- **並行セッションとの衝突が3回発生**: 別セッション（フロントエンドPhase3/4担当）が`routes/web.php`を編集するたびに、私の未コミットの`/buy-signals`ルート追加が巻き込まれて消失した。原因はコミット`166adce`で判明: 相手セッションが`/review`前に`git add routes/web.php`した際、他セッションの未コミット差分がファイル全体越しに混入するのを検知し、意図的に2行だけ除去していた（悪意・事故ではなく正しいgit衛生上の判断）。根本原因は「複数セッションが同一の未コミット作業ツリーを共有している」構造にあるため、都度復元するのではなく、UC-010の全作業をこのタイミングでコミットして解消した
-- 以前から未コミットのまま残っていたF-010 Gate1〜3ドキュメント叩き台（`docs/history/plan-archive.md`参照）も含め、Gate0〜4の全成果物を1コミット（`ba239fe`）にまとめてコミット済み（`git push`は未実施、ユーザーの明示的指示があるまで行わない）
-
-### Files touched
-
-`app/Models/BuySignal.php`（新規）、`app/Services/Analysis/BuySignalDeterminationService.php`（新規）、`app/Services/Analysis/FundamentalHealthEvaluator.php`（新規）、`app/Services/Portfolio/PortfolioEvaluationCalculator.php`（新規）、`app/Actions/Signal/ShowBuySignalListAction.php`（新規）、`app/Http/Controllers/BuySignalListController.php`（新規）、`database/migrations/2026_08_25_000000_create_buy_signals_table.php`（新規）、`app/Actions/Analysis/FetchExternalMarketDataAction.php`（買いシグナル永続化組み込み）、`app/Models/HoldingSnapshot.php`（`buySignals()`リレーション追加）、`app/Services/Candidate/NewCandidateFinder.php`（重複除去）、`routes/web.php`（`/api/buy-signals`追加）、`tests/Feature/FetchExternalMarketDataActionBuySignalTest.php`・`tests/Feature/UC010BuySignalListTest.php`・`tests/Unit/Services/Analysis/BuySignalDeterminationServiceTest.php`・`tests/Unit/Services/Analysis/FundamentalHealthEvaluatorTest.php`（新規）、`PLAN.md`（本エントリ追加）
-
-### Status
-
-Gate4完了（Red→Gate4承認→Green→成長率CR→Refactor）。フルスイートGreen（並行セッションの別画面の作業中ファイル・一時的なテストDB競合を除く）。コミット済み（`ba239fe`、未push）。UC-010のフロントエンド（Livewire画面統合）は別セッション・別スコープのため対象外
-
-## UC-010（既存保有株の買い増しタイミングレコメンド）Gate2/Gate3正式承認（2026-08-23）
-
-### Decision
-
-- 別セッションでフロントエンド実装（Phase0〜）が進行中の一方、UC-010はGate1〜2叩き台のみで正式承認が未取得だった（`docs/history/plan-archive.md`のADR-0007エントリ参照）ため、バックエンドAPI実装（Gate4 TDDサイクル）に着手する前提としてGate2（`use-cases.md`）・Gate3（`data-model.md`）の正式承認をこの場で実施
-- 承認レビューでユーザーから本機能の意図が確認された: 「健全で好調だった銘柄が、市場全体・セクター全体の調整で一時的に下げた場面」を拾う設計であり、長期低迷銘柄や個別要因で下落している銘柄を拾う設計ではない。当初のD2で定めた7シグナル種別（UC-004と面対称の汎用的な「売られすぎ・反発」指標のみ）はこの意図を担保する要素（直前の好調さ・連れ安の確認）を欠いていたため、承認前に設計を修正した
-- 修正内容: 7シグナル共通の前提条件として(1)直近13週以内に`week52_high`の-15%以内に到達していたこと、(2)`relative_strength_vs_market`が-5pt以上であること、の2点を追加（`use-cases.md` UC-010業務ルール、`data-model.md`の`buy_signals`節・初期パラメータ表、`ADR-0007`のAddendumに反映）。いずれも既存の算出済みデータで実現でき追加の外部データ取得は発生しない
-- 7シグナル種別自体・`buy_signals`テーブル分離方針・ファンダメンタルズフィルタ・NISA方針は変更なし。数値パラメータは他UC同様、叩き台のままGate4実装時に`/tdd`サイクルで確定する方針
-- 次はGate4（バックエンドAPI実装、`BuySignalDeterminationService`・`FundamentalHealthEvaluator`・`buy_signals`マイグレーション等）のRedフェーズに着手する
-
-### Files touched
-
-`docs/product/use-cases.md`（UC-010業務ルールに前提条件2点追加、承認記録追記）、`docs/architecture/data-model.md`（`buy_signals`節・初期パラメータ表に前提条件追加、承認記録追記）、`docs/adr/ADR-0007-existing-holding-add-on-buy-recommendation.md`（Addendum追加）、`PLAN.md`（本エントリ追加）
-
-### Status
-
-Gate2・Gate3正式承認完了。次はGate4（TDD Red→Green→Refactor）でバックエンドAPI実装に着手する。
-
-## フロントエンド実装Phase4（UC-003銘柄詳細画面）完了（2026-08-26）
-
-### Decision
-
-- Phase3に続き、Phase4（UC-003銘柄詳細画面、`GET /holdings/{holding}`。Phase3の一覧行が既にこのパスへリンクしていた先）を実施
-- `test-writer`が14件のLivewireコンポーネントテストを作成。Gate4で2点確認: (1) 手書きSVGチャートのテスト可能性確保のため`price_history`の各データ点に`data-testid="price-chart-point"`マーカーを付与する（視覚的なpolylineとは別のテスト用要素）、(2) `ShowHoldingDetailAction`は現在値を返さないため、`price_history`最新値のclose_priceを「現在値」として表示する — いずれも「推奨」で承認
-- `tdd-implementer`がGreenフェーズを実装: `app/Livewire/Holding/HoldingDetail.php`（`ShowHoldingDetailAction`を`render()`で毎回呼び出す純粋読み取り設計、`SaveHoldingMemoAction`によるメモ追記保存）。ADR-0004分の指標（出来高・52週高値安値・相対力・EPS成長率・PEGレシオ）も含め全指標を表示（モックアップはこれらの項目追加前の古い版のため参照せず、Actionの実際のレスポンス形状を正とした）。対象14件・フルスイート336件全てGreen
-- **並行セッション対応**: `routes/web.php`が別セッションの未コミット`/buy-signals`ルートと混在した状態だったため、PLAN.mdと同じ安全な退避・再適用手順（HEAD復元→自分の追加分のみ適用→差分確認→コミット→退避内容を復元→再適用）を今回から`routes/web.php`にも適用し、Phase3で発生したような汚染を防止した
-- 実ブラウザ確認（Playwright MCP、実データ）: `/holdings/2`（トヨタ自動車）で実際のテクニカル/ファンダメンタルズ指標が正しく表示され、EPS成長率がマイナスのためPEGレシオが正しく「取得不可」になること、利確シグナル判定（「52週高値3,825から3,132まで下落しました」）が実データに基づき表示されること、メモ保存が実際に永続化され画面に反映されることを確認（検証用に作成したテストメモは確認後に削除済み）
-
-### Files touched
-
-`app/Livewire/Holding/HoldingDetail.php`（新規）、`resources/views/livewire/holding/holding-detail.blade.php`（新規）、`routes/web.php`（`/holdings/{holding}`ルート追加）、`tests/Feature/HoldingDetailTest.php`（新規、14件）、`PLAN.md`（本エントリ追加）
-
-### Status
-
-Green確認・実ブラウザ動作確認完了（実データ）。フルスイート336件Green。次はPhase5（UC-004売買シグナル一覧画面、利確検討セクションのみ。UC-010買い増し候補セクションは別セッションのマージ完了後に追加）に進む。
-
-## Phase3の`/review`拡張レベルを実施、コミット汚染とビュー内クエリを修正（2026-08-25）
-
-### Decision
-
-- push前にユーザーから`/review`の依頼を受け、コミット`b493a18`（Phase3、origin/main比7ファイル・673行・review-score約41≧閾値30）に対し拡張レベルのレビューを実施
-- **重大な指摘**: `routes/web.php`は`PLAN.md`/`data-model.md`と異なり安全な退避・再適用手順（他セッションの未コミット変更を巻き込まないための手順）を踏まずに`git add`していたため、別セッションが並行して作業中の未コミットF-010（UC-010買い増しレコメンド）由来の`BuySignalListController`インポート・`/buy-signals`ルート登録がコミット`b493a18`に紛れ込んでいたことが判明した。当該コントローラ実体ファイルは未コミットのままディスク上に存在するため、`b493a18`単体をpull/参照した場合に存在しないクラスを参照する不整合なコミットになっていた
-- **軽微な指摘**: セクターフィルタのプルダウン用データ取得（`SectorClassification::query()`）がコンポーネントではなくBladeビュー内で直接実行されており、他の全画面（`render()`/`mount()`でデータ取得しビューへ渡す設計）と一貫していなかった
-- 両指摘を修正: `routes/web.php`から該当2行（インポート・ルート登録）を削除し汚染を解消（コントローラファイル自体は他セッションの作業として触れず維持）。セクター取得ロジックを`HoldingList::render()`に移動しビューへ`sectorOptions`として渡すよう変更。フルスイート302件Green（他セッション進行中のUC-010関連15件失敗は本修正と無関係、リグレッションでないことを確認）
-
-### Files touched
-
-`routes/web.php`（汚染除去）、`app/Livewire/Holding/HoldingList.php`・`resources/views/livewire/holding/holding-list.blade.php`（セクター取得ロジックのコンポーネント移動）、`PLAN.md`（本エントリ追加）
-
-### Status
-
-Green確認完了。フルスイート302件Green。今後、コード（Blade/ルート等）を含む共有ファイルへのコミット前は`git diff origin/main..HEAD`等でPLAN.md/data-model.md以外の共有ファイルにも他セッションの混入が無いか確認する運用とする。次はPhase4（UC-003銘柄詳細画面）に進む。
 
 ## 今後の対応（未着手・スコープ確認済み）（2026-08-23追記、UC-007完了時点で更新）
 

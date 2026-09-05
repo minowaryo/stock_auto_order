@@ -1,6 +1,78 @@
-# PLAN.md アーカイブ（〜2026-08-25 フロントエンド実装Phase3完了前）
+# PLAN.md アーカイブ（〜2026-08-27 フロントエンド実装Phase5完了時点）
 
-PLAN.md から退避した完了済みエントリ。Gate0セットアップ〜Phase1（UC-001/002/003/009）Gate4サイクル完了・ADR-0002 NISA区分CR・投資方針背景整理・ADR-0004（分析エンジンの指標セット拡張、設計確定〜TechnicalIndicatorCalculator〜MarketData層〜JQuantsClient〜SignalDeterminationService〜FundamentalIndicatorMapperの各TDDサイクル、UC-001への配線・UC-004画面実装・UC-003/UC-009への新指標反映を含む）完了、関連する`/review`指摘修正2件・UC-009サンプルレポート生成・per-holding非アトミック性修正、F-010（UC-010）のGate1〜3ドキュメント叩き台整備（ADR-0007新規作成、requirements.md/use-cases.md/data-model.md改訂）、NISA区分（口座区分）内訳の書き込み経路・UC-004消費側の実装完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査、フロントエンド実装Phase0（基盤整備）完了、およびフロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了までの記録。現在進行中のタスクとは直接関係しないため参照頻度は低いが、経緯確認が必要な場合はここを見る。
+PLAN.md から退避した完了済みエントリ。フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了までの記録を追加。UC-010（既存保有株の買い増しタイミングレコメンド）Gate4完了・コミット（`ba239fe`）までの記録を追加。Gate0セットアップ〜Phase1（UC-001/002/003/009）Gate4サイクル完了・ADR-0002 NISA区分CR・投資方針背景整理・ADR-0004（分析エンジンの指標セット拡張、設計確定〜TechnicalIndicatorCalculator〜MarketData層〜JQuantsClient〜SignalDeterminationService〜FundamentalIndicatorMapperの各TDDサイクル、UC-001への配線・UC-004画面実装・UC-003/UC-009への新指標反映を含む）完了、関連する`/review`指摘修正2件・UC-009サンプルレポート生成・per-holding非アトミック性修正、F-010（UC-010）のGate1〜3ドキュメント叩き台整備（ADR-0007新規作成、requirements.md/use-cases.md/data-model.md改訂）、NISA区分（口座区分）内訳の書き込み経路・UC-004消費側の実装完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、およびフロントエンド実装Phase4（UC-003銘柄詳細画面）完了までの記録。現在進行中のタスクとは直接関係しないため参照頻度は低いが、経緯確認が必要な場合はここを見る。
+
+## フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了（2026-08-27）
+
+### Decision
+
+- Phase4に続き、Phase5（UC-004売買シグナル一覧画面、`GET /signals`）を実施。モックアップは買い増し候補（UC-010）セクションも含む2段構成だが、UC-010バックエンドは別セッション（`BuySignalDeterminationService`等）の担当スコープのため、今回は利確検討セクションのみを実装しUC-010セクションは対象外とした（別セッションのマージ完了後、別サイクルで追加する）
+- `test-writer`が8件のLivewireコンポーネントテストを作成。Gate4で2点確認: (1) シグナルバッジは`signal_types`の生の文字列（`rsi_reversal`等）をそのまま表示（日本語ラベル変換は別タスク）、(2) 分割指値3段目（price=null、トレンド追従枠）の表示文言は「現在値以降」— いずれも「推奨」で承認
+- `tdd-implementer`がGreenフェーズを実装: `ShowSignalListAction`に`id`（holdings.id、一覧→詳細画面のリンク生成用）を追加（Phase0の`ListHoldingsAction`と同じ先例）。`app/Livewire/Signal/SignalList.php`（`render()`で毎回呼び出す純粋読み取り設計）。対象8件・フルスイート344件全てGreen
+- **並行セッション対応**: 別セッションが同日中にUC-010バックエンド一式をコミット（`ba239fe`）したことで、`routes/web.php`の同時編集競合が解消された（従来は`/buy-signals`が未コミットのまま`routes/web.php`に残り続けていたため、Phase3/4のたびに退避・再適用が必要だった）。今回は競合なくシンプルに完了
+- 実ブラウザ確認（Playwright MCP、実データ）: `/signals`で実際の利確検討対象銘柄（マイクロン テクノロジー含み益+555%等、40件超）が正しく一覧表示され、各行が`/holdings/{id}`へのリンクを持つこと、シグナルなし銘柄・複数シグナル銘柄・分割指値3段（トレンド追従枠の「現在値以降」表示含む）が正しく表示されることを確認。コンソールエラーなし
+
+### Files touched
+
+`app/Actions/Signal/ShowSignalListAction.php`（`id`フィールド追加）、`app/Livewire/Signal/SignalList.php`（新規）、`resources/views/livewire/signal/signal-list.blade.php`（新規）、`routes/web.php`（`/signals`ルート追加）、`tests/Feature/SignalListTest.php`（新規、8件）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実ブラウザ動作確認完了（実データ）。フルスイート344件Green。次はPhase6（UC-005セクター配分ダッシュボード画面）に進む。
+
+## UC-010（既存保有株の買い増しタイミングレコメンド）Gate4完了・コミット（2026-08-27）
+
+### Decision
+
+- `test-writer`がRedフェーズで4ファイル45件を作成（`BuySignalDeterminationServiceTest`18件・`FundamentalHealthEvaluatorTest`8件・`UC010BuySignalListTest`15件・`FetchExternalMarketDataActionBuySignalTest`4件）。全て意図通りクラス未検出／ルート未定義／テーブル未検出で失敗することを確認しGate4承認
+- `tdd-implementer`がGreenフェーズを実装: `buy_signals`マイグレーション、`BuySignal`モデル、`BuySignalDeterminationService`（7シグナル＋前提条件A/B）、`FundamentalHealthEvaluator`、`ShowBuySignalListAction`＋`BuySignalListController`（`GET /api/buy-signals`）、`FetchExternalMarketDataAction`への買いシグナル永続化組み込み（含み益率ゲートの外側で全銘柄対象、売り側`signals`ロジックは無改修）。対象45件・フルスイート316件Green
+- `/review`で指摘2件: (1) `FundamentalHealthEvaluator`が業務ルールの「成長率」条件を欠いている、(2) `NewCandidateFinder`と`portfolioEvaluationTotal()`が重複。(1)はユーザーと協議の結果、追加実装を選択（use-cases.md/ADR-0007 D4の「UC-008/009と同一値」を字面通り2条件と誤解していたことが判明）。小さなCRとしてRed→Gate4→Green（`evaluate()`を4引数化、成長率が両方null→unavailable、いずれかプラスでpassed）を実施、既存13+新規5件のUnitテスト・Feature側1件のアサーション追加、全件Green
+- (2)はRefactorとして対応: `app/Services/Portfolio/PortfolioEvaluationCalculator`を新設し`NewCandidateFinder`・`ShowBuySignalListAction`から重複コードを除去（DI経由）。`SectorAllocationCalculator`にも同型の3つ目の重複があることを発見したが、今サイクルのスコープ外として現状維持（将来の統合候補として記録）
+- **並行セッションとの衝突が3回発生**: 別セッション（フロントエンドPhase3/4担当）が`routes/web.php`を編集するたびに、私の未コミットの`/buy-signals`ルート追加が巻き込まれて消失した。原因はコミット`166adce`で判明: 相手セッションが`/review`前に`git add routes/web.php`した際、他セッションの未コミット差分がファイル全体越しに混入するのを検知し、意図的に2行だけ除去していた（悪意・事故ではなく正しいgit衛生上の判断）。根本原因は「複数セッションが同一の未コミット作業ツリーを共有している」構造にあるため、都度復元するのではなく、UC-010の全作業をこのタイミングでコミットして解消した
+- 以前から未コミットのまま残っていたF-010 Gate1〜3ドキュメント叩き台（`docs/history/plan-archive.md`参照）も含め、Gate0〜4の全成果物を1コミット（`ba239fe`）にまとめてコミット済み（`git push`は未実施、ユーザーの明示的指示があるまで行わない）
+
+### Files touched
+
+`app/Models/BuySignal.php`（新規）、`app/Services/Analysis/BuySignalDeterminationService.php`（新規）、`app/Services/Analysis/FundamentalHealthEvaluator.php`（新規）、`app/Services/Portfolio/PortfolioEvaluationCalculator.php`（新規）、`app/Actions/Signal/ShowBuySignalListAction.php`（新規）、`app/Http/Controllers/BuySignalListController.php`（新規）、`database/migrations/2026_08_25_000000_create_buy_signals_table.php`（新規）、`app/Actions/Analysis/FetchExternalMarketDataAction.php`（買いシグナル永続化組み込み）、`app/Models/HoldingSnapshot.php`（`buySignals()`リレーション追加）、`app/Services/Candidate/NewCandidateFinder.php`（重複除去）、`routes/web.php`（`/api/buy-signals`追加）、`tests/Feature/FetchExternalMarketDataActionBuySignalTest.php`・`tests/Feature/UC010BuySignalListTest.php`・`tests/Unit/Services/Analysis/BuySignalDeterminationServiceTest.php`・`tests/Unit/Services/Analysis/FundamentalHealthEvaluatorTest.php`（新規）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Gate4完了（Red→Gate4承認→Green→成長率CR→Refactor）。フルスイートGreen（並行セッションの別画面の作業中ファイル・一時的なテストDB競合を除く）。コミット済み（`ba239fe`、未push）。UC-010のフロントエンド（Livewire画面統合）は別セッション・別スコープのため対象外
+
+## フロントエンド実装Phase4（UC-003銘柄詳細画面）完了（2026-08-26）
+
+### Decision
+
+- Phase3に続き、Phase4（UC-003銘柄詳細画面、`GET /holdings/{holding}`。Phase3の一覧行が既にこのパスへリンクしていた先）を実施
+- `test-writer`が14件のLivewireコンポーネントテストを作成。Gate4で2点確認: (1) 手書きSVGチャートのテスト可能性確保のため`price_history`の各データ点に`data-testid="price-chart-point"`マーカーを付与する（視覚的なpolylineとは別のテスト用要素）、(2) `ShowHoldingDetailAction`は現在値を返さないため、`price_history`最新値のclose_priceを「現在値」として表示する — いずれも「推奨」で承認
+- `tdd-implementer`がGreenフェーズを実装: `app/Livewire/Holding/HoldingDetail.php`（`ShowHoldingDetailAction`を`render()`で毎回呼び出す純粋読み取り設計、`SaveHoldingMemoAction`によるメモ追記保存）。ADR-0004分の指標（出来高・52週高値安値・相対力・EPS成長率・PEGレシオ）も含め全指標を表示（モックアップはこれらの項目追加前の古い版のため参照せず、Actionの実際のレスポンス形状を正とした）。対象14件・フルスイート336件全てGreen
+- **並行セッション対応**: `routes/web.php`が別セッションの未コミット`/buy-signals`ルートと混在した状態だったため、PLAN.mdと同じ安全な退避・再適用手順（HEAD復元→自分の追加分のみ適用→差分確認→コミット→退避内容を復元→再適用）を今回から`routes/web.php`にも適用し、Phase3で発生したような汚染を防止した
+- 実ブラウザ確認（Playwright MCP、実データ）: `/holdings/2`（トヨタ自動車）で実際のテクニカル/ファンダメンタルズ指標が正しく表示され、EPS成長率がマイナスのためPEGレシオが正しく「取得不可」になること、利確シグナル判定（「52週高値3,825から3,132まで下落しました」）が実データに基づき表示されること、メモ保存が実際に永続化され画面に反映されることを確認（検証用に作成したテストメモは確認後に削除済み）
+
+### Files touched
+
+`app/Livewire/Holding/HoldingDetail.php`（新規）、`resources/views/livewire/holding/holding-detail.blade.php`（新規）、`routes/web.php`（`/holdings/{holding}`ルート追加）、`tests/Feature/HoldingDetailTest.php`（新規、14件）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実ブラウザ動作確認完了（実データ）。フルスイート336件Green。次はPhase5（UC-004売買シグナル一覧画面、利確検討セクションのみ。UC-010買い増し候補セクションは別セッションのマージ完了後に追加）に進む。
+
+## Phase3の`/review`拡張レベルを実施、コミット汚染とビュー内クエリを修正（2026-08-25）
+
+### Decision
+
+- push前にユーザーから`/review`の依頼を受け、コミット`b493a18`（Phase3、origin/main比7ファイル・673行・review-score約41≧閾値30）に対し拡張レベルのレビューを実施
+- **重大な指摘**: `routes/web.php`は`PLAN.md`/`data-model.md`と異なり安全な退避・再適用手順（他セッションの未コミット変更を巻き込まないための手順）を踏まずに`git add`していたため、別セッションが並行して作業中の未コミットF-010（UC-010買い増しレコメンド）由来の`BuySignalListController`インポート・`/buy-signals`ルート登録がコミット`b493a18`に紛れ込んでいたことが判明した。当該コントローラ実体ファイルは未コミットのままディスク上に存在するため、`b493a18`単体をpull/参照した場合に存在しないクラスを参照する不整合なコミットになっていた
+- **軽微な指摘**: セクターフィルタのプルダウン用データ取得（`SectorClassification::query()`）がコンポーネントではなくBladeビュー内で直接実行されており、他の全画面（`render()`/`mount()`でデータ取得しビューへ渡す設計）と一貫していなかった
+- 両指摘を修正: `routes/web.php`から該当2行（インポート・ルート登録）を削除し汚染を解消（コントローラファイル自体は他セッションの作業として触れず維持）。セクター取得ロジックを`HoldingList::render()`に移動しビューへ`sectorOptions`として渡すよう変更。フルスイート302件Green（他セッション進行中のUC-010関連15件失敗は本修正と無関係、リグレッションでないことを確認）
+
+### Files touched
+
+`routes/web.php`（汚染除去）、`app/Livewire/Holding/HoldingList.php`・`resources/views/livewire/holding/holding-list.blade.php`（セクター取得ロジックのコンポーネント移動）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認完了。フルスイート302件Green。今後、コード（Blade/ルート等）を含む共有ファイルへのコミット前は`git diff origin/main..HEAD`等でPLAN.md/data-model.md以外の共有ファイルにも他セッションの混入が無いか確認する運用とする。次はPhase4（UC-003銘柄詳細画面）に進む。
 
 ## フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット）完了、共通レイアウトの重大バグ修正（2026-08-25）
 
@@ -317,6 +389,24 @@ Green確認・実データ動作確認完了。フルスイート176件Green。U
 ### Status
 
 Gate 1〜3のドキュメント叩き台整備完了。正式承認は後日別エントリで完了（上記【後日追記】参照）。
+
+## UC-010（既存保有株の買い増しタイミングレコメンド）Gate2/Gate3正式承認（2026-08-23）
+
+### Decision
+
+- 別セッションでフロントエンド実装（Phase0〜）が進行中の一方、UC-010はGate1〜2叩き台のみで正式承認が未取得だった（本ファイル直前のADR-0007エントリ参照）ため、バックエンドAPI実装（Gate4 TDDサイクル）に着手する前提としてGate2（`use-cases.md`）・Gate3（`data-model.md`）の正式承認をこの場で実施
+- 承認レビューでユーザーから本機能の意図が確認された: 「健全で好調だった銘柄が、市場全体・セクター全体の調整で一時的に下げた場面」を拾う設計であり、長期低迷銘柄や個別要因で下落している銘柄を拾う設計ではない。当初のD2で定めた7シグナル種別（UC-004と面対称の汎用的な「売られすぎ・反発」指標のみ）はこの意図を担保する要素（直前の好調さ・連れ安の確認）を欠いていたため、承認前に設計を修正した
+- 修正内容: 7シグナル共通の前提条件として(1)直近13週以内に`week52_high`の-15%以内に到達していたこと、(2)`relative_strength_vs_market`が-5pt以上であること、の2点を追加（`use-cases.md` UC-010業務ルール、`data-model.md`の`buy_signals`節・初期パラメータ表、`ADR-0007`のAddendumに反映）。いずれも既存の算出済みデータで実現でき追加の外部データ取得は発生しない
+- 7シグナル種別自体・`buy_signals`テーブル分離方針・ファンダメンタルズフィルタ・NISA方針は変更なし。数値パラメータは他UC同様、叩き台のままGate4実装時に`/tdd`サイクルで確定する方針
+- 次はGate4（バックエンドAPI実装、`BuySignalDeterminationService`・`FundamentalHealthEvaluator`・`buy_signals`マイグレーション等）のRedフェーズに着手する
+
+### Files touched
+
+`docs/product/use-cases.md`（UC-010業務ルールに前提条件2点追加、承認記録追記）、`docs/architecture/data-model.md`（`buy_signals`節・初期パラメータ表に前提条件追加、承認記録追記）、`docs/adr/ADR-0007-existing-holding-add-on-buy-recommendation.md`（Addendum追加）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Gate2・Gate3正式承認完了。次はGate4（TDD Red→Green→Refactor）でバックエンドAPI実装に着手する。
 
 ## `/review`拡張レベルの指摘（per-holding非アトミック性）を修正（2026-08-22）
 

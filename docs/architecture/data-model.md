@@ -186,7 +186,9 @@
 
 ### fundamental_indicators（UC-002/003/006/008/009、個別株のみ・現在値キャッシュ）
 
-`technical_indicators`と同じ理由・同じUPSERT方式の現在値キャッシュ。J-Quantsは最大12週間更新されないため、取込のたびに新規INSERTする設計だと同一内容の行が最大12週分近く積み上がってしまう。UPSERTにすることで、実際にJ-Quants側の値が更新された時だけ`fetched_at`が進む（値が変わらなければ行数は増えない）。
+`technical_indicators`と同じ理由・同じUPSERT方式の現在値キャッシュ。JP株のデータソースであるJ-Quantsは最大12週間更新されないため、取込のたびに新規INSERTする設計だと同一内容の行が最大12週分近く積み上がってしまう。UPSERTにすることで、実際にデータソース側の値が更新された時だけ`fetched_at`が進む（値が変わらなければ行数は増えない）。US株はFinnhub（ADR-0009）をデータソースとし、決算開示のタイミングで更新される（J-Quantsの12週遅延の制約は適用されない）が、UPSERT方式自体はJP株と共通のスキーマ・設計を用いる。
+
+> **実装完了**（2026-09-05、CHG-0009・ADR-0009）: US株のファンダメンタルズ指標データソースとしてFinnhubを採用。`per`/`pbr`/`roe`/`revenue_growth`/`eps_growth`/`dividend_yield`/`dividend_payout_ratio`/`peg_ratio`は`stock/metric`（`metric=all`）の`peTTM`/`pbAnnual`/`roeTTM`/`revenueGrowthTTMYoy`/`epsGrowthTTMYoy`/`dividendYieldIndicatedAnnual`/`payoutRatioTTM`/`pegTTM`をそのまま採用する（JP株のようにEPS・簿価から自前計算しない）。`equity_ratio`は`stock/financials-reported`（10-KのXBRL実データ）の`us-gaap_Assets`（総資産）・`us-gaap_StockholdersEquity`（自己資本）から`自己資本÷総資産`で実測計算する（`totalDebt/totalEquity`からの近似は、検証で実測比最大約2倍の誤差が判明したため不採用）。`operating_income_growth`はFinnhubに直接のYoYフィールドが無いため、同じく`financials-reported`の`ic`（損益計算書）セクションの`us-gaap_OperatingIncomeLoss`を直近期・前期で比較して算出する。JP用`FundamentalIndicatorMapper`とは入力形状が根本的に異なるため、新規`UsFundamentalIndicatorMapper`（仮称）をJP側とは別クラスとして並立させる設計とし、既存のJP側実装・テストは無改修。DBスキーマ変更はなし（本テーブルは元々市場非依存のnullable列構成のため）。
 
 | カラム | 型 | Nullable | デフォルト | 説明 |
 |---|---|---|---|---|
@@ -201,8 +203,8 @@
 | dividend_yield | decimal(7,4) | YES | null | 配当利回り（%） |
 | dividend_payout_ratio | decimal(7,4) | YES | null | 配当性向（%） |
 | eps_growth | decimal(10,4) | YES | null | EPS成長率（%、前年同期比。`financial_statements.eps`から算出、ADR-0004）。実データでほぼゼロ近辺からの回復銘柄が999.9999%を超えINSERTエラーになったため、ADR-0006により`decimal(7,4)`から拡張 |
-| peg_ratio | decimal(10,4) | YES | null | PEGレシオ（PER÷EPS成長率）。`eps_growth`が0以下の場合は算出せずnull（ADR-0004） |
-| fetched_at | timestamp | NO | now() | J-Quantsからの取得日時（値が変化した時のみ更新。最大12週間遅延の可能性あり） |
+| peg_ratio | decimal(10,4) | YES | null | PEGレシオ。JP株は`PER÷EPS成長率`で自前算出し、`eps_growth`が0以下の場合は算出せずnull（ADR-0004）。**US株はFinnhubの`pegTTM`をそのまま採用しており、算出方法がJP株と同一とは限らない**（ADR-0009。同一カラムに算出方法が異なる値が混在するため、両者を比較する機能を追加する際は注意が必要） |
+| fetched_at | timestamp | NO | now() | 外部データソースからの取得日時（値が変化した時のみ更新）。JP株はJ-Quants由来で最大12週間遅延の可能性あり。US株はFinnhub由来（ADR-0009）でこの遅延制約は適用されない |
 
 **Index**: `holding_id` unique
 **FK**: `holding_id` → `holdings(id)`
@@ -493,3 +495,4 @@
 | 2026-08-23 | UC-006 Cycle Aの`/review`拡張レベル指摘（MEDIUM）を修正。`financial_statements.revenue`/`operating_income`をNOT NULLからnullableに変更（`2026_08_23_000001_nullable_revenue_operating_income_on_financial_statements_table.php`）。データソース（J-Quants `net_sales`/`operating_profit`）自体がnullを返しうるにもかかわらずNOT NULLだったため、該当銘柄で`financial_statements`のINSERT失敗が同一トランザクション内の`technical_indicators`/`fundamental_indicators`/`signals`更新まで巻き添えでロールバックさせていた | ADR-0008 |
 | 2026-08-23 | Phase2 Cycle4（UC-006）のCycle B（本体）実装完了、これでPhase2「UC-008→UC-005→UC-006」全サイクル完了。`watch_records`テーブル・`WatchRecord`モデルを`holding_memos`と同じ追記のみパターンで新規実装。`GET /candidate-check`（`overlap_rate`/`diversification_comment`をUC-005の`SectorAllocationCalculator`から流用、UC-003と同一のテクニカル/ファンダメンタルズ指標一式、`historical_performance`、`watch_status`/`watch_memo_history`）・`POST /candidate-check/watch-records`を新規追加。未知の`symbol_code`はFormRequestの`Rule::exists`で422拒否する方針・`overlap_rate`の一致なし時`0`扱い・ウォッチステータス/メモ両方省略時422をGate4で確定 | - |
 | 2026-08-23 | UC-007（市場全体指標表示）の表示エンドポイント`GET /market-indicators`を実装、これでPhase2（F-005/F-006/F-007/F-008）が全完了。直近スナップショットの5指標（`nikkei225`/`sp500`/`us10y`/`vix`/`usdjpy`）を固定順で返す。`us10y`/`vix`/`usdjpy`は取得ロジック自体が未実装のため常に`null`のプレースホルダとして返す方針をユーザー確認の上で確定（3指標の外部データ取得自体は別タスクとして先送り） | - |
+| 2026-09-05 | **Gate3承認**（CHG-0009・ADR-0009）。米国株のファンダメンタルズ指標データソースとしてFinnhub APIを新規採用。`fundamental_indicators`のカラム構成（`per`/`pbr`/`roe`/`revenue_growth`/`operating_income_growth`/`equity_ratio`/`dividend_yield`/`dividend_payout_ratio`/`eps_growth`/`peg_ratio`）は市場非依存のnullable列のまま変更なし、DBマイグレーション不要。`fetched_at`の説明・UPSERT設計根拠のコメントをJP（J-Quants）/US（Finnhub）の両データソースを踏まえた記載に更新。自己資本比率・営業利益成長率の算出方法（`financials-reported`からの実測計算・YoY算出）を「実装完了」注記として追記（実装はGate4のTDDサイクルで行う） | ADR-0009 |

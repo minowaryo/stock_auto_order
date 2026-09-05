@@ -13,11 +13,14 @@ use App\Models\Snapshot;
 use App\Models\TechnicalIndicator;
 use App\Services\Analysis\FundamentalIndicatorMapper;
 use App\Services\Analysis\TechnicalIndicatorCalculator;
+use App\Services\Analysis\UsFundamentalIndicatorMapper;
+use App\Services\MarketData\FinnhubClientInterface;
 use App\Services\MarketData\JpStockPriceClientInterface;
 use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\MarketData\MarketIndexClientInterface;
 use App\Services\MarketData\UsStockPriceClientInterface;
 use Illuminate\Support\Facades\DB;
+use Tests\Support\Fakes\FakeFinnhubClient;
 use Tests\Support\Fakes\FakeJpStockPriceClient;
 use Tests\Support\Fakes\FakeJQuantsClient;
 use Tests\Support\Fakes\FakeMarketIndexClient;
@@ -85,6 +88,50 @@ use Tests\Support\Fakes\FakeUsStockPriceClient;
 |     already-tested dependency, verify the wiring/business-rule layered on
 |     top of it" convention as
 |     tests/Unit/Services/Analysis/SignalDeterminationServiceTest.php.
+|
+|--------------------------------------------------------------------------
+| ADR-0009 addendum (2026-09-05, Red phase): US-stock Finnhub fundamentals
+|--------------------------------------------------------------------------
+|
+| Source of truth: docs/adr/ADR-0009-us-stock-fundamentals-finnhub.md — US
+| holdings now also get `fundamental_indicators` populated (via a new
+| FinnhubClientInterface + UsFundamentalIndicatorMapper), which this file's
+| pre-existing "正常系（US株）" test asserted the *opposite* of
+| (`assertDatabaseMissing('fundamental_indicators', ...)`). That assertion
+| predates ADR-0009 and is now factually superseded by it, so — unlike every
+| other pre-existing test in this file, which is left untouched — that one
+| test's body has been updated in place (renamed + rewritten) to assert the
+| new, ADR-0009-correct behavior. This is *not* a "JP test change" (the
+| instruction to leave existing JP cases untouched does not apply to it);
+| flag at Gate 4 if the reviewer would prefer keeping the old assertion
+| alongside a new, separately-named test instead of rewriting in place.
+|
+| femdAction()'s signature gains a new, OPTIONAL 5th parameter
+| (`?FakeFinnhubClient $finnhubClient = null`), bound only when explicitly
+| passed. This is a deliberate compromise, flagged here for Gate 4 review:
+|   - Deliberately kept optional (rather than mirroring the other 4 Fakes,
+|     which are all required positional params) so that none of the
+|     pre-existing call sites in this file need to change — required so
+|     "既存のテスト（JP側）が引き続きGreenであることも確認すること" holds
+|     *right now*, in the Red phase (this file's existing tests must not
+|     start failing merely because this new param was threaded through).
+|   - Known consequence for the Green-phase implementer: once
+|     FetchExternalMarketDataAction's constructor gains a *required*
+|     FinnhubClientInterface dependency (per the task description, no
+|     default), any test that resolves the Action via femdAction() without
+|     passing an explicit FakeFinnhubClient will hit an unresolvable-
+|     interface container error, because femdAction() only calls
+|     `app()->instance(FinnhubClientInterface::class, ...)` when
+|     $finnhubClient is non-null. The Green-phase implementer will very
+|     likely need to change femdAction() to bind a default
+|     `new FakeFinnhubClient` when $finnhubClient is null, so every
+|     pre-existing test in this file keeps passing once the new
+|     constructor dependency lands — this is intentionally left as an open
+|     question for Gate 4 rather than pre-emptively "fixed" here, since
+|     eagerly constructing `new FakeFinnhubClient` unconditionally today
+|     would itself break every pre-existing test right now (FakeFinnhubClient
+|     implements FinnhubClientInterface, which doesn't exist yet, so merely
+|     instantiating it triggers a fatal "Interface not found" error).
 |
 */
 
@@ -278,21 +325,30 @@ function femdHoldingSnapshot(Snapshot $snapshot, Holding $holding, array $attrib
 }
 
 /**
- * Binds the 4 MarketData Fakes into the container and resolves the Action
+ * Binds the MarketData Fakes into the container and resolves the Action
  * under test. This call itself is the expected Red-state trigger (see
  * file-level docblock): App\Actions\Analysis\FetchExternalMarketDataAction
  * does not exist yet.
+ *
+ * $finnhubClient (ADR-0009 addendum, see file-level docblock) is
+ * deliberately optional and only bound when explicitly passed, so none of
+ * this file's pre-existing call sites (which don't pass it) need to change
+ * — see the file-level docblock's "ADR-0009 addendum" section for the
+ * Gate-4-flagged consequence of this choice.
  */
 function femdAction(
     FakeJpStockPriceClient $jpStockPriceClient,
     FakeUsStockPriceClient $usStockPriceClient,
     FakeMarketIndexClient $marketIndexClient,
     FakeJQuantsClient $jQuantsClient,
+    ?FakeFinnhubClient $finnhubClient = null,
 ): FetchExternalMarketDataAction {
     app()->instance(JpStockPriceClientInterface::class, $jpStockPriceClient);
     app()->instance(UsStockPriceClientInterface::class, $usStockPriceClient);
     app()->instance(MarketIndexClientInterface::class, $marketIndexClient);
     app()->instance(JQuantsClientInterface::class, $jQuantsClient);
+
+    app()->instance(FinnhubClientInterface::class, $finnhubClient ?? new FakeFinnhubClient);
 
     return app(FetchExternalMarketDataAction::class);
 }
@@ -418,7 +474,18 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
     });
 
     describe('正常系（US株）', function () {
-        test('US個別株はテクニカル指標のみ保存され、ファンダメンタルズ指標・セクター分類は対象外', function () {
+        /*
+        |----------------------------------------------------------------
+        | ADR-0009 (2026-09-05): this test previously asserted
+        | `assertDatabaseMissing('fundamental_indicators', ...)` for US
+        | holdings. ADR-0009 supersedes that — US holdings now also get
+        | `fundamental_indicators` populated via Finnhub — so this test has
+        | been rewritten in place (see the file-level "ADR-0009 addendum"
+        | docblock section for why this one pre-existing test, unlike every
+        | other one in this file, is not left untouched).
+        |----------------------------------------------------------------
+        */
+        test('US個別株はテクニカル指標に加え、Finnhubから取得したファンダメンタルズ指標も保存される（セクター分類は引き続き対象外、ADR-0009）', function () {
             [$batch, $snapshot] = femdImportBatch();
             $holding = femdHolding([
                 'symbol_code' => 'AAPL',
@@ -435,6 +502,25 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
             $priceHistory = femdPriceHistory(femdCloses(150.0, 2.0, 60));
             $sp500History = femdPriceHistory(femdCloses(4500.0, 20.0, 30), 1_000_000, '2023-01-02');
 
+            // Real, HTTP-verified Finnhub AAPL values (per ADR-0009 /
+            // task description). reportedFinancials[1].operating_income is
+            // an invented-but-consistent fixture value (only equity_ratio's
+            // inputs were pinned to real data by the task description).
+            $metrics = [
+                'peTTM' => 37.3169,
+                'pbAnnual' => 50.978,
+                'roeTTM' => 137.18,
+                'revenueGrowthTTMYoy' => 14.24,
+                'epsGrowthTTMYoy' => 32.61,
+                'dividendYieldIndicatedAnnual' => 0.50534,
+                'payoutRatioTTM' => 12.13,
+                'pegTTM' => 2.93443,
+            ];
+            $reportedFinancials = [
+                ['operating_income' => 100000000000.0, 'total_assets' => 359241000000.0, 'total_equity' => 73733000000.0],
+                ['operating_income' => 80000000000.0, 'total_assets' => 352755000000.0, 'total_equity' => 56950000000.0],
+            ];
+
             $action = femdAction(
                 new FakeJpStockPriceClient,
                 new FakeUsStockPriceClient(['AAPL' => $priceHistory]),
@@ -443,6 +529,7 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
                     'sp500' => $sp500History,
                 ]),
                 new FakeJQuantsClient,
+                new FakeFinnhubClient(['AAPL' => $metrics], ['AAPL' => $reportedFinancials]),
             );
 
             $action->execute($batch);
@@ -451,8 +538,14 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
             $expectedTechnical = (new TechnicalIndicatorCalculator)->calculate($priceHistory, $marketReturn13w, null);
             femdAssertTechnicalIndicatorMatches($holding->id, $expectedTechnical);
 
-            $this->assertDatabaseMissing('fundamental_indicators', ['holding_id' => $holding->id]);
+            $expectedFundamental = (new UsFundamentalIndicatorMapper)->map($metrics, $reportedFinancials);
+            femdAssertFundamentalIndicatorMatches($holding->id, $expectedFundamental);
 
+            // financial_statements（UC-006向け）はADR-0009のスコープ外のまま。
+            $this->assertDatabaseMissing('financial_statements', ['holding_id' => $holding->id]);
+
+            // セクター分類はJP株限定のロジック（J-Quants由来）のままで、
+            // Finnhub統合はここに影響しない。
             $holding->refresh();
             expect($holding->sector_classification_id)->toBeNull();
         });
@@ -1296,6 +1389,148 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
                 // second resolution rather than exact Carbon equality.
                 expect($row->computed_at->format('Y-m-d H:i:s'))->toBe($staleComputedAt->format('Y-m-d H:i:s'));
             });
+        });
+    });
+
+    describe('ADR-0009: 米国株ファンダメンタルズ指標（Finnhub統合）', function () {
+        /*
+        |----------------------------------------------------------------
+        | Source of truth: docs/adr/ADR-0009-us-stock-fundamentals-finnhub.md
+        | (D1〜D5). Complements the rewritten "正常系（US株）" test above
+        | (which pins the happy-path field mapping) with the per-holding
+        | exception-isolation guarantee that every other external-data
+        | source in this Action already has (see
+        | describe('個別銘柄の失敗が全体を止めない') and
+        | describe('ADR-0004 再発防止: ...') above for the equivalent JP/
+        | J-Quants and price-history cases).
+        |
+        | Expected Red state: same as the rewritten US test above — fails
+        | earlier at `app(FetchExternalMarketDataAction::class)` (class
+        | doesn't exist yet) and, once that exists, at `new FakeFinnhubClient`
+        | (FinnhubClientInterface doesn't exist yet either).
+        |----------------------------------------------------------------
+        */
+        test('US個別株でFinnhubのfetchMetrics()が例外を投げても、その銘柄はスキップされ他の銘柄の処理は継続する', function () {
+            [$batch, $snapshot] = femdImportBatch();
+
+            $failingHolding = femdHolding([
+                'symbol_code' => 'FAIL',
+                'market' => 'us',
+                'instrument_type' => 'stock',
+                'symbol_name' => 'Finnhub取得失敗銘柄',
+            ]);
+            femdHoldingSnapshot($snapshot, $failingHolding, [
+                'current_price' => 10000.0,
+                'fx_rate_used' => 150.0,
+                'unrealized_gain_rate' => 5.0,
+            ]);
+
+            $okHolding = femdHolding([
+                'symbol_code' => 'AAPL',
+                'market' => 'us',
+                'instrument_type' => 'stock',
+                'symbol_name' => 'Apple Inc.',
+            ]);
+            femdHoldingSnapshot($snapshot, $okHolding, [
+                'current_price' => 25000.0,
+                'fx_rate_used' => 150.0,
+                'unrealized_gain_rate' => 8.0,
+            ]);
+
+            $failingPriceHistory = femdPriceHistory(femdCloses(100.0, 1.0, 20));
+            $okPriceHistory = femdPriceHistory(femdCloses(150.0, 2.0, 20));
+
+            $metrics = ['peTTM' => 37.3169, 'pbAnnual' => 50.978];
+            $reportedFinancials = [
+                ['operating_income' => 100000000000.0, 'total_assets' => 359241000000.0, 'total_equity' => 73733000000.0],
+                ['operating_income' => 80000000000.0, 'total_assets' => 352755000000.0, 'total_equity' => 56950000000.0],
+            ];
+
+            $action = femdAction(
+                new FakeJpStockPriceClient,
+                new FakeUsStockPriceClient(['FAIL' => $failingPriceHistory, 'AAPL' => $okPriceHistory]),
+                new FakeMarketIndexClient([
+                    'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 20)),
+                    'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20)),
+                ]),
+                new FakeJQuantsClient,
+                new FakeFinnhubClient(
+                    metricsResponses: ['AAPL' => $metrics],
+                    reportedFinancialsResponses: ['AAPL' => $reportedFinancials],
+                    throwsForMetrics: ['FAIL'],
+                ),
+            );
+
+            $action->execute($batch);
+
+            // 失敗した銘柄はtechnical_indicatorsも含めて丸ごとロールバックされる
+            // （1銘柄単位のアトミック性、既存のDB::transaction()挙動を踏襲）。
+            $this->assertDatabaseMissing('technical_indicators', ['holding_id' => $failingHolding->id]);
+            $this->assertDatabaseMissing('fundamental_indicators', ['holding_id' => $failingHolding->id]);
+
+            // 正常銘柄はFinnhub統合の影響を受けず処理が継続する。
+            $this->assertDatabaseHas('technical_indicators', ['holding_id' => $okHolding->id]);
+            $this->assertDatabaseHas('fundamental_indicators', ['holding_id' => $okHolding->id]);
+        });
+
+        test('US個別株でFinnhubのfetchReportedFinancials()が例外を投げても、その銘柄はスキップされ他の銘柄の処理は継続する', function () {
+            [$batch, $snapshot] = femdImportBatch();
+
+            $failingHolding = femdHolding([
+                'symbol_code' => 'FAIL2',
+                'market' => 'us',
+                'instrument_type' => 'stock',
+                'symbol_name' => 'Finnhub財務データ取得失敗銘柄',
+            ]);
+            femdHoldingSnapshot($snapshot, $failingHolding, [
+                'current_price' => 10000.0,
+                'fx_rate_used' => 150.0,
+                'unrealized_gain_rate' => 5.0,
+            ]);
+
+            $okHolding = femdHolding([
+                'symbol_code' => 'AAPL',
+                'market' => 'us',
+                'instrument_type' => 'stock',
+                'symbol_name' => 'Apple Inc.',
+            ]);
+            femdHoldingSnapshot($snapshot, $okHolding, [
+                'current_price' => 25000.0,
+                'fx_rate_used' => 150.0,
+                'unrealized_gain_rate' => 8.0,
+            ]);
+
+            $failingPriceHistory = femdPriceHistory(femdCloses(100.0, 1.0, 20));
+            $okPriceHistory = femdPriceHistory(femdCloses(150.0, 2.0, 20));
+
+            $metrics = ['peTTM' => 37.3169, 'pbAnnual' => 50.978];
+            $reportedFinancials = [
+                ['operating_income' => 100000000000.0, 'total_assets' => 359241000000.0, 'total_equity' => 73733000000.0],
+                ['operating_income' => 80000000000.0, 'total_assets' => 352755000000.0, 'total_equity' => 56950000000.0],
+            ];
+
+            $action = femdAction(
+                new FakeJpStockPriceClient,
+                new FakeUsStockPriceClient(['FAIL2' => $failingPriceHistory, 'AAPL' => $okPriceHistory]),
+                new FakeMarketIndexClient([
+                    'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 20)),
+                    'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20)),
+                ]),
+                new FakeJQuantsClient,
+                new FakeFinnhubClient(
+                    metricsResponses: ['FAIL2' => ['peTTM' => 10.0], 'AAPL' => $metrics],
+                    reportedFinancialsResponses: ['AAPL' => $reportedFinancials],
+                    throwsForReportedFinancials: ['FAIL2'],
+                ),
+            );
+
+            $action->execute($batch);
+
+            $this->assertDatabaseMissing('technical_indicators', ['holding_id' => $failingHolding->id]);
+            $this->assertDatabaseMissing('fundamental_indicators', ['holding_id' => $failingHolding->id]);
+
+            $this->assertDatabaseHas('technical_indicators', ['holding_id' => $okHolding->id]);
+            $this->assertDatabaseHas('fundamental_indicators', ['holding_id' => $okHolding->id]);
         });
     });
 });
