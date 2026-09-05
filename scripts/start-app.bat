@@ -38,11 +38,59 @@ echo   waiting for Docker... !n!/40
 goto wait_docker
 
 :docker_ok
-echo   Docker OK
+echo   Docker OK (Windows side)
 
+rem "docker info" on the Windows side can succeed before Docker Desktop's
+rem WSL integration (the internal docker-desktop VM bridging the daemon
+rem socket into %WSL_DISTRO%) has actually finished starting. Confirm the
+rem daemon is reachable from inside %WSL_DISTRO% too, so we don't rush into
+rem "docker compose up" against a socket that isn't there yet.
+set /a n=0
+:wait_wsl_docker
+wsl -d %WSL_DISTRO% -- docker info >nul 2>&1
+if not errorlevel 1 goto wsl_docker_ok
+set /a n+=1
+if !n! geq 20 goto compose_start
+echo   waiting for Docker WSL integration (%WSL_DISTRO%)... !n!/20
+ping -n 4 127.0.0.1 >nul
+goto wait_wsl_docker
+
+:wsl_docker_ok
+echo   Docker OK (%WSL_DISTRO%)
+
+:compose_start
 echo [2/4] Starting containers in WSL (%WSL_DISTRO%:%WSL_PROJECT_DIR%)...
+set /a n=0
+:try_compose
 wsl -d %WSL_DISTRO% -- bash -lc "cd %WSL_PROJECT_DIR% && docker compose up -d"
-if errorlevel 1 (echo   [ERROR] docker compose up failed in WSL. & pause & exit /b 1)
+if not errorlevel 1 goto compose_ok
+set /a n+=1
+if !n! geq 5 goto compose_failed
+echo   [WARN] docker compose up failed, retrying (!n!/5)...
+ping -n 6 127.0.0.1 >nul
+goto try_compose
+
+:compose_failed
+echo.
+echo ============================================================
+echo   [ERROR] docker compose up failed in WSL after 5 attempts.
+echo.
+echo   This usually means Docker Desktop's internal WSL VM
+echo   (docker-desktop distro) failed to boot correctly, even
+echo   though Docker Desktop itself looked ready above.
+echo.
+echo   Manual recovery:
+echo     1. Close Docker Desktop
+echo     2. Run in PowerShell/CMD: wsl --shutdown
+echo        NOTE: this restarts ALL WSL distros. Make sure no other
+echo        WSL terminals/sessions/work are running first.
+echo     3. Start Docker Desktop again and wait until it is ready
+echo     4. Re-run this script
+echo ============================================================
+pause
+exit /b 1
+
+:compose_ok
 
 echo [3/4] Waiting for app to respond...
 set /a n=0
