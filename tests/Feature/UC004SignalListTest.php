@@ -9,6 +9,7 @@ use App\Models\HoldingSnapshotAccount;
 use App\Models\ImportBatch;
 use App\Models\Signal;
 use App\Models\Snapshot;
+use App\Models\TechnicalIndicator;
 use App\Models\User;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -240,6 +241,37 @@ function ucFrom004TestHealthyFundamentalIndicator(Holding $holding, array $attri
         'dividend_yield' => 2.0,
         'dividend_payout_ratio' => 30.0,
         'fetched_at' => now(),
+    ], $attributes));
+}
+
+/**
+ * Create a `technical_indicators` row for a holding (CHG-0007 判定
+ * チェックリスト). Defaults are tuned so that every take-profit technical
+ * criterion is comfortably "met" for a holding priced at current_price=1300
+ * (the ucFrom004TestHoldingSnapshot default): RSI≧70, 52週高値からの下落率
+ * ≦-10% (week52_high=1500 → -13.3%), BB上限乖離≧0% (bb_upper=1250),
+ * MACD-シグナル線<0, 相対力<0.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function ucFrom004TestTechnicalIndicator(Holding $holding, array $attributes = []): TechnicalIndicator
+{
+    return TechnicalIndicator::create(array_merge([
+        'holding_id' => $holding->id,
+        'rsi' => 78.0,
+        'macd' => -3.0,
+        'macd_signal' => 1.0,
+        'ma20' => 1400.0,
+        'ma75' => 1350.0,
+        'bb_upper' => 1250.0,
+        'bb_lower' => 1100.0,
+        'volume' => 3_000_000,
+        'volume_ma20' => 1_000_000.0,
+        'week52_high' => 1500.0,
+        'week52_low' => 800.0,
+        'relative_strength_vs_market' => -4.5,
+        'relative_strength_vs_sector' => -3.0,
+        'computed_at' => now(),
     ], $attributes));
 }
 
@@ -677,6 +709,95 @@ describe('UC-004: 利確シグナル一覧', function () {
             $suggestion = $row['split_limit_suggestion'];
             $firstTier = $suggestion[0];
             expect((float) $firstTier['price'])->toEqualWithDelta(1200.0, 0.01);
+        });
+    });
+
+    describe('判定チェックリスト（criteria、CHG-0007）', function () {
+        test('各行に criteria（technical 7項目・fundamental 3項目・グループ別サマリ）が含まれる', function () {
+            [, $snapshot] = ucFrom004TestImportBatch();
+            $holding = ucFrom004TestHolding(['symbol_code' => '7203', 'symbol_name' => 'トヨタ自動車']);
+            $holdingSnapshot = ucFrom004TestHoldingSnapshot($snapshot, $holding, [
+                'average_cost' => 1000.00,
+                'current_price' => 1300.00,
+                'unrealized_gain_rate' => 30.0,
+            ]);
+            ucFrom004TestSignal($holdingSnapshot, ['signal_type' => 'rsi_reversal']);
+            ucFrom004TestHealthyFundamentalIndicator($holding);
+            ucFrom004TestTechnicalIndicator($holding);
+
+            $row = ucFrom004TestFindRow(ucFrom004TestFetch($this), '7203');
+
+            expect($row['criteria'])->toHaveKeys(['technical', 'fundamental', 'summary']);
+            expect($row['criteria']['technical'])->toHaveCount(7);
+            expect($row['criteria']['fundamental'])->toHaveCount(3);
+            expect($row['criteria']['summary']['technical']['total'])->toBe(7);
+            expect($row['criteria']['summary']['fundamental']['total'])->toBe(3);
+
+            foreach ($row['criteria']['technical'] as $item) {
+                expect($item)->toHaveKeys(['label', 'threshold_label', 'value_label', 'status']);
+                expect($item['status'])->toBeIn(['met', 'near', 'unmet', 'unavailable']);
+            }
+        });
+
+        test('全テクニカル基準を満たす銘柄は summary.technical.met が 7 になる', function () {
+            [, $snapshot] = ucFrom004TestImportBatch();
+            $holding = ucFrom004TestHolding(['symbol_code' => '6526', 'symbol_name' => 'ソシオネクスト']);
+            $holdingSnapshot = ucFrom004TestHoldingSnapshot($snapshot, $holding, [
+                'average_cost' => 1000.00,
+                'current_price' => 1300.00,
+                'unrealized_gain_rate' => 30.0, // 含み益率 > +20% ライン → met
+            ]);
+            ucFrom004TestSignal($holdingSnapshot, ['signal_type' => 'rsi_reversal']);
+            // ucFrom004TestHealthyFundamentalIndicator()のデフォルトはpeg_ratio未設定
+            // （null=unavailable）のため、PEGレシオ項目もmetにするには明示的に
+            // ≧2.0の値を渡す必要がある。
+            ucFrom004TestHealthyFundamentalIndicator($holding, ['peg_ratio' => 2.6]);
+            ucFrom004TestTechnicalIndicator($holding); // 既定値で全項目 met
+
+            $row = ucFrom004TestFindRow(ucFrom004TestFetch($this), '6526');
+
+            expect($row['criteria']['summary']['technical']['met'])->toBe(7);
+            expect($row['criteria']['summary']['fundamental']['met'])->toBe(3);
+        });
+
+        test('高水準モード銘柄は含み益率の基準ラベルが +150% ラインになる', function () {
+            [, $snapshot] = ucFrom004TestImportBatch();
+            $holding = ucFrom004TestHolding(['symbol_code' => '6098', 'symbol_name' => 'リクルート']);
+            // シグナル0件・財務健全性passed・含み益+200% → 高水準モード
+            ucFrom004TestHealthyFundamentalIndicator($holding);
+            ucFrom004TestTechnicalIndicator($holding);
+            ucFrom004TestHoldingSnapshot($snapshot, $holding, [
+                'average_cost' => 1000.00,
+                'current_price' => 3000.00,
+                'unrealized_gain_rate' => 200.0,
+            ]);
+
+            $row = ucFrom004TestFindRow(ucFrom004TestFetch($this), '6098');
+            expect($row)->not->toBeNull();
+
+            $gainRow = collect($row['criteria']['technical'])->firstWhere('label', '含み益率');
+            expect($gainRow['threshold_label'])->toContain('150');
+            expect($gainRow['status'])->toBe('met'); // +200% ≥ +150%
+        });
+
+        test('テクニカル指標が未取得の銘柄は該当項目が unavailable（value_label は「—」）になり、集計から外れる', function () {
+            [, $snapshot] = ucFrom004TestImportBatch();
+            $holding = ucFrom004TestHolding(['symbol_code' => 'AAPL', 'market' => 'us', 'symbol_name' => 'Apple']);
+            $holdingSnapshot = ucFrom004TestHoldingSnapshot($snapshot, $holding, [
+                'average_cost' => 100.00,
+                'current_price' => 130.00,
+                'unrealized_gain_rate' => 30.0,
+            ]);
+            ucFrom004TestSignal($holdingSnapshot, ['signal_type' => 'rsi_reversal']);
+            // Deliberately no TechnicalIndicator / FundamentalIndicator rows.
+
+            $row = ucFrom004TestFindRow(ucFrom004TestFetch($this), 'AAPL');
+
+            $rsiRow = collect($row['criteria']['technical'])->firstWhere('label', 'RSI');
+            expect($rsiRow['status'])->toBe('unavailable');
+            expect($rsiRow['value_label'])->toBe('—');
+            // 含み益率だけは holding_snapshot 由来なので met のまま
+            expect($row['criteria']['summary']['technical']['met'])->toBe(1);
         });
     });
 

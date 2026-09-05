@@ -438,6 +438,7 @@
 | 分割買い下がりの閾値・比率 | 現在値×1.00／×0.93（-7%）／×0.85（-15%）の3段階 | UC-010 | 叩き台のまま承認（ADR-0007）。将来`bb_lower`/`week52_low`を価格アンカーにする代替案もあるが、負値リスク・データ不足リスクを避けるため初期値は固定率とした |
 | 買い増し追加投資額の目安率 | ポートフォリオ評価総額×2%（UC-008の1〜2%小口方針を流用） | UC-010 | 叩き台のまま承認（ADR-0007） |
 | 買い増しシグナル共通の前提条件（直前の好調さ・連れ安確認） | (1)直近13週以内に`week52_high`の-15%以内到達、(2)`relative_strength_vs_market`が-5pt以上 | UC-010 | 叩き台のまま承認（2026-08-23、ADR-0007）。`BuySignalDeterminationService`のGate4実装時に`/tdd`サイクルで確定 |
+| 判定チェックリストの「あと一歩（`near`）」バッファ | 基準値 T に対し、\|T\| × 0.2 手前まで到達していれば「あと一歩」。「T 以上」条件は `実測 ≥ T − \|T\|×0.2`、「T 以下」条件は `実測 ≤ T + \|T\|×0.2`。T = 0 の項目（ボリンジャー乖離率・MACD差・成長率・相対力）は比率が定義できないため「達成／未達」の2値とする。実測値が未取得の項目は `unavailable` | UC-004/UC-010 | 叩き台のまま承認（2026-08-29、CHG-0007）。`SignalCriteriaEvaluator`のGate4実装時に`/tdd`サイクルで確定。判定に用いる項目の基準値そのものは既存のシグナル判定閾値・財務健全性フィルタの値を流用し、本CRでは新設しない |
 
 ## 分析ロジックの計算仕様（`TechnicalIndicatorCalculator`、Gate4確定・2026-08-21）
 
@@ -469,6 +470,7 @@
 | 2026-08-23 | minowaryo | 承認 | `buy_signals`テーブル定義（UC-010、ADR-0007）を新規承認。use-cases.md Gate2承認と同時に、全シグナル共通の前提条件（直近13週以内の`week52_high`-15%以内到達歴、`relative_strength_vs_market`-5pt以上）を追加した上で承認。数値パラメータは他UC同様、叩き台のままGate4実装時に確定する方針 |
 | 2026-08-27 | minowaryo | 承認（CR） | UC-010実装完了後の`/review`で、UC-010のみ成長率条件を追加した結果UC-008/UC-009と判定基準が乖離することが判明（CHG-0005）。「財務健全性フィルタ」行にUC-008/UC-009分の成長率条件を追加し、UC-005/UC-008/UC-009/UC-010の4UC全てで自己資本比率・ROE・成長率の3条件に統一する方針を承認 |
 | 2026-08-28 | minowaryo | 承認（CR） | 利確検討ラインの動的分岐ロジックを新規承認（CHG-0006、Planフェーズで具体化）。「分割指値の閾値・比率」行を通常モードとして維持しつつ、「利確検討ラインの動的分岐（高水準モード）」行を新設。判定は表示・集計レイヤー（`ShowSignalListAction`/`ShowImportSummaryReportAction`が利用する新設`TakeProfitThresholdEvaluator`）で完結させ、`signals`テーブルの永続化条件（含み益+20%超）は変更しないためUC-010への影響がないことを確認した上で承認 |
+| 2026-08-29 | minowaryo | 承認（CR） | 売買シグナル画面の判定チェックリスト表示を新規承認（CHG-0007）。「保留・確定が必要な初期パラメータ値」表に「判定チェックリストの『あと一歩（`near`）』バッファ = 基準値の±20%手前、基準値0の項目は2値判定」行を新設。判定項目の基準値そのものは既存のシグナル判定閾値・財務健全性フィルタ値を流用するため新設せず、DBスキーマ変更もなし。新設`SignalCriteriaEvaluator`（表示専用の純粋計算クラス）で`ShowSignalListAction`/`ShowBuySignalListAction`に組み込む |
 
 ## 変更履歴
 
@@ -495,4 +497,5 @@
 | 2026-08-23 | UC-006 Cycle Aの`/review`拡張レベル指摘（MEDIUM）を修正。`financial_statements.revenue`/`operating_income`をNOT NULLからnullableに変更（`2026_08_23_000001_nullable_revenue_operating_income_on_financial_statements_table.php`）。データソース（J-Quants `net_sales`/`operating_profit`）自体がnullを返しうるにもかかわらずNOT NULLだったため、該当銘柄で`financial_statements`のINSERT失敗が同一トランザクション内の`technical_indicators`/`fundamental_indicators`/`signals`更新まで巻き添えでロールバックさせていた | ADR-0008 |
 | 2026-08-23 | Phase2 Cycle4（UC-006）のCycle B（本体）実装完了、これでPhase2「UC-008→UC-005→UC-006」全サイクル完了。`watch_records`テーブル・`WatchRecord`モデルを`holding_memos`と同じ追記のみパターンで新規実装。`GET /candidate-check`（`overlap_rate`/`diversification_comment`をUC-005の`SectorAllocationCalculator`から流用、UC-003と同一のテクニカル/ファンダメンタルズ指標一式、`historical_performance`、`watch_status`/`watch_memo_history`）・`POST /candidate-check/watch-records`を新規追加。未知の`symbol_code`はFormRequestの`Rule::exists`で422拒否する方針・`overlap_rate`の一致なし時`0`扱い・ウォッチステータス/メモ両方省略時422をGate4で確定 | - |
 | 2026-08-23 | UC-007（市場全体指標表示）の表示エンドポイント`GET /market-indicators`を実装、これでPhase2（F-005/F-006/F-007/F-008）が全完了。直近スナップショットの5指標（`nikkei225`/`sp500`/`us10y`/`vix`/`usdjpy`）を固定順で返す。`us10y`/`vix`/`usdjpy`は取得ロジック自体が未実装のため常に`null`のプレースホルダとして返す方針をユーザー確認の上で確定（3指標の外部データ取得自体は別タスクとして先送り） | - |
+| 2026-08-29 | 売買シグナル画面の判定チェックリスト表示を追加（CHG-0007）。「保留・確定が必要な初期パラメータ値」表に「判定チェックリストの『あと一歩（`near`）』バッファ」行を新設。判定項目の基準値は既存のシグナル判定閾値・`FundamentalHealthEvaluator`の閾値を流用し新設しない。DBスキーマ変更なし（`technical_indicators`/`fundamental_indicators`/`holding_snapshots`の既存値のみ参照）。表示専用の純粋計算クラス`SignalCriteriaEvaluator`を新設し`ShowSignalListAction`/`ShowBuySignalListAction`に組み込む | CHG-0007 |
 | 2026-09-05 | **Gate3承認**（CHG-0009・ADR-0009）。米国株のファンダメンタルズ指標データソースとしてFinnhub APIを新規採用。`fundamental_indicators`のカラム構成（`per`/`pbr`/`roe`/`revenue_growth`/`operating_income_growth`/`equity_ratio`/`dividend_yield`/`dividend_payout_ratio`/`eps_growth`/`peg_ratio`）は市場非依存のnullable列のまま変更なし、DBマイグレーション不要。`fetched_at`の説明・UPSERT設計根拠のコメントをJP（J-Quants）/US（Finnhub）の両データソースを踏まえた記載に更新。自己資本比率・営業利益成長率の算出方法（`financials-reported`からの実測計算・YoY算出）を「実装完了」注記として追記（実装はGate4のTDDサイクルで行う） | ADR-0009 |

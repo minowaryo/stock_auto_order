@@ -4,6 +4,7 @@ namespace App\Actions\Signal;
 
 use App\Models\HoldingSnapshot;
 use App\Models\Snapshot;
+use App\Services\Analysis\SignalCriteriaEvaluator;
 use App\Services\Analysis\TakeProfitThresholdEvaluator;
 
 /**
@@ -18,7 +19,10 @@ use App\Services\Analysis\TakeProfitThresholdEvaluator;
  */
 class ShowSignalListAction
 {
-    public function __construct(private readonly TakeProfitThresholdEvaluator $takeProfitThresholdEvaluator) {}
+    public function __construct(
+        private readonly TakeProfitThresholdEvaluator $takeProfitThresholdEvaluator,
+        private readonly SignalCriteriaEvaluator $criteriaEvaluator,
+    ) {}
 
     /**
      * @return array<int, array<string, mixed>>
@@ -51,7 +55,7 @@ class ShowSignalListAction
                     ->orWhereHas('accounts', fn ($accounts) => $accounts
                         ->whereIn('account_type', ['specific', 'general']));
             })
-            ->with(['holding', 'holding.fundamentalIndicator', 'signals', 'accounts'])
+            ->with(['holding', 'holding.fundamentalIndicator', 'holding.technicalIndicator', 'signals', 'accounts'])
             ->get();
 
         return $holdingSnapshots
@@ -115,6 +119,41 @@ class ShowSignalListAction
             // (+100%/+150% vs +20%/+35%) instead of hardcoding the normal
             // mode's labels regardless of which mode actually applied.
             'is_high_water_mark' => $threshold['mode'] === 'high_water_mark',
+            // 判定チェックリスト（CHG-0007）: 基準点・実測値・達成状態を並べた
+            // 表示用データ。含み益率の基準ラベルは高水準モード時+150%に追従する。
+            'criteria' => $this->criteriaEvaluator->evaluateTakeProfit(
+                $this->buildCriteriaMetrics($holdingSnapshot, $threshold),
+            ),
+        ];
+    }
+
+    /**
+     * @param  array{mode: string, target_gain_rate_threshold: float, first_tier_price_multiplier: float, second_tier_price_multiplier: float}  $threshold
+     * @return array<string, float|null>
+     */
+    private function buildCriteriaMetrics(HoldingSnapshot $holdingSnapshot, array $threshold): array
+    {
+        $holding = $holdingSnapshot->holding;
+        $technicalIndicator = $holding->technicalIndicator;
+        $fundamentalIndicator = $holding->fundamentalIndicator;
+
+        return [
+            'unrealized_gain_rate' => $holdingSnapshot->unrealized_gain_rate !== null ? (float) $holdingSnapshot->unrealized_gain_rate : null,
+            'gain_line_threshold' => $threshold['target_gain_rate_threshold'],
+            'current_price' => $holdingSnapshot->current_price !== null ? (float) $holdingSnapshot->current_price : null,
+            'rsi' => $technicalIndicator?->rsi !== null ? (float) $technicalIndicator->rsi : null,
+            'macd' => $technicalIndicator?->macd !== null ? (float) $technicalIndicator->macd : null,
+            'macd_signal' => $technicalIndicator?->macd_signal !== null ? (float) $technicalIndicator->macd_signal : null,
+            'bb_upper' => $technicalIndicator?->bb_upper !== null ? (float) $technicalIndicator->bb_upper : null,
+            'bb_lower' => $technicalIndicator?->bb_lower !== null ? (float) $technicalIndicator->bb_lower : null,
+            'week52_high' => $technicalIndicator?->week52_high !== null ? (float) $technicalIndicator->week52_high : null,
+            'week52_low' => $technicalIndicator?->week52_low !== null ? (float) $technicalIndicator->week52_low : null,
+            'relative_strength_vs_market' => $technicalIndicator?->relative_strength_vs_market !== null ? (float) $technicalIndicator->relative_strength_vs_market : null,
+            'peg_ratio' => $fundamentalIndicator?->peg_ratio !== null ? (float) $fundamentalIndicator->peg_ratio : null,
+            'roe' => $fundamentalIndicator?->roe !== null ? (float) $fundamentalIndicator->roe : null,
+            'equity_ratio' => $fundamentalIndicator?->equity_ratio !== null ? (float) $fundamentalIndicator->equity_ratio : null,
+            'revenue_growth' => $fundamentalIndicator?->revenue_growth !== null ? (float) $fundamentalIndicator->revenue_growth : null,
+            'operating_income_growth' => $fundamentalIndicator?->operating_income_growth !== null ? (float) $fundamentalIndicator->operating_income_growth : null,
         ];
     }
 

@@ -11,6 +11,7 @@ use App\Models\HoldingSnapshot;
 use App\Models\ImportBatch;
 use App\Models\Signal;
 use App\Models\Snapshot;
+use App\Models\TechnicalIndicator;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -275,6 +276,33 @@ function signalListTestBuySignal(HoldingSnapshot $holdingSnapshot, array $attrib
         'holding_snapshot_id' => $holdingSnapshot->id,
         'signal_type' => 'rsi_oversold_rebound',
         'reason_summary' => 'RSIが28から34へ反発しました',
+    ], $attributes));
+}
+
+/**
+ * Creates a `technical_indicators` row (CHG-0007 判定チェックリスト).
+ * Neutral defaults — individual tests override the fields they assert on.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function signalListTestTechnicalIndicator(Holding $holding, array $attributes = []): TechnicalIndicator
+{
+    return TechnicalIndicator::create(array_merge([
+        'holding_id' => $holding->id,
+        'rsi' => 50.0,
+        'macd' => 0.0,
+        'macd_signal' => 0.0,
+        'ma20' => 1000.0,
+        'ma75' => 1000.0,
+        'bb_upper' => 1200.0,
+        'bb_lower' => 800.0,
+        'volume' => 1_000_000,
+        'volume_ma20' => 1_000_000.0,
+        'week52_high' => 1500.0,
+        'week52_low' => 700.0,
+        'relative_strength_vs_market' => 0.0,
+        'relative_strength_vs_sector' => 0.0,
+        'computed_at' => now(),
     ], $attributes));
 }
 
@@ -580,6 +608,87 @@ describe('UC-010: 買い増し候補セクション（売買シグナル画面�
             $component->assertSee('利確検討');
             $component->assertSee('サンプル素材');
             $component->assertSee('トヨタ自動車');
+        });
+    });
+});
+
+describe('判定チェックリスト表示（criteria、CHG-0007）', function () {
+    describe('利確検討セクション', function () {
+        test('各項目の基準ラベル・実測値・達成カウントが画面に描画される', function () {
+            $user = User::factory()->create();
+            [, $snapshot] = signalListTestImportBatch();
+
+            $holding = signalListTestHolding(['symbol_code' => '6526', 'market' => 'jp', 'symbol_name' => 'ソシオネクスト']);
+            $holdingSnapshot = signalListTestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 300, 'average_cost' => 1000.00, 'current_price' => 1300.00, 'unrealized_gain_rate' => 30.0,
+            ]);
+            signalListTestSignal($holdingSnapshot, ['signal_type' => 'rsi_reversal', 'reason_summary' => 'RSIが72から65に反落']);
+            signalListTestFundamentalIndicator($holding);
+            // 全テクニカル項目 met になる値（current_price=1300 前提）
+            signalListTestTechnicalIndicator($holding, [
+                'rsi' => 78.0,
+                'macd' => -3.0, 'macd_signal' => 1.0,
+                'bb_upper' => 1250.0,
+                'week52_high' => 1500.0,
+                'relative_strength_vs_market' => -4.5,
+            ]);
+
+            $html = Livewire::actingAs($user)->test(SignalList::class)->html();
+
+            // 項目名・基準ラベル・実測値
+            expect($html)->toContain('RSI');
+            expect($html)->toContain('≥70');
+            expect($html)->toContain('78.0');
+            // グループ別の達成サマリ（「7/7」等の表現。桁は実装で確定するが
+            // 「テクニカル」「財務」のラベルと達成分母/分子は必ず出す）
+            expect($html)->toContain('テクニカル');
+            expect($html)->toContain('財務');
+        });
+
+        test('テクニカル指標が未取得の銘柄では該当項目が「—」で表示され画面が壊れない', function () {
+            $user = User::factory()->create();
+            [, $snapshot] = signalListTestImportBatch();
+
+            $holding = signalListTestHolding(['symbol_code' => 'AAPL', 'market' => 'us', 'symbol_name' => 'Apple']);
+            $holdingSnapshot = signalListTestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 10, 'average_cost' => 100.00, 'current_price' => 130.00, 'unrealized_gain_rate' => 30.0,
+            ]);
+            signalListTestSignal($holdingSnapshot, ['signal_type' => 'rsi_reversal', 'reason_summary' => 'RSIが72から65に反落']);
+            // TechnicalIndicator / FundamentalIndicator を意図的に作らない
+
+            $component = Livewire::actingAs($user)->test(SignalList::class);
+
+            $component->assertOk();
+            $component->assertSee('Apple');
+            expect($component->html())->toContain('—');
+        });
+    });
+
+    describe('買い増し候補セクション', function () {
+        test('買い増し方向の基準ラベル（RSI ≤30・出来高倍率 ≥1.5倍 等）が描画される', function () {
+            $user = User::factory()->create();
+            [, $snapshot] = signalListTestImportBatch();
+
+            $holding = signalListTestHolding(['symbol_code' => '5201', 'market' => 'jp', 'symbol_name' => 'サンプル素材']);
+            $holdingSnapshot = signalListTestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 100, 'average_cost' => 1200.00, 'current_price' => 1000.00, 'unrealized_gain_rate' => -8.5,
+            ]);
+            signalListTestBuySignal($holdingSnapshot, ['signal_type' => 'rsi_oversold_rebound']);
+            signalListTestFundamentalIndicator($holding, ['equity_ratio' => 58.0, 'roe' => 15.2]);
+            signalListTestTechnicalIndicator($holding, [
+                'rsi' => 22.0,
+                'macd' => 2.0, 'macd_signal' => -1.0,
+                'bb_lower' => 1100.0,
+                'ma20' => 1200.0,
+                'week52_low' => 950.0,
+                'volume' => 2_500_000, 'volume_ma20' => 1_000_000.0,
+            ]);
+
+            $html = Livewire::actingAs($user)->test(SignalList::class)->html();
+
+            expect($html)->toContain('≤30');
+            expect($html)->toContain('≥1.5倍');
+            expect($html)->toContain('MA20乖離率');
         });
     });
 });

@@ -38,6 +38,12 @@
 - **移設後にハマった点（重要）**: Windows側チェックアウト（`c:\workspace\stock_auto_order`）と WSL側は compose プロジェクト名が同じ（どちらもディレクトリ名由来の `stock_auto_order`）だったため、**デスクトップの起動バッチ等で Windows パスから `docker compose up` が走るたびに、高速な WSL 版コンテナが遅い Windows bind mount 版へ静かに作り直されていた**（体感だけ遅く戻り、原因が分かりにくい）。
 - **恒久対処（2026-08-29）**: WSL側の `.env` に `COMPOSE_PROJECT_NAME=stock_auto_order_wsl` を追加してプロジェクトを完全分離。MySQLボリュームは `stock_auto_order_sail-mysql` → `stock_auto_order_wsl_sail-mysql` に複製（`docker run --rm -v old:/from:ro -v new:/to alpine cp -a /from/. /to/`、旧ボリュームはバックアップ保持）。以後 Windows パスから compose が走っても別プロジェクト（`stock_auto_order`）になり WSL 版（`stock_auto_order_wsl`）は無傷。両方同時起動時はポート80衝突で**明示エラー**になる（静かな劣化ではなくなる）。`scripts/*.bat` は WSL 内で `docker compose` を実行する形に修正済み（`COMPOSE_PROJECT_NAME` は `.env` から自動適用）。Windows側の旧デスクトップショートカット・旧スタックは撤去推奨。
 
+### Docker Desktop（Windows + WSL2） — `docker info`はOKなのにWSL内`docker compose up`が失敗する（内部WSL VMの起動失敗）
+
+- 現象: `scripts/start-app.bat`でWindows側の`docker info`チェックが「Docker OK」を返した直後、`wsl -d Ubuntu -- docker compose up -d`が`Cannot connect to the Docker daemon at unix:///var/run/docker.sock`で失敗。同時にDocker Desktopが「Unexpected WSL error」ダイアログ（`running wsl-bootstrap: ... : exit status 1`）を表示することがある
+- 原因: Docker DesktopはWSL2バックエンドの場合、内部専用の`docker-desktop`ディストロでデーモン本体を動かし、ユーザーの`Ubuntu`ディストロにはソケット経由で橋渡し（WSL統合）する。Windows側の`docker info`はこの内部VMの起動完了を待たずに成功することがあり、その状態でWSL側から`docker compose`を叩くと橋渡しがまだ済んでおらず失敗する。まれに内部VM自体の起動が（`getty`の`console=hvc0`関連の警告等で）failed扱いになることもある
+- 対処: `scripts/start-app.bat`に(1) `wsl -d Ubuntu -- docker info`でWSL側からの疎通も確認してから`docker compose up`に進む待機ループ、(2) `docker compose up -d`自体の数回リトライ、を追加（2026-09-05）。それでも失敗する場合は自動復旧せず、画面に「`wsl --shutdown`→Docker Desktop再起動→再実行」の手順を表示して停止する（`wsl --shutdown`は全WSLディストロを巻き込むため自動実行はしない設計。実行前に他のWSL作業がないか必ず確認すること）
+
 ### Laravel `auth`ミドルウェア（ログイン画面未実装） — ブラウザ的な未認証アクセスが500になる
 
 - 現象: `run`スキルでUC-003（`GET /holdings/{holding}`）を`Accept: application/json`ヘッダーなしでcurlすると500。ログを見ると`RouteNotFoundException: Route [login] not defined.`。同条件で`GET /holdings`（UC-002、既存）を叩いても再現するため、UC-003固有ではなく既存の構造的ギャップと判明。`Accept: application/json`を付けたリクエストでは正しく401が返る（Pest Feature Test群は`getJson()`/`postJson()`で常にこのヘッダーが付くため、テストでは検出できない）
@@ -76,3 +82,34 @@
 - 原因: (1) `fundamental_indicators.eps_growth`/`revenue_growth`/`operating_income_growth`の列幅がユニットテストの仮フィクスチャ（小さい成長率）でしか検証されておらず、実データの極端な成長率（分母がゼロに近い回復銘柄）を想定していなかった。(2) `FetchExternalMarketDataAction::execute()`の1つ目のループは価格履歴取得のみをtry-catchで保護し`fetchSectorInfo()`を保護範囲外に置いていた。2つ目のループ（指標計算・DB保存・シグナル判定）にはper-holdingのtry-catchが一切なかった
 - 対処: `database/migrations/2026_08_22_000004_widen_growth_columns_on_fundamental_indicators_table.php`で3カラムを`decimal(10,4)`に拡張（`docs/adr/ADR-0006-widen-fundamental-growth-columns.md`）。`FetchExternalMarketDataAction::execute()`の両ループとも、1銘柄分の処理全体を1つのtry-catchで囲み、例外発生時は`Log::warning()`で銘柄ID・シンボルコード・例外メッセージを記録した上でその銘柄をスキップして次に進むよう修正した（`app/Actions/Analysis/FetchExternalMarketDataAction.php`）
 - **追加で発見・修正した関連の非アトミック性**（`/review`拡張レベルで指摘）: 2つ目のループのtry-catchはスキップ自体は正しく行うが、`TechnicalIndicator::updateOrCreate()`が成功した**後**にファンダメンタルズ指標保存やシグナル判定で例外が起きた場合、その銘柄は「テクニカル指標だけ最新化され、ファンダメンタルズ指標・シグナルは古いまま」という中途半端な状態でDBに残っていた。2つ目のループの銘柄ごとの処理本体を`DB::transaction()`で包み、例外時は該当銘柄の全ての書き込み（テクニカル指標を含む）がロールバックされ、更新前の状態を維持するよう修正した
+
+### Tailwind CSS v4（`vite build`、Sailコンテナ） — Bladeに新しいユーティリティクラスを追加してもレイアウトが崩れたまま反映されない
+
+- 現象: `resources/views/livewire/signal/signal-list.blade.php`に`overflow-x-auto`・`whitespace-nowrap`を新規追加し、`php artisan test`はGreen（Livewireテストヘルパーは実DOM描画を伴わない）だったにもかかわらず、実際に`/signals`をHTTP経由（ログイン後の実HTML）で取得して確認したところ、配信中のCSS（`public/build/assets/app-*.css`）に該当クラスの定義が存在しなかった。ユーザーからは「デザイン崩れが激しい」と報告があった
+- 原因: 本プロジェクトの`compose.yaml`にはVite dev serverのサービスが定義されておらず、`npm run build`で一度ビルドした静的CSSを配信する運用。Tailwind v4はビルド時点でBladeファイルをスキャンして使用中のユーティリティクラスのみを生成する（JIT）ため、CSSビルド**後**に追加した新しいクラス名はコンテナ再起動やBlade編集だけでは反映されず、`npm run build`を再実行するまで欠落したまま
+- 対処: Blade側でTailwindユーティリティクラス（特にこれまでこのビューで未使用だったクラス名）を新規に使い始めた場合は、`docker compose exec laravel.test bash -c "cd /var/www/html && npm run build"`を実行してCSSを再ビルドすること。Feature Test（Livewireの`->html()`）はコンパイル済みCSSを検証しないため、この種の欠落を検出できない — レイアウト変更時は実HTTP経由での目視確認（Playwright、またはログイン込みの実HTTP取得）が必須
+
+### CSS `overflow-x: auto` + `position: sticky`（Tailwind、ブラウザ全般） — 横スクロール用ラッパー内で`sticky`が全く効かない。**`overflow-y`側の値をどういじっても直らない、構造自体を分ける必要がある不具合**
+
+- 現象: `signal-list.blade.php`のテーブルヘッダー（`<thead>`）・先頭列に`sticky top-0`/`sticky left-0`を付与したが、実ブラウザで縦スクロールしてもヘッダーが固定されずページと一緒に流れていった。curlで取得した実HTMLにはクラス自体は正しく出力されており（Tailwindビルド漏れとは別原因）、`php artisan test`はもちろんクラスの存在確認だけの静的HTML検証でも検出できなかった
+- 原因の本質: `<div class="overflow-x-auto">`で横スクロールを提供する限り、この**div自身が必ず「スクロールコンテナ」になり**、`position: sticky`な子孫要素の基準がページ本体ではなくこのdivになってしまう。`overflow-y`をどんな値にしてもこの結論は変わらない：
+  - `overflow-y`未指定（既定`visible`）→ 「`visible`と非`visible`が混在すると両方`auto`に補正される」というCSS仕様の挙動で、暗黙に`overflow-y: auto`（スクロールコンテナ）になる
+  - `overflow-y-hidden`に変更（1回目の誤った対処）→ `hidden`は`auto`と同様それ自体がスクロールコンテナを成立させる値であり、何も変わらない
+  - `overflow-y-clip`に変更（2回目の誤った対処）→ 一見`clip`はスクロールコンテナを作らない値のはずだが、実際に`getComputedStyle()`で確認すると`overflow-y`は`"hidden"`として計算されていた。CSS仕様には「`overflow-x`/`overflow-y`の片方が`clip`で、もう片方が`visible`でも`clip`でもない場合、`clip`側は`hidden`に計算される」という追加の補正ルールがあり、`overflow-x: auto`（`visible`でも`clip`でもない）と組み合わせた時点でこの補正が発動し、結局`hidden`と同じ状態に戻ってしまう。**「横スクロールを本物のスクロールコンテナとして機能させる」ことと「縦方向はスクロールコンテナにしない」ことは、CSSの`overflow`プロパティだけでは同一要素上で両立できない**
+- 正しい対処: **1つの要素に両方の性質を持たせようとするのをやめ、ヘッダー用と本文用で`<table>`ごと2つに分割する。** ヘッダー側の`<table>`（`<colgroup>`+`<thead>`のみ、`<tbody>`は無し）を`overflow-x-auto`かつ`position: sticky; top: 0`を**同じdiv自身に**付与してラップする。この場合、`sticky`は「このdivの祖先」を基準に解決されるため（このdiv自身がoverflow-x-autoでスクロールコンテナになっていることは無関係）、祖先に`overflow`を持つ要素が無ければページ本体に対して正しく固定される。本文側の`<table>`（`<tbody>`のみ）は別の`overflow-x-auto`のdivに入れ、`sticky`は付けない。2つのdivは独立した横スクロール位置を持つため、本文側の`scroll`イベントでヘッダー側の`scrollLeft`を同期するJS（`resources/js/app.js`、`data-scroll-sync-with="<ヘッダーdivのid>"`属性を目印にする）が必要。ヘッダー用の横スクロールバーは本文側と二重に見えるため`[scrollbar-width:none] [&::-webkit-scrollbar]:hidden`で視覚的に隠す（`scrollLeft`によるプログラム操作は可能なまま）
+- 検証方法: この種の不具合はクラスの存在確認（curlで取得した静的HTML・コンパイル済みCSSのgrep）は元より、`getComputedStyle()`で「クラスが正しく適用されているか」を見るだけでも「本当にスクロールする/固定されるか」は確認できない（`overflow-y: clip`は正しく適用されていたが、それでも`hidden`相当の挙動になっていた）。**実際にブラウザ上でスクロールさせて`getBoundingClientRect()`の座標が動かないことを目で確認するまで気づけない**。本プロジェクトのSailコンテナには`npx playwright install chromium`でChromiumを追加インストールでき（`docker compose exec laravel.test npx playwright install chromium`、約300MBダウンロード）、Node.jsスクリプトから`import { chromium } from 'playwright'`する形で実際にスクロール・スクリーンショットを取得して検証できる（詳細は`.claude/skills/verify/SKILL.md`参照）。理論上正しく見えるCSSでも、複雑な`overflow`/`position: sticky`の組み合わせは必ず実ブラウザで検証すること
+- 教訓: `overflow-x: auto`の入れ物に`position: sticky`な子孫を入れる設計は、`overflow-y`の値を工夫する対症療法では直らないケースがある（今回のように`hidden`↔`auto`↔`clip`のいずれも同じスクロールコンテナ扱いになる組み合わせでは特に）。構造そのもの（スクロール軸ごとに要素を分離する）を見直す必要がある
+
+### Tailwind `table-fixed` + `w-max` — `<colgroup>`で列幅を固定したつもりが、内容の長い列だけ幅が膨らむ
+
+- 現象: 上記のヘッダー/本文分割後、`table-fixed`かつ`<colgroup>`で全列の幅を指定したテーブルに`w-max`（`width: max-content`）を付けたところ、`scrollWidth`を実測すると同じ`<colgroup>`を共有しているはずのヘッダー用`<table>`と本文用`<table>`で幅が異なっていた（例: 1446pxと1350px）。原因を追うと、特定の列（バッジの文言が長い「発生シグナル」列等）だけ`<colgroup>`で指定した幅（130px）を大きく超えて実際にレンダリングされていた（164px等）
+- 原因: `table-layout: fixed`は本来「列幅はcolgroup/最初の行の指定値のみで決まり、内容は無視する」アルゴリズムだが、テーブル自身の`width`が`auto`または`max-content`（`w-max`）の場合、Chromiumは指定した列幅を無視して内容の最小幅（min-content、特に折り返せない文字列があるとその文字列の全幅）を考慮した上でテーブル全体の幅を決めてしまう。ヘッダー側は`whitespace-nowrap`を付けた項目名（例: 「52週安値からの距離」）があり、本文側にはそのような幅を強制する要素が無かったため、ヘッダーと本文で実際の列幅が食い違っていた
+- 対処: テーブルの`width`を`w-max`ではなく**`<colgroup>`の合計値と一致する具体的なpx値**（例: `w-[1296px]`、5固定列90+56+130+150+150 + 判定チェックリスト10列×72の合計）で明示的に指定する。こうすると`table-layout: fixed`が指定通りの列幅を厳密に守り、内容がそれより長い場合は列幅を広げず、セル内で折り返す（またはセル外へ視覚的にはみ出す）挙動になる。加えて、ヘッダー側の項目名から`whitespace-nowrap`を外し`break-words`に統一することで、ヘッダー・本文どちらも同じ折り返しルールになり幅の食い違いが起きなくなる
+- 教訓: `table-fixed`は「列幅を内容から独立させる」ためのものだが、**テーブル自身の`width`が`auto`/`max-content`のままだと内容依存の挙動が残る**。`<colgroup>`で列幅を固定するときは、テーブルの`width`も列幅の合計と一致する具体的な値で固定しないと、`table-fixed`が期待通りに機能しない場合がある。またヘッダー用・本文用でテーブルを分けた構成では、両者の折り返しルール（`whitespace-nowrap`の有無等）を完全に揃えないと、同じ`<colgroup>`を共有していても実際の描画幅がずれる
+
+### Tailwind `inline-block`な要素（例: バッジコンポーネント） — 親セルに`break-words`を付けても長い1単語のテキストが折り返されず、セルからはみ出して隣接要素と重なる
+
+- 現象: `signal-list.blade.php`の「発生シグナル」列で、シグナル種別を表示する`<x-badge>`（`display: inline-block`）の中身が`week52_high_pullback`のような区切り文字（スペース・ハイフン）を含まない長い1単語だった場合、親の`<td>`に`[&_td]:break-words`（`overflow-wrap: break-word`）を付けていたにもかかわらずバッジ自体は折り返されず、セル幅（130px）を大きく超えて（151px）隣の要素・下の行に視覚的に重なって表示された。実ブラウザで下にスクロールして初めて発見した（`table-fixed`の列幅自体は正しく130pxのまま変わっていなかったため、上記の「列が広がる」不具合とは別の症状）
+- 原因: `overflow-wrap: break-word`はテキストの折り返しルールとして子孫に継承されるが、`display: inline-block`な要素自身の「置き換えられない限り自分の内容に基づいて幅を決める」というサイズ決定の性質までは変えない。`<td>`側で折り返しを許可していても、`inline-block`の中身が折り返せない1単語の場合、その`inline-block`要素自体が中身の全幅を必要とする箱として振る舞い、結果的に親セルの幅を無視してはみ出す
+- 対処: `inline-block`要素自身（`resources/views/components/badge.blade.php`）に直接`max-w-full break-words`を追加する。`max-w-full`で自身の幅を親の利用可能幅までに制限し、`break-words`（`overflow-wrap: break-word`）と組み合わせることで、はみ出す代わりにバッジ自身の中で改行されるようになる。バッジは他画面でも使う共有コンポーネントだが、通常の短いテキストでは`max-w-full`は何の影響も与えないため後方互換
+- 教訓: 折り返し系のCSSプロパティ（`overflow-wrap`/`word-break`）は継承されるが、`inline-block`のような「自身の内容で幅が決まる」表示タイプの要素には、**その要素自身にも**明示的に指定しないと効かないことがある。親要素にだけ付けて安心せず、実際にはみ出していないか（`getBoundingClientRect().width`が親セル幅を超えていないか）を実ブラウザで確認すること

@@ -5,6 +5,7 @@ namespace App\Actions\Signal;
 use App\Models\HoldingSnapshot;
 use App\Models\Snapshot;
 use App\Services\Analysis\FundamentalHealthEvaluator;
+use App\Services\Analysis\SignalCriteriaEvaluator;
 use App\Services\Portfolio\PortfolioEvaluationCalculator;
 
 /**
@@ -39,6 +40,7 @@ class ShowBuySignalListAction
     public function __construct(
         private readonly FundamentalHealthEvaluator $evaluator,
         private readonly PortfolioEvaluationCalculator $portfolioEvaluationCalculator,
+        private readonly SignalCriteriaEvaluator $criteriaEvaluator,
     ) {}
 
     /**
@@ -57,7 +59,7 @@ class ShowBuySignalListAction
 
         $allHoldingSnapshots = HoldingSnapshot::query()
             ->where('snapshot_id', $latestSnapshot->id)
-            ->with(['holding.fundamentalIndicator', 'buySignals', 'signals'])
+            ->with(['holding.fundamentalIndicator', 'holding.technicalIndicator', 'buySignals', 'signals'])
             ->get();
 
         $portfolioTotal = $this->portfolioEvaluationCalculator->total($allHoldingSnapshots);
@@ -137,7 +139,50 @@ class ShowBuySignalListAction
                 : '',
             'suggested_amount' => $suggestedAmount,
             'split_buy_down_suggestion' => $this->splitBuyDownSuggestion($holdingSnapshot, $suggestedAmount),
+            // 判定チェックリスト（CHG-0007）: signal_type/fundamental_statusの
+            // 合否とは別に、基準点・実測値・達成状態を並べた表示用データ。
+            'criteria' => $this->criteriaEvaluator->evaluateBuy($this->buildCriteriaMetrics(
+                $holdingSnapshot,
+                $equityRatio,
+                $roe,
+                $revenueGrowth,
+                $operatingIncomeGrowth,
+            )),
             '_buy_signal_count' => $buySignals->count(),
+        ];
+    }
+
+    /**
+     * @return array<string, float|null>
+     */
+    private function buildCriteriaMetrics(
+        HoldingSnapshot $holdingSnapshot,
+        ?float $equityRatio,
+        ?float $roe,
+        ?float $revenueGrowth,
+        ?float $operatingIncomeGrowth,
+    ): array {
+        $technicalIndicator = $holdingSnapshot->holding->technicalIndicator;
+        $fundamentalIndicator = $holdingSnapshot->holding->fundamentalIndicator;
+
+        return [
+            'current_price' => $holdingSnapshot->current_price !== null ? (float) $holdingSnapshot->current_price : null,
+            'rsi' => $technicalIndicator?->rsi !== null ? (float) $technicalIndicator->rsi : null,
+            'macd' => $technicalIndicator?->macd !== null ? (float) $technicalIndicator->macd : null,
+            'macd_signal' => $technicalIndicator?->macd_signal !== null ? (float) $technicalIndicator->macd_signal : null,
+            'bb_upper' => $technicalIndicator?->bb_upper !== null ? (float) $technicalIndicator->bb_upper : null,
+            'bb_lower' => $technicalIndicator?->bb_lower !== null ? (float) $technicalIndicator->bb_lower : null,
+            'ma20' => $technicalIndicator?->ma20 !== null ? (float) $technicalIndicator->ma20 : null,
+            'week52_high' => $technicalIndicator?->week52_high !== null ? (float) $technicalIndicator->week52_high : null,
+            'week52_low' => $technicalIndicator?->week52_low !== null ? (float) $technicalIndicator->week52_low : null,
+            'volume' => $technicalIndicator?->volume !== null ? (float) $technicalIndicator->volume : null,
+            'volume_ma20' => $technicalIndicator?->volume_ma20 !== null ? (float) $technicalIndicator->volume_ma20 : null,
+            'relative_strength_vs_market' => $technicalIndicator?->relative_strength_vs_market !== null ? (float) $technicalIndicator->relative_strength_vs_market : null,
+            'peg_ratio' => $fundamentalIndicator?->peg_ratio !== null ? (float) $fundamentalIndicator->peg_ratio : null,
+            'roe' => $roe,
+            'equity_ratio' => $equityRatio,
+            'revenue_growth' => $revenueGrowth,
+            'operating_income_growth' => $operatingIncomeGrowth,
         ];
     }
 

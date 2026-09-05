@@ -16,9 +16,16 @@ final class FundamentalHealthEvaluator
      * 財務健全性フィルタ (data-model.md「買い増し用ファンダメンタルズ健全性
      * フィルタ」: 自己資本比率40%以上・ROE10%以上、NewCandidateFinderと同一値).
      */
-    private const MIN_EQUITY_RATIO = 40.0;
+    public const MIN_EQUITY_RATIO = 40.0;
 
-    private const MIN_ROE = 10.0;
+    public const MIN_ROE = 10.0;
+
+    /**
+     * 成長率条件（CHG-0005）の基準値。0.0固定だが、判定チェックリスト
+     * （2026-08-29、CHG-0007、App\Services\Analysis\SignalCriteriaEvaluator）
+     * が参照する単一のソースにするため定数化する。
+     */
+    public const MIN_GROWTH_RATE = 0.0;
 
     /**
      * Returns 'passed' / 'unavailable' / 'failed' (see
@@ -44,8 +51,8 @@ final class FundamentalHealthEvaluator
             return 'unavailable';
         }
 
-        $growthPositive = ($revenueGrowth !== null && $revenueGrowth > 0.0)
-            || ($operatingIncomeGrowth !== null && $operatingIncomeGrowth > 0.0);
+        $growthPositive = ($revenueGrowth !== null && $revenueGrowth > self::MIN_GROWTH_RATE)
+            || ($operatingIncomeGrowth !== null && $operatingIncomeGrowth > self::MIN_GROWTH_RATE);
 
         return $growthPositive ? 'passed' : 'failed';
     }

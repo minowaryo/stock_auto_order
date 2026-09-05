@@ -9,6 +9,7 @@ use App\Models\HoldingSnapshotAccount;
 use App\Models\ImportBatch;
 use App\Models\Signal;
 use App\Models\Snapshot;
+use App\Models\TechnicalIndicator;
 use App\Models\User;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -256,6 +257,37 @@ function ucFrom010TestAccount(HoldingSnapshot $holdingSnapshot, array $attribute
         'account_type' => 'specific',
         'quantity' => 300,
         'average_cost' => 800.00,
+    ], $attributes));
+}
+
+/**
+ * Create a `technical_indicators` row for a holding (CHG-0007 判定
+ * チェックリスト). Defaults are tuned so that every buy-on-dip technical
+ * criterion is comfortably "met" for a holding priced at current_price=1000
+ * (the ucFrom010TestHoldingSnapshot default): RSI≦30, 52週安値からの距離
+ * ≦+10% (week52_low=950 → +5.3%), BB下限乖離≦0% (bb_lower=1100),
+ * MACD-シグナル線>0, MA20乖離≦-10% (ma20=1200 → -16.7%), 出来高倍率≧1.5.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function ucFrom010TestTechnicalIndicator(Holding $holding, array $attributes = []): TechnicalIndicator
+{
+    return TechnicalIndicator::create(array_merge([
+        'holding_id' => $holding->id,
+        'rsi' => 22.0,
+        'macd' => 2.0,
+        'macd_signal' => -1.0,
+        'ma20' => 1200.0,
+        'ma75' => 1150.0,
+        'bb_upper' => 1400.0,
+        'bb_lower' => 1100.0,
+        'volume' => 2_500_000,
+        'volume_ma20' => 1_000_000.0,
+        'week52_high' => 1600.0,
+        'week52_low' => 950.0,
+        'relative_strength_vs_market' => -1.0,
+        'relative_strength_vs_sector' => -1.0,
+        'computed_at' => now(),
     ], $attributes));
 }
 
@@ -613,6 +645,61 @@ describe('UC-010: 既存保有株の買い増しタイミングレコメンド�
             // Expected: D (passed, 2 signals, -10%) -> C (passed, 2 signals, +5%)
             //   -> B (passed, 1 signal, +10%) -> A (unavailable, 1 signal, -90%)
             expect($order)->toBe(['8306', '6758', '7203', 'AAPL']);
+        });
+    });
+
+    describe('判定チェックリスト（criteria、CHG-0007）', function () {
+        test('各行に criteria（technical 7項目・fundamental 3項目・グループ別サマリ）が含まれる', function () {
+            [, $snapshot] = ucFrom010TestImportBatch();
+            $holding = ucFrom010TestHolding(['symbol_code' => '7203', 'symbol_name' => 'トヨタ自動車']);
+            $holdingSnapshot = ucFrom010TestHoldingSnapshot($snapshot, $holding, ['current_price' => 1000.00]);
+            ucFrom010TestBuySignal($holdingSnapshot, ['signal_type' => 'rsi_oversold_rebound']);
+            ucFrom010TestFundamentalIndicator($holding, ['equity_ratio' => 58.0, 'roe' => 15.2]);
+            ucFrom010TestTechnicalIndicator($holding);
+
+            $row = ucFrom010TestFindRow(ucFrom010TestFetch($this), '7203');
+
+            expect($row['criteria'])->toHaveKeys(['technical', 'fundamental', 'summary']);
+            expect($row['criteria']['technical'])->toHaveCount(7);
+            expect($row['criteria']['fundamental'])->toHaveCount(3);
+            expect($row['criteria']['summary']['technical']['total'])->toBe(7);
+            expect($row['criteria']['summary']['fundamental']['total'])->toBe(3);
+
+            foreach ($row['criteria']['technical'] as $item) {
+                expect($item)->toHaveKeys(['label', 'threshold_label', 'value_label', 'status']);
+                expect($item['status'])->toBeIn(['met', 'near', 'unmet', 'unavailable']);
+            }
+        });
+
+        test('全テクニカル基準を満たす銘柄は summary.technical.met が 7 になる', function () {
+            [, $snapshot] = ucFrom010TestImportBatch();
+            $holding = ucFrom010TestHolding(['symbol_code' => '6526', 'symbol_name' => 'ソシオネクスト']);
+            $holdingSnapshot = ucFrom010TestHoldingSnapshot($snapshot, $holding, ['current_price' => 1000.00]);
+            ucFrom010TestBuySignal($holdingSnapshot, ['signal_type' => 'rsi_oversold_rebound']);
+            ucFrom010TestFundamentalIndicator($holding, ['equity_ratio' => 58.0, 'roe' => 15.2, 'peg_ratio' => 0.7]);
+            ucFrom010TestTechnicalIndicator($holding);
+
+            $row = ucFrom010TestFindRow(ucFrom010TestFetch($this), '6526');
+
+            expect($row['criteria']['summary']['technical']['met'])->toBe(7);
+            expect($row['criteria']['summary']['fundamental']['met'])->toBe(3);
+        });
+
+        test('ファンダメンタルズ指標が未取得（unavailable）の銘柄も criteria を返し、財務3項目が unavailable になる', function () {
+            [, $snapshot] = ucFrom010TestImportBatch();
+            $holding = ucFrom010TestHolding(['symbol_code' => 'AAPL', 'market' => 'us', 'symbol_name' => 'Apple']);
+            $holdingSnapshot = ucFrom010TestHoldingSnapshot($snapshot, $holding, ['current_price' => 130.00]);
+            ucFrom010TestBuySignal($holdingSnapshot, ['signal_type' => 'rsi_oversold_rebound']);
+            // Deliberately no FundamentalIndicator / TechnicalIndicator rows.
+
+            $row = ucFrom010TestFindRow(ucFrom010TestFetch($this), 'AAPL');
+            expect($row)->not->toBeNull();
+
+            foreach ($row['criteria']['fundamental'] as $item) {
+                expect($item['status'])->toBe('unavailable');
+                expect($item['value_label'])->toBe('—');
+            }
+            expect($row['criteria']['summary']['fundamental']['met'])->toBe(0);
         });
     });
 

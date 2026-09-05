@@ -33,6 +33,25 @@ final class BuySignalDeterminationService
      */
     private const MIN_RELATIVE_STRENGTH = -5.0;
 
+    /**
+     * Threshold constants, promoted from inline literals (2026-08-29,
+     * CHG-0007) so App\Services\Analysis\SignalCriteriaEvaluator (判定
+     * チェックリスト) can reference the same source of truth instead of
+     * re-declaring these values (avoids the CHG-0005-style duplicate
+     * threshold drift). Values are unchanged from the pre-existing literals.
+     */
+    public const RSI_OVERSOLD_THRESHOLD = 30.0;
+
+    public const MACD_CROSS_THRESHOLD = 0.0;
+
+    public const WEEK52_LOW_PROXIMITY_RATE = 1.10;
+
+    public const MA_DEVIATION_OVERSOLD_PCT = -10.0;
+
+    public const PEG_UNDERVALUED_THRESHOLD = 1.0;
+
+    public const VOLUME_SPIKE_RATIO = 1.5;
+
     public function __construct(private readonly TechnicalIndicatorCalculator $calculator) {}
 
     /**
@@ -140,7 +159,7 @@ final class BuySignalDeterminationService
             return null;
         }
 
-        if ($previousRsi <= 30 && $currentRsi > $previousRsi) {
+        if ($previousRsi <= self::RSI_OVERSOLD_THRESHOLD && $currentRsi > $previousRsi) {
             return [
                 'signal_type' => 'rsi_oversold_rebound',
                 'reason_summary' => sprintf(
@@ -170,7 +189,7 @@ final class BuySignalDeterminationService
             return null;
         }
 
-        if (($previousMacd - $previousSignal) <= 0 && ($currentMacd - $currentSignal) > 0) {
+        if (($previousMacd - $previousSignal) <= self::MACD_CROSS_THRESHOLD && ($currentMacd - $currentSignal) > self::MACD_CROSS_THRESHOLD) {
             return [
                 'signal_type' => 'macd_golden_cross',
                 'reason_summary' => 'MACDがシグナル線を上抜けました（ゴールデンクロス）',
@@ -218,7 +237,7 @@ final class BuySignalDeterminationService
             return null;
         }
 
-        if ($lastClose <= $week52Low * 1.10) {
+        if ($lastClose <= $week52Low * self::WEEK52_LOW_PROXIMITY_RATE) {
             return [
                 'signal_type' => 'week52_low_proximity',
                 'reason_summary' => sprintf(
@@ -246,7 +265,7 @@ final class BuySignalDeterminationService
 
         $deviation = ($lastClose - $ma20) / $ma20 * 100;
 
-        if ($deviation <= -10.0) {
+        if ($deviation <= self::MA_DEVIATION_OVERSOLD_PCT) {
             return [
                 'signal_type' => 'ma_deviation_oversold',
                 'reason_summary' => sprintf('MA20から%s%%下方乖離しています', $this->formatNumber($deviation, 2)),
@@ -275,7 +294,7 @@ final class BuySignalDeterminationService
 
         $ratio = $volume / $volumeMa20;
 
-        if ($ratio >= 1.5 && $lastClose > $previousClose) {
+        if ($ratio >= self::VOLUME_SPIKE_RATIO && $lastClose > $previousClose) {
             return [
                 'signal_type' => 'volume_spike_rebound',
                 'reason_summary' => sprintf(
@@ -297,7 +316,7 @@ final class BuySignalDeterminationService
             return null;
         }
 
-        if ($pegRatio <= 1.0) {
+        if ($pegRatio <= self::PEG_UNDERVALUED_THRESHOLD) {
             return [
                 'signal_type' => 'peg_undervalued',
                 'reason_summary' => sprintf('PEGレシオが%sと割安水準です', $this->formatNumber($pegRatio, 1)),

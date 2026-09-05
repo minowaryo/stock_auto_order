@@ -13,6 +13,25 @@ namespace App\Services\Analysis;
  */
 final class SignalDeterminationService
 {
+    /**
+     * Threshold constants, promoted from inline literals (2026-08-29,
+     * CHG-0007) so App\Services\Analysis\SignalCriteriaEvaluator (判定
+     * チェックリスト) can reference the same source of truth instead of
+     * re-declaring these values (avoids the CHG-0005-style duplicate
+     * threshold drift). Values are unchanged from the pre-existing literals.
+     */
+    public const RSI_REVERSAL_THRESHOLD = 70.0;
+
+    public const MACD_CROSS_THRESHOLD = 0.0;
+
+    public const WEEK52_HIGH_PULLBACK_RATE = 0.9;
+
+    public const PEG_OVERVALUED_THRESHOLD = 2.0;
+
+    public const RELATIVE_STRENGTH_WEAKENING_THRESHOLD = 0.0;
+
+    public const VOLUME_SPIKE_RATIO = 1.5;
+
     public function __construct(private readonly TechnicalIndicatorCalculator $calculator) {}
 
     /**
@@ -78,7 +97,7 @@ final class SignalDeterminationService
             return null;
         }
 
-        if ($previousRsi >= 70 && $currentRsi < $previousRsi) {
+        if ($previousRsi >= self::RSI_REVERSAL_THRESHOLD && $currentRsi < $previousRsi) {
             return [
                 'signal_type' => 'rsi_reversal',
                 'reason_summary' => sprintf(
@@ -108,7 +127,7 @@ final class SignalDeterminationService
             return null;
         }
 
-        if (($previousMacd - $previousSignal) >= 0 && ($currentMacd - $currentSignal) < 0) {
+        if (($previousMacd - $previousSignal) >= self::MACD_CROSS_THRESHOLD && ($currentMacd - $currentSignal) < self::MACD_CROSS_THRESHOLD) {
             return [
                 'signal_type' => 'macd_dead_cross',
                 'reason_summary' => 'MACDがシグナル線を下抜けました（デッドクロス）',
@@ -156,7 +175,7 @@ final class SignalDeterminationService
             return null;
         }
 
-        if ($lastClose <= $week52High * 0.9) {
+        if ($lastClose <= $week52High * self::WEEK52_HIGH_PULLBACK_RATE) {
             return [
                 'signal_type' => 'week52_high_pullback',
                 'reason_summary' => sprintf(
@@ -179,7 +198,7 @@ final class SignalDeterminationService
             return null;
         }
 
-        if ($pegRatio >= 2.0) {
+        if ($pegRatio >= self::PEG_OVERVALUED_THRESHOLD) {
             return [
                 'signal_type' => 'peg_overvalued',
                 'reason_summary' => sprintf('PEGレシオが%sと割高水準です', $this->formatNumber($pegRatio, 1)),
@@ -201,7 +220,7 @@ final class SignalDeterminationService
             return null;
         }
 
-        if ($relativeStrength < 0) {
+        if ($relativeStrength < self::RELATIVE_STRENGTH_WEAKENING_THRESHOLD) {
             return [
                 'signal_type' => 'relative_strength_weakening',
                 'reason_summary' => sprintf('対市場の相対力が%sと劣後しています', $this->formatNumber($relativeStrength)),
@@ -230,7 +249,7 @@ final class SignalDeterminationService
 
         $ratio = $volume / $volumeMa20;
 
-        if ($ratio >= 1.5 && $lastClose < $previousClose) {
+        if ($ratio >= self::VOLUME_SPIKE_RATIO && $lastClose < $previousClose) {
             return [
                 'signal_type' => 'volume_spike_decline',
                 'reason_summary' => sprintf(

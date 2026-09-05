@@ -13,6 +13,6 @@
         default => 'bg-slate-100 text-text-secondary',
     };
 @endphp
-<span {{ $attributes->class(['inline-block px-2 py-0.5 rounded text-xs font-medium', $variantClasses]) }}>
+<span {{ $attributes->class(['inline-block max-w-full break-words px-2 py-0.5 rounded text-xs font-medium', $variantClasses]) }}>
     {{ $slot }}
 </span>
