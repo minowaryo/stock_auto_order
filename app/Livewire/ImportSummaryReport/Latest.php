@@ -28,11 +28,7 @@ class Latest extends Component
 
     public function mount(ShowImportSummaryReportAction $showImportSummaryReportAction): void
     {
-        $batch = ImportBatch::query()
-            ->whereHas('snapshot')
-            ->orderByDesc('imported_at')
-            ->orderByDesc('id')
-            ->first();
+        $batch = ImportBatch::query()->latestWithSnapshot()->first();
 
         if ($batch === null) {
             return;
