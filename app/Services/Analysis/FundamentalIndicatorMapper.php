@@ -18,7 +18,7 @@ final class FundamentalIndicatorMapper
 {
     /**
      * @param  array<int, array{disclosed_date: string, net_sales: float|null, operating_profit: float|null, profit: float|null, eps: float|null, book_value_per_share: float|null, equity_to_asset_ratio: float|null, roe: float|null, dividend_per_share_annual: float|null, payout_ratio_annual: float|null}>  $statements  Descending (latest-first) disclosed financial statements.
-     * @return array{per: float|null, pbr: float|null, roe: float|null, revenue_growth: float|null, operating_income_growth: float|null, equity_ratio: float|null, dividend_yield: float|null, dividend_payout_ratio: float|null, eps_growth: float|null, peg_ratio: float|null}
+     * @return array{per: float|null, pbr: float|null, roe: float|null, revenue_growth: float|null, operating_income_growth: float|null, equity_ratio: float|null, operating_margin: float|null, dividend_yield: float|null, dividend_payout_ratio: float|null, eps_growth: float|null, peg_ratio: float|null}
      */
     public function map(array $statements, ?float $currentPrice): array
     {
@@ -36,6 +36,7 @@ final class FundamentalIndicatorMapper
             'revenue_growth' => $revenueGrowth,
             'operating_income_growth' => $operatingIncomeGrowth,
             'equity_ratio' => $this->toPercent($latest['equity_to_asset_ratio'] ?? null),
+            'operating_margin' => $this->calculateOperatingMargin($latest),
             'dividend_yield' => $this->calculateDividendYield($latest, $currentPrice),
             'dividend_payout_ratio' => $this->toPercent($latest['payout_ratio_annual'] ?? null),
             'eps_growth' => $epsGrowth,
@@ -83,6 +84,36 @@ final class FundamentalIndicatorMapper
         }
 
         return $dividendPerShareAnnual / $currentPrice * 100;
+    }
+
+    /**
+     * 営業利益率（%）= 最新期の operating_profit ÷ net_sales × 100
+     * （CHG-0012 / ADR-0011 D4、財務健全性フィルタの4条件目）.
+     *
+     * net_sales が null / 0以下、operating_profit が null なら null
+     * （calculatePer() / calculatePbr() と同じガードパターン）。算出結果の
+     * 絶対値が 999% を超える場合も null（ADR-0011 D5: 売上ほぼゼロのプレ
+     * レベニュー企業。US 側では Finnhub が -243100% を返す例あり。DB に
+     * 極端値を残さない）。
+     *
+     * @param  array<string, float|null>|null  $latest
+     */
+    private function calculateOperatingMargin(?array $latest): ?float
+    {
+        $netSales = $latest['net_sales'] ?? null;
+        $operatingProfit = $latest['operating_profit'] ?? null;
+
+        if ($netSales === null || $netSales <= 0 || $operatingProfit === null) {
+            return null;
+        }
+
+        $margin = $operatingProfit / $netSales * 100;
+
+        if (abs($margin) > 999) {
+            return null;
+        }
+
+        return $margin;
     }
 
     private function calculatePegRatio(?float $per, ?float $epsGrowth): ?float

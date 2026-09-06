@@ -217,6 +217,8 @@ function holdingDetailTestFundamentalIndicator(Holding $holding, array $attribut
         'dividend_payout_ratio' => 30.0,
         'eps_growth' => 12.4,
         'peg_ratio' => 1.23,
+        // CHG-0012 / ADR-0011: ファンダメンタルズ指標一覧に営業利益率を追加。
+        'operating_margin' => 16.7,
         'fetched_at' => now(),
     ], $attributes));
 }
@@ -307,6 +309,53 @@ describe('UC-003: 銘柄詳細画面（Livewire）', function () {
             expect($html)->toContain('55.0%'); // equity_ratio
             expect($html)->toContain('2.1%'); // dividend_yield
             expect($html)->toContain('12.4%'); // eps_growth（成長率系: 既存の符号をそのまま活かす）
+        });
+
+        // ---------------------------------------------------------------
+        // CR (2026-09-06, CHG-0012 / ADR-0011): 営業利益率をファンダメンタルズ
+        // 指標一覧に追加（UC-003 フロー4）
+        // ---------------------------------------------------------------
+        // ShowHoldingDetailAction の返却に `operating_margin` を追加し、
+        // holding-detail.blade.php の $fundamentalFields に
+        // '営業利益率' => $fmtUnsignedPercent($detail['operating_margin'])
+        // を追加する（ROE・自己資本比率の並び。符号なしパーセントルール:
+        // number_format($value, 1).'%'）。
+        //
+        // Red の出方（2026-09-06）: `operating_margin` は現時点で
+        // FundamentalIndicator の $fillable に無く、`operating_margin` カラムの
+        // マイグレーションも未作成。ヘルパーの `operating_margin` デフォルト値は
+        // mass-assignment で黙って捨てられる（QueryException にはならない）ため、
+        // ShowHoldingDetailAction は operating_margin を返さず、blade も
+        // 「営業利益率」行を描画しない → `assertSee('営業利益率')` が
+        // アサーション不一致で失敗する。Green で $fillable / casts /
+        // マイグレーション / Action 返却 / blade を追加して初めて通る。
+        test('銘柄詳細画面のファンダメンタルズ指標一覧に営業利益率が表示される', function () {
+            $user = User::factory()->create();
+            [, $snapshot] = holdingDetailTestImportBatch();
+            $holding = holdingDetailTestHolding();
+            holdingDetailTestHoldingSnapshot($snapshot, $holding);
+            holdingDetailTestTechnicalIndicator($holding);
+            holdingDetailTestFundamentalIndicator($holding, ['operating_margin' => 18.3]);
+
+            $component = Livewire::actingAs($user)->test(HoldingDetail::class, ['holding' => $holding]);
+
+            $component->assertSee('営業利益率');
+            // 符号なしパーセントルール（小数点1桁 + %）。18.30 → 18.3%
+            expect($component->html())->toContain('18.3%');
+        });
+
+        test('営業利益率が取得不可（null）の場合でも営業利益率の項目ラベルが表示され「取得不可」になる', function () {
+            $user = User::factory()->create();
+            [, $snapshot] = holdingDetailTestImportBatch();
+            $holding = holdingDetailTestHolding();
+            holdingDetailTestHoldingSnapshot($snapshot, $holding);
+            holdingDetailTestTechnicalIndicator($holding);
+            holdingDetailTestFundamentalIndicator($holding, ['operating_margin' => null]);
+
+            $component = Livewire::actingAs($user)->test(HoldingDetail::class, ['holding' => $holding]);
+
+            $component->assertSee('営業利益率');
+            $component->assertSee('取得不可');
         });
 
         test('指標が取得不可（null）の場合、該当項目が明示的な「取得不可」表示になる', function () {

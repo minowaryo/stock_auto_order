@@ -24,11 +24,32 @@ use App\Services\Analysis\TakeProfitThresholdEvaluator;
 |     TakeProfitThresholdEvaluatorのGate4実装時に確定する前提）
 |   - docs/rcid/traceability-matrix.md CHG-0006
 |
-| This class does not exist yet under app/Services/Analysis/ (no migration,
+| -------------------------------------------------------------------------
+| CR (2026-09-06, CHG-0012 / ADR-0011): 営業利益率条件の追加（4条件目）
+| -------------------------------------------------------------------------
+| ADR-0011 で FundamentalHealthEvaluator::evaluate() に5引数目
+| `?float $operatingMargin` が追加されるのに伴い、本クラスの evaluate() にも
+| 6引数目 `?float $operatingMargin` を追加し、FundamentalHealthEvaluator::
+| evaluate() へそのまま渡す:
+|   evaluate(int $signalCount, ?float $equityRatio, ?float $roe,
+|            ?float $revenueGrowth, ?float $operatingIncomeGrowth,
+|            ?float $operatingMargin): array
+|
+| Expected Red state (2026-09-06): 現行実装は evaluate() が5引数
+| （signalCount + 4財務値）で、内部で FundamentalHealthEvaluator::evaluate()
+| に4引数を渡している。本ファイルの6引数呼び出しは PHP 上 legal（余剰引数は
+| 破棄）で、営業利益率が健全なケース・財務が明らかに failed/unavailable な
+| ケースは偶然 Green のまま。Red（アサーション不一致）になるのは、
+| 「シグナル0件・equity/roe/成長率は健全だが営業利益率のみ基準割れ」で
+| 高水準モードにならない（normal になる）ことを期待するケースのみ
+| ——現行実装は営業利益率を無視して 'passed' 判定 → high_water_mark を返す。
+|
+| -------------------------------------------------------------------------
+| 旧 Red 状態（歴史的記録）:
+| This class did not exist yet under app/Services/Analysis/ (no migration,
 | no route involved — it is a pure calculation service like
-| FundamentalHealthEvaluator/SignalDeterminationService). Every test below is
-| therefore expected to fail with a "Class ... not found" fatal error, not an
-| assertion mismatch. This is the intended Red state for this file.
+| FundamentalHealthEvaluator/SignalDeterminationService). Every test was
+| therefore expected to fail with a "Class ... not found" fatal error.
 |
 | -------------------------------------------------------------------------
 | Design decisions this Red phase bakes in (method name / parameter shape /
@@ -105,21 +126,22 @@ function takeProfitThresholdEvaluator(): TakeProfitThresholdEvaluator
 /**
  * Fundamentals that FundamentalHealthEvaluator judges as 'passed' (same
  * values as FundamentalHealthEvaluatorTest's own "大きく上回る" case:
- * equity_ratio=58.0, roe=15.2, both growth figures comfortably positive).
+ * equity_ratio=58.0, roe=15.2, both growth figures comfortably positive,
+ * operating_margin=18.3 comfortably above the 10% bar — CHG-0012 / ADR-0011).
  *
- * @return array{0: float, 1: float, 2: float, 3: float}
+ * @return array{0: float, 1: float, 2: float, 3: float, 4: float}
  */
 function tpteHealthyFundamentals(): array
 {
-    return [58.0, 15.2, 8.0, 12.3];
+    return [58.0, 15.2, 8.0, 12.3, 18.3];
 }
 
-describe('TakeProfitThresholdEvaluator: 利確検討ラインの動的分岐判定（CHG-0006）', function () {
+describe('TakeProfitThresholdEvaluator: 利確検討ラインの動的分岐判定（CHG-0006 / CHG-0012）', function () {
     describe('高水準モードが適用される場合', function () {
-        test('シグナル0件・財務健全性passedの場合、高水準モード（対象抽出+150%超、分割指値+100%/+150%）を返す', function () {
-            [$equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth] = tpteHealthyFundamentals();
+        test('シグナル0件・財務健全性passed（営業利益率も健全）の場合、高水準モード（対象抽出+150%超、分割指値+100%/+150%）を返す', function () {
+            [$equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin] = tpteHealthyFundamentals();
 
-            $result = takeProfitThresholdEvaluator()->evaluate(0, $equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth);
+            $result = takeProfitThresholdEvaluator()->evaluate(0, $equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin);
 
             expect($result['mode'])->toBe('high_water_mark');
             expect($result['target_gain_rate_threshold'])->toEqualWithDelta(150.0, 0.001);
@@ -130,9 +152,9 @@ describe('TakeProfitThresholdEvaluator: 利確検討ラインの動的分岐判�
 
     describe('通常モードが適用される場合（高水準モードの条件を満たさない）', function () {
         test('シグナルが1件以上ある場合、財務健全性がpassedであっても通常モード（+20%超、+20%/+35%）を返す', function () {
-            [$equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth] = tpteHealthyFundamentals();
+            [$equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin] = tpteHealthyFundamentals();
 
-            $result = takeProfitThresholdEvaluator()->evaluate(1, $equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth);
+            $result = takeProfitThresholdEvaluator()->evaluate(1, $equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin);
 
             expect($result['mode'])->toBe('normal');
             expect($result['target_gain_rate_threshold'])->toEqualWithDelta(20.0, 0.001);
@@ -141,17 +163,17 @@ describe('TakeProfitThresholdEvaluator: 利確検討ラインの動的分岐判�
         });
 
         test('シグナルが複数件ある場合も、財務健全性がpassedであれば通常モードを返す', function () {
-            [$equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth] = tpteHealthyFundamentals();
+            [$equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin] = tpteHealthyFundamentals();
 
-            $result = takeProfitThresholdEvaluator()->evaluate(3, $equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth);
+            $result = takeProfitThresholdEvaluator()->evaluate(3, $equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin);
 
             expect($result['mode'])->toBe('normal');
         });
 
         test('シグナル0件だが財務健全性がfailed（自己資本比率・ROEとも基準未満）の場合、通常モードを返す', function () {
             // FundamentalHealthEvaluatorTest「自己資本比率・ROEともに閾値を
-            // 下回る場合、failedを返す」と同一値（20.0, 3.0, -5.0, -2.0）。
-            $result = takeProfitThresholdEvaluator()->evaluate(0, 20.0, 3.0, -5.0, -2.0);
+            // 下回る場合、failedを返す」と同一値（20.0, 3.0, -5.0, -2.0, 5.0）。
+            $result = takeProfitThresholdEvaluator()->evaluate(0, 20.0, 3.0, -5.0, -2.0, 5.0);
 
             expect($result['mode'])->toBe('normal');
             expect($result['target_gain_rate_threshold'])->toEqualWithDelta(20.0, 0.001);
@@ -162,14 +184,34 @@ describe('TakeProfitThresholdEvaluator: 利確検討ラインの動的分岐判�
         test('シグナル0件だが自己資本比率・ROEが基準を満たし成長率のみfailed（両方マイナス）の場合、通常モードを返す', function () {
             // FundamentalHealthEvaluatorが'failed'を返す境界（自己資本比率・
             // ROEは基準を満たすが成長率が両方マイナス）でも高水準モードには
-            // ならないことを確認する。
-            $result = takeProfitThresholdEvaluator()->evaluate(0, 58.0, 15.2, -3.0, -1.0);
+            // ならないことを確認する。営業利益率は健全。
+            $result = takeProfitThresholdEvaluator()->evaluate(0, 58.0, 15.2, -3.0, -1.0, 18.0);
+
+            expect($result['mode'])->toBe('normal');
+        });
+
+        // -------------------------------------------------------------
+        // CR (2026-09-06, CHG-0012 / ADR-0011): 営業利益率のみ基準割れでも
+        // 高水準モードにならない
+        // -------------------------------------------------------------
+        test('シグナル0件・equity/roe/成長率は健全だが営業利益率が9.0%（基準割れ）の場合、財務健全性はfailedのため通常モードを返す', function () {
+            // タカラトミー相当（9.0%、near チップだが failed）。ADR-0011。
+            // FundamentalHealthEvaluator が 'failed' を返すため、6引数目を
+            // 素通しで受け取れば high_water_mark にはならない。
+            $result = takeProfitThresholdEvaluator()->evaluate(0, 58.0, 15.2, 8.0, 12.3, 9.0);
+
+            expect($result['mode'])->toBe('normal');
+            expect($result['target_gain_rate_threshold'])->toEqualWithDelta(20.0, 0.001);
+        });
+
+        test('シグナル0件・equity/roe/成長率は健全だが営業利益率がnull（未取得）の場合、財務健全性はunavailableのため通常モードを返す', function () {
+            $result = takeProfitThresholdEvaluator()->evaluate(0, 58.0, 15.2, 8.0, 12.3, null);
 
             expect($result['mode'])->toBe('normal');
         });
 
         test('シグナル0件だが財務健全性がunavailable（自己資本比率・ROEとも未取得、米国株等）の場合、通常モードを返す', function () {
-            $result = takeProfitThresholdEvaluator()->evaluate(0, null, null, null, null);
+            $result = takeProfitThresholdEvaluator()->evaluate(0, null, null, null, null, null);
 
             expect($result['mode'])->toBe('normal');
             expect($result['target_gain_rate_threshold'])->toEqualWithDelta(20.0, 0.001);
@@ -178,7 +220,7 @@ describe('TakeProfitThresholdEvaluator: 利確検討ラインの動的分岐判�
         });
 
         test('シグナル0件だが財務健全性がunavailable（自己資本比率・ROEは基準を満たすが成長率データが両方null）の場合、通常モードを返す', function () {
-            $result = takeProfitThresholdEvaluator()->evaluate(0, 58.0, 15.2, null, null);
+            $result = takeProfitThresholdEvaluator()->evaluate(0, 58.0, 15.2, null, null, 18.0);
 
             expect($result['mode'])->toBe('normal');
         });

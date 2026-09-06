@@ -286,6 +286,11 @@ function ucFrom009TestFundamentalIndicator(Holding $holding, array $attributes =
         'equity_ratio' => 35.0,
         'dividend_yield' => 2.0,
         'dividend_payout_ratio' => 30.0,
+        // CHG-0012 / ADR-0011: 営業利益率10%以上（健全）をデフォルトに。
+        // 動的分岐テストが equity/roe/成長率を健全側に override する際、
+        // 営業利益率も健全であることで FundamentalHealthEvaluator が
+        // 'passed' を返し高水準モード判定が維持される。
+        'operating_margin' => 18.0,
         'fetched_at' => now(),
     ], $attributes));
 }
@@ -763,6 +768,97 @@ describe('UC-009: 取込後サマリーレポート', function () {
 
             $candidateItem = $allItems->first(fn ($item) => str_contains((string) ($item['target'] ?? ''), '6920'));
             expect($candidateItem)->toBeNull();
+        });
+
+        // CR (2026-09-06, CHG-0012 / ADR-0011): 営業利益率を4条件目に追加。
+        // ShowImportSummaryReportAction::buildNewCandidateItems() /
+        // buildTakeProfitCandidates() が FundamentalHealthEvaluator::evaluate()
+        // に operating_margin を渡すようになり、営業利益率10%未満の未保有銘柄は
+        // 新規投資候補セクションから除外される（買い増し候補件数も連動して減る）。
+        //
+        // Red の出方: `operating_margin` は現時点で FundamentalIndicator の
+        // $fillable / マイグレーション未整備。フィクスチャで渡した
+        // operating_margin は mass-assignment で黙って捨てられるため、現行の
+        // ShowImportSummaryReportAction は営業利益率を見ず、equity/roe/成長率
+        // が健全な候補をそのまま新規投資候補に含める → `expect(...)->toBeNull()`
+        // がアサーション不一致で失敗する（fatal ではない）。
+        test('自己資本比率・ROE・成長率は基準を満たすが営業利益率が7.0%（基準割れ）の未保有銘柄は、レポートの新規投資候補セクションから除外される', function () {
+            [$batch, $snapshot] = ucFrom009TestImportBatch();
+
+            $heldSector = ucFrom009TestSectorClassification('情報・通信業', '5250');
+            $heldHolding = ucFrom009TestHolding([
+                'symbol_code' => '9432', 'market' => 'jp', 'symbol_name' => 'NTT',
+                'sector_classification_id' => $heldSector->id,
+            ]);
+            ucFrom009TestHoldingSnapshot($snapshot, $heldHolding, [
+                'unrealized_gain_amount' => 500.0,
+                'unrealized_gain_rate' => 5.0,
+            ]);
+
+            ucFrom009TestWatchedTheme('AI半導体');
+            $themeSector = ucFrom009TestSectorClassification('AI半導体', '9999');
+
+            $candidateHolding = ucFrom009TestHolding([
+                'symbol_code' => '6920', 'market' => 'jp', 'symbol_name' => 'レーザーテック',
+                'sector_classification_id' => $themeSector->id,
+            ]);
+            ucFrom009TestFundamentalIndicator($candidateHolding, [
+                'equity_ratio' => 60.0,
+                'roe' => 15.0,
+                'revenue_growth' => 8.0,
+                'operating_income_growth' => 6.0,
+                'operating_margin' => 7.0, // < 10% → 除外
+            ]);
+
+            $response = ucFrom009TestFetchReport($this, $batch);
+
+            $response->assertSuccessful();
+
+            $allItems = collect($response->json('data.top_recommendations'))
+                ->merge($response->json('data.supplementary_recommendations'));
+
+            $candidateItem = $allItems->first(fn ($item) => str_contains((string) ($item['target'] ?? ''), '6920'));
+            expect($candidateItem)->toBeNull();
+        });
+
+        test('営業利益率が18.0%（健全）の未保有銘柄は、レポートの新規投資候補セクションに含まれる', function () {
+            [$batch, $snapshot] = ucFrom009TestImportBatch();
+
+            $heldSector = ucFrom009TestSectorClassification('情報・通信業', '5250');
+            $heldHolding = ucFrom009TestHolding([
+                'symbol_code' => '9432', 'market' => 'jp', 'symbol_name' => 'NTT',
+                'sector_classification_id' => $heldSector->id,
+            ]);
+            ucFrom009TestHoldingSnapshot($snapshot, $heldHolding, [
+                'unrealized_gain_amount' => 500.0,
+                'unrealized_gain_rate' => 5.0,
+            ]);
+
+            ucFrom009TestWatchedTheme('AI半導体');
+            $themeSector = ucFrom009TestSectorClassification('AI半導体', '9999');
+
+            $candidateHolding = ucFrom009TestHolding([
+                'symbol_code' => '6920', 'market' => 'jp', 'symbol_name' => 'レーザーテック',
+                'sector_classification_id' => $themeSector->id,
+            ]);
+            ucFrom009TestFundamentalIndicator($candidateHolding, [
+                'equity_ratio' => 60.0,
+                'roe' => 15.0,
+                'revenue_growth' => 8.0,
+                'operating_income_growth' => 6.0,
+                'operating_margin' => 18.0,
+            ]);
+
+            $response = ucFrom009TestFetchReport($this, $batch);
+
+            $response->assertSuccessful();
+
+            $allItems = collect($response->json('data.top_recommendations'))
+                ->merge($response->json('data.supplementary_recommendations'));
+
+            $candidateItem = $allItems->firstWhere('recommendation_type', '新規投資候補');
+            expect($candidateItem)->not->toBeNull();
+            expect($candidateItem['target'])->toContain('6920');
         });
     });
 

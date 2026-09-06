@@ -130,8 +130,8 @@ class ShowImportSummaryReportAction
             // CHG-0006: the +20%超 threshold dynamically switches to +150%超
             // ("高水準モード") when the holding has zero signals and passes
             // the financial health filter (TakeProfitThresholdEvaluator).
-            [$equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth] = $holding->fundamentalIndicator?->healthEvaluatorArgs()
-                ?? [null, null, null, null];
+            [$equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin] = $holding->fundamentalIndicator?->healthEvaluatorArgs()
+                ?? [null, null, null, null, null];
 
             $threshold = $this->takeProfitThresholdEvaluator->evaluate(
                 $signals->count(),
@@ -139,6 +139,7 @@ class ShowImportSummaryReportAction
                 $roe,
                 $revenueGrowth,
                 $operatingIncomeGrowth,
+                $operatingMargin,
             );
 
             if ($gainRate <= $threshold['target_gain_rate_threshold']) {
@@ -250,13 +251,17 @@ class ShowImportSummaryReportAction
             $roe = (float) $fundamentalIndicator->roe;
             $revenueGrowth = $fundamentalIndicator->revenue_growth !== null ? (float) $fundamentalIndicator->revenue_growth : null;
             $operatingIncomeGrowth = $fundamentalIndicator->operating_income_growth !== null ? (float) $fundamentalIndicator->operating_income_growth : null;
+            $operatingMargin = $fundamentalIndicator->operating_margin !== null ? (float) $fundamentalIndicator->operating_margin : null;
 
             // CHG-0005: 財務健全性フィルタに成長率条件（売上高または営業利益
-            // 成長率のいずれかがプラス）を追加する。equity_ratio/roeのDB
-            // クエリでの事前絞り込みに加え、FundamentalHealthEvaluatorを
-            // Source of Truthとして'passed'（unavailable/failedはいずれも
-            // 除外）の銘柄のみを新規投資候補として残す。
-            if ($this->evaluator->evaluate($equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth) !== 'passed') {
+            // 成長率のいずれかがプラス）を追加する。CHG-0012: 営業利益率条件
+            // （10%以上）を4条件目として追加。equity_ratio/roeのDBクエリでの
+            // 事前絞り込みに加え、FundamentalHealthEvaluatorを Source of Truth
+            // として'passed'（unavailable/failedはいずれも除外）の銘柄のみを
+            // 新規投資候補として残す。営業利益率はDBクエリの事前絞り込みに
+            // 足さない（NULL行がSQLで落ちてevaluatorのunavailable判定に
+            // 到達しなくなるため。ADR-0011）。
+            if ($this->evaluator->evaluate($equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin) !== 'passed') {
                 continue;
             }
 

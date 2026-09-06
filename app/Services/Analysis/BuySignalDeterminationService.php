@@ -30,8 +30,14 @@ final class BuySignalDeterminationService
     /**
      * All-signals-common precondition B: relative_strength_vs_market must
      * not be null and must be >= this value.
+     *
+     * Promoted to `public` (2026-09-06, CHG-0010) so
+     * App\Services\Analysis\SignalCriteriaEvaluator::evaluateLossReview()
+     * (整理チェックリスト⑥ 相対力(対市場)) can reference the same -5.0 source
+     * of truth instead of re-declaring it. Value unchanged; the existing
+     * preconditionsSatisfied() reference keeps working.
      */
-    private const MIN_RELATIVE_STRENGTH = -5.0;
+    public const MIN_RELATIVE_STRENGTH = -5.0;
 
     /**
      * Threshold constants, promoted from inline literals (2026-08-29,

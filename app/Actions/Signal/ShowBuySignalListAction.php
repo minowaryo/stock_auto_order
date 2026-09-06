@@ -112,8 +112,9 @@ class ShowBuySignalListAction
         $roe = $fundamentalIndicator?->roe !== null ? (float) $fundamentalIndicator->roe : null;
         $revenueGrowth = $fundamentalIndicator?->revenue_growth !== null ? (float) $fundamentalIndicator->revenue_growth : null;
         $operatingIncomeGrowth = $fundamentalIndicator?->operating_income_growth !== null ? (float) $fundamentalIndicator->operating_income_growth : null;
+        $operatingMargin = $fundamentalIndicator?->operating_margin !== null ? (float) $fundamentalIndicator->operating_margin : null;
 
-        $fundamentalStatus = $this->evaluator->evaluate($equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth);
+        $fundamentalStatus = $this->evaluator->evaluate($equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin);
 
         if ($fundamentalStatus === 'failed') {
             return null;
@@ -128,11 +129,14 @@ class ShowBuySignalListAction
             'symbol_code' => $holding->symbol_code,
             'symbol_name' => $holding->symbol_name,
             'current_price' => $holdingSnapshot->current_price,
+            // CHG-0011: 評価額（保有数量 × 現在値）。US株の current_price は
+            // 取込時に参考為替レートで円換算済みのため円建て。表示専用。
+            'market_value' => (float) $holdingSnapshot->quantity * (float) $holdingSnapshot->current_price,
             'unrealized_gain_rate' => $holdingSnapshot->unrealized_gain_rate,
             'buy_signal_types' => $buySignals->pluck('signal_type')->values()->all(),
             'buy_signal_reason_summary' => $buySignals->pluck('reason_summary')->implode('、'),
             'fundamental_status' => $fundamentalStatus,
-            'fundamental_summary' => $this->fundamentalSummary($fundamentalStatus, $equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth),
+            'fundamental_summary' => $this->fundamentalSummary($fundamentalStatus, $equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin),
             'nisa_recommended' => $nisaRecommended,
             'nisa_recommended_reason' => $nisaRecommended
                 ? sprintf('自己資本比率%s%%・ROE%s%%と財務健全性が高くNISA口座での長期保有に適しています', $this->fmt($equityRatio), $this->fmt($roe))
@@ -147,6 +151,7 @@ class ShowBuySignalListAction
                 $roe,
                 $revenueGrowth,
                 $operatingIncomeGrowth,
+                $operatingMargin,
             )),
             '_buy_signal_count' => $buySignals->count(),
         ];
@@ -161,12 +166,18 @@ class ShowBuySignalListAction
         ?float $roe,
         ?float $revenueGrowth,
         ?float $operatingIncomeGrowth,
+        ?float $operatingMargin,
     ): array {
         $technicalIndicator = $holdingSnapshot->holding->technicalIndicator;
         $fundamentalIndicator = $holdingSnapshot->holding->fundamentalIndicator;
 
         return [
-            'current_price' => $holdingSnapshot->current_price !== null ? (float) $holdingSnapshot->current_price : null,
+            // US株は current_price が円換算済み・technical_indicators は USD の
+            // ため、乖離チップの計算前に USD へ割り戻す（CHG-0010）。
+            'current_price' => SignalCriteriaEvaluator::indicatorComparablePrice(
+                $holdingSnapshot->current_price !== null ? (float) $holdingSnapshot->current_price : null,
+                $holdingSnapshot->fx_rate_used !== null ? (float) $holdingSnapshot->fx_rate_used : null,
+            ),
             'rsi' => $technicalIndicator?->rsi !== null ? (float) $technicalIndicator->rsi : null,
             'macd' => $technicalIndicator?->macd !== null ? (float) $technicalIndicator->macd : null,
             'macd_signal' => $technicalIndicator?->macd_signal !== null ? (float) $technicalIndicator->macd_signal : null,
@@ -183,10 +194,11 @@ class ShowBuySignalListAction
             'equity_ratio' => $equityRatio,
             'revenue_growth' => $revenueGrowth,
             'operating_income_growth' => $operatingIncomeGrowth,
+            'operating_margin' => $operatingMargin,
         ];
     }
 
-    private function fundamentalSummary(string $fundamentalStatus, ?float $equityRatio, ?float $roe, ?float $revenueGrowth, ?float $operatingIncomeGrowth): string
+    private function fundamentalSummary(string $fundamentalStatus, ?float $equityRatio, ?float $roe, ?float $revenueGrowth, ?float $operatingIncomeGrowth, ?float $operatingMargin): string
     {
         if ($fundamentalStatus === 'unavailable') {
             return 'ファンダメンタルズ指標が未取得のため判定できません';
@@ -216,11 +228,12 @@ class ShowBuySignalListAction
         }
 
         return sprintf(
-            'ROE%s%%・自己資本比率%s%%・%s%s%%',
+            'ROE%s%%・自己資本比率%s%%・%s%s%%・営業利益率%s%%',
             $this->fmt($roe),
             $this->fmt($equityRatio),
             $growthLabel,
             $growthValue === null ? '-' : sprintf('%+.1f', $growthValue),
+            $this->fmt($operatingMargin),
         );
     }
 

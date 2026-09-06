@@ -5,15 +5,19 @@
     全体の達成度を出しておくためのもの。色は達成率の目安（全達成=緑／0件=グレー／
     それ以外=黄）で、個々のチップの厳密な基準判定とは独立した簡易表示。
 --}}
-@props(['criteria'])
+@props(['criteria', 'variant' => 'signal'])
 @php
+    $isLossReview = $variant === 'lossReview';
     $classFor = fn (array $summary) => match (true) {
-        $summary['met'] === $summary['total'] => 'text-green-700',
+        $summary['met'] === $summary['total'] => $isLossReview ? 'text-red-700' : 'text-green-700',
         $summary['met'] === 0 => 'text-slate-400',
         default => 'text-amber-600',
     };
     $technicalSummary = $criteria['summary']['technical'];
     $fundamentalSummary = $criteria['summary']['fundamental'];
+    [$technicalLabel, $fundamentalLabel] = $isLossReview
+        ? ['整理シグナル', '投資根拠の毀損']
+        : ['技術', '財務'];
 @endphp
-<div class="mt-0.5 text-[10px] {{ $classFor($technicalSummary) }}">技術 {{ $technicalSummary['met'] }}/{{ $technicalSummary['total'] }}</div>
-<div class="text-[10px] {{ $classFor($fundamentalSummary) }}">財務 {{ $fundamentalSummary['met'] }}/{{ $fundamentalSummary['total'] }}</div>
+<div class="mt-0.5 text-[10px] {{ $classFor($technicalSummary) }}">{{ $technicalLabel }} {{ $technicalSummary['met'] }}/{{ $technicalSummary['total'] }}</div>
+<div class="text-[10px] {{ $classFor($fundamentalSummary) }}">{{ $fundamentalLabel }} {{ $fundamentalSummary['met'] }}/{{ $fundamentalSummary['total'] }}</div>

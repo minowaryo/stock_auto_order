@@ -31,6 +31,21 @@ use App\Services\Analysis\FundamentalIndicatorMapper;
 | Unit Test with no RefreshDatabase (Unit/ tests are not bound to
 | Tests\TestCase in tests/Pest.php, matching TechnicalIndicatorCalculatorTest).
 |
+| -------------------------------------------------------------------------
+| CR (2026-09-06, CHG-0012 / ADR-0011): 営業利益率（operating_margin）を
+| map() の返却配列に追加
+| -------------------------------------------------------------------------
+| JP（J-Quants）は最新期（index 0）から実測算出する（ADR-0011 D4）:
+|   operating_margin = operating_profit / net_sales * 100
+|   - net_sales が null / 0以下、operating_profit が null → null
+|     （calculatePer() / calculatePbr() と同じガードパターン）
+|   - |operating_margin| > 999 → null（ADR-0011 D5。売上ほぼゼロ企業の
+|     ACHR -243100% のような異常値を DB に入れない）
+|
+| 現行 map() は返却配列に `operating_margin` キーを持たないため、
+| `toHaveKey('operating_margin')` / FIM_ALL_KEYS を使った全キー検証は
+| アサーション不一致で Red（fatal ではない）。
+|
 */
 
 /**
@@ -127,7 +142,7 @@ function fimFiveStatements(): array
 
 const FIM_ALL_KEYS = [
     'per', 'pbr', 'roe', 'revenue_growth', 'operating_income_growth',
-    'equity_ratio', 'dividend_yield', 'dividend_payout_ratio',
+    'equity_ratio', 'operating_margin', 'dividend_yield', 'dividend_payout_ratio',
     'eps_growth', 'peg_ratio',
 ];
 
@@ -158,6 +173,77 @@ test('5期分の開示データと現在株価からPER・PBR・ROE等を正し�
     expect($result['eps_growth'])->toEqualWithDelta(20.0, 0.0001);
     // peg_ratio = per / eps_growth = 15.0 / 20.0
     expect($result['peg_ratio'])->toEqualWithDelta(0.75, 0.0001);
+    // operating_margin = latest operating_profit / net_sales * 100 = 200 / 1200 * 100 (CHG-0012 / ADR-0011)
+    expect($result['operating_margin'])->toEqualWithDelta(200 / 1200 * 100, 0.0001);
+});
+
+// -----------------------------------------------------------------------
+// CR (2026-09-06, CHG-0012 / ADR-0011): 営業利益率の算出・ガード
+// -----------------------------------------------------------------------
+
+test('営業利益率は最新期(index0)の operating_profit / net_sales * 100 で算出される', function () {
+    $statements = fimFiveStatements();
+    $statements[0]['net_sales'] = 1000.0;
+    $statements[0]['operating_profit'] = 150.0;
+
+    $result = (new FundamentalIndicatorMapper)->map($statements, currentPrice: 1800.0);
+
+    // 150 / 1000 * 100 = 15.0
+    expect($result['operating_margin'])->toEqualWithDelta(15.0, 0.0001);
+});
+
+test('最新期の operating_profit が null の場合、営業利益率は null になる', function () {
+    $statements = fimFiveStatements();
+    $statements[0]['operating_profit'] = null;
+
+    $result = (new FundamentalIndicatorMapper)->map($statements, currentPrice: 1800.0);
+
+    expect($result['operating_margin'])->toBeNull();
+});
+
+test('最新期の net_sales が 0 の場合、営業利益率は null になる（ゼロ除算防止）', function () {
+    $statements = fimFiveStatements();
+    $statements[0]['net_sales'] = 0.0;
+
+    $result = (new FundamentalIndicatorMapper)->map($statements, currentPrice: 1800.0);
+
+    expect($result['operating_margin'])->toBeNull();
+});
+
+test('最新期の net_sales がマイナス（債務超過的な特殊開示）の場合、営業利益率は null になる', function () {
+    $statements = fimFiveStatements();
+    $statements[0]['net_sales'] = -500.0;
+
+    $result = (new FundamentalIndicatorMapper)->map($statements, currentPrice: 1800.0);
+
+    expect($result['operating_margin'])->toBeNull();
+});
+
+test('最新期の net_sales が null の場合、営業利益率は null になる', function () {
+    $statements = fimFiveStatements();
+    $statements[0]['net_sales'] = null;
+
+    $result = (new FundamentalIndicatorMapper)->map($statements, currentPrice: 1800.0);
+
+    expect($result['operating_margin'])->toBeNull();
+});
+
+test('売上がほぼゼロで営業損失が巨大なプレレベニュー企業（|営業利益率| > 999%）の場合、営業利益率は null になる（ADR-0011 D5）', function () {
+    $statements = fimFiveStatements();
+    // net_sales=1, operating_profit=-3000 → -300000% → |値| > 999 → null
+    $statements[0]['net_sales'] = 1.0;
+    $statements[0]['operating_profit'] = -3000.0;
+
+    $result = (new FundamentalIndicatorMapper)->map($statements, currentPrice: 1800.0);
+
+    expect($result['operating_margin'])->toBeNull();
+});
+
+test('開示データが0件の場合、営業利益率も null になる（FIM_ALL_KEYS の一括検証に含まれる）', function () {
+    $result = (new FundamentalIndicatorMapper)->map([], currentPrice: 1800.0);
+
+    expect($result)->toHaveKey('operating_margin');
+    expect($result['operating_margin'])->toBeNull();
 });
 
 test('ROE・自己資本比率・配当性向はJ-Quantsの比率(0〜1)からパーセント値に変換される', function () {

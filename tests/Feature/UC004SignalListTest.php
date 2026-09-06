@@ -238,6 +238,10 @@ function ucFrom004TestHealthyFundamentalIndicator(Holding $holding, array $attri
         'revenue_growth' => 8.0,
         'operating_income_growth' => 12.3,
         'equity_ratio' => 58.0,
+        // CHG-0012 / ADR-0011: 財務健全性フィルタの4条件目。健全な値を
+        // デフォルトにし、既存の high_water_mark モード等のテストが無改変で
+        // Green のまま通るようにする。
+        'operating_margin' => 18.3,
         'dividend_yield' => 2.0,
         'dividend_payout_ratio' => 30.0,
         'fetched_at' => now(),
@@ -713,7 +717,7 @@ describe('UC-004: 利確シグナル一覧', function () {
     });
 
     describe('判定チェックリスト（criteria、CHG-0007）', function () {
-        test('各行に criteria（technical 7項目・fundamental 3項目・グループ別サマリ）が含まれる', function () {
+        test('各行に criteria（technical 7項目・fundamental 4項目・グループ別サマリ）が含まれる', function () {
             [, $snapshot] = ucFrom004TestImportBatch();
             $holding = ucFrom004TestHolding(['symbol_code' => '7203', 'symbol_name' => 'トヨタ自動車']);
             $holdingSnapshot = ucFrom004TestHoldingSnapshot($snapshot, $holding, [
@@ -729,9 +733,10 @@ describe('UC-004: 利確シグナル一覧', function () {
 
             expect($row['criteria'])->toHaveKeys(['technical', 'fundamental', 'summary']);
             expect($row['criteria']['technical'])->toHaveCount(7);
-            expect($row['criteria']['fundamental'])->toHaveCount(3);
+            // CHG-0012 / ADR-0011: 財務健全性チェックリストは3→4項目（営業利益率を追加）
+            expect($row['criteria']['fundamental'])->toHaveCount(4);
             expect($row['criteria']['summary']['technical']['total'])->toBe(7);
-            expect($row['criteria']['summary']['fundamental']['total'])->toBe(3);
+            expect($row['criteria']['summary']['fundamental']['total'])->toBe(4);
 
             foreach ($row['criteria']['technical'] as $item) {
                 expect($item)->toHaveKeys(['label', 'threshold_label', 'value_label', 'status']);
@@ -757,7 +762,8 @@ describe('UC-004: 利確シグナル一覧', function () {
             $row = ucFrom004TestFindRow(ucFrom004TestFetch($this), '6526');
 
             expect($row['criteria']['summary']['technical']['met'])->toBe(7);
-            expect($row['criteria']['summary']['fundamental']['met'])->toBe(3);
+            // CHG-0012 / ADR-0011: 営業利益率18.3%（健全デフォルト）も met で財務 4/4
+            expect($row['criteria']['summary']['fundamental']['met'])->toBe(4);
         });
 
         test('高水準モード銘柄は含み益率の基準ラベルが +150% ラインになる', function () {
@@ -798,6 +804,46 @@ describe('UC-004: 利確シグナル一覧', function () {
             expect($rsiRow['value_label'])->toBe('—');
             // 含み益率だけは holding_snapshot 由来なので met のまま
             expect($row['criteria']['summary']['technical']['met'])->toBe(1);
+        });
+    });
+
+    describe('評価額（market_value、CHG-0011）', function () {
+        test('各行に market_value（保有数量 × 現在値）が含まれる', function () {
+            [, $snapshot] = ucFrom004TestImportBatch();
+            $holding = ucFrom004TestHolding(['symbol_code' => '7203', 'market' => 'jp']);
+            $holdingSnapshot = ucFrom004TestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 300,
+                'average_cost' => 1000.00,
+                'current_price' => 1300.00,
+                'unrealized_gain_rate' => 30.0,
+            ]);
+            ucFrom004TestSignal($holdingSnapshot, ['signal_type' => 'rsi_reversal']);
+
+            $row = ucFrom004TestFindRow(ucFrom004TestFetch($this), '7203');
+
+            expect($row)->not->toBeNull();
+            // 300株 × 1,300円 = 390,000円
+            expect((float) $row['market_value'])->toEqualWithDelta(390000.0, 0.01);
+        });
+
+        test('米国株は取込時に円換算済みの current_price を用いるため market_value も円建てになる', function () {
+            [, $snapshot] = ucFrom004TestImportBatch();
+            $holding = ucFrom004TestHolding(['symbol_code' => 'MU', 'market' => 'us', 'symbol_name' => 'Micron']);
+            // current_price は UsStockCsvParser が USドル × 参考為替レートで円換算した後の値
+            $holdingSnapshot = ucFrom004TestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 50,
+                'average_cost' => 8000.00,
+                'current_price' => 16000.00,
+                'fx_rate_used' => 160.0,
+                'unrealized_gain_rate' => 100.0,
+            ]);
+            ucFrom004TestSignal($holdingSnapshot, ['signal_type' => 'rsi_reversal']);
+
+            $row = ucFrom004TestFindRow(ucFrom004TestFetch($this), 'MU');
+
+            expect($row)->not->toBeNull();
+            // 50株 × 16,000円 = 800,000円
+            expect((float) $row['market_value'])->toEqualWithDelta(800000.0, 0.01);
         });
     });
 

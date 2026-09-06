@@ -13,14 +13,22 @@
     先頭列（$labels[0]、通常は「銘柄」）はこのヘッダー用<table>自体の横スクロール内で
     追従して見えるよう sticky left-0 にする。
 --}}
-@props(['labels', 'criteria'])
+@props(['labels', 'criteria', 'variant' => 'signal'])
+@php
+    // 整理検討（UC-011, ADR-0010 D6）は財務3項目の判定を反転しているため、
+    // グループ見出しもサマリバッジ（x-signal-criteria-summary-badges）と
+    // 同じ語彙に揃える。利確検討・買い増し候補は従来どおり。
+    [$technicalGroupLabel, $fundamentalGroupLabel] = $variant === 'lossReview'
+        ? ['判定チェックリスト（整理シグナル）', '判定チェックリスト（投資根拠の毀損）']
+        : ['判定チェックリスト（テクニカル）', '判定チェックリスト（財務）'];
+@endphp
 <thead>
     <tr class="text-left text-text-secondary border-b border-app-border">
         @foreach ($labels as $label)
             <th class="py-1.5 px-1.5 break-words {{ $loop->first ? 'sticky left-0 z-10 bg-surface' : '' }}" rowspan="2">{{ $label }}</th>
         @endforeach
-        <th class="py-1.5 px-1.5 text-center break-words" colspan="{{ count($criteria['technical']) }}">判定チェックリスト（テクニカル）</th>
-        <th class="py-1.5 px-1.5 text-center break-words" colspan="{{ count($criteria['fundamental']) }}">判定チェックリスト（財務）</th>
+        <th class="py-1.5 px-1.5 text-center break-words" colspan="{{ count($criteria['technical']) }}">{{ $technicalGroupLabel }}</th>
+        <th class="py-1.5 px-1.5 text-center break-words" colspan="{{ count($criteria['fundamental']) }}">{{ $fundamentalGroupLabel }}</th>
     </tr>
     <tr class="text-left text-text-secondary border-b border-app-border">
         @foreach ($criteria['technical'] as $item)

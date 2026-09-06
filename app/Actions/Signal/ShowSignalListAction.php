@@ -78,8 +78,8 @@ class ShowSignalListAction
      */
     private function resolveThreshold(HoldingSnapshot $holdingSnapshot): array
     {
-        [$equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth] = $holdingSnapshot->holding->fundamentalIndicator?->healthEvaluatorArgs()
-            ?? [null, null, null, null];
+        [$equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin] = $holdingSnapshot->holding->fundamentalIndicator?->healthEvaluatorArgs()
+            ?? [null, null, null, null, null];
 
         return $this->takeProfitThresholdEvaluator->evaluate(
             $holdingSnapshot->signals->count(),
@@ -87,6 +87,7 @@ class ShowSignalListAction
             $roe,
             $revenueGrowth,
             $operatingIncomeGrowth,
+            $operatingMargin,
         );
     }
 
@@ -111,6 +112,10 @@ class ShowSignalListAction
             'id' => $holding->id,
             'symbol_code' => $holding->symbol_code,
             'symbol_name' => $holding->symbol_name,
+            // CHG-0011: 評価額（保有数量 × 現在値）。US株の current_price は
+            // 取込時に参考為替レートで円換算済みのため円建て。表示専用で
+            // シグナル判定・対象抽出には使わない。
+            'market_value' => (float) $holdingSnapshot->quantity * (float) $holdingSnapshot->current_price,
             'unrealized_gain_rate' => $holdingSnapshot->unrealized_gain_rate,
             'signal_types' => $signals->pluck('signal_type')->values()->all(),
             'signal_reason_summary' => $signalReasonSummary,
@@ -140,7 +145,12 @@ class ShowSignalListAction
         return [
             'unrealized_gain_rate' => $holdingSnapshot->unrealized_gain_rate !== null ? (float) $holdingSnapshot->unrealized_gain_rate : null,
             'gain_line_threshold' => $threshold['target_gain_rate_threshold'],
-            'current_price' => $holdingSnapshot->current_price !== null ? (float) $holdingSnapshot->current_price : null,
+            // US株は current_price が円換算済み・technical_indicators は USD の
+            // ため、乖離チップの計算前に USD へ割り戻す（CHG-0010）。
+            'current_price' => SignalCriteriaEvaluator::indicatorComparablePrice(
+                $holdingSnapshot->current_price !== null ? (float) $holdingSnapshot->current_price : null,
+                $holdingSnapshot->fx_rate_used !== null ? (float) $holdingSnapshot->fx_rate_used : null,
+            ),
             'rsi' => $technicalIndicator?->rsi !== null ? (float) $technicalIndicator->rsi : null,
             'macd' => $technicalIndicator?->macd !== null ? (float) $technicalIndicator->macd : null,
             'macd_signal' => $technicalIndicator?->macd_signal !== null ? (float) $technicalIndicator->macd_signal : null,
@@ -154,6 +164,7 @@ class ShowSignalListAction
             'equity_ratio' => $fundamentalIndicator?->equity_ratio !== null ? (float) $fundamentalIndicator->equity_ratio : null,
             'revenue_growth' => $fundamentalIndicator?->revenue_growth !== null ? (float) $fundamentalIndicator->revenue_growth : null,
             'operating_income_growth' => $fundamentalIndicator?->operating_income_growth !== null ? (float) $fundamentalIndicator->operating_income_growth : null,
+            'operating_margin' => $fundamentalIndicator?->operating_margin !== null ? (float) $fundamentalIndicator->operating_margin : null,
         ];
     }
 

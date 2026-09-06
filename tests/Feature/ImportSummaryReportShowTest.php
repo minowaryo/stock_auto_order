@@ -162,6 +162,10 @@ function importSummaryReportShowTestFundamentalIndicator(Holding $holding, array
         'revenue_growth' => 5.0,
         'operating_income_growth' => 4.0,
         'equity_ratio' => 35.0,
+        // CHG-0012 / ADR-0011: 財務健全性フィルタの4条件目（健全な既定値）。
+        // 新規投資候補として掲載されることを期待するテストは equity_ratio /
+        // roe を override するため、営業利益率も健全でないと passed にならない。
+        'operating_margin' => 15.0,
         'dividend_yield' => 2.0,
         'dividend_payout_ratio' => 30.0,
         'fetched_at' => now(),

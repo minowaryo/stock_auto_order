@@ -91,6 +91,7 @@ class ShowHoldingDetailAction
             'roe' => $fundamentalIndicator->roe ?? null,
             'revenue_growth' => $fundamentalIndicator->revenue_growth ?? null,
             'equity_ratio' => $fundamentalIndicator->equity_ratio ?? null,
+            'operating_margin' => $fundamentalIndicator->operating_margin ?? null,
             'dividend_yield' => $fundamentalIndicator->dividend_yield ?? null,
             'eps_growth' => $fundamentalIndicator->eps_growth ?? null,
             'peg_ratio' => $fundamentalIndicator->peg_ratio ?? null,

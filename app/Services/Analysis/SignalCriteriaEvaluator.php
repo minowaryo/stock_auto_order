@@ -30,6 +30,35 @@ final class SignalCriteriaEvaluator
     private const UNAVAILABLE_LABEL = '—';
 
     /**
+     * Normalises `holding_snapshots.current_price` to the same currency as
+     * `technical_indicators.week52_high` / `week52_low` / `ma20` / `ma75` /
+     * `bb_*` before the price-vs-indicator deviation items are computed.
+     *
+     * US holdings store `current_price` already converted to JPY at import
+     * time (UC-001 業務ルール: 参考為替レートで円換算), while the technical
+     * indicators are derived from the native-currency (USD) price series.
+     * Comparing the two directly blows the deviation up by ~150x. Dividing
+     * `current_price` back by `fx_rate_used` puts both in USD. JP holdings
+     * have `fx_rate_used = null` and are returned unchanged.
+     *
+     * Display/price columns outside the criteria checklist (評価額 =
+     * market_value〔CHG-0011〕, 分割指値の価格) intentionally stay JPY and do
+     * not call this.
+     */
+    public static function indicatorComparablePrice(?float $currentPrice, ?float $fxRateUsed): ?float
+    {
+        if ($currentPrice === null) {
+            return null;
+        }
+
+        if ($fxRateUsed !== null && $fxRateUsed > 0.0) {
+            return $currentPrice / $fxRateUsed;
+        }
+
+        return $currentPrice;
+    }
+
+    /**
      * @param  array<string, float|null>  $metrics
      * @return array{
      *   technical: list<array{label: string, threshold_label: string, value_label: string, status: string}>,
@@ -198,14 +227,146 @@ final class SignalCriteriaEvaluator
     }
 
     /**
-     * 財務健全性3項目（UC-004/UC-010共通、FundamentalHealthEvaluatorの基準を
-     * そのまま可視化）。
+     * 整理検討チェックリスト（UC-011 / F-011, CHG-0010 / ADR-0010 D6 改訂
+     * 2026-09-06「赤の単一極性」）。テクニカル7項目・財務3項目のいずれも
+     * 「整理を後押しする事実が成立している」状態を達成（met）とする。財務3項目は
+     * UC-004/UC-010 とは判定の向きを反転し「基準割れ（＝投資根拠の毀損）」を
+     * met とする（fundamentalRows($metrics, true)）。返却構造は
+     * evaluateTakeProfit()/evaluateBuy() と完全に同一。
+     *
+     * @param  array<string, float|null>  $metrics
+     * @return array{
+     *   technical: list<array{label: string, threshold_label: string, value_label: string, status: string}>,
+     *   fundamental: list<array{label: string, threshold_label: string, value_label: string, status: string}>,
+     *   summary: array{technical: array{met: int, near: int, total: int}, fundamental: array{met: int, near: int, total: int}},
+     * }
+     */
+    public function evaluateLossReview(array $metrics): array
+    {
+        $technical = [
+            $this->row(
+                '含み損率',
+                sprintf('≤%d%%', (int) LossReviewThresholds::LOSS_REVIEW_LINE),
+                $metrics['unrealized_gain_rate'] ?? null,
+                LossReviewThresholds::LOSS_REVIEW_LINE,
+                'lte',
+                fn (float $v) => sprintf('%+.1f%%', $v),
+            ),
+            $this->row(
+                '52週高値からの下落率',
+                sprintf('≤%d%%', (int) LossReviewThresholds::WEEK52_HIGH_DECLINE_PCT),
+                $this->percentDeviation($metrics['current_price'] ?? null, $metrics['week52_high'] ?? null),
+                LossReviewThresholds::WEEK52_HIGH_DECLINE_PCT,
+                'lte',
+                fn (float $v) => sprintf('%+.1f%%', $v),
+            ),
+            $this->row(
+                '52週安値からの距離',
+                '≤+10%',
+                $this->percentDeviation($metrics['current_price'] ?? null, $metrics['week52_low'] ?? null),
+                (BuySignalDeterminationService::WEEK52_LOW_PROXIMITY_RATE - 1) * 100,
+                'lte',
+                fn (float $v) => sprintf('%+.1f%%', $v),
+            ),
+            $this->row(
+                'MA75乖離率',
+                '≤-10%',
+                $this->percentDeviation($metrics['current_price'] ?? null, $metrics['ma75'] ?? null),
+                BuySignalDeterminationService::MA_DEVIATION_OVERSOLD_PCT,
+                'lte',
+                fn (float $v) => sprintf('%+.1f%%', $v),
+            ),
+            $this->row(
+                'MACD-シグナル線',
+                '<0',
+                $this->macdDiff($metrics['macd'] ?? null, $metrics['macd_signal'] ?? null),
+                BuySignalDeterminationService::MACD_CROSS_THRESHOLD,
+                'lt',
+                fn (float $v) => number_format($v, 2),
+            ),
+            $this->row(
+                '相対力(対市場)',
+                '≤-5',
+                $metrics['relative_strength_vs_market'] ?? null,
+                BuySignalDeterminationService::MIN_RELATIVE_STRENGTH,
+                'lte',
+                fn (float $v) => sprintf('%+.1f', $v),
+            ),
+            $this->row(
+                '押し目買いシグナル件数',
+                '=0件',
+                $metrics['rebound_buy_signal_count'] ?? null,
+                (float) LossReviewThresholds::NO_REBOUND_SIGNAL_COUNT,
+                'lte',
+                fn (float $v) => number_format($v, 0).'件',
+            ),
+        ];
+
+        $fundamental = $this->fundamentalRows($metrics, true);
+
+        return [
+            'technical' => $technical,
+            'fundamental' => $fundamental,
+            'summary' => [
+                'technical' => $this->summarize($technical),
+                'fundamental' => $this->summarize($fundamental),
+            ],
+        ];
+    }
+
+    /**
+     * 財務健全性4項目（CHG-0012 / ADR-0011 で営業利益率を4項目目に追加）。
+     *
+     * $forLossReview = false（UC-004/UC-010）: FundamentalHealthEvaluator の
+     * 基準をそのまま可視化し「健全＝met」とする。
+     * $forLossReview = true（UC-011 / ADR-0010 D6 改訂・ADR-0011 D7）: 判定の
+     * 向きを反転し「基準割れ（＝投資根拠の毀損）＝met」とする。閾値の値は同じ
+     * 定数を流用し direction と threshold_label のみ反転する。
      *
      * @param  array<string, float|null>  $metrics
      * @return list<array{label: string, threshold_label: string, value_label: string, status: string}>
      */
-    private function fundamentalRows(array $metrics): array
+    private function fundamentalRows(array $metrics, bool $forLossReview = false): array
     {
+        $growthRate = self::higherGrowthRate($metrics['revenue_growth'] ?? null, $metrics['operating_income_growth'] ?? null);
+
+        if ($forLossReview) {
+            return [
+                $this->row(
+                    'ROE',
+                    sprintf('<%d%%', (int) FundamentalHealthEvaluator::MIN_ROE),
+                    $metrics['roe'] ?? null,
+                    FundamentalHealthEvaluator::MIN_ROE,
+                    'lt',
+                    fn (float $v) => number_format($v, 1).'%',
+                ),
+                $this->row(
+                    '自己資本比率',
+                    sprintf('<%d%%', (int) FundamentalHealthEvaluator::MIN_EQUITY_RATIO),
+                    $metrics['equity_ratio'] ?? null,
+                    FundamentalHealthEvaluator::MIN_EQUITY_RATIO,
+                    'lt',
+                    fn (float $v) => number_format($v, 1).'%',
+                ),
+                $this->row(
+                    '成長率',
+                    '≤0%',
+                    $growthRate,
+                    FundamentalHealthEvaluator::MIN_GROWTH_RATE,
+                    'lte',
+                    fn (float $v) => sprintf('%+.1f%%', $v),
+                ),
+                $this->row(
+                    '営業利益率',
+                    sprintf('<%d%%', (int) FundamentalHealthEvaluator::MIN_OPERATING_MARGIN),
+                    $metrics['operating_margin'] ?? null,
+                    FundamentalHealthEvaluator::MIN_OPERATING_MARGIN,
+                    'lt',
+                    fn (float $v) => number_format($v, 1).'%',
+                ),
+            ];
+        }
+
         return [
             $this->row(
                 'ROE',
@@ -226,10 +387,18 @@ final class SignalCriteriaEvaluator
             $this->row(
                 '成長率',
                 '>0%',
-                $this->higherGrowthRate($metrics['revenue_growth'] ?? null, $metrics['operating_income_growth'] ?? null),
+                $growthRate,
                 FundamentalHealthEvaluator::MIN_GROWTH_RATE,
                 'gt',
                 fn (float $v) => sprintf('%+.1f%%', $v),
+            ),
+            $this->row(
+                '営業利益率',
+                sprintf('≥%d%%', (int) FundamentalHealthEvaluator::MIN_OPERATING_MARGIN),
+                $metrics['operating_margin'] ?? null,
+                FundamentalHealthEvaluator::MIN_OPERATING_MARGIN,
+                'gte',
+                fn (float $v) => number_format($v, 1).'%',
             ),
         ];
     }
@@ -357,9 +526,10 @@ final class SignalCriteriaEvaluator
     /**
      * 成長率は売上高・営業利益成長率の高い方を採用する（UC-004/UC-010業務
      * ルール「成長率（売上高・営業利益の高い方）」）。両方nullのときのみ
-     * unavailable。
+     * unavailable。ShowLossReviewListAction（UC-011）の fundamental_summary
+     * からも同一ロジックで使うため public static とする。
      */
-    private function higherGrowthRate(?float $revenueGrowth, ?float $operatingIncomeGrowth): ?float
+    public static function higherGrowthRate(?float $revenueGrowth, ?float $operatingIncomeGrowth): ?float
     {
         if ($revenueGrowth === null && $operatingIncomeGrowth === null) {
             return null;

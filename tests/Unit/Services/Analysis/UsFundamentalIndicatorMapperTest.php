@@ -35,6 +35,22 @@ use App\Services\Analysis\UsFundamentalIndicatorMapper;
 | (Unit/ tests are not bound to Tests\TestCase in tests/Pest.php, matching
 | FundamentalIndicatorMapperTest).
 |
+| -------------------------------------------------------------------------
+| CR (2026-09-06, CHG-0012 / ADR-0011): 営業利益率（operating_margin）を
+| map() の返却配列に追加
+| -------------------------------------------------------------------------
+| US（Finnhub）は `stock/metric` の値をそのまま採用する（ADR-0011 D4）:
+|   operating_margin = $metrics['operatingMarginTTM']
+|                      ?? $metrics['operatingMarginAnnual'] ?? null
+|   - 既にパーセントスケールのため ×100 しない（roe / revenue_growth と同扱い）
+|   - TTM を優先し、null のとき Annual にフォールバック（ADR-0011 D4。
+|     ACHR は TTM=null / Annual有、AMD は TTM/Annual が乖離するため鮮度優先）
+|   - |operating_margin| > 999 → null（ADR-0011 D5。ACHR の
+|     operatingMarginAnnual = -243100 のような異常値を DB に入れない）
+|
+| 現行 map() は `operating_margin` キーを返さないため、`toHaveKey` /
+| UFIM_ALL_KEYS を使った全キー検証はアサーション不一致で Red（fatal ではない）。
+|
 | Assumptions made while writing these tests (not yet confirmed by an
 | implementation — flag during Gate 4 review if a different contract is
 | preferred):
@@ -73,6 +89,8 @@ function ufimAaplMetrics(): array
         'dividendYieldIndicatedAnnual' => 0.50534,
         'payoutRatioTTM' => 12.13,
         'pegTTM' => 2.93443,
+        'operatingMarginTTM' => 33.17,
+        'operatingMarginAnnual' => 31.97,
     ];
 }
 
@@ -96,7 +114,7 @@ function ufimAaplReportedFinancials(): array
 
 const UFIM_ALL_KEYS = [
     'per', 'pbr', 'roe', 'revenue_growth', 'operating_income_growth',
-    'equity_ratio', 'dividend_yield', 'dividend_payout_ratio',
+    'equity_ratio', 'operating_margin', 'dividend_yield', 'dividend_payout_ratio',
     'eps_growth', 'peg_ratio',
 ];
 
@@ -116,6 +134,8 @@ test('Finnhubのmetricsフィールドはそのまま採用され、equity_ratio
     expect($result['dividend_yield'])->toEqualWithDelta(0.50534, 0.00001);
     expect($result['dividend_payout_ratio'])->toEqualWithDelta(12.13, 0.0001);
     expect($result['peg_ratio'])->toEqualWithDelta(2.93443, 0.00001);
+    // operating_margin = operatingMarginTTM をそのまま採用（×100 しない、CHG-0012 / ADR-0011）
+    expect($result['operating_margin'])->toEqualWithDelta(33.17, 0.0001);
 
     // equity_ratio = total_equity / total_assets * 100（実測、近似不採用）
     expect($result['equity_ratio'])->toEqualWithDelta(73733000000 / 359241000000 * 100, 0.0001);
@@ -148,10 +168,61 @@ test('metricsが空配列の場合、metrics由来の全フィールド（per/pb
     expect($result['dividend_yield'])->toBeNull();
     expect($result['dividend_payout_ratio'])->toBeNull();
     expect($result['peg_ratio'])->toBeNull();
+    expect($result['operating_margin'])->toBeNull();
 
     // reportedFinancials由来の項目はmetricsの欠損による影響を受けない
     expect($result['equity_ratio'])->toEqualWithDelta(73733000000 / 359241000000 * 100, 0.0001);
     expect($result['operating_income_growth'])->toEqualWithDelta(25.0, 0.0001);
+});
+
+// -----------------------------------------------------------------------
+// CR (2026-09-06, CHG-0012 / ADR-0011): 営業利益率（operating_margin）
+// -----------------------------------------------------------------------
+
+test('operating_margin は operatingMarginTTM を優先して採用する（×100 しない）', function () {
+    $metrics = ufimAaplMetrics();
+    $metrics['operatingMarginTTM'] = 33.17;
+    $metrics['operatingMarginAnnual'] = 31.97;
+
+    $result = (new UsFundamentalIndicatorMapper)->map($metrics, ufimAaplReportedFinancials());
+
+    expect($result['operating_margin'])->toEqualWithDelta(33.17, 0.0001);
+});
+
+test('operatingMarginTTM が欠損している場合、operatingMarginAnnual にフォールバックする（ACHR相当）', function () {
+    $metrics = ufimAaplMetrics();
+    unset($metrics['operatingMarginTTM']);
+    $metrics['operatingMarginAnnual'] = 31.97;
+
+    $result = (new UsFundamentalIndicatorMapper)->map($metrics, ufimAaplReportedFinancials());
+
+    expect($result['operating_margin'])->toEqualWithDelta(31.97, 0.0001);
+});
+
+test('operatingMarginTTM / operatingMarginAnnual の両方が欠損している場合、operating_margin は null になる', function () {
+    $metrics = ufimAaplMetrics();
+    unset($metrics['operatingMarginTTM'], $metrics['operatingMarginAnnual']);
+
+    $result = (new UsFundamentalIndicatorMapper)->map($metrics, ufimAaplReportedFinancials());
+
+    expect($result['operating_margin'])->toBeNull();
+});
+
+test('operatingMarginAnnual が -243100（ACHRのプレレベニュー異常値、|値| > 999）の場合、operating_margin は null になる（ADR-0011 D5）', function () {
+    $metrics = ufimAaplMetrics();
+    unset($metrics['operatingMarginTTM']);
+    $metrics['operatingMarginAnnual'] = -243100.0;
+
+    $result = (new UsFundamentalIndicatorMapper)->map($metrics, ufimAaplReportedFinancials());
+
+    expect($result['operating_margin'])->toBeNull();
+});
+
+test('metricsが空配列の場合、operating_margin も null になる（UFIM_ALL_KEYS の一括検証に含まれる）', function () {
+    $result = (new UsFundamentalIndicatorMapper)->map([], ufimAaplReportedFinancials());
+
+    expect($result)->toHaveKey('operating_margin');
+    expect($result['operating_margin'])->toBeNull();
 });
 
 test('metricsに個別のキーが存在しない場合、そのフィールドのみnullになり他のフィールドは影響を受けない', function () {

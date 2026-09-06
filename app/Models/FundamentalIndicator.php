@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'revenue_growth',
     'operating_income_growth',
     'equity_ratio',
+    'operating_margin',
     'dividend_yield',
     'dividend_payout_ratio',
     'eps_growth',
@@ -42,6 +43,7 @@ class FundamentalIndicator extends Model
             'revenue_growth' => 'decimal:4',
             'operating_income_growth' => 'decimal:4',
             'equity_ratio' => 'decimal:4',
+            'operating_margin' => 'decimal:4',
             'dividend_yield' => 'decimal:4',
             'dividend_payout_ratio' => 'decimal:4',
             'eps_growth' => 'decimal:4',
@@ -56,13 +58,15 @@ class FundamentalIndicator extends Model
     }
 
     /**
-     * equity_ratio/roe/revenue_growth/operating_income_growth as plain
-     * nullable floats, in the parameter order FundamentalHealthEvaluator::
-     * evaluate() and TakeProfitThresholdEvaluator::evaluate() expect.
-     * Centralizes the decimal-cast-string-to-float/null-safe extraction that
-     * every caller of those two evaluators otherwise has to repeat.
+     * equity_ratio/roe/revenue_growth/operating_income_growth/operating_margin
+     * as plain nullable floats, in the parameter order
+     * FundamentalHealthEvaluator::evaluate() and
+     * TakeProfitThresholdEvaluator::evaluate() expect. Centralizes the
+     * decimal-cast-string-to-float/null-safe extraction that every caller of
+     * those two evaluators otherwise has to repeat. `operating_margin` is the
+     * 5th element (CHG-0012 / ADR-0011).
      *
-     * @return array{0: ?float, 1: ?float, 2: ?float, 3: ?float}
+     * @return array{0: ?float, 1: ?float, 2: ?float, 3: ?float, 4: ?float}
      */
     public function healthEvaluatorArgs(): array
     {
@@ -71,6 +75,7 @@ class FundamentalIndicator extends Model
             $this->roe !== null ? (float) $this->roe : null,
             $this->revenue_growth !== null ? (float) $this->revenue_growth : null,
             $this->operating_income_growth !== null ? (float) $this->operating_income_growth : null,
+            $this->operating_margin !== null ? (float) $this->operating_margin : null,
         ];
     }
 }

@@ -147,6 +147,8 @@ function ucFrom008CandidateTestFundamental(Holding $holding, array $attributes =
         // の ucFrom009TestFundamentalIndicator() が既に revenue_growth: 5.0
         // をデフォルトに持つのと同じ考え方）。
         'revenue_growth' => 8.0,
+        // CHG-0012 / ADR-0011: 営業利益率10%以上（健全）をデフォルトに。
+        'operating_margin' => 15.0,
         'fetched_at' => now(),
     ], $attributes));
 }
@@ -456,6 +458,102 @@ describe('UC-008: 新規投資候補レコメンド（軽量版）候補一覧',
 
             $response->assertSuccessful();
             expect(ucFrom008CandidateTestFindRow($response, '5679'))->toBeNull();
+        });
+
+        // -----------------------------------------------------------
+        // CR (2026-09-06, CHG-0012 / ADR-0011): 営業利益率フィルタ（4条件目）
+        // -----------------------------------------------------------
+        // ADR-0011: NewCandidateFinder::passesHealthFilter() が
+        // FundamentalHealthEvaluator::evaluate() に operating_margin を渡す
+        // ようになり、営業利益率10%未満は 'failed'（除外）、null は
+        // 'unavailable'（同じく除外）となる。
+        //
+        // ★重要（ADR-0011 実装上の注意点1 / plan「重要」節）:
+        //   NewCandidateFinder の SQL 事前絞り込み
+        //   （equity_ratio >= 40 AND roe >= 10）に `operating_margin >= 10`
+        //   を足してはいけない。NULL の行が SQL レベルで落ち、evaluator の
+        //   「null は unavailable」判定に到達しなくなるため。営業利益率の
+        //   合否判定は evaluator に委ねる。下の「営業利益率がNULLの候補」
+        //   テストがこの設計を検証する。
+        //
+        // Red の出方（2026-09-06）:
+        //   `operating_margin` は現時点で FundamentalIndicator の $fillable /
+        //   マイグレーション未整備。フィクスチャで渡した値も、渡さない場合も、
+        //   現行の NewCandidateFinder は営業利益率を見ないため候補に出てしまい、
+        //   期待値 null（除外）とアサーション不一致になる（fatal ではない）。
+        test('自己資本比率・ROE・成長率は基準を満たすが営業利益率が7.0%（基準割れ）の候補は一覧から除外される', function () {
+            WatchedTheme::create(['name' => 'AI半導体']);
+
+            [, $snapshot] = ucFrom008CandidateTestImportBatch();
+            $heldStock = ucFrom008CandidateTestHolding(['symbol_code' => '9999', 'symbol_name' => '既存保有株']);
+            ucFrom008CandidateTestHoldingSnapshot($snapshot, $heldStock, ['quantity' => 100, 'current_price' => 1000.00]);
+
+            $sector = ucFrom008CandidateTestSector('AI半導体');
+            $lowMargin = ucFrom008CandidateTestHolding([
+                'symbol_code' => '3088',
+                'symbol_name' => '営業利益率基準未達株',
+                'sector_classification_id' => $sector->id,
+            ]);
+            ucFrom008CandidateTestFundamental($lowMargin, [
+                'equity_ratio' => 55.0, 'roe' => 14.0, 'revenue_growth' => 8.0, 'operating_margin' => 7.0,
+            ]);
+
+            $response = ucFrom008CandidateTestFetch($this);
+
+            $response->assertSuccessful();
+            expect(ucFrom008CandidateTestFindRow($response, '3088'))->toBeNull();
+        });
+
+        test('営業利益率が15.0%（健全）の候補は一覧に掲載される', function () {
+            WatchedTheme::create(['name' => 'AI半導体']);
+
+            [, $snapshot] = ucFrom008CandidateTestImportBatch();
+            $heldStock = ucFrom008CandidateTestHolding(['symbol_code' => '9999', 'symbol_name' => '既存保有株']);
+            ucFrom008CandidateTestHoldingSnapshot($snapshot, $heldStock, ['quantity' => 100, 'current_price' => 1000.00]);
+
+            $sector = ucFrom008CandidateTestSector('AI半導体');
+            $healthy = ucFrom008CandidateTestHolding([
+                'symbol_code' => '6920',
+                'symbol_name' => 'レーザーテック',
+                'sector_classification_id' => $sector->id,
+            ]);
+            ucFrom008CandidateTestFundamental($healthy, [
+                'equity_ratio' => 55.0, 'roe' => 14.0, 'revenue_growth' => 8.0, 'operating_margin' => 15.0,
+            ]);
+
+            $response = ucFrom008CandidateTestFetch($this);
+
+            $response->assertSuccessful();
+            expect(ucFrom008CandidateTestFindRow($response, '6920'))->not->toBeNull();
+        });
+
+        test('営業利益率がNULL（未取得）の候補は、SQL事前絞り込みでは落とさず evaluator に渡り「unavailable」扱いで一覧から除外される', function () {
+            // ADR-0011 実装上の注意点1: SQL 事前絞り込みに operating_margin
+            // 条件を足さないことの検証。NULL の候補は SQL では残り、
+            // FundamentalHealthEvaluator が 'unavailable' を返すことで
+            // passesHealthFilter() が false → 除外される（'passed' 以外は
+            // すべて除外、既存の CHG-0005 と同じ挙動）。
+            WatchedTheme::create(['name' => 'AI半導体']);
+
+            [, $snapshot] = ucFrom008CandidateTestImportBatch();
+            $heldStock = ucFrom008CandidateTestHolding(['symbol_code' => '9999', 'symbol_name' => '既存保有株']);
+            ucFrom008CandidateTestHoldingSnapshot($snapshot, $heldStock, ['quantity' => 100, 'current_price' => 1000.00]);
+
+            $sector = ucFrom008CandidateTestSector('AI半導体');
+            $noMargin = ucFrom008CandidateTestHolding([
+                'symbol_code' => '6146',
+                'symbol_name' => '営業利益率未取得株',
+                'sector_classification_id' => $sector->id,
+            ]);
+            // operating_margin を明示 null（ヘルパーの健全デフォルトを打ち消す）。
+            ucFrom008CandidateTestFundamental($noMargin, [
+                'equity_ratio' => 55.0, 'roe' => 14.0, 'revenue_growth' => 8.0, 'operating_margin' => null,
+            ]);
+
+            $response = ucFrom008CandidateTestFetch($this);
+
+            $response->assertSuccessful();
+            expect(ucFrom008CandidateTestFindRow($response, '6146'))->toBeNull();
         });
 
         test('セクターが登録済みテーマ名と一致しない銘柄は候補一覧から除外される', function () {
