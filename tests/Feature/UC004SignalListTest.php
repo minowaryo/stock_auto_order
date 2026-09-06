@@ -801,6 +801,46 @@ describe('UC-004: 利確シグナル一覧', function () {
         });
     });
 
+    describe('評価額（market_value、CHG-0011）', function () {
+        test('各行に market_value（保有数量 × 現在値）が含まれる', function () {
+            [, $snapshot] = ucFrom004TestImportBatch();
+            $holding = ucFrom004TestHolding(['symbol_code' => '7203', 'market' => 'jp']);
+            $holdingSnapshot = ucFrom004TestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 300,
+                'average_cost' => 1000.00,
+                'current_price' => 1300.00,
+                'unrealized_gain_rate' => 30.0,
+            ]);
+            ucFrom004TestSignal($holdingSnapshot, ['signal_type' => 'rsi_reversal']);
+
+            $row = ucFrom004TestFindRow(ucFrom004TestFetch($this), '7203');
+
+            expect($row)->not->toBeNull();
+            // 300株 × 1,300円 = 390,000円
+            expect((float) $row['market_value'])->toEqualWithDelta(390000.0, 0.01);
+        });
+
+        test('米国株は取込時に円換算済みの current_price を用いるため market_value も円建てになる', function () {
+            [, $snapshot] = ucFrom004TestImportBatch();
+            $holding = ucFrom004TestHolding(['symbol_code' => 'MU', 'market' => 'us', 'symbol_name' => 'Micron']);
+            // current_price は UsStockCsvParser が USドル × 参考為替レートで円換算した後の値
+            $holdingSnapshot = ucFrom004TestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 50,
+                'average_cost' => 8000.00,
+                'current_price' => 16000.00,
+                'fx_rate_used' => 160.0,
+                'unrealized_gain_rate' => 100.0,
+            ]);
+            ucFrom004TestSignal($holdingSnapshot, ['signal_type' => 'rsi_reversal']);
+
+            $row = ucFrom004TestFindRow(ucFrom004TestFetch($this), 'MU');
+
+            expect($row)->not->toBeNull();
+            // 50株 × 16,000円 = 800,000円
+            expect((float) $row['market_value'])->toEqualWithDelta(800000.0, 0.01);
+        });
+    });
+
     describe('権限', function () {
         test('未認証ユーザーは利確シグナル一覧を取得できない', function () {
             [, $snapshot] = ucFrom004TestImportBatch();

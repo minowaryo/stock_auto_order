@@ -478,6 +478,25 @@ describe('UC-004: 利確検討画面（Livewire）', function () {
         });
     });
 
+    describe('評価額列（market_value、CHG-0011）', function () {
+        test('利確検討テーブルの各行に、銘柄名の右隣として評価額（保有数量 × 現在値）が桁区切りで表示される', function () {
+            $user = User::factory()->create();
+            [, $snapshot] = signalListTestImportBatch();
+
+            $holding = signalListTestHolding(['symbol_code' => '7203', 'market' => 'jp', 'symbol_name' => 'トヨタ自動車']);
+            $holdingSnapshot = signalListTestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 300, 'average_cost' => 1000.00, 'current_price' => 1300.00, 'unrealized_gain_rate' => 30.0,
+            ]);
+            signalListTestSignal($holdingSnapshot, ['signal_type' => 'rsi_reversal']);
+
+            $component = Livewire::actingAs($user)->test(SignalList::class);
+
+            $component->assertSee('評価額');
+            // 300株 × 1,300円 = 390,000円
+            $component->assertSee('390,000');
+        });
+    });
+
     describe('空状態', function () {
         test('対象銘柄が1件も存在しない場合、エラーにならず空状態メッセージが表示される', function () {
             $user = User::factory()->create();
@@ -579,6 +598,26 @@ describe('UC-010: 買い増し候補セクション（売買シグナル画面�
             $component = Livewire::actingAs($user)->test(SignalList::class);
 
             $component->assertSee('買い増しを検討できる押し目銘柄はありません');
+        });
+    });
+
+    describe('評価額列（market_value、CHG-0011）', function () {
+        test('買い増し候補テーブルの各行に、銘柄名の右隣として評価額（保有数量 × 現在値）が桁区切りで表示される', function () {
+            $user = User::factory()->create();
+            [, $snapshot] = signalListTestImportBatch();
+
+            $holding = signalListTestHolding(['symbol_code' => '5201', 'market' => 'jp', 'symbol_name' => 'サンプル素材']);
+            $holdingSnapshot = signalListTestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 300, 'average_cost' => 1200.00, 'current_price' => 1000.00, 'unrealized_gain_rate' => -8.5,
+            ]);
+            signalListTestBuySignal($holdingSnapshot);
+            signalListTestFundamentalIndicator($holding, ['equity_ratio' => 58.0, 'roe' => 15.2]);
+
+            $component = Livewire::actingAs($user)->test(SignalList::class);
+
+            $component->assertSee('評価額');
+            // 300株 × 1,000円 = 300,000円
+            $component->assertSee('300,000');
         });
     });
 

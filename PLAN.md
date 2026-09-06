@@ -1,6 +1,6 @@
 # PLAN.md
 
-> 2026-08-27（フロントエンド実装Phase5完了時点。UC-010 Gate4完了・コミット`ba239fe`分も含む）以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、Phase2 UC-008（Cycle1・Cycle2）完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査完了、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了、利確・リバランス閾値の動的分岐ロジック検討〔検討事項の記録のみ、実装はCHG-0006として2026-08-28〜29に別途完了〕、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、フロントエンド実装Phase4（UC-003銘柄詳細画面）完了、UC-010 Gate2/Gate3正式承認（買いシグナル7種の前提条件追加）完了、UC-010 Gate4完了・コミット（`ba239fe`）、およびフロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
+> 2026-08-27（フロントエンド実装Phase5完了時点。UC-010 Gate4完了・コミット`ba239fe`分も含む）以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、Phase2 UC-008（Cycle1・Cycle2）完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査完了、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了、利確・リバランス閾値の動的分岐ロジック検討〔検討事項の記録のみ、実装はCHG-0006として2026-08-28〜29に別途完了〕、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、フロントエンド実装Phase4（UC-003銘柄詳細画面）完了、UC-010 Gate2/Gate3正式承認（買いシグナル7種の前提条件追加）完了、UC-010 Gate4完了・コミット（`ba239fe`）、フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了、およびフロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了〔2026-09-05、CHG-0011作業時に退避〕等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 > **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。
 
 ## 整理検討（含み損）候補一覧の新設（F-011・UC-011・ADR-0010・CHG-0010）（2026-09-05〜）
@@ -54,8 +54,43 @@ Gate1/2/3/4 承認完了（2026-09-05）。**Green 完了**。
 
 **コミット完了（2026-09-06、`b3d1793`、未push）**: ①**CHG-0010（F-011本体＋赤単一極性リワーク＋通貨単位横断バグ修正）**分のみを `git add -p` で選択ステージしてコミット（27ファイル）。作業ツリーに残る②**CHG-0011（評価額列 market_value）**・③**CHG-0009運用化（`market-data:refetch-us-fundamentals` コマンド）**は別セッションの未完了作業（②は `/review` 前）のため本セッションではコミットしない。混在ファイル（`ShowSignalListAction`/`ShowBuySignalListAction`/`signal-list.blade.php`/`SignalListTest.php`/`use-cases.md`/`traceability-matrix.md`/`PLAN.md`）は①分ハンクのみをコミット済み、②分ハンクは未ステージのまま残置。
 
-UC-011 は閲覧系フローで `.claude/rules/31-e2e-testing.md` のクリティカルフロー対象外のため Playwright E2E は追加しない（UC-004/UC-009/CHG-0007 と同じ判断）。**PLAN.md の300行超過対応（旧エントリの `plan-archive.md` 退避）は CHG-0011 側の未コミット編集と重複するため、CHG-0011 コミット時にまとめて行う。**
+UC-011 は閲覧系フローで `.claude/rules/31-e2e-testing.md` のクリティカルフロー対象外のため Playwright E2E は追加しない（UC-004/UC-009/CHG-0007 と同じ判断）。
 
+**b3d1793 後の追加確認（2026-09-06、CHG-0011 引き取りセッション）**:
+- `b3d1793` は既に `origin/feat/f011-loss-review-list` に push 済み（`c98165b` まで）。`traceability-matrix.md` の F-011 行を「完了」に更新（コミット済みだが `b3d1793` 時点では2行しか反映されず「リワーク中」表記が残っていた）→ CHG-0011 コミットに同梱。
+- **今後の対応（低優先・先送り）**: `ShowLossReviewListAction::also_on_buy_list` は `$reboundPresent && fundamental_status !== 'failed'` で判定しており、`ShowBuySignalListAction::isEligible()` の「利確シグナル（`signals`）同時成立銘柄を除外」条件（`signals->isNotEmpty()`）を再現していない。含み損-20%超の銘柄が利確シグナル（通常 +20%超が条件）を持つのは異常/古いデータのケースのみで到達性は低い。修正するには `ShowLossReviewListAction` の eager load に `signals` 追加（N+1回避）が必要。次に F-011 に手を入れる際に解消する。
+- **今後の対応（軽微・cosmetic）**: 整理検討テーブルのヘッダー用/本文用 `<table>` の `scrollWidth` が 1441 vs 1452（12px差）。`getBoundingClientRect().width` は両方 1441 で実描画・列整列は一致しており視認上の崩れはない（`known-pitfalls.md`「table-fixed + 折返し不可ラベル」と同種の軽微な内容オーバーフロー）。実害が出たら本文側の長いラベル/バッジの `break-words` を見直す。
+
+## 売買シグナル画面「評価額」列追加（CHG-0011）＋米国株ファンダのDB補完（2026-09-05〜）
+
+### Decision
+
+- ユーザー要望2点:
+  1. 売買シグナル画面（利確検討 UC-004 / 買い増し候補 UC-010）の左の方に、各行の「実際の評価額」（保有数量 × 現在値、CSV由来の円換算値）を表示したい
+  2. ADR-0009（CHG-0009、Finnhub）で米国株ファンダ取得コードは実装済みだが、既存の最新スナップショット（batch 135）の米国株44銘柄は `fundamental_indicators` が0件で画面上「取得不可」のまま。Finnhubから実取得してDB補完し画面に実数を出したい
+- ユーザー確認済みの決定:
+  - 評価額列の位置 = 銘柄の右隣（2列目）。銘柄セルの `sticky left-0` は据え置き、評価額は通常列
+  - 米国株補完 = `FetchExternalMarketDataAction` 本体は変更せず、米国株ファンダのみ再取得する軽量 artisan コマンドを新設（US分岐ロジックの一部重複は許容）
+- CR番号: CHG-0011（評価額列。CHG-0010 は ADR-0010 で使用済み）。US補完コマンドは ADR-0009 の運用化のため新規CR/ADR不要
+- 評価額 = `quantity * current_price`（シグナル画面は stock のみ対象なので投信の ÷10000 補正は不要）。US株は取込時に円換算済みのため円建て
+
+### Files touched（予定）
+
+- ドキュメント（先行）: `docs/product/use-cases.md`（UC-004/UC-010 出力表 + 変更履歴 CHG-0011）, `docs/rcid/traceability-matrix.md`, `docs/ai-context/common-commands.md`
+- Part A（CHG-0011・表示のみ）: `app/Actions/Signal/ShowSignalListAction.php`, `app/Actions/Signal/ShowBuySignalListAction.php`, `resources/views/components/signal-table-colgroup.blade.php`, `resources/views/livewire/signal/signal-list.blade.php`, テスト（`tests/Feature/UC004SignalListTest.php` / `tests/Feature/UC010BuySignalListTest.php` / `tests/Feature/SignalListTest.php`）
+- Part B: `app/Console/Commands/RefetchUsFundamentalsCommand.php`（新規）, `tests/Feature/RefetchUsFundamentalsCommandTest.php`（新規）
+- スコープ外: `FetchExternalMarketDataAction` 本体, UC-003 銘柄詳細, `financial_statements` への米国株保存, JP株の再取得, DBマイグレーション
+
+### Status
+
+- ドキュメントCR反映（Gate2）: 完了（2026-09-05）
+- Part A（評価額列）: Red → Gate4承認 → Green 完了。`ShowSignalListAction`/`ShowBuySignalListAction` に `market_value` 追加、`signal-table-colgroup` に列追加、`signal-list.blade.php` に「評価額」列（銘柄の右隣・`number_format(...)円`・幅 w-[1406px]）追加。テスト5件追加、フルスイート465件 Green
+- Part B（`market-data:refetch-us-fundamentals`）: Red → Gate4承認 → Green 完了。`app/Console/Commands/RefetchUsFundamentalsCommand.php` 新規。テスト5件追加
+- 実データ実行: `docker compose exec -T laravel.test php artisan market-data:refetch-us-fundamentals` → 44件更新 / 0件失敗。売買シグナル画面の米国株が実数のファンダ表示に切り替わったことを `ShowSignalListAction` 実データ出力で確認（利確検討US13件が「—」から ROE%/自己資本比率%/成長% 表示へ。ARM/ASML/GOOG/TSM 等は `financials-reported` に us-gaap Assets/Equity が無く自己資本比率のみ「—」＝ADR-0009 のフォールバック通り）
+- `/review`（2026-09-06、別セッションが引き取り、medium レベル）: **CHG-0011 自体は指摘なし**（`market_value` の投信 ÷10000 補正欠落＝両リスト stock 絞り込み済みで誤検知、colgroup/ラベル列数一致、等いずれも verify で refute）。PLAUSIBLE 1件は CHG-0011 ではなくコミット済み F-011 の `ShowLossReviewListAction::also_on_buy_list` が「利確シグナル同時成立銘柄」の除外を再現しない点（到達性低・下記「今後の対応」に記録し先送り）
+- `npm run build` 済み（`app-Ck2oRFta.css`）。実データ実ブラウザ再確認（保有135）: 買い増し候補・利確検討テーブルの2列目に評価額（`13,740円` 等・右寄せ）が正しく表示、レイアウト崩れなし
+- コミット（2026-09-06、本セッション）: Part A + Part B + 付随ドキュメント（`use-cases.md` の `market_value` 行・承認記録、`traceability-matrix.md` の CHG-0011 追跡行＋F-004/F-010/F-011 行更新、`common-commands.md`）＋ PLAN.md 300行超過対応（Phase7 の2エントリを `plan-archive.md` へ退避）をまとめてコミット
+- プランファイル: `~/.claude/plans/stock_auto_order-signal-market-value-and-us-fundamentals-implementation-phase.md`
 
 ## 米国株ファンダメンタルズ指標データソースとしてFinnhub採用（CHG-0009）Gate2/3承認完了（2026-09-05〜）
 
@@ -242,91 +277,12 @@ Green確認・実データ実ブラウザ確認完了（コミット`d2756c6`、
 
 Green確認・実データE2E確認完了（コミット`dd30650`、未push）。フルスイート374件Green。これでUC-010はバックエンド・フロントエンドとも完結（`docs/rcid/traceability-matrix.md`のF-010ステータス更新要）
 
-## Phase7「新規投資候補」画面 `/review`指摘（MEDIUM 3件）修正完了（2026-08-28）
-
-### Decision
-
-- Phase7（`5e24137`）に対しユーザー依頼で`/review`を実施（review-score=0・通常レベル）。MEDIUM 3件・LOW 4件を報告し、ユーザーの指示でMEDIUM 3件のみ対応（LOWは先送り）
-- **MEDIUM-1（要件不一致）**: `CandidateCheck::saveWatchRecord()`が`watch_memo`の2000文字上限を検証しておらず、`use-cases.md`（メモ最大2000文字・「メモは2000文字以内で入力してください」）および`SaveWatchRecordRequest`（`max:2000`）とLivewire経路で契約が乖離。`memo`カラムが`text`のためDBエラーにもならず無検証で保存されていた
-- **MEDIUM-2（500エラー経路）**: `saveWatchRecord()`が`$holding`のnullガードを持たず、チェック成功後に証券コード入力欄を存在しない値へ書き換えてから保存すると`SaveWatchRecordAction::execute()`に`null`が渡り`TypeError`（500）。`checkCandidate()`側はガード済みだった
-- **MEDIUM-3（モック不一致・二重表示）**: おすすめ候補テーブルの「財務健全性サマリ」列が`fundamental_summary`（`NewCandidateFinder`で整数丸め、例`ROE15%`）と生値の括弧書き（例`（自己資本比率52.0%・ROE14.5%）`）を同一セルに二重表示していた。モック`screen-UC006-candidate-check.html`は単一文字列（`自己資本比率52%・ROE14.5%`）
-- Red→Green（TDDサイクル、Gate4相当は本レビュー指摘の合意で代替）: `CandidateCheckTest.php`に回帰テスト4件追加（2000文字超で拒否・ちょうど2000文字は保存可の境界値・存在しないsymbol_codeでの保存はエラー表示のみ・サマリ二重表示なし）。追加直後に3件Red（MEDIUM-2はTypeError）を確認してから実装
-- 修正内容: `saveWatchRecord()`に既存の`addError('watchRecord', ...)`スタイルと揃えた3段ガード（`watch_status`許可値・`watch_memo`文字数上限・`$holding`存在）を追加。許可値・上限は`WATCH_STATUS_OPTIONS`/`WATCH_MEMO_MAX`定数として`SaveWatchRecordRequest`と同値で定義。`render()`ではおすすめ候補の`fundamental_summary`を生`FundamentalIndicator`値から小数第1位で組み直し（表示専用の再フォーマット、新規計算ルールなし）、Bladeの二重表示ブロックを単一の`{{ $candidate['fundamental_summary'] }}`に置換
-- `.claude/rules/15-frontend.md`は「バリデーションは`rules()`に定義」を推奨するが、既存コードが`addError()`直書きだったこと・MEDIUM限定スコープ・既存承認済みテストへの回帰リスクを踏まえ、今回は既存スタイルを踏襲。`rules()`への一本化はLOW指摘として先送り
-
-### Files touched
-
-`app/Livewire/Candidate/CandidateCheck.php`（`saveWatchRecord()`ガード3件追加・定数2件・`render()`のサマリ再フォーマット）、`resources/views/livewire/candidate/candidate-check.blade.php`（財務健全性サマリ列の二重表示を解消・`rawFundamentals`受け取り削除）、`tests/Feature/CandidateCheckTest.php`（回帰テスト4件追加）、`PLAN.md`（本エントリ）
-
-### Status
-
-Green確認完了。`CandidateCheckTest.php` 12件Green（既存8＋新規4）。pint適用済み。フルスイート369件Green（13 deprecatedは既存・回帰なし）。LOW指摘4件（`rules()`一本化・`watch_status`のクライアント改変耐性は`Rule::in`未使用のまま・候補一覧の毎リクエスト再計算・Alpineハンドラ内`querySelector`）は未対応で先送り。未コミット。
-
-## フロントエンド実装Phase7（UC-006/UC-008統合「新規投資候補」画面）完了、全7Phase完了（2026-08-28）
-
-### Decision
-
-- Phase6に続き、フロントエンド実装計画の最終Phase7（UC-006「新規投資候補の重複チェック」+ UC-008「おすすめ候補」の統合画面、`GET /candidate-check`）を実施。use-cases.mdの業務ルール（UC-006「画面はUC-008と統合し単一メニュー項目の下部セクションとして提供」/ UC-008「UC-006と同一画面の上部セクション、専用メニュー項目は設けない」）通り1画面に統合。既存の`ShowNewCandidateListAction`・`ShowCandidateCheckAction`・`SaveWatchRecordAction`（いずれもPhase2で実装済み・無改修で再利用）を配線するのみ
-- `test-writer`が8件のLivewireコンポーネントテストを作成。Gate4で2点確認: (1) 他画面（SignalList/SectorDashboard）からの`/candidate-check?symbol_code=XXXX`リンク遷移時、`#[Url(as:'symbol_code')]`でクエリパラメータをsymbolCodeプロパティに束縛し、`mount()`時点で自動的に個別チェックを実行する設計、(2) 存在しないsymbol_codeでのチェック時は「銘柄コードを確認してください」をインライン表示し指標は一切表示しない（クラッシュ・リダイレクトなし）— いずれも「推奨」で承認
-- `tdd-implementer`がGreenフェーズを実装: `app/Livewire/Candidate/CandidateCheck.php`（おすすめ候補は`render()`で毎回呼び直す純粋読み取り、個別チェック・ウォッチ記録保存は`checkCandidate()`/`saveWatchRecord()`メソッド）。対象8件・フルスイート365件全てGreen（回帰なし）
-- 実装上の注意点（軽微、次点の課題として記録）: (a) おすすめ候補テーブルの自己資本比率・ROE生値表示のため`render()`内で`Holding`を追加クエリしており、`ShowNewCandidateListAction`の`fundamental_summary`（四捨五入済み文字列）とは別に生データを取得している。新規計算式ではなく既存カラムの表示専用の再取得のため許容、(b) 判定結果カードの重複度ラベル（「やや偏り」等）は、`ShowCandidateCheckAction`/`CandidateOverlapCalculator`がラベルを返さないため、Blade側で`SectorAllocationCalculator`（UC-005）と同一の40%/70%閾値をコメント付きで再定義して導出している。**この閾値がBlade側とService側の2箇所に分散する形になっており、将来どちらかだけ変更されると表示が乖離するリスクがある**。是正するなら`CandidateOverlapCalculator`にラベル算出を寄せる小さなリファクタが必要（Action改修を伴うため別途Red→Gate4→Greenサイクル）。実害は表示ラベルのみ（`overlap_rate`自体の数値は実データのまま）のため今回は許容し先送りとした
-- 実ブラウザ確認（Playwright MCP、1回目）: ログイン→`/candidate-check`へ正常遷移、コンソールエラーなし。開発DBの保有データ・ウォッチテーマが空のため、おすすめ候補は空状態表示を確認。「存在しないsymbol_code」のエラーパス（「銘柄コードを確認してください」）は画面上で確認できたが、有効データでの判定結果表示・ウォッチ記録保存は未確認のまま完了報告した
-- `/verify`スキルによる追加検証（2026-08-28）: `.claude/skills/verify/SKILL.md`を新規作成した上で、tinkerで最小限の実データ（既存保有1件・合致候補1件・注目テーマ1件）を一時投入し、happy pathを実ブラウザで網羅的に確認: (1) おすすめ候補テーブルの表示（NISA推奨バッジ・合致テーマ・財務健全性サマリ・購入額目安）、(2) 候補行クリック→Alpineフック（`$wire.symbolCode`設定→URL同期→入力欄反映）が正しく動作すること（Livewireコンポーネントテストでは検証不可能だった箇所の初の実機確認）、(3) 個別チェック実行→判定結果（重複度・分散影響コメント・テクニカル/ファンダメンタルズ指標・過去の業績推移）が正しく表示されること、(4) ウォッチ記録の保存→即座に履歴へ反映されること、(5) 両方空でのバリデーションエラー→保存されないこと。検証後は投入した実データを全て削除しDBを空の状態に復元した
-- 検証中、「重複をチェック」「保存」ボタンの`.click()`が反応しない事象が発生したため、当初は「アプリ側の潜在バグの疑い」として報告した。ユーザーの指摘を受けて追加切り分けを実施した結果、ボタンのDOM状態（非表示・被覆・disabled等）に異常はなく、**全く同じ操作を再試行すると成功する**ことを確認した。同一マークアップ・同一配線で結果が変わることから、Playwright側のクリック合成のタイミングに起因する既知の不安定さであり、**アプリ側の不具合ではない**と結論づけた。コード側の修正は行わず、`.claude/skills/verify/SKILL.md`に「クリックが反応しない場合はまずリトライする」手順を記録するに留めた
-- これで計画（`stock_auto_order-frontend-implementation-phase.md`）のPhase0〜7が全て完了。UC-001〜UC-009（UC-007はUC-002内ウィジェット、UC-008はUC-006と統合画面）を一通りブラウザで操作・確認できる状態になった。開発DBの保有データは検証後に空へ戻したため（下記「今後の対応」参照）、実際のCSV再取込による本番相当データでのEnd-to-End最終確認は改めて別途行う
-
-### Files touched
-
-`app/Livewire/Candidate/CandidateCheck.php`（新規）、`resources/views/livewire/candidate/candidate-check.blade.php`（新規）、`routes/web.php`（`/candidate-check`ルート追加）、`tests/Feature/CandidateCheckTest.php`（新規、8件）、`.claude/skills/verify/SKILL.md`（新規、実ブラウザ検証手順の記録）、`PLAN.md`（本エントリ追加）
-
-### Status
-
-Green確認完了。フルスイート365件Green。`/verify`スキルによる一時データ投入検証で、おすすめ候補表示・Alpine連携・個別チェック判定結果・ウォッチ記録保存（正常系・異常系）を全て実ブラウザで確認済み（検証後DBは空に復元）。フロントエンド実装計画の全7Phase完了。次は開発DBへの本番相当データ復元（CSV再取込）とEnd-to-End最終確認、または別タスク（数値未整形表示の是正・重複度ラベルの閾値統合リファクタ等）に進む。
-
-## UC-010 `/review`指摘3件の修正完了（CHG-0005含む）（2026-08-28）
-
-### Decision
-
-- UC-010 Green実装完了後にユーザーの依頼で`/review`を実施（8観点の並列エージェント）。確定バグ2件・consistency指摘1件をユーザーに詳細説明し、全て修正する方針で承認を得た
-- **バグ1**: `FundamentalHealthEvaluator::evaluate()`が成長率データ両方null判定をequity_ratio/roeの閾値判定より先に行っていたため、equity_ratio/roeが明らかに基準未満（本来`failed`）の銘柄でも成長率未取得なだけで`unavailable`が返り、一覧に表示されてしまうバグを修正。equity_ratio/roeいずれかが基準未満なら即座に`failed`を返す順序に変更
-- **バグ2**: `ShowBuySignalListAction::fundamentalSummary()`が符号を見ずに営業利益成長率を無条件優先表示していたため、売上高成長率のプラスで合格したのにマイナスの営業利益成長率が表示される矛盾を修正。実際にプラスだった方を優先表示するよう変更
-- **CHG-0005（consistency指摘）**: ADR-0007 D4は「UC-008/UC-009と同一値」と謳っていたが、成長率条件を追加したのはUC-010のみで、UC-008/UC-009（`NewCandidateFinder`・`ShowImportSummaryReportAction`）は自己資本比率・ROEの2条件のみだったため、同一銘柄がUC-008では候補に出るがUC-010では出ない（またはその逆）という乖離が起こり得た。ユーザーと相談し、UC-008/UC-009にも成長率条件を追加して統一する方針で合意。`use-cases.md`（UC-008業務ルール改訂・承認記録）、`data-model.md`（財務健全性フィルタ行・承認記録）、`traceability-matrix.md`（CHG-0005、F-010ステータス修正、CHG-0004承認者の記載漏れ修正）を先に整備
-- `test-writer`がRedフェーズで5ファイルを改訂・作成（`FundamentalHealthEvaluatorTest`2件・`UC010BuySignalListTest`1件・`UC008NewCandidateListTest`2件・`UC005SectorDashboardTest`0件〔フィクスチャ調整のみ〕・`UC009ImportSummaryReportTest`1件、計6件Red）。並行セッションによるテストDB競合（migrate中のdeadlock等）でフルスイート実行が不安定だったため、ファイル単位で個別実行して意図通りのRed原因であることを確認しGate4承認
-- `tdd-implementer`がGreenフェーズを実装: `FundamentalHealthEvaluator`（判定順序修正）、`ShowBuySignalListAction::fundamentalSummary()`（表示優先順位修正）、`NewCandidateFinder`・`ShowImportSummaryReportAction`（`FundamentalHealthEvaluator`をDI注入し`evaluate()==='passed'`のみ候補として残す。`ShowSectorDashboardAction`〔UC-005〕は`NewCandidateFinder`を直接利用しているため無改修で自動的に反映）
-- Green実装により、Gate4対象外だった`tests/Feature/SectorDashboardTest.php`（UC-005のLivewire画面テスト、別セッション所有・Phase6で新規作成されたばかり）で2件の回帰を検出（フィクスチャが成長率データを設定しておらず、CHG-0005の仕様通りの正しい副作用として除外されてしまっていた）。Gate4承認済みの`UC005SectorDashboardTest.php`（API版）に適用したのと全く同じ最小フィクスチャ修正（`revenue_growth: 8.0`追加）を適用し解消。新しい業務ルールのテストではなく既存フィクスチャの整合性維持のみのため、新規Gate4サイクルは経由せず対応
-- フルスイート357件Green確認後、コミット（`bfe29da`、未push）
-
-### Files touched
-
-`app/Services/Analysis/FundamentalHealthEvaluator.php`、`app/Actions/Signal/ShowBuySignalListAction.php`、`app/Services/Candidate/NewCandidateFinder.php`、`app/Actions/ImportSummaryReport/ShowImportSummaryReportAction.php`、`docs/product/use-cases.md`（UC-008業務ルール改訂・承認記録）、`docs/architecture/data-model.md`（財務健全性フィルタ行・承認記録）、`docs/rcid/traceability-matrix.md`（CHG-0005、F-010/CHG-0004のステータス修正）、`tests/Unit/Services/Analysis/FundamentalHealthEvaluatorTest.php`、`tests/Feature/UC010BuySignalListTest.php`、`tests/Feature/UC008NewCandidateListTest.php`、`tests/Feature/UC005SectorDashboardTest.php`、`tests/Feature/UC009ImportSummaryReportTest.php`、`tests/Feature/SectorDashboardTest.php`（フィクスチャ修正のみ）、`PLAN.md`（本エントリ追加）
-
-### Status
-
-Gate4完了（Red→Gate4承認→Green）。フルスイート357件Green。コミット済み（`bfe29da`、未push）。`/review`指摘のうち残る低優先度項目（効率性の重複計算、NISA推奨ロジック・`Signal`/`BuySignal`永続化の重複等）は対応保留、必要になった時点で再検討
-
 ## 今後の対応（未着手）（2026-08-27追記、Phase5の実ブラウザ確認時に発見）
 
 - **数値の未整形表示（Phase3〜5共通）**: `HoldingList`（保有一覧、Phase3）・`SignalList`（利確検討、Phase5）の含み益率・取得単価・現在値・分割指値の価格が、`{{ $value }}`で生の浮動小数点値をそのまま出力しており（例: 含み益率が`89.5793`と%記号なし表示、価格が`3632.676`のような小数点3桁表示）、実際にPlaywrightで画面を目視確認した際に発見した。レイアウト崩れではなく数値の可読性の問題。既存テストは生の数値部分文字列を検証する設計のため、これらのテストを含め画面3つ（Phase3/4/5）をまとめて後日別タスクで整形する（%サフィックス・価格の四捨五入・桁区切り等）方針とし、今回のPhase5サイクルでは対応を見送る
 - **UC-004のE2Eテスト**: 一覧→詳細遷移のみの標準的な閲覧フローであり、`.claude/rules/31-e2e-testing.md`が対象とする「クリティカルフロー」に該当しないと判断し追加しない（Phase3/UC-002・Phase4/UC-003の同種の遷移もE2E化していないこととの一貫性を優先）
 - **開発DBの保有データが空になっている**: Phase6の実ブラウザ確認時に発覚。`test@example.com`ユーザー自体も消えており(`db:seed`で復元済み)、CSV再取込等の保有データは未復元。並行セッションが`migrate:fresh`等を実行した際の巻き添えと推測されるが未確定。セクター配分ダッシュボードは空状態表示（「リバランス候補はありません」）のみ実ブラウザ確認済み。Phase7（`/candidate-check`）は`/verify`スキルで一時的にtinker投入した実データによりhappy path含め確認済み（検証後は削除しDBは空のまま）だが、いずれの画面も**本番相当のCSV再取込データでの確認はまだ行っていない**。実データでの最終End-to-End確認は保有データが復元された時点で改めて行う
 - **重複度ラベルの閾値がBlade側とService側に分散（Phase7で発生）**: `resources/views/livewire/candidate/candidate-check.blade.php`が判定結果カードの「健全」/「やや偏り」/「偏り警告」ラベルを、`SectorAllocationCalculator`（UC-005）と同一の40%/70%閾値をBladeの`@php`ブロック内に再定義して導出している（`ShowCandidateCheckAction`/`CandidateOverlapCalculator`はラベルを返さず`overlap_rate`の数値のみ返すため）。閾値が2箇所に分散しており、将来どちらか一方だけ変更されるとラベル表示が実際の判定基準と乖離するリスクがある。是正するには`CandidateOverlapCalculator`にラベル算出を寄せるリファクタが必要（`ShowCandidateCheckAction`の出力契約変更を伴うため別途Red→Gate4→Greenサイクルが必要）。実害は表示ラベルのみ（`overlap_rate`の数値自体は正しい）のため優先度は低いが、次にこの画面に手を入れる際に解消する
-
-## フロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了（2026-08-28）
-
-### Decision
-
-- Phase5に続き、Phase6（UC-005セクター配分ダッシュボード画面、`GET /sector-dashboard`）を実施。`ShowSectorDashboardAction`は既存（Phase2で実装済み）のため、Livewireコンポーネント・ビューの新規作成のみが対象
-- `test-writer`が7件のLivewireコンポーネントテストを作成。Gate4で2点確認: (1) 「健全」セクターは業務ルール（情報過多の回避）に基づきバッジ・文言を一切表示しない完全抑制とする、(2) NISA推奨候補の表示文言は「NISA」という部分文字列を含めば良い叩き台とする — いずれも「推奨」で承認
-- `tdd-implementer`がGreenフェーズを実装: `app/Livewire/Sector/SectorDashboard.php`（`ShowSectorDashboardAction`を`render()`で毎回呼び出す純粋読み取り設計、HoldingList/SignalListと同一規約）。セクター配分バーはCSSのみ（`width: X%`インラインスタイル）、偏り警告→dangerバッジ／やや偏り→warningバッジ／健全→非表示、`is_overweight`時のみ売却提案（金額・株数）表示、リバランス候補は`/candidate-check?symbol_code=...`へのリンク・NISA推奨バッジ・空状態時「リバランス候補はありません」。対象7件・フルスイート335件Green（22件失敗は全て他UC・並行セッション作業由来の既存分、本変更による回帰なし）
-- 実ブラウザ確認（Playwright MCP）: ログイン→`/sector-dashboard`へ正常遷移、コンソールエラーなし。開発DBの保有データが空の状態だったため（下記「今後の対応」参照）、セクター配分バー・バッジ・売却提案・NISA推奨バッジ付きの表示は目視確認できず、リバランス候補の空状態表示（「リバランス候補はありません」）のみ実ブラウザで確認した。データが入っている場合の各表示パターンは7件のFeature Testで網羅済み
-
-### Files touched
-
-`app/Livewire/Sector/SectorDashboard.php`（新規）、`resources/views/livewire/sector/sector-dashboard.blade.php`（新規）、`routes/web.php`（`/sector-dashboard`ルート追加）、`tests/Feature/SectorDashboardTest.php`（新規、7件）、`PLAN.md`（本エントリ追加、300行超過に伴い旧エントリ7件を`docs/history/plan-archive.md`へ退避）
-
-### Status
-
-Green確認完了。実ブラウザ動作確認は空状態のみ（開発DBの保有データ欠落のため、上記「今後の対応」参照）。フルスイート335件Green（他UC由来の既存失敗22件は無関係）。次はPhase7（UC-006/UC-008統合「新規投資候補」画面）に進む。
 
 ## 今後の対応（未着手・スコープ確認済み）（2026-08-23追記、UC-007完了時点で更新）
 

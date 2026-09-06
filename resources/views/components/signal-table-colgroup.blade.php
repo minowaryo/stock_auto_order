@@ -8,6 +8,8 @@
 @props(['technicalCount', 'fundamentalCount'])
 <colgroup>
     <col class="w-[90px]">
+    {{-- 評価額（CHG-0011）: 銘柄の右隣の2列目 --}}
+    <col class="w-[110px]">
     <col class="w-14">
     <col class="w-[130px]">
     <col class="w-[150px]">

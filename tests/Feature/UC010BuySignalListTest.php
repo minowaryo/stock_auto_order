@@ -703,6 +703,27 @@ describe('UC-010: 既存保有株の買い増しタイミングレコメンド�
         });
     });
 
+    describe('評価額（market_value、CHG-0011）', function () {
+        test('各行に market_value（保有数量 × 現在値）が含まれる', function () {
+            [, $snapshot] = ucFrom010TestImportBatch();
+            $holding = ucFrom010TestHolding(['symbol_code' => '7203', 'market' => 'jp']);
+            $holdingSnapshot = ucFrom010TestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 300,
+                'average_cost' => 800.00,
+                'current_price' => 1000.00,
+                'unrealized_gain_rate' => 25.0,
+            ]);
+            ucFrom010TestBuySignal($holdingSnapshot);
+            ucFrom010TestFundamentalIndicator($holding, ['equity_ratio' => 58.0, 'roe' => 15.2]);
+
+            $row = ucFrom010TestFindRow(ucFrom010TestFetch($this), '7203');
+
+            expect($row)->not->toBeNull();
+            // 300株 × 1,000円 = 300,000円
+            expect((float) $row['market_value'])->toEqualWithDelta(300000.0, 0.01);
+        });
+    });
+
     describe('権限', function () {
         test('未認証ユーザーは買い増しタイミングレコメンド一覧を取得できない', function () {
             [, $snapshot] = ucFrom010TestImportBatch();

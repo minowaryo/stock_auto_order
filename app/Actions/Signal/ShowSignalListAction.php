@@ -111,6 +111,10 @@ class ShowSignalListAction
             'id' => $holding->id,
             'symbol_code' => $holding->symbol_code,
             'symbol_name' => $holding->symbol_name,
+            // CHG-0011: 評価額（保有数量 × 現在値）。US株の current_price は
+            // 取込時に参考為替レートで円換算済みのため円建て。表示専用で
+            // シグナル判定・対象抽出には使わない。
+            'market_value' => (float) $holdingSnapshot->quantity * (float) $holdingSnapshot->current_price,
             'unrealized_gain_rate' => $holdingSnapshot->unrealized_gain_rate,
             'signal_types' => $signals->pluck('signal_type')->values()->all(),
             'signal_reason_summary' => $signalReasonSummary,

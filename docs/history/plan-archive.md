@@ -1,6 +1,64 @@
-# PLAN.md アーカイブ（〜2026-08-27 フロントエンド実装Phase5完了時点）
+# PLAN.md アーカイブ（〜2026-08-28 フロントエンド実装Phase7完了時点）
 
-PLAN.md から退避した完了済みエントリ。フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了までの記録を追加。UC-010（既存保有株の買い増しタイミングレコメンド）Gate4完了・コミット（`ba239fe`）までの記録を追加。Gate0セットアップ〜Phase1（UC-001/002/003/009）Gate4サイクル完了・ADR-0002 NISA区分CR・投資方針背景整理・ADR-0004（分析エンジンの指標セット拡張、設計確定〜TechnicalIndicatorCalculator〜MarketData層〜JQuantsClient〜SignalDeterminationService〜FundamentalIndicatorMapperの各TDDサイクル、UC-001への配線・UC-004画面実装・UC-003/UC-009への新指標反映を含む）完了、関連する`/review`指摘修正2件・UC-009サンプルレポート生成・per-holding非アトミック性修正、F-010（UC-010）のGate1〜3ドキュメント叩き台整備（ADR-0007新規作成、requirements.md/use-cases.md/data-model.md改訂）、NISA区分（口座区分）内訳の書き込み経路・UC-004消費側の実装完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、およびフロントエンド実装Phase4（UC-003銘柄詳細画面）完了までの記録。現在進行中のタスクとは直接関係しないため参照頻度は低いが、経緯確認が必要な場合はここを見る。
+PLAN.md から退避した完了済みエントリ。フロントエンド実装Phase7（UC-006/UC-008統合「新規投資候補」画面）完了・その`/review`指摘（MEDIUM 3件）修正完了の記録を追加（2026-09-06、CHG-0011コミット時に300行超過に伴い退避）。フロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了の記録を追加（2026-09-05、CHG-0011作業時に300行超過に伴い退避）。フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了までの記録を追加。UC-010（既存保有株の買い増しタイミングレコメンド）Gate4完了・コミット（`ba239fe`）までの記録を追加。Gate0セットアップ〜Phase1（UC-001/002/003/009）Gate4サイクル完了・ADR-0002 NISA区分CR・投資方針背景整理・ADR-0004（分析エンジンの指標セット拡張、設計確定〜TechnicalIndicatorCalculator〜MarketData層〜JQuantsClient〜SignalDeterminationService〜FundamentalIndicatorMapperの各TDDサイクル、UC-001への配線・UC-004画面実装・UC-003/UC-009への新指標反映を含む）完了、関連する`/review`指摘修正2件・UC-009サンプルレポート生成・per-holding非アトミック性修正、F-010（UC-010）のGate1〜3ドキュメント叩き台整備（ADR-0007新規作成、requirements.md/use-cases.md/data-model.md改訂）、NISA区分（口座区分）内訳の書き込み経路・UC-004消費側の実装完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、およびフロントエンド実装Phase4（UC-003銘柄詳細画面）完了までの記録。現在進行中のタスクとは直接関係しないため参照頻度は低いが、経緯確認が必要な場合はここを見る。
+
+## Phase7「新規投資候補」画面 `/review`指摘（MEDIUM 3件）修正完了（2026-08-28）
+
+### Decision
+
+- Phase7（`5e24137`）に対しユーザー依頼で`/review`を実施（review-score=0・通常レベル）。MEDIUM 3件・LOW 4件を報告し、ユーザーの指示でMEDIUM 3件のみ対応（LOWは先送り）
+- **MEDIUM-1（要件不一致）**: `CandidateCheck::saveWatchRecord()`が`watch_memo`の2000文字上限を検証しておらず、`use-cases.md`（メモ最大2000文字・「メモは2000文字以内で入力してください」）および`SaveWatchRecordRequest`（`max:2000`）とLivewire経路で契約が乖離。`memo`カラムが`text`のためDBエラーにもならず無検証で保存されていた
+- **MEDIUM-2（500エラー経路）**: `saveWatchRecord()`が`$holding`のnullガードを持たず、チェック成功後に証券コード入力欄を存在しない値へ書き換えてから保存すると`SaveWatchRecordAction::execute()`に`null`が渡り`TypeError`（500）。`checkCandidate()`側はガード済みだった
+- **MEDIUM-3（モック不一致・二重表示）**: おすすめ候補テーブルの「財務健全性サマリ」列が`fundamental_summary`（`NewCandidateFinder`で整数丸め、例`ROE15%`）と生値の括弧書き（例`（自己資本比率52.0%・ROE14.5%）`）を同一セルに二重表示していた。モック`screen-UC006-candidate-check.html`は単一文字列（`自己資本比率52%・ROE14.5%`）
+- Red→Green（TDDサイクル、Gate4相当は本レビュー指摘の合意で代替）: `CandidateCheckTest.php`に回帰テスト4件追加（2000文字超で拒否・ちょうど2000文字は保存可の境界値・存在しないsymbol_codeでの保存はエラー表示のみ・サマリ二重表示なし）。追加直後に3件Red（MEDIUM-2はTypeError）を確認してから実装
+- 修正内容: `saveWatchRecord()`に既存の`addError('watchRecord', ...)`スタイルと揃えた3段ガード（`watch_status`許可値・`watch_memo`文字数上限・`$holding`存在）を追加。許可値・上限は`WATCH_STATUS_OPTIONS`/`WATCH_MEMO_MAX`定数として`SaveWatchRecordRequest`と同値で定義。`render()`ではおすすめ候補の`fundamental_summary`を生`FundamentalIndicator`値から小数第1位で組み直し（表示専用の再フォーマット、新規計算ルールなし）、Bladeの二重表示ブロックを単一の`{{ $candidate['fundamental_summary'] }}`に置換
+- `.claude/rules/15-frontend.md`は「バリデーションは`rules()`に定義」を推奨するが、既存コードが`addError()`直書きだったこと・MEDIUM限定スコープ・既存承認済みテストへの回帰リスクを踏まえ、今回は既存スタイルを踏襲。`rules()`への一本化はLOW指摘として先送り
+
+### Files touched
+
+`app/Livewire/Candidate/CandidateCheck.php`（`saveWatchRecord()`ガード3件追加・定数2件・`render()`のサマリ再フォーマット）、`resources/views/livewire/candidate/candidate-check.blade.php`（財務健全性サマリ列の二重表示を解消・`rawFundamentals`受け取り削除）、`tests/Feature/CandidateCheckTest.php`（回帰テスト4件追加）、`PLAN.md`（本エントリ）
+
+### Status
+
+Green確認完了。`CandidateCheckTest.php` 12件Green（既存8＋新規4）。pint適用済み。フルスイート369件Green（13 deprecatedは既存・回帰なし）。LOW指摘4件（`rules()`一本化・`watch_status`のクライアント改変耐性は`Rule::in`未使用のまま・候補一覧の毎リクエスト再計算・Alpineハンドラ内`querySelector`）は未対応で先送り。未コミット。
+
+## フロントエンド実装Phase7（UC-006/UC-008統合「新規投資候補」画面）完了、全7Phase完了（2026-08-28）
+
+### Decision
+
+- Phase6に続き、フロントエンド実装計画の最終Phase7（UC-006「新規投資候補の重複チェック」+ UC-008「おすすめ候補」の統合画面、`GET /candidate-check`）を実施。use-cases.mdの業務ルール（UC-006「画面はUC-008と統合し単一メニュー項目の下部セクションとして提供」/ UC-008「UC-006と同一画面の上部セクション、専用メニュー項目は設けない」）通り1画面に統合。既存の`ShowNewCandidateListAction`・`ShowCandidateCheckAction`・`SaveWatchRecordAction`（いずれもPhase2で実装済み・無改修で再利用）を配線するのみ
+- `test-writer`が8件のLivewireコンポーネントテストを作成。Gate4で2点確認: (1) 他画面（SignalList/SectorDashboard）からの`/candidate-check?symbol_code=XXXX`リンク遷移時、`#[Url(as:'symbol_code')]`でクエリパラメータをsymbolCodeプロパティに束縛し、`mount()`時点で自動的に個別チェックを実行する設計、(2) 存在しないsymbol_codeでのチェック時は「銘柄コードを確認してください」をインライン表示し指標は一切表示しない（クラッシュ・リダイレクトなし）— いずれも「推奨」で承認
+- `tdd-implementer`がGreenフェーズを実装: `app/Livewire/Candidate/CandidateCheck.php`（おすすめ候補は`render()`で毎回呼び直す純粋読み取り、個別チェック・ウォッチ記録保存は`checkCandidate()`/`saveWatchRecord()`メソッド）。対象8件・フルスイート365件全てGreen（回帰なし）
+- 実装上の注意点（軽微、次点の課題として記録）: (a) おすすめ候補テーブルの自己資本比率・ROE生値表示のため`render()`内で`Holding`を追加クエリしており、`ShowNewCandidateListAction`の`fundamental_summary`（四捨五入済み文字列）とは別に生データを取得している。新規計算式ではなく既存カラムの表示専用の再取得のため許容、(b) 判定結果カードの重複度ラベル（「やや偏り」等）は、`ShowCandidateCheckAction`/`CandidateOverlapCalculator`がラベルを返さないため、Blade側で`SectorAllocationCalculator`（UC-005）と同一の40%/70%閾値をコメント付きで再定義して導出している。**この閾値がBlade側とService側の2箇所に分散する形になっており、将来どちらかだけ変更されると表示が乖離するリスクがある**。是正するなら`CandidateOverlapCalculator`にラベル算出を寄せる小さなリファクタが必要（Action改修を伴うため別途Red→Gate4→Greenサイクル）。実害は表示ラベルのみ（`overlap_rate`自体の数値は実データのまま）のため今回は許容し先送りとした
+- 実ブラウザ確認（Playwright MCP、1回目）: ログイン→`/candidate-check`へ正常遷移、コンソールエラーなし。開発DBの保有データ・ウォッチテーマが空のため、おすすめ候補は空状態表示を確認。「存在しないsymbol_code」のエラーパス（「銘柄コードを確認してください」）は画面上で確認できたが、有効データでの判定結果表示・ウォッチ記録保存は未確認のまま完了報告した
+- `/verify`スキルによる追加検証（2026-08-28）: `.claude/skills/verify/SKILL.md`を新規作成した上で、tinkerで最小限の実データ（既存保有1件・合致候補1件・注目テーマ1件）を一時投入し、happy pathを実ブラウザで網羅的に確認: (1) おすすめ候補テーブルの表示（NISA推奨バッジ・合致テーマ・財務健全性サマリ・購入額目安）、(2) 候補行クリック→Alpineフック（`$wire.symbolCode`設定→URL同期→入力欄反映）が正しく動作すること（Livewireコンポーネントテストでは検証不可能だった箇所の初の実機確認）、(3) 個別チェック実行→判定結果（重複度・分散影響コメント・テクニカル/ファンダメンタルズ指標・過去の業績推移）が正しく表示されること、(4) ウォッチ記録の保存→即座に履歴へ反映されること、(5) 両方空でのバリデーションエラー→保存されないこと。検証後は投入した実データを全て削除しDBを空の状態に復元した
+- 検証中、「重複をチェック」「保存」ボタンの`.click()`が反応しない事象が発生したため、当初は「アプリ側の潜在バグの疑い」として報告した。ユーザーの指摘を受けて追加切り分けを実施した結果、ボタンのDOM状態（非表示・被覆・disabled等）に異常はなく、**全く同じ操作を再試行すると成功する**ことを確認した。同一マークアップ・同一配線で結果が変わることから、Playwright側のクリック合成のタイミングに起因する既知の不安定さであり、**アプリ側の不具合ではない**と結論づけた。コード側の修正は行わず、`.claude/skills/verify/SKILL.md`に「クリックが反応しない場合はまずリトライする」手順を記録するに留めた
+- これで計画（`stock_auto_order-frontend-implementation-phase.md`）のPhase0〜7が全て完了。UC-001〜UC-009（UC-007はUC-002内ウィジェット、UC-008はUC-006と統合画面）を一通りブラウザで操作・確認できる状態になった。開発DBの保有データは検証後に空へ戻したため（下記「今後の対応」参照）、実際のCSV再取込による本番相当データでのEnd-to-End最終確認は改めて別途行う
+
+### Files touched
+
+`app/Livewire/Candidate/CandidateCheck.php`（新規）、`resources/views/livewire/candidate/candidate-check.blade.php`（新規）、`routes/web.php`（`/candidate-check`ルート追加）、`tests/Feature/CandidateCheckTest.php`（新規、8件）、`.claude/skills/verify/SKILL.md`（新規、実ブラウザ検証手順の記録）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認完了。フルスイート365件Green。`/verify`スキルによる一時データ投入検証で、おすすめ候補表示・Alpine連携・個別チェック判定結果・ウォッチ記録保存（正常系・異常系）を全て実ブラウザで確認済み（検証後DBは空に復元）。フロントエンド実装計画の全7Phase完了。次は開発DBへの本番相当データ復元（CSV再取込）とEnd-to-End最終確認、または別タスク（数値未整形表示の是正・重複度ラベルの閾値統合リファクタ等）に進む。
+
+## フロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了（2026-08-28）
+
+### Decision
+
+- Phase5に続き、Phase6（UC-005セクター配分ダッシュボード画面、`GET /sector-dashboard`）を実施。`ShowSectorDashboardAction`は既存（Phase2で実装済み）のため、Livewireコンポーネント・ビューの新規作成のみが対象
+- `test-writer`が7件のLivewireコンポーネントテストを作成。Gate4で2点確認: (1) 「健全」セクターは業務ルール（情報過多の回避）に基づきバッジ・文言を一切表示しない完全抑制とする、(2) NISA推奨候補の表示文言は「NISA」という部分文字列を含めば良い叩き台とする — いずれも「推奨」で承認
+- `tdd-implementer`がGreenフェーズを実装: `app/Livewire/Sector/SectorDashboard.php`（`ShowSectorDashboardAction`を`render()`で毎回呼び出す純粋読み取り設計、HoldingList/SignalListと同一規約）。セクター配分バーはCSSのみ（`width: X%`インラインスタイル）、偏り警告→dangerバッジ／やや偏り→warningバッジ／健全→非表示、`is_overweight`時のみ売却提案（金額・株数）表示、リバランス候補は`/candidate-check?symbol_code=...`へのリンク・NISA推奨バッジ・空状態時「リバランス候補はありません」。対象7件・フルスイート335件Green（22件失敗は全て他UC・並行セッション作業由来の既存分、本変更による回帰なし）
+- 実ブラウザ確認（Playwright MCP）: ログイン→`/sector-dashboard`へ正常遷移、コンソールエラーなし。開発DBの保有データが空の状態だったため、セクター配分バー・バッジ・売却提案・NISA推奨バッジ付きの表示は目視確認できず、リバランス候補の空状態表示（「リバランス候補はありません」）のみ実ブラウザで確認した。データが入っている場合の各表示パターンは7件のFeature Testで網羅済み
+
+### Files touched
+
+`app/Livewire/Sector/SectorDashboard.php`（新規）、`resources/views/livewire/sector/sector-dashboard.blade.php`（新規）、`routes/web.php`（`/sector-dashboard`ルート追加）、`tests/Feature/SectorDashboardTest.php`（新規、7件）、`PLAN.md`（本エントリ追加、300行超過に伴い旧エントリ7件を`docs/history/plan-archive.md`へ退避）
+
+### Status
+
+Green確認完了。実ブラウザ動作確認は空状態のみ（開発DBの保有データ欠落のため）。フルスイート335件Green（他UC由来の既存失敗22件は無関係）。次はPhase7（UC-006/UC-008統合「新規投資候補」画面）に進む。
 
 ## フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了（2026-08-27）
 

@@ -131,6 +131,16 @@ docker compose exec laravel.test php artisan queue:work
 docker compose exec laravel.test php artisan schedule:work
 ```
 
+## 外部データ取得（Artisan）
+
+```bash
+# 米国株ファンダメンタルズ指標の再取得（CHG-0011 / ADR-0009）
+# 最新スナップショットの米国株について Finnhub から PER/PBR/ROE/成長率/自己資本比率等を
+# 取得し fundamental_indicators を補完する。CSV取込を伴わずに単独で実行できる。
+# 銘柄単位の取得失敗はログに記録してスキップ（unavailable 表示にフォールバック）。
+docker compose exec laravel.test php artisan market-data:refetch-us-fundamentals
+```
+
 ## コード生成（Artisan）
 
 ```bash
