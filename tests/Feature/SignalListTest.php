@@ -320,6 +320,8 @@ function signalListTestFundamentalIndicator(Holding $holding, array $attributes 
             'revenue_growth' => 8.0,
             'operating_income_growth' => 12.3,
             'equity_ratio' => 58.0,
+            // CHG-0012 / ADR-0011: 財務健全性フィルタの4条件目（健全な既定値）。
+            'operating_margin' => 18.3,
             'dividend_yield' => 2.0,
             'dividend_payout_ratio' => 30.0,
             'eps_growth' => 10.0,

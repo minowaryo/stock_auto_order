@@ -21,7 +21,7 @@ final class UsFundamentalIndicatorMapper
     /**
      * @param  array<string, mixed>  $metrics  Finnhub `stock/metric` response's "metric" payload (empty array when unavailable).
      * @param  array<int, array{operating_income: float|null, total_assets: float|null, total_equity: float|null}>  $reportedFinancials  Descending (latest-first) reported financials.
-     * @return array{per: float|null, pbr: float|null, roe: float|null, revenue_growth: float|null, operating_income_growth: float|null, equity_ratio: float|null, dividend_yield: float|null, dividend_payout_ratio: float|null, eps_growth: float|null, peg_ratio: float|null}
+     * @return array{per: float|null, pbr: float|null, roe: float|null, revenue_growth: float|null, operating_income_growth: float|null, equity_ratio: float|null, operating_margin: float|null, dividend_yield: float|null, dividend_payout_ratio: float|null, eps_growth: float|null, peg_ratio: float|null}
      */
     public function map(array $metrics, array $reportedFinancials): array
     {
@@ -32,11 +32,38 @@ final class UsFundamentalIndicatorMapper
             'revenue_growth' => $metrics['revenueGrowthTTMYoy'] ?? null,
             'operating_income_growth' => $this->calculateOperatingIncomeGrowth($reportedFinancials),
             'equity_ratio' => $this->calculateEquityRatio($reportedFinancials),
+            'operating_margin' => $this->operatingMargin($metrics),
             'dividend_yield' => $metrics['dividendYieldIndicatedAnnual'] ?? null,
             'dividend_payout_ratio' => $metrics['payoutRatioTTM'] ?? null,
             'eps_growth' => $metrics['epsGrowthTTMYoy'] ?? null,
             'peg_ratio' => $metrics['pegTTM'] ?? null,
         ];
+    }
+
+    /**
+     * 営業利益率（%）= Finnhub `stock/metric` の `operatingMarginTTM` を優先し、
+     * 無ければ `operatingMarginAnnual` にフォールバック（CHG-0012 / ADR-0011 D4）.
+     *
+     * `roe` / `revenue_growth` 等と同様 metric の値をそのまま採用する（既に
+     * パーセントスケールのため ×100 しない）。equity_ratio /
+     * operating_income_growth を reported financials から実測算出しているのと
+     * 異なり、営業利益率は metric に直接あるため採用する（ADR-0009 D3 の
+     * 実測算出は metric に信頼できる値が無い項目のみが対象）。TTM を優先する
+     * のは鮮度優先のため（ACHR は TTM=null / Annual有、AMD は TTM/Annual が
+     * 乖離する）。絶対値が 999% を超える値は null（ADR-0011 D5: ACHR の
+     * `operatingMarginAnnual = -243100` のような異常値を DB に残さない）。
+     *
+     * @param  array<string, mixed>  $metrics
+     */
+    private function operatingMargin(array $metrics): ?float
+    {
+        $margin = $metrics['operatingMarginTTM'] ?? $metrics['operatingMarginAnnual'] ?? null;
+
+        if ($margin === null || abs((float) $margin) > 999) {
+            return null;
+        }
+
+        return (float) $margin;
     }
 
     /**

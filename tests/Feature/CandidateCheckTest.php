@@ -232,6 +232,8 @@ function candidateCheckTestFundamental(Holding $holding, array $attributes = [])
         'roe' => 12.0,
         'revenue_growth' => 7.2,
         'equity_ratio' => 45.0,
+        // CHG-0012 / ADR-0011: 財務健全性フィルタの4条件目（健全な既定値）。
+        'operating_margin' => 15.0,
         'dividend_yield' => 0.8,
         'eps_growth' => 9.4,
         'peg_ratio' => 1.9,

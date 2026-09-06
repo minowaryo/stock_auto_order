@@ -53,10 +53,11 @@ use App\Services\Analysis\SignalCriteriaEvaluator;
 |   - Return shape (plain array, matching the other pure-calc services):
 |       [
 |         'technical'   => list<Row>,   // exactly 7 rows, fixed order
-|         'fundamental' => list<Row>,   // exactly 3 rows, fixed order
+|         'fundamental' => list<Row>,   // exactly 4 rows, fixed order
+|                                       //   (CHG-0012 / ADR-0011: 3→4、営業利益率を4項目目に追加)
 |         'summary' => [
 |           'technical'   => ['met' => int, 'near' => int, 'total' => 7],
-|           'fundamental' => ['met' => int, 'near' => int, 'total' => 3],
+|           'fundamental' => ['met' => int, 'near' => int, 'total' => 4],
 |         ],
 |       ]
 |     Row = [
@@ -70,6 +71,36 @@ use App\Services\Analysis\SignalCriteriaEvaluator;
 |   - Derived-percentage items (52週乖離・BB乖離・MA20乖離・出来高倍率) are
 |     unavailable when current_price or the reference indicator is null (or
 |     the reference is 0, to avoid division by zero).
+|
+| -------------------------------------------------------------------------
+| CR (2026-09-06, CHG-0012 / ADR-0011): 財務健全性チェックリストに営業利益率
+| を4項目目として追加（fundamental 3行→4行）
+| -------------------------------------------------------------------------
+| `SignalCriteriaEvaluator::fundamentalRows()` に「営業利益率」行を4項目目
+| として追加する。表示レイヤーは `criteria` 配列駆動のため、この1行追加で
+| ヘッダー colspan・colgroup・チップセル・サマリ「◯/4」がすべて自動追従する
+| （ADR-0011 の「表示のさせ方」節）。
+|
+|   $metrics キーに `operating_margin`（nullable float）が加わる。
+|
+|   利確検討（evaluateTakeProfit）/ 買い増し候補（evaluateBuy）:
+|     label「営業利益率」、threshold_label「≥10%」、direction 'gte'、
+|     threshold = FundamentalHealthEvaluator::MIN_OPERATING_MARGIN (10.0)、
+|     フォーマッタ number_format($v, 1).'%'（ROE・自己資本比率と同形式）。
+|     near バッファは既存の |T|×0.2 ルール（T=10 → 8.0〜10.0% が near、
+|     10.0% 以上で met、8.0% 未満で unmet、null で unavailable）。
+|
+|   整理検討（evaluateLossReview、ADR-0010 D6 の反転契約に乗せる）:
+|     direction を反転（gte→lt）、threshold_label は反転表記（例「<10%」）。
+|     10% 未満で met（＝投資根拠の毀損）、near は 10 以上 12 以下、
+|     健全（12超）は unmet。値そのものは実測値をそのまま表示。
+|
+| 現行実装は fundamental が3行のため、Red の出方は:
+|   - `toHaveCount(3)` / `total => 3` 等の件数アサーション → 3 vs 4 の不一致
+|   - `criterionRow($result['fundamental'], '営業利益率')` → 行が存在せず
+|     \RuntimeException("criterion row not found: 営業利益率") で test error
+|   - all-met フィクスチャの `met => 3` → 4 の不一致
+| いずれも fatal（クラス未検出）ではなくアサーション不一致 / テストエラー。
 */
 
 function signalCriteriaEvaluator(): SignalCriteriaEvaluator
@@ -107,6 +138,7 @@ function tpMetricsAllMet(array $overrides = []): array
         'equity_ratio' => 58.0,               // ≥ 40%
         'revenue_growth' => 8.0,              // > 0%
         'operating_income_growth' => 12.3,
+        'operating_margin' => 18.0,           // ≥ 10% (CHG-0012 / ADR-0011)
     ], $overrides);
 }
 
@@ -137,6 +169,7 @@ function buyMetricsAllMet(array $overrides = []): array
         'equity_ratio' => 58.0,
         'revenue_growth' => 8.0,
         'operating_income_growth' => 12.3,
+        'operating_margin' => 18.0,           // ≥ 10% (CHG-0012 / ADR-0011)
     ], $overrides);
 }
 
@@ -159,14 +192,14 @@ function criterionRow(array $rows, string $label): array
 
 describe('SignalCriteriaEvaluator: 判定チェックリスト（CHG-0007）', function () {
     describe('共通の返却構造', function () {
-        test('evaluateTakeProfit はテクニカル7項目・財務3項目とグループ別サマリを返す', function () {
+        test('evaluateTakeProfit はテクニカル7項目・財務4項目とグループ別サマリを返す', function () {
             $result = signalCriteriaEvaluator()->evaluateTakeProfit(tpMetricsAllMet());
 
             expect($result)->toHaveKeys(['technical', 'fundamental', 'summary']);
             expect($result['technical'])->toHaveCount(7);
-            expect($result['fundamental'])->toHaveCount(3);
+            expect($result['fundamental'])->toHaveCount(4);
             expect($result['summary']['technical']['total'])->toBe(7);
-            expect($result['summary']['fundamental']['total'])->toBe(3);
+            expect($result['summary']['fundamental']['total'])->toBe(4);
 
             foreach ([...$result['technical'], ...$result['fundamental']] as $row) {
                 expect($row)->toHaveKeys(['label', 'threshold_label', 'value_label', 'status']);
@@ -174,22 +207,22 @@ describe('SignalCriteriaEvaluator: 判定チェックリスト（CHG-0007）', f
             }
         });
 
-        test('evaluateBuy はテクニカル7項目・財務3項目とグループ別サマリを返す', function () {
+        test('evaluateBuy はテクニカル7項目・財務4項目とグループ別サマリを返す', function () {
             $result = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet());
 
             expect($result['technical'])->toHaveCount(7);
-            expect($result['fundamental'])->toHaveCount(3);
+            expect($result['fundamental'])->toHaveCount(4);
             expect($result['summary']['technical']['total'])->toBe(7);
-            expect($result['summary']['fundamental']['total'])->toBe(3);
+            expect($result['summary']['fundamental']['total'])->toBe(4);
         });
     });
 
     describe('利確検討（evaluateTakeProfit）', function () {
-        test('全項目を満たす銘柄はテクニカル7/7・財務3/3が met になる', function () {
+        test('全項目を満たす銘柄はテクニカル7/7・財務4/4が met になる', function () {
             $result = signalCriteriaEvaluator()->evaluateTakeProfit(tpMetricsAllMet());
 
             expect($result['summary']['technical'])->toMatchArray(['met' => 7, 'near' => 0, 'total' => 7]);
-            expect($result['summary']['fundamental'])->toMatchArray(['met' => 3, 'near' => 0, 'total' => 3]);
+            expect($result['summary']['fundamental'])->toMatchArray(['met' => 4, 'near' => 0, 'total' => 4]);
         });
 
         test('含み益率の基準ラベルは利確ライン（gain_line_threshold）に追従する', function () {
@@ -285,7 +318,33 @@ describe('SignalCriteriaEvaluator: 判定チェックリスト（CHG-0007）', f
 
             expect(criterionRow($result['fundamental'], 'ROE')['status'])->toBe('near');
             expect(criterionRow($result['fundamental'], '自己資本比率')['status'])->toBe('near');
-            expect($result['summary']['fundamental'])->toMatchArray(['met' => 1, 'near' => 2, 'total' => 3]);
+            expect($result['summary']['fundamental'])->toMatchArray(['met' => 2, 'near' => 2, 'total' => 4]);
+        });
+
+        // -------------------------------------------------------------
+        // CR (2026-09-06, CHG-0012 / ADR-0011): 営業利益率チップ（4項目目）
+        // -------------------------------------------------------------
+        test('営業利益率は「≥10%」で判定し、10.0%ちょうど→met・9.0%（8割バッファ内）→near・7.0%→unmet・null→unavailable', function () {
+            $met = signalCriteriaEvaluator()->evaluateTakeProfit(tpMetricsAllMet(['operating_margin' => 10.0]));
+            $near = signalCriteriaEvaluator()->evaluateTakeProfit(tpMetricsAllMet(['operating_margin' => 9.0])); // 10 の 90%
+            $unmet = signalCriteriaEvaluator()->evaluateTakeProfit(tpMetricsAllMet(['operating_margin' => 7.0]));
+            $unavailable = signalCriteriaEvaluator()->evaluateTakeProfit(tpMetricsAllMet(['operating_margin' => null]));
+
+            expect(criterionRow($met['fundamental'], '営業利益率')['status'])->toBe('met');
+            expect(criterionRow($met['fundamental'], '営業利益率')['threshold_label'])->toContain('10');
+            expect(criterionRow($met['fundamental'], '営業利益率')['value_label'])->toBe('10.0%');
+            expect(criterionRow($near['fundamental'], '営業利益率')['status'])->toBe('near');
+            expect(criterionRow($unmet['fundamental'], '営業利益率')['status'])->toBe('unmet');
+            expect(criterionRow($unavailable['fundamental'], '営業利益率')['status'])->toBe('unavailable');
+            expect(criterionRow($unavailable['fundamental'], '営業利益率')['value_label'])->toBe('—');
+        });
+
+        test('タカラトミー相当（営業利益率9.0%）は near チップだが、財務サマリの met には数えない', function () {
+            $result = signalCriteriaEvaluator()->evaluateTakeProfit(tpMetricsAllMet(['operating_margin' => 9.0]));
+
+            expect(criterionRow($result['fundamental'], '営業利益率')['status'])->toBe('near');
+            // ROE/自己資本比率/成長率は met のまま → 財務 3/4
+            expect($result['summary']['fundamental'])->toMatchArray(['met' => 3, 'near' => 1, 'total' => 4]);
         });
 
         // 回帰テスト（`/review`で判明した確定バグの修正、2026-09-05）:
@@ -317,11 +376,25 @@ describe('SignalCriteriaEvaluator: 判定チェックリスト（CHG-0007）', f
     });
 
     describe('買い増し候補（evaluateBuy）', function () {
-        test('全項目を満たす銘柄はテクニカル7/7・財務3/3が met になる', function () {
+        test('全項目を満たす銘柄はテクニカル7/7・財務4/4が met になる', function () {
             $result = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet());
 
             expect($result['summary']['technical'])->toMatchArray(['met' => 7, 'near' => 0, 'total' => 7]);
-            expect($result['summary']['fundamental'])->toMatchArray(['met' => 3, 'near' => 0, 'total' => 3]);
+            expect($result['summary']['fundamental'])->toMatchArray(['met' => 4, 'near' => 0, 'total' => 4]);
+        });
+
+        // CR (2026-09-06, CHG-0012 / ADR-0011): 買い増し候補の営業利益率チップ
+        test('買い増し候補でも営業利益率は「≥10%」の順方向で判定される（12.0→met・9.0→near・7.0→unmet・null→unavailable）', function () {
+            $met = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet(['operating_margin' => 12.0]));
+            $near = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet(['operating_margin' => 9.0]));
+            $unmet = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet(['operating_margin' => 7.0]));
+            $unavailable = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet(['operating_margin' => null]));
+
+            expect(criterionRow($met['fundamental'], '営業利益率')['status'])->toBe('met');
+            expect(criterionRow($near['fundamental'], '営業利益率')['status'])->toBe('near');
+            expect(criterionRow($unmet['fundamental'], '営業利益率')['status'])->toBe('unmet');
+            expect(criterionRow($unavailable['fundamental'], '営業利益率')['status'])->toBe('unavailable');
+            expect(criterionRow($met['fundamental'], '営業利益率')['threshold_label'])->toContain('10');
         });
 
         test('RSI は「≦30」の上限方向で判定し、30〜36 は near、36超は unmet', function () {
@@ -418,7 +491,7 @@ describe('SignalCriteriaEvaluator: 判定チェックリスト（CHG-0007）', f
 | 新契約（ADR-0010 D6 改訂 2026-09-06） — このRedフェーズで固定する仕様
 | -------------------------------------------------------------------------
 |   evaluateLossReview(array $metrics): array の返却構造は evaluateTakeProfit
-|   / evaluateBuy と完全に同一（technical 7 行・固定順 / fundamental 3 行・
+|   / evaluateBuy と完全に同一（technical 7 行・固定順 / fundamental 4 行・
 |   固定順 / summary は per-group met・near・total）。既存の classify() /
 |   fundamentalRows() / row() / percentDeviation() ヘルパーを再利用する。
 |
@@ -505,18 +578,19 @@ function lossMetricsAllMet(array $overrides = []): array
         'equity_ratio' => 28.0,                    // < 40%  → 毀損＝met（反転契約）
         'revenue_growth' => -3.0,                  // ≤ 0%   → 毀損＝met（反転契約）
         'operating_income_growth' => -1.0,         // 高い方でも -1.0 ≤ 0
+        'operating_margin' => 6.0,                 // < 10%  → 毀損＝met（反転契約、CHG-0012 / ADR-0011）
     ], $overrides);
 }
 
 describe('整理検討チェックリスト（evaluateLossReview、UC-011 / ADR-0010 D6 改訂）', function () {
-    test('テクニカル7項目・財務3項目とグループ別サマリを返す（返却構造は evaluateTakeProfit/evaluateBuy と同一）', function () {
+    test('テクニカル7項目・財務4項目とグループ別サマリを返す（返却構造は evaluateTakeProfit/evaluateBuy と同一）', function () {
         $result = signalCriteriaEvaluator()->evaluateLossReview(lossMetricsAllMet());
 
         expect($result)->toHaveKeys(['technical', 'fundamental', 'summary']);
         expect($result['technical'])->toHaveCount(7);
-        expect($result['fundamental'])->toHaveCount(3);
+        expect($result['fundamental'])->toHaveCount(4);
         expect($result['summary']['technical']['total'])->toBe(7);
-        expect($result['summary']['fundamental']['total'])->toBe(3);
+        expect($result['summary']['fundamental']['total'])->toBe(4);
 
         foreach ([...$result['technical'], ...$result['fundamental']] as $row) {
             expect($row)->toHaveKeys(['label', 'threshold_label', 'value_label', 'status']);
@@ -524,11 +598,11 @@ describe('整理検討チェックリスト（evaluateLossReview、UC-011 / ADR-
         }
     });
 
-    test('整理を全方向で後押しする銘柄はテクニカル7/7・財務3/3が met になる（財務は毀損＝met の反転契約）', function () {
+    test('整理を全方向で後押しする銘柄はテクニカル7/7・財務4/4が met になる（財務は毀損＝met の反転契約）', function () {
         $result = signalCriteriaEvaluator()->evaluateLossReview(lossMetricsAllMet());
 
         expect($result['summary']['technical'])->toMatchArray(['met' => 7, 'near' => 0, 'total' => 7]);
-        expect($result['summary']['fundamental'])->toMatchArray(['met' => 3, 'near' => 0, 'total' => 3]);
+        expect($result['summary']['fundamental'])->toMatchArray(['met' => 4, 'near' => 0, 'total' => 4]);
     });
 
     // ---- テクニカル7項目（契約変更なし・現行実装のまま。回帰確認用に維持） ----
@@ -620,20 +694,45 @@ describe('整理検討チェックリスト（evaluateLossReview、UC-011 / ADR-
         expect($result['summary']['technical']['met'])->toBe(6);
     });
 
-    // ---- 財務健全性3項目（ADR-0010 D6 改訂: 判定の向きを反転＝毀損で met） ----
+    // ---- 財務健全性4項目（ADR-0010 D6 改訂: 判定の向きを反転＝毀損で met。
+    //      2026-09-06 CHG-0012 / ADR-0011 で営業利益率を4項目目に追加） ----
 
-    test('健全な財務（ROE 15.2% / 自己資本比率 58% / 成長率 +8%）は財務3項目すべて unmet になり、summary.fundamental.met は 0', function () {
+    test('健全な財務（ROE 15.2% / 自己資本比率 58% / 成長率 +8% / 営業利益率 18%）は財務4項目すべて unmet になり、summary.fundamental.met は 0', function () {
         $result = signalCriteriaEvaluator()->evaluateLossReview(lossMetricsAllMet([
             'roe' => 15.2,
             'equity_ratio' => 58.0,
             'revenue_growth' => 8.0,
             'operating_income_growth' => 12.3,
+            'operating_margin' => 18.0,
         ]));
 
         expect(criterionRow($result['fundamental'], 'ROE')['status'])->toBe('unmet');
         expect(criterionRow($result['fundamental'], '自己資本比率')['status'])->toBe('unmet');
         expect(criterionRow($result['fundamental'], '成長率')['status'])->toBe('unmet');
-        expect($result['summary']['fundamental'])->toMatchArray(['met' => 0, 'near' => 0, 'total' => 3]);
+        expect(criterionRow($result['fundamental'], '営業利益率')['status'])->toBe('unmet');
+        expect($result['summary']['fundamental'])->toMatchArray(['met' => 0, 'near' => 0, 'total' => 4]);
+    });
+
+    // CR (2026-09-06, CHG-0012 / ADR-0011): 営業利益率も反転フラグに乗る
+    test('営業利益率は「<10%」で met（＝投資根拠の毀損）とし、6.0%→met・11.0%→near・18.0%→unmet。threshold_label は反転表記', function () {
+        $met = signalCriteriaEvaluator()->evaluateLossReview(lossMetricsAllMet(['operating_margin' => 6.0]));
+        $near = signalCriteriaEvaluator()->evaluateLossReview(lossMetricsAllMet(['operating_margin' => 11.0])); // 10〜12（threshold + |threshold|×0.2）
+        $unmet = signalCriteriaEvaluator()->evaluateLossReview(lossMetricsAllMet(['operating_margin' => 18.0]));
+
+        expect(criterionRow($met['fundamental'], '営業利益率')['status'])->toBe('met');
+        expect(criterionRow($near['fundamental'], '営業利益率')['status'])->toBe('near');
+        expect(criterionRow($unmet['fundamental'], '営業利益率')['status'])->toBe('unmet');
+        // UC-004/UC-010 の「≥10%」ではなく反転表記（例「<10%」）
+        expect(criterionRow($met['fundamental'], '営業利益率')['threshold_label'])->toContain('<10');
+        // unmet でも実測値をそのまま表示する（「—」は null のときだけ）
+        expect(criterionRow($unmet['fundamental'], '営業利益率')['value_label'])->toBe('18.0%');
+    });
+
+    test('営業利益率が null（Mapperで異常値null化・JP当期開示なし等）のとき、整理検討テーブルでも営業利益率行は unavailable', function () {
+        $result = signalCriteriaEvaluator()->evaluateLossReview(lossMetricsAllMet(['operating_margin' => null]));
+
+        expect(criterionRow($result['fundamental'], '営業利益率')['status'])->toBe('unavailable');
+        expect(criterionRow($result['fundamental'], '営業利益率')['value_label'])->toBe('—');
     });
 
     test('ROE は「<10%」で met（毀損）とし、4.2%→met・12.0%→near・20.0%→unmet。threshold_label は反転表記', function () {
@@ -694,17 +793,19 @@ describe('整理検討チェックリスト（evaluateLossReview、UC-011 / ADR-
         expect(criterionRow($healthy['fundamental'], 'ROE')['value_label'])->not->toBe('—');
     });
 
-    test('roe / equity_ratio が null のとき財務の該当行が unavailable になる（健全な成長率 +8% は反転で unmet のため met は 0）', function () {
+    test('roe / equity_ratio が null のとき財務の該当行が unavailable になる（健全な成長率 +8% ・営業利益率 18% は反転で unmet のため met は 0）', function () {
         $result = signalCriteriaEvaluator()->evaluateLossReview(lossMetricsAllMet([
             'roe' => null,
             'equity_ratio' => null,
             'revenue_growth' => 8.0,
             'operating_income_growth' => 12.3,
+            'operating_margin' => 18.0,
         ]));
 
         expect(criterionRow($result['fundamental'], 'ROE')['status'])->toBe('unavailable');
         expect(criterionRow($result['fundamental'], '自己資本比率')['status'])->toBe('unavailable');
         expect(criterionRow($result['fundamental'], '成長率')['status'])->toBe('unmet');
+        expect(criterionRow($result['fundamental'], '営業利益率')['status'])->toBe('unmet');
         expect($result['summary']['fundamental']['met'])->toBe(0);
     });
 

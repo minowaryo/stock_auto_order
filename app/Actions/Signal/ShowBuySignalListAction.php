@@ -112,8 +112,9 @@ class ShowBuySignalListAction
         $roe = $fundamentalIndicator?->roe !== null ? (float) $fundamentalIndicator->roe : null;
         $revenueGrowth = $fundamentalIndicator?->revenue_growth !== null ? (float) $fundamentalIndicator->revenue_growth : null;
         $operatingIncomeGrowth = $fundamentalIndicator?->operating_income_growth !== null ? (float) $fundamentalIndicator->operating_income_growth : null;
+        $operatingMargin = $fundamentalIndicator?->operating_margin !== null ? (float) $fundamentalIndicator->operating_margin : null;
 
-        $fundamentalStatus = $this->evaluator->evaluate($equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth);
+        $fundamentalStatus = $this->evaluator->evaluate($equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin);
 
         if ($fundamentalStatus === 'failed') {
             return null;
@@ -135,7 +136,7 @@ class ShowBuySignalListAction
             'buy_signal_types' => $buySignals->pluck('signal_type')->values()->all(),
             'buy_signal_reason_summary' => $buySignals->pluck('reason_summary')->implode('、'),
             'fundamental_status' => $fundamentalStatus,
-            'fundamental_summary' => $this->fundamentalSummary($fundamentalStatus, $equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth),
+            'fundamental_summary' => $this->fundamentalSummary($fundamentalStatus, $equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin),
             'nisa_recommended' => $nisaRecommended,
             'nisa_recommended_reason' => $nisaRecommended
                 ? sprintf('自己資本比率%s%%・ROE%s%%と財務健全性が高くNISA口座での長期保有に適しています', $this->fmt($equityRatio), $this->fmt($roe))
@@ -150,6 +151,7 @@ class ShowBuySignalListAction
                 $roe,
                 $revenueGrowth,
                 $operatingIncomeGrowth,
+                $operatingMargin,
             )),
             '_buy_signal_count' => $buySignals->count(),
         ];
@@ -164,6 +166,7 @@ class ShowBuySignalListAction
         ?float $roe,
         ?float $revenueGrowth,
         ?float $operatingIncomeGrowth,
+        ?float $operatingMargin,
     ): array {
         $technicalIndicator = $holdingSnapshot->holding->technicalIndicator;
         $fundamentalIndicator = $holdingSnapshot->holding->fundamentalIndicator;
@@ -191,10 +194,11 @@ class ShowBuySignalListAction
             'equity_ratio' => $equityRatio,
             'revenue_growth' => $revenueGrowth,
             'operating_income_growth' => $operatingIncomeGrowth,
+            'operating_margin' => $operatingMargin,
         ];
     }
 
-    private function fundamentalSummary(string $fundamentalStatus, ?float $equityRatio, ?float $roe, ?float $revenueGrowth, ?float $operatingIncomeGrowth): string
+    private function fundamentalSummary(string $fundamentalStatus, ?float $equityRatio, ?float $roe, ?float $revenueGrowth, ?float $operatingIncomeGrowth, ?float $operatingMargin): string
     {
         if ($fundamentalStatus === 'unavailable') {
             return 'ファンダメンタルズ指標が未取得のため判定できません';
@@ -224,11 +228,12 @@ class ShowBuySignalListAction
         }
 
         return sprintf(
-            'ROE%s%%・自己資本比率%s%%・%s%s%%',
+            'ROE%s%%・自己資本比率%s%%・%s%s%%・営業利益率%s%%',
             $this->fmt($roe),
             $this->fmt($equityRatio),
             $growthLabel,
             $growthValue === null ? '-' : sprintf('%+.1f', $growthValue),
+            $this->fmt($operatingMargin),
         );
     }
 

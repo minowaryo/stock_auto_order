@@ -238,6 +238,10 @@ function ucFrom004TestHealthyFundamentalIndicator(Holding $holding, array $attri
         'revenue_growth' => 8.0,
         'operating_income_growth' => 12.3,
         'equity_ratio' => 58.0,
+        // CHG-0012 / ADR-0011: 財務健全性フィルタの4条件目。健全な値を
+        // デフォルトにし、既存の high_water_mark モード等のテストが無改変で
+        // Green のまま通るようにする。
+        'operating_margin' => 18.3,
         'dividend_yield' => 2.0,
         'dividend_payout_ratio' => 30.0,
         'fetched_at' => now(),
@@ -713,7 +717,7 @@ describe('UC-004: 利確シグナル一覧', function () {
     });
 
     describe('判定チェックリスト（criteria、CHG-0007）', function () {
-        test('各行に criteria（technical 7項目・fundamental 3項目・グループ別サマリ）が含まれる', function () {
+        test('各行に criteria（technical 7項目・fundamental 4項目・グループ別サマリ）が含まれる', function () {
             [, $snapshot] = ucFrom004TestImportBatch();
             $holding = ucFrom004TestHolding(['symbol_code' => '7203', 'symbol_name' => 'トヨタ自動車']);
             $holdingSnapshot = ucFrom004TestHoldingSnapshot($snapshot, $holding, [
@@ -729,9 +733,10 @@ describe('UC-004: 利確シグナル一覧', function () {
 
             expect($row['criteria'])->toHaveKeys(['technical', 'fundamental', 'summary']);
             expect($row['criteria']['technical'])->toHaveCount(7);
-            expect($row['criteria']['fundamental'])->toHaveCount(3);
+            // CHG-0012 / ADR-0011: 財務健全性チェックリストは3→4項目（営業利益率を追加）
+            expect($row['criteria']['fundamental'])->toHaveCount(4);
             expect($row['criteria']['summary']['technical']['total'])->toBe(7);
-            expect($row['criteria']['summary']['fundamental']['total'])->toBe(3);
+            expect($row['criteria']['summary']['fundamental']['total'])->toBe(4);
 
             foreach ($row['criteria']['technical'] as $item) {
                 expect($item)->toHaveKeys(['label', 'threshold_label', 'value_label', 'status']);
@@ -757,7 +762,8 @@ describe('UC-004: 利確シグナル一覧', function () {
             $row = ucFrom004TestFindRow(ucFrom004TestFetch($this), '6526');
 
             expect($row['criteria']['summary']['technical']['met'])->toBe(7);
-            expect($row['criteria']['summary']['fundamental']['met'])->toBe(3);
+            // CHG-0012 / ADR-0011: 営業利益率18.3%（健全デフォルト）も met で財務 4/4
+            expect($row['criteria']['summary']['fundamental']['met'])->toBe(4);
         });
 
         test('高水準モード銘柄は含み益率の基準ラベルが +150% ラインになる', function () {

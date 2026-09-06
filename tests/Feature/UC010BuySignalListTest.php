@@ -242,6 +242,12 @@ function ucFrom010TestFundamentalIndicator(Holding $holding, array $attributes =
             'dividend_payout_ratio' => 30.0,
             'eps_growth' => 10.0,
             'peg_ratio' => 1.2,
+            // CHG-0012 / ADR-0011: 営業利益率10%以上（健全）をデフォルトにし、
+            // 既存の「健全な銘柄」テストが Green 実装後も fundamental_status=passed
+            // のまま通るようにする。RED フェーズでは operating_margin が
+            // $fillable 未登録のためこのキーは mass-assignment で無視される
+            // （QueryException にはならない）。
+            'operating_margin' => 18.3,
             'fetched_at' => now(),
         ], $attributes),
     );
@@ -486,6 +492,57 @@ describe('UC-010: 既存保有株の買い増しタイミングレコメンド�
             expect($row)->toBeNull();
         });
 
+        // ---------------------------------------------------------------
+        // CR (2026-09-06, CHG-0012 / ADR-0011): 営業利益率フィルタ（4条件目）
+        // ---------------------------------------------------------------
+        // ADR-0011: 財務健全性フィルタに営業利益率10%以上を追加する。ROE・
+        // 自己資本比率・成長率が基準を満たしても、営業利益率が10%未満なら
+        // FundamentalHealthEvaluator が 'failed' を返し、買い増し候補一覧
+        // （ShowBuySignalListAction）から除外される。
+        //
+        // Red の出方（2026-09-06）: `operating_margin` は現時点で
+        // FundamentalIndicator の $fillable に無く、マイグレーションも未作成。
+        // フィクスチャで渡した operating_margin は mass-assignment で黙って
+        // 捨てられるため、現行の ShowBuySignalListAction は営業利益率を見ず、
+        // 8.0% の銘柄も一覧に残す → `expect(...)->toBeNull()` がアサーション
+        // 不一致で失敗する（fatal ではない）。Green で $fillable / casts /
+        // マイグレーション / evaluate() 呼び出しに operating_margin を追加して
+        // 初めて意味のある検証になる。
+        test('ROE・自己資本比率・成長率は健全だが営業利益率が8.0%（基準割れ）の銘柄は買い増し候補一覧から除外される', function () {
+            [, $snapshot] = ucFrom010TestImportBatch();
+            $holding = ucFrom010TestHolding(['symbol_code' => '3088', 'market' => 'jp', 'symbol_name' => 'マツキヨココカラ&カンパニー']);
+            $holdingSnapshot = ucFrom010TestHoldingSnapshot($snapshot, $holding);
+            ucFrom010TestBuySignal($holdingSnapshot);
+            ucFrom010TestFundamentalIndicator($holding, [
+                'equity_ratio' => 58.0, 'roe' => 15.2, 'operating_margin' => 8.0,
+            ]);
+
+            $response = ucFrom010TestFetch($this);
+
+            $response->assertSuccessful();
+            expect(ucFrom010TestFindRow($response, '3088'))->toBeNull();
+        });
+
+        test('営業利益率が12.0%（健全）でROE・自己資本比率・成長率も健全な銘柄は買い増し候補一覧に掲載され fundamental_status=passed になる', function () {
+            [, $snapshot] = ucFrom010TestImportBatch();
+            $holding = ucFrom010TestHolding(['symbol_code' => '4063', 'market' => 'jp', 'symbol_name' => '信越化学工業']);
+            $holdingSnapshot = ucFrom010TestHoldingSnapshot($snapshot, $holding);
+            ucFrom010TestBuySignal($holdingSnapshot);
+            ucFrom010TestFundamentalIndicator($holding, [
+                'equity_ratio' => 58.0, 'roe' => 15.2, 'operating_margin' => 12.0,
+            ]);
+
+            $response = ucFrom010TestFetch($this);
+
+            $response->assertSuccessful();
+            $row = ucFrom010TestFindRow($response, '4063');
+            expect($row)->not->toBeNull();
+            expect($row['fundamental_status'])->toBe('passed');
+            // fundamental_summary に営業利益率が含まれる（use-cases.md UC-010
+            // 出力例「…・営業利益率18.3%」相当。正確な文言は Gate 4 で確認）
+            expect($row['fundamental_summary'])->toContain('営業利益率');
+        });
+
         test('ファンダメンタルズ指標が未取得（fundamentalIndicator行が存在しない、US株等）の銘柄はfundamental_status=unavailableとして一覧から除外されない', function () {
             [, $snapshot] = ucFrom010TestImportBatch();
             $holding = ucFrom010TestHolding(['symbol_code' => 'AAPL', 'market' => 'us', 'symbol_name' => 'Apple Inc.']);
@@ -648,22 +705,32 @@ describe('UC-010: 既存保有株の買い増しタイミングレコメンド�
         });
     });
 
-    describe('判定チェックリスト（criteria、CHG-0007）', function () {
-        test('各行に criteria（technical 7項目・fundamental 3項目・グループ別サマリ）が含まれる', function () {
+    describe('判定チェックリスト（criteria、CHG-0007 / CHG-0012）', function () {
+        // CHG-0012 / ADR-0011: 財務健全性チェックリストが 3→4 項目（営業利益率
+        // を4項目目に追加）。表示レイヤーは criteria 配列駆動のため、
+        // SignalCriteriaEvaluator::fundamentalRows() の1行追加で自動追従する。
+        // Red の出方: 現行実装は fundamental 3項目のため件数アサーションが
+        // 3 vs 4 で不一致（fatal ではない）。営業利益率を明示的にセットする
+        // ケースは、営業利益率を明示セットしても mass-assignment で捨てられる
+        // ため件数が 3 のままで、3 vs 4 のアサーション不一致になる。
+        test('各行に criteria（technical 7項目・fundamental 4項目・グループ別サマリ）が含まれ、財務に「営業利益率」列がある', function () {
             [, $snapshot] = ucFrom010TestImportBatch();
             $holding = ucFrom010TestHolding(['symbol_code' => '7203', 'symbol_name' => 'トヨタ自動車']);
             $holdingSnapshot = ucFrom010TestHoldingSnapshot($snapshot, $holding, ['current_price' => 1000.00]);
             ucFrom010TestBuySignal($holdingSnapshot, ['signal_type' => 'rsi_oversold_rebound']);
-            ucFrom010TestFundamentalIndicator($holding, ['equity_ratio' => 58.0, 'roe' => 15.2]);
+            ucFrom010TestFundamentalIndicator($holding, ['equity_ratio' => 58.0, 'roe' => 15.2, 'operating_margin' => 18.3]);
             ucFrom010TestTechnicalIndicator($holding);
 
             $row = ucFrom010TestFindRow(ucFrom010TestFetch($this), '7203');
 
             expect($row['criteria'])->toHaveKeys(['technical', 'fundamental', 'summary']);
             expect($row['criteria']['technical'])->toHaveCount(7);
-            expect($row['criteria']['fundamental'])->toHaveCount(3);
+            expect($row['criteria']['fundamental'])->toHaveCount(4);
             expect($row['criteria']['summary']['technical']['total'])->toBe(7);
-            expect($row['criteria']['summary']['fundamental']['total'])->toBe(3);
+            expect($row['criteria']['summary']['fundamental']['total'])->toBe(4);
+
+            $fundamentalLabels = array_column($row['criteria']['fundamental'], 'label');
+            expect($fundamentalLabels)->toContain('営業利益率');
 
             foreach ($row['criteria']['technical'] as $item) {
                 expect($item)->toHaveKeys(['label', 'threshold_label', 'value_label', 'status']);
@@ -671,21 +738,21 @@ describe('UC-010: 既存保有株の買い増しタイミングレコメンド�
             }
         });
 
-        test('全テクニカル基準を満たす銘柄は summary.technical.met が 7 になる', function () {
+        test('全テクニカル基準・全財務基準を満たす銘柄は summary.technical.met が 7・summary.fundamental.met が 4 になる', function () {
             [, $snapshot] = ucFrom010TestImportBatch();
             $holding = ucFrom010TestHolding(['symbol_code' => '6526', 'symbol_name' => 'ソシオネクスト']);
             $holdingSnapshot = ucFrom010TestHoldingSnapshot($snapshot, $holding, ['current_price' => 1000.00]);
             ucFrom010TestBuySignal($holdingSnapshot, ['signal_type' => 'rsi_oversold_rebound']);
-            ucFrom010TestFundamentalIndicator($holding, ['equity_ratio' => 58.0, 'roe' => 15.2, 'peg_ratio' => 0.7]);
+            ucFrom010TestFundamentalIndicator($holding, ['equity_ratio' => 58.0, 'roe' => 15.2, 'peg_ratio' => 0.7, 'operating_margin' => 18.3]);
             ucFrom010TestTechnicalIndicator($holding);
 
             $row = ucFrom010TestFindRow(ucFrom010TestFetch($this), '6526');
 
             expect($row['criteria']['summary']['technical']['met'])->toBe(7);
-            expect($row['criteria']['summary']['fundamental']['met'])->toBe(3);
+            expect($row['criteria']['summary']['fundamental']['met'])->toBe(4);
         });
 
-        test('ファンダメンタルズ指標が未取得（unavailable）の銘柄も criteria を返し、財務3項目が unavailable になる', function () {
+        test('ファンダメンタルズ指標が未取得（unavailable）の銘柄も criteria を返し、財務4項目（営業利益率含む）が unavailable になる', function () {
             [, $snapshot] = ucFrom010TestImportBatch();
             $holding = ucFrom010TestHolding(['symbol_code' => 'AAPL', 'market' => 'us', 'symbol_name' => 'Apple']);
             $holdingSnapshot = ucFrom010TestHoldingSnapshot($snapshot, $holding, ['current_price' => 130.00]);

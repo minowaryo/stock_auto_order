@@ -118,8 +118,9 @@ class ShowLossReviewListAction
         $roe = $fundamentalIndicator?->roe !== null ? (float) $fundamentalIndicator->roe : null;
         $revenueGrowth = $fundamentalIndicator?->revenue_growth !== null ? (float) $fundamentalIndicator->revenue_growth : null;
         $operatingIncomeGrowth = $fundamentalIndicator?->operating_income_growth !== null ? (float) $fundamentalIndicator->operating_income_growth : null;
+        $operatingMargin = $fundamentalIndicator?->operating_margin !== null ? (float) $fundamentalIndicator->operating_margin : null;
 
-        $fundamentalStatus = $this->evaluator->evaluate($equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth);
+        $fundamentalStatus = $this->evaluator->evaluate($equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin);
 
         $unrealizedGainRate = (float) $holdingSnapshot->unrealized_gain_rate;
         $unrealizedGainAmount = (float) $holdingSnapshot->unrealized_gain_amount;
@@ -153,6 +154,7 @@ class ShowLossReviewListAction
             'equity_ratio' => $equityRatio,
             'revenue_growth' => $revenueGrowth,
             'operating_income_growth' => $operatingIncomeGrowth,
+            'operating_margin' => $operatingMargin,
         ]);
 
         $portfolioLossShare = $portfolioTotal > 0.0
@@ -178,7 +180,7 @@ class ShowLossReviewListAction
             'continuous_holding_weeks' => $continuous['weeks'],
             'continuous_holding_weeks_is_truncated' => $continuous['is_truncated'],
             'fundamental_status' => $fundamentalStatus,
-            'fundamental_summary' => $this->fundamentalSummary($fundamentalStatus, $roe, $equityRatio, $revenueGrowth, $operatingIncomeGrowth),
+            'fundamental_summary' => $this->fundamentalSummary($fundamentalStatus, $roe, $equityRatio, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin),
             'rebound_buy_signal_count' => $reboundCount,
             'rebound_buy_signal_present' => $reboundPresent,
             'also_on_buy_list' => $alsoOnBuyList,
@@ -215,6 +217,7 @@ class ShowLossReviewListAction
         ?float $equityRatio,
         ?float $revenueGrowth,
         ?float $operatingIncomeGrowth,
+        ?float $operatingMargin,
     ): string {
         if ($fundamentalStatus === 'unavailable') {
             return 'ファンダメンタルズ指標が未取得のため判定できません';
@@ -227,15 +230,20 @@ class ShowLossReviewListAction
         // 判定チェックリストの成長率チップと同じ「≤0%」基準。ちょうど0%も
         // 含むため「マイナス」ではなく「0%以下」と表記する（/review LOW 指摘）。
         $growthNote = ($growth !== null && $growth <= FundamentalHealthEvaluator::MIN_GROWTH_RATE) ? '（成長率0%以下）' : '';
+        // 営業利益率とROEは注記の文言・閾値がどちらも「（基準10%未満）」で
+        // 同じになるため、必ず指標名とセットで並べる（CHG-0012 / ADR-0011）。
+        $marginNote = ($operatingMargin !== null && $operatingMargin < FundamentalHealthEvaluator::MIN_OPERATING_MARGIN) ? '（基準10%未満）' : '';
 
         return sprintf(
-            'ROE%s%%%s・自己資本比率%s%%%s・成長率%s%s',
+            'ROE%s%%%s・自己資本比率%s%%%s・成長率%s%s・営業利益率%s%%%s',
             $this->fmt($roe),
             $roeNote,
             $this->fmt($equityRatio),
             $equityNote,
             $growth === null ? '-' : sprintf('%+.1f%%', $growth),
             $growthNote,
+            $this->fmt($operatingMargin),
+            $marginNote,
         );
     }
 

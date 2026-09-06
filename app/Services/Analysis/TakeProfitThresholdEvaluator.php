@@ -27,9 +27,9 @@ final class TakeProfitThresholdEvaluator
     /**
      * @return array{mode: string, target_gain_rate_threshold: float, first_tier_price_multiplier: float, second_tier_price_multiplier: float}
      */
-    public function evaluate(int $signalCount, ?float $equityRatio, ?float $roe, ?float $revenueGrowth, ?float $operatingIncomeGrowth): array
+    public function evaluate(int $signalCount, ?float $equityRatio, ?float $roe, ?float $revenueGrowth, ?float $operatingIncomeGrowth, ?float $operatingMargin): array
     {
-        if ($signalCount === 0 && $this->evaluator->evaluate($equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth) === 'passed') {
+        if ($signalCount === 0 && $this->evaluator->evaluate($equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin) === 'passed') {
             return [
                 'mode' => 'high_water_mark',
                 'target_gain_rate_threshold' => 150.0,

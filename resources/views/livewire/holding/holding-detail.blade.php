@@ -51,6 +51,7 @@
         'ROE' => $fmtUnsignedPercent($detail['roe']),
         '売上成長率' => $fmtUnsignedPercent($detail['revenue_growth']),
         '自己資本比率' => $fmtUnsignedPercent($detail['equity_ratio']),
+        '営業利益率' => $fmtUnsignedPercent($detail['operating_margin']),
         '配当利回り' => $fmtUnsignedPercent($detail['dividend_yield']),
         'EPS成長率' => $fmtUnsignedPercent($detail['eps_growth']),
         'PEGレシオ' => $fmt2Decimal($detail['peg_ratio']),

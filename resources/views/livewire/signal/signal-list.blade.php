@@ -16,7 +16,7 @@
                 二重線にならないようにしている。
             --}}
             <div id="buy-signals-header-scroll" class="overflow-x-auto sticky top-0 z-20 bg-surface [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                <table class="table-fixed w-[1406px] text-[11px] border border-app-border border-b-0 [&_th]:border [&_th]:border-app-border">
+                <table class="table-fixed w-[1478px] text-[11px] border border-app-border border-b-0 [&_th]:border [&_th]:border-app-border">
                     <x-signal-table-colgroup
                         :technical-count="count($buySignals[0]['criteria']['technical'])"
                         :fundamental-count="count($buySignals[0]['criteria']['fundamental'])"
@@ -28,7 +28,7 @@
                 </table>
             </div>
             <div class="overflow-x-auto" data-scroll-sync-with="buy-signals-header-scroll">
-                <table class="table-fixed w-[1406px] text-[11px] border border-app-border [&_td]:border [&_td]:border-app-border [&_td]:align-top [&_td]:break-words">
+                <table class="table-fixed w-[1478px] text-[11px] border border-app-border [&_td]:border [&_td]:border-app-border [&_td]:align-top [&_td]:break-words">
                     <x-signal-table-colgroup
                         :technical-count="count($buySignals[0]['criteria']['technical'])"
                         :fundamental-count="count($buySignals[0]['criteria']['fundamental'])"
@@ -80,7 +80,7 @@
             <x-empty-state>利確検討が必要な銘柄はありません</x-empty-state>
         @else
             <div id="take-profit-header-scroll" class="overflow-x-auto sticky top-0 z-20 bg-surface [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                <table class="table-fixed w-[1406px] text-[11px] border border-app-border border-b-0 [&_th]:border [&_th]:border-app-border">
+                <table class="table-fixed w-[1478px] text-[11px] border border-app-border border-b-0 [&_th]:border [&_th]:border-app-border">
                     <x-signal-table-colgroup
                         :technical-count="count($signals[0]['criteria']['technical'])"
                         :fundamental-count="count($signals[0]['criteria']['fundamental'])"
@@ -92,7 +92,7 @@
                 </table>
             </div>
             <div class="overflow-x-auto" data-scroll-sync-with="take-profit-header-scroll">
-                <table class="table-fixed w-[1406px] text-[11px] border border-app-border [&_td]:border [&_td]:border-app-border [&_td]:align-top [&_td]:break-words">
+                <table class="table-fixed w-[1478px] text-[11px] border border-app-border [&_td]:border [&_td]:border-app-border [&_td]:align-top [&_td]:break-words">
                     <x-signal-table-colgroup
                         :technical-count="count($signals[0]['criteria']['technical'])"
                         :fundamental-count="count($signals[0]['criteria']['fundamental'])"
@@ -144,7 +144,7 @@
             <x-empty-state>整理検討が必要な含み損銘柄はありません</x-empty-state>
         @else
             <div id="loss-review-header-scroll" class="overflow-x-auto sticky top-0 z-20 bg-surface [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                <table class="table-fixed w-[1440px] text-[11px] border border-app-border border-b-0 [&_th]:border [&_th]:border-app-border">
+                <table class="table-fixed w-[1512px] text-[11px] border border-app-border border-b-0 [&_th]:border [&_th]:border-app-border">
                     <x-loss-review-table-colgroup
                         :technical-count="count($lossReviews[0]['criteria']['technical'])"
                         :fundamental-count="count($lossReviews[0]['criteria']['fundamental'])"
@@ -157,7 +157,7 @@
                 </table>
             </div>
             <div class="overflow-x-auto" data-scroll-sync-with="loss-review-header-scroll">
-                <table class="table-fixed w-[1440px] text-[11px] border border-app-border [&_td]:border [&_td]:border-app-border [&_td]:align-top [&_td]:break-words">
+                <table class="table-fixed w-[1512px] text-[11px] border border-app-border [&_td]:border [&_td]:border-app-border [&_td]:align-top [&_td]:break-words">
                     <x-loss-review-table-colgroup
                         :technical-count="count($lossReviews[0]['criteria']['technical'])"
                         :fundamental-count="count($lossReviews[0]['criteria']['fundamental'])"

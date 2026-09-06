@@ -198,6 +198,9 @@ function ucFrom011TestFundamentalIndicator(Holding $holding, array $attributes =
             'dividend_payout_ratio' => 30.0,
             'eps_growth' => 10.0,
             'peg_ratio' => 1.2,
+            // CHG-0012 / ADR-0011: 営業利益率10%以上（健全）をデフォルトに。
+            // 'failed' を意図するテストは override で operating_margin を渡す。
+            'operating_margin' => 18.3,
             'fetched_at' => now(),
         ], $attributes),
     );
@@ -511,7 +514,14 @@ describe('UC-011: 整理検討（含み損）候補一覧', function () {
     });
 
     describe('判定チェックリスト（criteria）', function () {
-        test('criteria は UC-004 と同一構造（technical 7 / fundamental 3 / summary の met/near/total）', function () {
+        // CHG-0012 / ADR-0011: 整理検討テーブルの財務健全性チェックリストも
+        // 3→4 項目（営業利益率を追加）。ADR-0010 D6 の反転フラグに乗るため、
+        // 営業利益率も「10%未満＝投資根拠の毀損＝met」となる。
+        // Red の出方: 件数アサーションが 3 vs 4 で不一致。営業利益率を明示
+        // セットするケースも、mass-assignment で捨てられるため現行の
+        // fundamental_status / criteria が旧仕様のままとなりアサーション不一致で
+        // 失敗する（fatal ではない）。
+        test('criteria は UC-004 と同一構造（technical 7 / fundamental 4 / summary の met/near/total）で、財務に「営業利益率」列がある', function () {
             [, $snapshot] = ucFrom011TestBatch();
             $holding = ucFrom011TestHolding(['symbol_code' => '7203', 'symbol_name' => 'トヨタ自動車']);
             ucFrom011TestHoldingSnapshot($snapshot, $holding);
@@ -522,11 +532,14 @@ describe('UC-011: 整理検討（含み損）候補一覧', function () {
 
             expect($row['criteria'])->toHaveKeys(['technical', 'fundamental', 'summary']);
             expect($row['criteria']['technical'])->toHaveCount(7);
-            expect($row['criteria']['fundamental'])->toHaveCount(3);
+            expect($row['criteria']['fundamental'])->toHaveCount(4);
             expect($row['criteria']['summary']['technical'])->toHaveKeys(['met', 'near', 'total']);
             expect($row['criteria']['summary']['fundamental'])->toHaveKeys(['met', 'near', 'total']);
             expect($row['criteria']['summary']['technical']['total'])->toBe(7);
-            expect($row['criteria']['summary']['fundamental']['total'])->toBe(3);
+            expect($row['criteria']['summary']['fundamental']['total'])->toBe(4);
+
+            $fundamentalLabels = array_column($row['criteria']['fundamental'], 'label');
+            expect($fundamentalLabels)->toContain('営業利益率');
 
             foreach ($row['criteria']['technical'] as $item) {
                 expect($item)->toHaveKeys(['label', 'threshold_label', 'value_label', 'status']);
@@ -544,6 +557,63 @@ describe('UC-011: 整理検討（含み損）候補一覧', function () {
             $row = ucFrom011TestFindRow(ucFrom011TestExecute(), '6526');
 
             expect($row['criteria']['summary']['technical']['met'])->toBe(7);
+        });
+
+        // ---------------------------------------------------------------
+        // CR (2026-09-06, CHG-0012 / ADR-0011): 営業利益率の反転チップ
+        // ---------------------------------------------------------------
+        test('含み損-40%かつ営業利益率5.0%（基準割れ）の銘柄は、判定チェックリストの営業利益率チップが met（反転）・fundamental_status=failed・サマリの投資根拠の毀損に数えられる', function () {
+            [, $snapshot] = ucFrom011TestBatch();
+            $holding = ucFrom011TestHolding(['symbol_code' => '3088', 'symbol_name' => 'マツキヨココカラ&カンパニー']);
+            ucFrom011TestHoldingSnapshot($snapshot, $holding);
+            ucFrom011TestTechnicalIndicator($holding);
+            // ROE・自己資本比率・成長率は健全、営業利益率のみ基準割れ
+            ucFrom011TestFundamentalIndicator($holding, [
+                'roe' => 15.2, 'equity_ratio' => 58.0, 'revenue_growth' => 8.0,
+                'operating_income_growth' => 12.3, 'operating_margin' => 5.0,
+            ]);
+
+            $row = ucFrom011TestFindRow(ucFrom011TestExecute(), '3088');
+
+            expect($row)->not->toBeNull();
+            expect($row['fundamental_status'])->toBe('failed');
+
+            $marginChip = null;
+            foreach ($row['criteria']['fundamental'] as $item) {
+                if ($item['label'] === '営業利益率') {
+                    $marginChip = $item;
+                }
+            }
+            expect($marginChip)->not->toBeNull();
+            expect($marginChip['status'] ?? null)->toBe('met'); // 反転契約: 10%未満で met
+            expect($marginChip['threshold_label'] ?? '')->toContain('<10');
+
+            // fundamental_summary に営業利益率が「（基準10%未満）」付きで含まれる
+            // （use-cases.md UC-011 出力例「…・営業利益率7.8%（基準10%未満）」相当）
+            expect($row['fundamental_summary'])->toContain('営業利益率');
+            expect($row['fundamental_summary'])->toContain('基準10%未満');
+        });
+
+        test('含み損銘柄でも営業利益率が20.0%（健全）なら、判定チェックリストの営業利益率チップは unmet（＝毀損していない）', function () {
+            [, $snapshot] = ucFrom011TestBatch();
+            $holding = ucFrom011TestHolding(['symbol_code' => '6758', 'symbol_name' => 'ソニーグループ']);
+            ucFrom011TestHoldingSnapshot($snapshot, $holding);
+            ucFrom011TestTechnicalIndicator($holding);
+            ucFrom011TestFundamentalIndicator($holding, [
+                'roe' => 15.2, 'equity_ratio' => 58.0, 'operating_margin' => 20.0,
+            ]);
+
+            $row = ucFrom011TestFindRow(ucFrom011TestExecute(), '6758');
+
+            $marginChip = null;
+            foreach ($row['criteria']['fundamental'] as $item) {
+                if ($item['label'] === '営業利益率') {
+                    $marginChip = $item;
+                }
+            }
+            expect($marginChip)->not->toBeNull();
+            expect($marginChip['status'] ?? null)->toBe('unmet');
+            expect($marginChip['value_label'] ?? null)->toBe('20.0%');
         });
     });
 

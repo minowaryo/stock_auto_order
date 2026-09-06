@@ -177,6 +177,9 @@ function ucFrom005SectorTestFundamental(Holding $holding, array $attributes = []
         // 設定する（UC008NewCandidateListTest.phpの
         // ucFrom008CandidateTestFundamental()と同じフィクスチャ調整）。
         'revenue_growth' => 8.0,
+        // CHG-0012 / ADR-0011: 財務健全性フィルタの4条件目。上記の成長率
+        // 条件と同じ理由で健全な既定値を設定する。
+        'operating_margin' => 15.0,
         'fetched_at' => now(),
     ], $attributes));
 }

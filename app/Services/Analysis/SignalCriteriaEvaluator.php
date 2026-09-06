@@ -315,13 +315,13 @@ final class SignalCriteriaEvaluator
     }
 
     /**
-     * 財務健全性3項目。
+     * 財務健全性4項目（CHG-0012 / ADR-0011 で営業利益率を4項目目に追加）。
      *
      * $forLossReview = false（UC-004/UC-010）: FundamentalHealthEvaluator の
      * 基準をそのまま可視化し「健全＝met」とする。
-     * $forLossReview = true（UC-011 / ADR-0010 D6 改訂）: 判定の向きを反転し
-     * 「基準割れ（＝投資根拠の毀損）＝met」とする。閾値の値は同じ定数を流用し
-     * direction と threshold_label のみ反転する。
+     * $forLossReview = true（UC-011 / ADR-0010 D6 改訂・ADR-0011 D7）: 判定の
+     * 向きを反転し「基準割れ（＝投資根拠の毀損）＝met」とする。閾値の値は同じ
+     * 定数を流用し direction と threshold_label のみ反転する。
      *
      * @param  array<string, float|null>  $metrics
      * @return list<array{label: string, threshold_label: string, value_label: string, status: string}>
@@ -356,6 +356,14 @@ final class SignalCriteriaEvaluator
                     'lte',
                     fn (float $v) => sprintf('%+.1f%%', $v),
                 ),
+                $this->row(
+                    '営業利益率',
+                    sprintf('<%d%%', (int) FundamentalHealthEvaluator::MIN_OPERATING_MARGIN),
+                    $metrics['operating_margin'] ?? null,
+                    FundamentalHealthEvaluator::MIN_OPERATING_MARGIN,
+                    'lt',
+                    fn (float $v) => number_format($v, 1).'%',
+                ),
             ];
         }
 
@@ -383,6 +391,14 @@ final class SignalCriteriaEvaluator
                 FundamentalHealthEvaluator::MIN_GROWTH_RATE,
                 'gt',
                 fn (float $v) => sprintf('%+.1f%%', $v),
+            ),
+            $this->row(
+                '営業利益率',
+                sprintf('≥%d%%', (int) FundamentalHealthEvaluator::MIN_OPERATING_MARGIN),
+                $metrics['operating_margin'] ?? null,
+                FundamentalHealthEvaluator::MIN_OPERATING_MARGIN,
+                'gte',
+                fn (float $v) => number_format($v, 1).'%',
             ),
         ];
     }
