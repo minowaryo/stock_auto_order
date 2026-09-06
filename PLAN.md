@@ -1,7 +1,28 @@
 # PLAN.md
 
 > 2026-08-27（フロントエンド実装Phase5完了時点。UC-010 Gate4完了・コミット`ba239fe`分も含む）以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、Phase2 UC-008（Cycle1・Cycle2）完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査完了、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了、利確・リバランス閾値の動的分岐ロジック検討〔検討事項の記録のみ、実装はCHG-0006として2026-08-28〜29に別途完了〕、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、フロントエンド実装Phase4（UC-003銘柄詳細画面）完了、UC-010 Gate2/Gate3正式承認（買いシグナル7種の前提条件追加）完了、UC-010 Gate4完了・コミット（`ba239fe`）、フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了、およびフロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了〔2026-09-05、CHG-0011作業時に退避〕等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
-> **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。
+> **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。300行超過に伴い「数値表示フォーマット修正完了（2026-08-28）」「UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0012 Phase 0作業時）。
+
+## 財務健全性フィルタに営業利益率を追加（CHG-0012・ADR-0011）Phase 0 ドキュメント先行（2026-09-06〜）
+
+### Decision
+
+- 本人要望: 「財務健全性を確認できるわかりやすい項目を、中長期目線での評価がしやすくなるよう3項目からもう1項目足したい。おすすめは？」→ 営業利益率（営業利益÷売上高）を推奨・採用。3項目（ROE・自己資本比率・成長率）は資本効率／BSの頑丈さ／成長を見るが「事業そのものの稼ぐ力（利益率）」が欠けていた
+- Planフェーズ承認済み。プランファイル: `~/.claude/plans/stock_auto_order-operating-margin-phase.md`
+- 本人と確定（AskUserQuestion）: (1) **表示のみでなく判定に組み込む**（`FundamentalHealthEvaluator` の4条件目）、(2) 閾値 **10%以上**（8%案と実測比較。8%＝追加で2銘柄 failed／10%＝5銘柄。境界9〜10%の3銘柄を切ることを許容）、(3) `|営業利益率|>999%` は「—」（算出不可）扱いで Mapper が null 化
+- 実測検証済み（保有128銘柄）: US=Finnhub `stock/metric` の `operatingMarginTTM`（無ければ `operatingMarginAnnual`）に存在・パーセントスケール・実態一致。JP=J-Quants で既取得の `net_sales`/`operating_profit` から実測算出（新規APIコールなし）。判定組み込みの実影響は 財務 `passed` が JP 15→11・US 12→11（合計 27→22）。落ちる銘柄: 3088マツキヨココカラ7.6% / 7867タカラトミー9.0% / 5288アジアパイルHD9.4% / 5805SWCC9.8% / IONQ-408%（いずれも妥当な検出）。ACHR は `operatingMarginAnnual=-243100` を返すため `decimal(7,4)` だと ADR-0006 と同じ INSERT エラー → `decimal(10,4)` ＋ null化で予防
+- 影響範囲: `FundamentalHealthEvaluator::evaluate()` が5引数化 → 呼び出し元6機能（`TakeProfitThresholdEvaluator`／`NewCandidateFinder`／`ShowImportSummaryReportAction`／`ShowBuySignalListAction`／`ShowLossReviewListAction`）改修必須。`FundamentalIndicator::healthEvaluatorArgs()` を4→5要素化。判定チェックリスト（`SignalCriteriaEvaluator::fundamentalRows()`）が財務3→4項目、Bladeのテーブル固定幅 `w-[1440px]`→`w-[1512px]`。UC-011 は ADR-0010 D6 の反転フラグに営業利益率も乗せる。NISA推奨の追加基準は変更しない。**`NewCandidateFinder` の SQL事前絞り込みに `operating_margin>=10` を足さない**（NULL行がSQLで落ち evaluator の unavailable 判定に到達しなくなる）
+- **実施タイミング**: F-011（`feat/f011-loss-review-list`）が `fundamentalRows()` と `SignalCriteriaEvaluatorTest` の `'total' => 3` アサート群を触っている最中のため、**F-011 マージ後に独立CRとして実装着手**。本セッションは Phase 0（ドキュメント＋ADR-0011）のみ、別ブランチ `feat/chg0012-operating-margin-criterion` で先行
+
+### Files touched
+
+**ドキュメント（Phase 0、本セッション）**: `docs/adr/ADR-0011-operating-margin-health-criterion.md`（新規、Status: Proposed）、`docs/architecture/data-model.md`（`fundamental_indicators` に `operating_margin` 行・US Mapper注記・「保留・確定が必要な初期パラメータ値」表4行〔財務健全性フィルタ／買い増し用／整理検討3→4項目／near バッファ〕・承認記録・変更履歴）、`docs/product/use-cases.md`（UC-001フロー7・UC-003フロー4・UC-004/010/011 判定チェックリスト財務3→4項目・UC-005/008/009 健全性フィルタ・`criteria`データ辞書・`fundamental_summary`例・承認記録）、`docs/product/requirements.md`（3章ファンダ指標一覧・F-010説明）、`docs/product/ui-guidelines.md`（チップ配色規約・サマリバッジ文言・固定件数記述・テーブル幅注記）、`docs/product/accuracy-improvement-backlog.md`（営業利益率の行を追加）、`docs/rcid/traceability-matrix.md`（CHG-0012行・F-004/009/010/011行に注記）、`PLAN.md`（本エントリ＋2エントリ退避）
+
+**コード**: 未着手（F-011 マージ後）。実装ステップはプランファイル参照（migration → 両Mapper → `FundamentalHealthEvaluator` → 呼び出し元6機能 → `SignalCriteriaEvaluator` → Blade、Red→Gate4→Green→Refactor→`/review`）
+
+### Status
+
+Phase 0（ドキュメント先行）完了。Gate 2（use-cases.md）／Gate 3（data-model.md、`operating_margin` 列追加のマイグレーションを伴うため実質的な承認が必要）は**本人レビュー待ち**。実装は F-011 マージ後。
 
 ## 整理検討（含み損）候補一覧の新設（F-011・UC-011・ADR-0010・CHG-0010）（2026-09-05〜）
 
@@ -240,42 +261,6 @@ Gate4完了（Red→Gate4承認→Green→`/review`→修正）。フルスイ�
 ### Status
 
 `SignalListTest`/`HoldingListTest` 25件 Green。`npm run build` でTailwindの追加クラス（`[&_td]:border` 等）がビルド済みCSSに反映されていることを確認。実ブラウザでの目視確認は別セッションのPlaywrightがブラウザプロファイルをロックしていて未実施（次回セッションで確認）。未コミット
-
-## 数値表示フォーマット修正完了（保有一覧・銘柄詳細・売買シグナル）（2026-08-28）
-
-### Decision
-
-- 「今後の対応」に記録済みだった数値未整形表示（Phase3〜5）を解消した。フォーマット規則: 含み益率は符号付き1桁+%、ROE等の水準系は符号なし1桁+%、価格系はカンマ区切り2桁、出来高はカンマ区切り整数、RSI/PERは1桁、MACD/PBR/PEGレシオは2桁（単位記号なし）
-- `test-writer`が既存3テストファイル（`HoldingListTest`/`HoldingDetailTest`/`SignalListTest`）のアサーションを新フォーマット文字列に改訂。4件Red・35件Green確認。Gate4で「保有一覧のRSI/PERバッジは対象外のままでよいか」を確認し「進めてよい」で承認
-- `tdd-implementer`がGreenフェーズを実装。3つのBladeテンプレートのみ変更（Livewireコンポーネント・Actionのロジックは無変更）。対象39件・フルスイート374件Green。実装中、PBRのフォーマット桁数についてタスク指示（2桁ルール）とGate4承認済みテストのフィクスチャ（1桁想定）に矛盾が見つかったため、承認済みテストを優先し1桁ルールで実装（Blade内にコメントで理由を明記）
-- 実データ（134銘柄）でPlaywright実ブラウザ確認: 保有一覧（価格・含み益率・売上成長バッジ）、売買シグナル（含み益率・分割買い下がり価格）、銘柄詳細（テクニカル/ファンダメンタルズ指標全項目）が意図通りフォーマットされて表示されることを確認
-- 市場全体指標ウィジェット（日経平均・S&P500）は元の指摘範囲外のため未整形のまま残っている（次回対応時の候補として記録）
-
-### Files touched
-
-`resources/views/livewire/holding/holding-list.blade.php`、`resources/views/livewire/holding/holding-detail.blade.php`、`resources/views/livewire/signal/signal-list.blade.php`、`tests/Feature/HoldingListTest.php`、`tests/Feature/HoldingDetailTest.php`、`tests/Feature/SignalListTest.php`、`PLAN.md`（本エントリ追加）
-
-### Status
-
-Green確認・実データ実ブラウザ確認完了（コミット`d2756c6`、未push）。フルスイート374件Green。市場全体指標ウィジェットの数値整形は未対応のまま残存（軽微、次回候補）
-
-## UC-010買い増し候補セクションのフロントエンド統合完了、実データE2E確認（2026-08-28）
-
-### Decision
-
-- UC-010バックエンド（`/review`修正・CHG-0005含む）がmainにマージ済みとなったため、残っていたフロントエンド統合（`/signals`画面へ買い増し候補セクションを追加）に着手した。モックアップ（`screen-UC004-signal-list.html`）通り、上部＝買い増し候補（UC-010）・下部＝利確検討（UC-004）の2段構成
-- `test-writer`が`tests/Feature/SignalListTest.php`に5件追加（既存UC-004分8件は無改変）。正常系（銘柄名/含み益率/シグナルバッジ/理由サマリ/財務健全性/分割買い下がり3段階の一括表示）・NISA推奨表示・財務指標取得不可表示・空状態・2セクション同時表示をカバー。5件Red・8件Green確認しGate4承認
-- `tdd-implementer`がGreenフェーズを実装: `SignalList::render()`に`ShowBuySignalListAction`の呼び出しを追加、`signal-list.blade.php`先頭にモックアップ準拠の買い増し候補セクションを追加。ページタイトルを「利確検討」→「売買シグナル」に変更（モックアップに整合、既存テストと非衝突）。対象13件・フルスイート374件Green
-- **実データE2E確認**: `docs/original-docs/`の元CSV3ファイル（JP株・US株・投資信託）を実際に`/csv-import`画面から取り込み、134銘柄・エラー0件で取込完了することを確認（1回目はUI操作のタイミングにより投資信託分が反映されない取込〔128銘柄〕になったため、各ファイルのアップロード完了を待ってから再実行し134銘柄で成功。原因はテスト実装の不備ではなく手動操作側の待ち時間不足）
-- 取込後、`/import-batches/{id}/summary-report`・`/holdings`・`/holdings/{id}`・`/signals`（買い増し候補セクション含む）・`/sector-dashboard`・`/candidate-check`（個別銘柄チェック含む）の全画面をPlaywrightで実際に確認し、実データに基づく表示（シグナル種別・財務健全性サマリ・成長率・NISA推奨・分割買い下がり提案・セクター配分・重複度判定等）が正しく反映されることを確認した。セクター「未分類」96.8%・新規投資候補「おすすめ候補はありません」は、既知の制約（J-Quantsレート制限によるセクター分類未取得の多さ、注目テーマ未登録）による想定通りの挙動であり、本タスクの不具合ではない
-
-### Files touched
-
-`app/Livewire/Signal/SignalList.php`（`ShowBuySignalListAction`呼び出し追加、タイトル変更）、`resources/views/livewire/signal/signal-list.blade.php`（買い増し候補セクション追加）、`tests/Feature/SignalListTest.php`（UC-010統合テスト5件追加）、`PLAN.md`（本エントリ追加）
-
-### Status
-
-Green確認・実データE2E確認完了（コミット`dd30650`、未push）。フルスイート374件Green。これでUC-010はバックエンド・フロントエンドとも完結（`docs/rcid/traceability-matrix.md`のF-010ステータス更新要）
 
 ## 今後の対応（未着手）（2026-08-27追記、Phase5の実ブラウザ確認時に発見）
 

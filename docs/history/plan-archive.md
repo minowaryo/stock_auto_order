@@ -1,6 +1,42 @@
 # PLAN.md アーカイブ（〜2026-08-28 フロントエンド実装Phase7完了時点）
 
-PLAN.md から退避した完了済みエントリ。フロントエンド実装Phase7（UC-006/UC-008統合「新規投資候補」画面）完了・その`/review`指摘（MEDIUM 3件）修正完了の記録を追加（2026-09-06、CHG-0011コミット時に300行超過に伴い退避）。フロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了の記録を追加（2026-09-05、CHG-0011作業時に300行超過に伴い退避）。フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了までの記録を追加。UC-010（既存保有株の買い増しタイミングレコメンド）Gate4完了・コミット（`ba239fe`）までの記録を追加。Gate0セットアップ〜Phase1（UC-001/002/003/009）Gate4サイクル完了・ADR-0002 NISA区分CR・投資方針背景整理・ADR-0004（分析エンジンの指標セット拡張、設計確定〜TechnicalIndicatorCalculator〜MarketData層〜JQuantsClient〜SignalDeterminationService〜FundamentalIndicatorMapperの各TDDサイクル、UC-001への配線・UC-004画面実装・UC-003/UC-009への新指標反映を含む）完了、関連する`/review`指摘修正2件・UC-009サンプルレポート生成・per-holding非アトミック性修正、F-010（UC-010）のGate1〜3ドキュメント叩き台整備（ADR-0007新規作成、requirements.md/use-cases.md/data-model.md改訂）、NISA区分（口座区分）内訳の書き込み経路・UC-004消費側の実装完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、およびフロントエンド実装Phase4（UC-003銘柄詳細画面）完了までの記録。現在進行中のタスクとは直接関係しないため参照頻度は低いが、経緯確認が必要な場合はここを見る。
+PLAN.md から退避した完了済みエントリ。数値表示フォーマット修正完了（2026-08-28）・UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）の記録を追加（2026-09-06、CHG-0012 Phase 0作業時に300行超過に伴い退避）。フロントエンド実装Phase7（UC-006/UC-008統合「新規投資候補」画面）完了・その`/review`指摘（MEDIUM 3件）修正完了の記録を追加（2026-09-06、CHG-0011コミット時に300行超過に伴い退避）。フロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了の記録を追加（2026-09-05、CHG-0011作業時に300行超過に伴い退避）。フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了までの記録を追加。UC-010（既存保有株の買い増しタイミングレコメンド）Gate4完了・コミット（`ba239fe`）までの記録を追加。Gate0セットアップ〜Phase1（UC-001/002/003/009）Gate4サイクル完了・ADR-0002 NISA区分CR・投資方針背景整理・ADR-0004（分析エンジンの指標セット拡張、設計確定〜TechnicalIndicatorCalculator〜MarketData層〜JQuantsClient〜SignalDeterminationService〜FundamentalIndicatorMapperの各TDDサイクル、UC-001への配線・UC-004画面実装・UC-003/UC-009への新指標反映を含む）完了、関連する`/review`指摘修正2件・UC-009サンプルレポート生成・per-holding非アトミック性修正、F-010（UC-010）のGate1〜3ドキュメント叩き台整備（ADR-0007新規作成、requirements.md/use-cases.md/data-model.md改訂）、NISA区分（口座区分）内訳の書き込み経路・UC-004消費側の実装完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、およびフロントエンド実装Phase4（UC-003銘柄詳細画面）完了までの記録。現在進行中のタスクとは直接関係しないため参照頻度は低いが、経緯確認が必要な場合はここを見る。
+
+## 数値表示フォーマット修正完了（保有一覧・銘柄詳細・売買シグナル）（2026-08-28）
+
+### Decision
+
+- 「今後の対応」に記録済みだった数値未整形表示（Phase3〜5）を解消した。フォーマット規則: 含み益率は符号付き1桁+%、ROE等の水準系は符号なし1桁+%、価格系はカンマ区切り2桁、出来高はカンマ区切り整数、RSI/PERは1桁、MACD/PBR/PEGレシオは2桁（単位記号なし）
+- `test-writer`が既存3テストファイル（`HoldingListTest`/`HoldingDetailTest`/`SignalListTest`）のアサーションを新フォーマット文字列に改訂。4件Red・35件Green確認。Gate4で「保有一覧のRSI/PERバッジは対象外のままでよいか」を確認し「進めてよい」で承認
+- `tdd-implementer`がGreenフェーズを実装。3つのBladeテンプレートのみ変更（Livewireコンポーネント・Actionのロジックは無変更）。対象39件・フルスイート374件Green。実装中、PBRのフォーマット桁数についてタスク指示（2桁ルール）とGate4承認済みテストのフィクスチャ（1桁想定）に矛盾が見つかったため、承認済みテストを優先し1桁ルールで実装（Blade内にコメントで理由を明記）
+- 実データ（134銘柄）でPlaywright実ブラウザ確認: 保有一覧（価格・含み益率・売上成長バッジ）、売買シグナル（含み益率・分割買い下がり価格）、銘柄詳細（テクニカル/ファンダメンタルズ指標全項目）が意図通りフォーマットされて表示されることを確認
+- 市場全体指標ウィジェット（日経平均・S&P500）は元の指摘範囲外のため未整形のまま残っている（次回対応時の候補として記録）
+
+### Files touched
+
+`resources/views/livewire/holding/holding-list.blade.php`、`resources/views/livewire/holding/holding-detail.blade.php`、`resources/views/livewire/signal/signal-list.blade.php`、`tests/Feature/HoldingListTest.php`、`tests/Feature/HoldingDetailTest.php`、`tests/Feature/SignalListTest.php`、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実データ実ブラウザ確認完了（コミット`d2756c6`、未push）。フルスイート374件Green。市場全体指標ウィジェットの数値整形は未対応のまま残存（軽微、次回候補）
+
+## UC-010買い増し候補セクションのフロントエンド統合完了、実データE2E確認（2026-08-28）
+
+### Decision
+
+- UC-010バックエンド（`/review`修正・CHG-0005含む）がmainにマージ済みとなったため、残っていたフロントエンド統合（`/signals`画面へ買い増し候補セクションを追加）に着手した。モックアップ（`screen-UC004-signal-list.html`）通り、上部＝買い増し候補（UC-010）・下部＝利確検討（UC-004）の2段構成
+- `test-writer`が`tests/Feature/SignalListTest.php`に5件追加（既存UC-004分8件は無改変）。正常系（銘柄名/含み益率/シグナルバッジ/理由サマリ/財務健全性/分割買い下がり3段階の一括表示）・NISA推奨表示・財務指標取得不可表示・空状態・2セクション同時表示をカバー。5件Red・8件Green確認しGate4承認
+- `tdd-implementer`がGreenフェーズを実装: `SignalList::render()`に`ShowBuySignalListAction`の呼び出しを追加、`signal-list.blade.php`先頭にモックアップ準拠の買い増し候補セクションを追加。ページタイトルを「利確検討」→「売買シグナル」に変更（モックアップに整合、既存テストと非衝突）。対象13件・フルスイート374件Green
+- **実データE2E確認**: `docs/original-docs/`の元CSV3ファイル（JP株・US株・投資信託）を実際に`/csv-import`画面から取り込み、134銘柄・エラー0件で取込完了することを確認（1回目はUI操作のタイミングにより投資信託分が反映されない取込〔128銘柄〕になったため、各ファイルのアップロード完了を待ってから再実行し134銘柄で成功。原因はテスト実装の不備ではなく手動操作側の待ち時間不足）
+- 取込後、`/import-batches/{id}/summary-report`・`/holdings`・`/holdings/{id}`・`/signals`（買い増し候補セクション含む）・`/sector-dashboard`・`/candidate-check`（個別銘柄チェック含む）の全画面をPlaywrightで実際に確認し、実データに基づく表示（シグナル種別・財務健全性サマリ・成長率・NISA推奨・分割買い下がり提案・セクター配分・重複度判定等）が正しく反映されることを確認した。セクター「未分類」96.8%・新規投資候補「おすすめ候補はありません」は、既知の制約（J-Quantsレート制限によるセクター分類未取得の多さ、注目テーマ未登録）による想定通りの挙動であり、本タスクの不具合ではない
+
+### Files touched
+
+`app/Livewire/Signal/SignalList.php`（`ShowBuySignalListAction`呼び出し追加、タイトル変更）、`resources/views/livewire/signal/signal-list.blade.php`（買い増し候補セクション追加）、`tests/Feature/SignalListTest.php`（UC-010統合テスト5件追加）、`PLAN.md`（本エントリ追加）
+
+### Status
+
+Green確認・実データE2E確認完了（コミット`dd30650`、未push）。フルスイート374件Green。これでUC-010はバックエンド・フロントエンドとも完結（`docs/rcid/traceability-matrix.md`のF-010ステータス更新要）
 
 ## Phase7「新規投資候補」画面 `/review`指摘（MEDIUM 3件）修正完了（2026-08-28）
 
