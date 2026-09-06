@@ -128,4 +128,79 @@
             </div>
         @endif
     </x-card>
+
+    <x-card>
+        <h2 class="text-lg font-semibold mb-1">整理検討（含み損）（UC-011）</h2>
+        <p class="text-[13px] text-text-secondary mb-1">整理検討ラインを下回る含み損の個別株です。復帰に必要な上昇率・損失の実額・推定保有週数・財務健全性・整理判断チェックリストを一覧で示します。</p>
+        <p class="text-[13px] text-text-secondary mb-3">
+            <strong>自動売却は行いません。最終判断は本人が行います。</strong>
+            NISA区分の含み損は損益通算できない点にご留意ください。
+            推定保有週数は取込回数がまだ少ないため情報量が限られます。
+        </p>
+
+        @if (empty($lossReviews))
+            <x-empty-state>整理検討が必要な含み損銘柄はありません</x-empty-state>
+        @else
+            <div id="loss-review-header-scroll" class="overflow-x-auto sticky top-0 z-20 bg-surface [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <table class="table-fixed w-[1440px] text-[11px] border border-app-border border-b-0 [&_th]:border [&_th]:border-app-border">
+                    <x-loss-review-table-colgroup
+                        :technical-count="count($lossReviews[0]['criteria']['technical'])"
+                        :fundamental-count="count($lossReviews[0]['criteria']['fundamental'])"
+                    />
+                    <x-signal-table-head
+                        :labels="['銘柄', '含み損率', '損失の実額', '財務健全性', '整理判断の要点']"
+                        :criteria="$lossReviews[0]['criteria']"
+                        variant="lossReview"
+                    />
+                </table>
+            </div>
+            <div class="overflow-x-auto" data-scroll-sync-with="loss-review-header-scroll">
+                <table class="table-fixed w-[1440px] text-[11px] border border-app-border [&_td]:border [&_td]:border-app-border [&_td]:align-top [&_td]:break-words">
+                    <x-loss-review-table-colgroup
+                        :technical-count="count($lossReviews[0]['criteria']['technical'])"
+                        :fundamental-count="count($lossReviews[0]['criteria']['fundamental'])"
+                    />
+                    <tbody>
+                        @foreach ($lossReviews as $row)
+                            <tr class="border-b border-app-border last:border-b-0">
+                                <td class="py-1.5 px-1.5 sticky left-0 z-10 bg-surface">
+                                    <div><a href="/holdings/{{ $row['id'] }}" wire:navigate class="text-primary hover:underline">{{ $row['symbol_name'] }}</a> {{ $row['symbol_code'] }}</div>
+                                    <x-signal-criteria-summary-badges :criteria="$row['criteria']" variant="lossReview" />
+                                </td>
+                                <td class="py-1.5 px-1.5">{{ sprintf('%+.1f%%', $row['unrealized_gain_rate']) }}</td>
+                                <td class="py-1.5 px-1.5">
+                                    <div>{{ number_format($row['unrealized_gain_amount']) }}円</div>
+                                    @if ($row['portfolio_loss_share'] !== null)
+                                        <div class="text-text-secondary">ポートフォリオ比 {{ number_format($row['portfolio_loss_share'], 1) }}%</div>
+                                    @endif
+                                </td>
+                                <td class="py-1.5 px-1.5">
+                                    @if ($row['fundamental_status'] === 'unavailable')
+                                        <x-badge variant="neutral">財務指標 取得不可</x-badge>
+                                    @else
+                                        <div>{{ $row['fundamental_summary'] }}</div>
+                                        @if ($row['fundamental_status'] === 'failed')
+                                            <x-badge variant="danger">財務健全性 基準割れ</x-badge>
+                                        @endif
+                                    @endif
+                                </td>
+                                <td class="py-1.5 px-1.5">
+                                    <div>復帰に必要な上昇率 {{ $row['recovery_required_rate'] === null ? '算出不可' : sprintf('%+.1f%%', $row['recovery_required_rate']) }}</div>
+                                    <div>推定保有 {{ $row['continuous_holding_weeks'] }}週{{ $row['continuous_holding_weeks_is_truncated'] ? '以上' : '' }}</div>
+                                    <div>
+                                        押し目買いシグナル: {{ $row['rebound_buy_signal_count'] }}件
+                                        @if ($row['also_on_buy_list'])
+                                            <x-badge variant="danger">買い増し候補にも掲載</x-badge>
+                                        @endif
+                                    </div>
+                                    <div>{{ $row['loss_review_reason_summary'] }}</div>
+                                </td>
+                                <x-signal-criteria-cells :criteria="$row['criteria']" tone="danger" />
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+    </x-card>
 </div>

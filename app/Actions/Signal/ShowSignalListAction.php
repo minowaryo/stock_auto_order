@@ -140,7 +140,12 @@ class ShowSignalListAction
         return [
             'unrealized_gain_rate' => $holdingSnapshot->unrealized_gain_rate !== null ? (float) $holdingSnapshot->unrealized_gain_rate : null,
             'gain_line_threshold' => $threshold['target_gain_rate_threshold'],
-            'current_price' => $holdingSnapshot->current_price !== null ? (float) $holdingSnapshot->current_price : null,
+            // US株は current_price が円換算済み・technical_indicators は USD の
+            // ため、乖離チップの計算前に USD へ割り戻す（CHG-0010）。
+            'current_price' => SignalCriteriaEvaluator::indicatorComparablePrice(
+                $holdingSnapshot->current_price !== null ? (float) $holdingSnapshot->current_price : null,
+                $holdingSnapshot->fx_rate_used !== null ? (float) $holdingSnapshot->fx_rate_used : null,
+            ),
             'rsi' => $technicalIndicator?->rsi !== null ? (float) $technicalIndicator->rsi : null,
             'macd' => $technicalIndicator?->macd !== null ? (float) $technicalIndicator->macd : null,
             'macd_signal' => $technicalIndicator?->macd_signal !== null ? (float) $technicalIndicator->macd_signal : null,

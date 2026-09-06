@@ -3,12 +3,14 @@
     docs/product/ui-guidelines.md「判定チェックリストのチップ」参照:
     達成=濃い緑／あと一歩=達成より薄い緑／未達=グレー／データなし=薄いグレー。
 --}}
-@props(['item'])
+@props(['item', 'tone' => 'success'])
 @php
-    $variantClasses = match ($item['status']) {
-        'met' => 'bg-green-100 text-green-800 border-green-200',
-        'near' => 'bg-green-50 text-green-700 border-green-100',
-        'unmet' => 'bg-slate-50 text-slate-500 border-app-border',
+    $variantClasses = match (true) {
+        $item['status'] === 'met' && $tone === 'danger' => 'bg-red-100 text-red-800 border-red-200',
+        $item['status'] === 'near' && $tone === 'danger' => 'bg-red-50 text-red-700 border-red-100',
+        $item['status'] === 'met' => 'bg-green-100 text-green-800 border-green-200',
+        $item['status'] === 'near' => 'bg-green-50 text-green-700 border-green-100',
+        $item['status'] === 'unmet' => 'bg-slate-50 text-slate-500 border-app-border',
         default => 'bg-slate-50 text-slate-400 border-app-border', // unavailable
     };
 @endphp

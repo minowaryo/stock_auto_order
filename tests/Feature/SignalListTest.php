@@ -692,3 +692,308 @@ describe('判定チェックリスト表示（criteria、CHG-0007）', function 
         });
     });
 });
+
+/*
+|--------------------------------------------------------------------------
+| UC-011: 整理検討（含み損）画面（Livewire）への統合 — Red phase 追記
+|--------------------------------------------------------------------------
+|
+| ※ この節より上の describe / test / アサーション / signalListTest* ヘルパーは
+|   一切変更していない（既存の UC-004 / UC-010 / 判定チェックリスト表示の
+|   テストは無改変で Green のまま維持される想定）。ここでは末尾に UC-011 用の
+|   describe を追記し、既存 signalListTest* ヘルパー
+|   （Holding/HoldingSnapshot/TechnicalIndicator/FundamentalIndicator/BuySignal）
+|   を再利用する。
+|
+| Source of truth:
+|   - docs/product/use-cases.md UC-011（出力・業務ルール・エラーケース）
+|   - docs/adr/ADR-0010-loss-review-candidate-list.md D10
+|   - docs/product/ui-guidelines.md（3セクション構成・danger バッジ配色）
+|
+| -------------------------------------------------------------------------
+| Contract this Red phase proposes (flag at Gate 4 if a different shape is
+| preferred):
+| -------------------------------------------------------------------------
+|   - SignalList::render() が毎 render で ShowLossReviewListAction も呼び、
+|     ビューに `lossReviews` として渡す（`signals`/`buySignals` と同じ
+|     「毎 render 呼び出し」規約）。
+|   - resources/views/livewire/signal/signal-list.blade.php の末尾に第3の
+|     <x-card> セクションを追加。見出しに「整理検討」を含む。
+|   - シグナル/警戒バッジは <x-badge variant="danger">（ui-guidelines の
+|     配色: 買い=success / 利確=warning / 整理=danger）。
+|   - F-011 専用 colgroup <x-loss-review-table-colgroup>（<x-signal-table-colgroup>
+|     は CHG-0011 が触るため流用しない）。ヘッダーは <x-signal-table-head>、
+|     判定チェックリストセルは <x-signal-criteria-cells>、達成数サマリは
+|     <x-signal-criteria-summary-badges> を流用。
+|   - 空状態メッセージ: 「整理検討が必要な含み損銘柄はありません」。
+|   - 見出し下の注記に「自動売却は行いません」と「NISA区分の含み損は損益通算
+|     できない」旨を含む。
+|   - 押し目シグナル発生の含み損銘柄には「買い増し候補にも掲載」相当の文言。
+|
+| 現状 SignalList::render() は `lossReviews` を渡さず、ビューに第3セクション
+| のマークアップが無く、ShowLossReviewListAction も未実装。以下の各テストは、
+| 描画 HTML に該当文言・チップが存在しないため assertSee/toContain のアサー
+| ション失敗で Red になる想定（クラス未検出の fatal ではなく、描画結果の
+| 不一致）。これが意図した Red 状態である。
+*/
+
+/**
+ * 含み損の個別株フィクスチャ一式（batch + snapshot は呼び出し側で用意）。
+ * current_price=600 前提で整理テクニカル7項目が全て met になる弱気な
+ * technical_indicators を作る。
+ */
+function signalListTestLossReviewHolding(Snapshot $snapshot, array $holdingAttributes = [], array $snapshotAttributes = []): Holding
+{
+    $holding = signalListTestHolding(array_merge([
+        'symbol_code' => '7203', 'market' => 'jp', 'symbol_name' => 'トヨタ自動車',
+    ], $holdingAttributes));
+
+    signalListTestHoldingSnapshot($snapshot, $holding, array_merge([
+        'quantity' => 100, 'average_cost' => 1000.00, 'current_price' => 600.00,
+        'unrealized_gain_amount' => -40000, 'unrealized_gain_rate' => -40.0,
+    ], $snapshotAttributes));
+
+    signalListTestTechnicalIndicator($holding, [
+        'macd' => -5.0, 'macd_signal' => -2.0,
+        'ma75' => 750.0,
+        'week52_high' => 1000.0,
+        'week52_low' => 580.0,
+        'relative_strength_vs_market' => -12.0,
+    ]);
+
+    return $holding;
+}
+
+describe('UC-011: 整理検討（含み損）画面（Livewire）', function () {
+    test('含み損 -40% の個別株が第3セクション（整理検討）に表示され、含み損率・財務健全性・復帰必要上昇率が読める', function () {
+        $user = User::factory()->create();
+        [, $snapshot] = signalListTestImportBatch();
+
+        $holding = signalListTestLossReviewHolding($snapshot, ['symbol_code' => '7203', 'symbol_name' => 'トヨタ自動車']);
+        signalListTestFundamentalIndicator($holding, ['equity_ratio' => 58.0, 'roe' => 15.2]);
+
+        $component = Livewire::actingAs($user)->test(SignalList::class);
+
+        $component->assertSee('整理検討');
+        $component->assertSee('トヨタ自動車');
+
+        $html = $component->html();
+        expect($html)->toContain('-40.0%');   // 含み損率（sprintf('%+.1f%%') 相当）
+        expect($html)->toContain('ROE');        // 財務健全性サマリ
+    });
+
+    test('fundamental_status=failed の含み損銘柄も整理検討セクションに表示される', function () {
+        $user = User::factory()->create();
+        [, $snapshot] = signalListTestImportBatch();
+
+        $holding = signalListTestLossReviewHolding($snapshot, ['symbol_code' => '6501', 'symbol_name' => '日立製作所']);
+        signalListTestFundamentalIndicator($holding, ['equity_ratio' => 28.0, 'roe' => 4.2]);
+
+        $component = Livewire::actingAs($user)->test(SignalList::class);
+
+        $component->assertSee('整理検討');
+        $component->assertSee('日立製作所');
+    });
+
+    test('押し目買いシグナル発生中の含み損銘柄には「買い増し候補にも掲載」相当の文言が表示される', function () {
+        $user = User::factory()->create();
+        [, $snapshot] = signalListTestImportBatch();
+
+        $holding = signalListTestLossReviewHolding($snapshot, ['symbol_code' => '4063', 'symbol_name' => '信越化学工業']);
+        signalListTestFundamentalIndicator($holding, ['equity_ratio' => 58.0, 'roe' => 15.2]);
+        $holdingSnapshot = HoldingSnapshot::where('holding_id', $holding->id)->firstOrFail();
+        signalListTestBuySignal($holdingSnapshot, ['signal_type' => 'rsi_oversold_rebound']);
+
+        $component = Livewire::actingAs($user)->test(SignalList::class);
+
+        $component->assertSee('信越化学工業');
+        $component->assertSee('買い増し候補にも掲載');
+    });
+
+    // ADR-0010 D6 改訂（2026-09-06「赤の単一極性」）: 整理検討テーブルの判定
+    // チェックリストのチップは met＝赤（criteria-chip の tone="danger":
+    // `bg-red-100 text-red-800`）で描画し、緑の met チップ（`bg-green-100
+    // text-green-800`）は一切出さない。財務3項目は判定の向きを反転して
+    // 「基準割れ（＝投資根拠の毀損）」を met とする。
+    // ※ `x-badge` も variant="danger" で `bg-red-100`／variant="success" で
+    //   `bg-green-100` を出すため、チップ固有トークンの `text-red-800`
+    //   （chip met danger）/ `text-green-800`（chip met success）でアサートする。
+    // 現行実装は criteria-chip に tone prop が無く met＝緑固定・財務は健全＝met
+    // のため、以下は「緑チップが出てしまう／財務チップの色が逆」というアサー
+    // ション不一致で Red になる想定（クラス/ルート未検出の fatal ではない）。
+    test('整理検討セクションの判定チェックリストのチップは met＝赤で描画され、緑の met チップは出さない', function () {
+        $user = User::factory()->create();
+        [, $snapshot] = signalListTestImportBatch();
+
+        // 整理検討の銘柄のみ（買い増し候補・利確検討セクションは空）
+        $holding = signalListTestLossReviewHolding($snapshot, ['symbol_code' => '7203', 'symbol_name' => 'トヨタ自動車']);
+        signalListTestFundamentalIndicator($holding, ['equity_ratio' => 58.0, 'roe' => 15.2]);
+
+        $html = Livewire::actingAs($user)->test(SignalList::class)->html();
+
+        // 整理検討チェックリスト固有のラベル（UC-004/UC-010 には存在しない）
+        expect($html)->toContain('含み損率');
+        expect($html)->toContain('MA75乖離率');
+        expect($html)->toContain('押し目買いシグナル件数');
+        // met チップは赤系（criteria-chip tone="danger" met: text-red-800）
+        expect($html)->toContain('text-red-800');
+        // このシナリオ（整理検討のみ・買い増し/利確は空）では緑の met/near チップは1つも出ない
+        expect($html)->not->toContain('text-green-800');
+        expect($html)->not->toContain('bg-green-50');
+    });
+
+    test('健全な財務の含み損銘柄は財務チップが赤 met ではなくグレー unmet になり、実測値は表示される（財務3項目反転）', function () {
+        $user = User::factory()->create();
+        [, $snapshot] = signalListTestImportBatch();
+
+        // ROE 15.2% / 自己資本比率 58% / 成長 +8% → 反転契約では財務3項目とも unmet（グレー）
+        $healthy = signalListTestLossReviewHolding($snapshot, ['symbol_code' => '7203', 'symbol_name' => 'トヨタ自動車']);
+        signalListTestFundamentalIndicator($healthy, [
+            'equity_ratio' => 58.0, 'roe' => 15.2, 'revenue_growth' => 8.0, 'operating_income_growth' => 12.3,
+        ]);
+
+        $html = Livewire::actingAs($user)->test(SignalList::class)->html();
+
+        // テクニカル7項目は met＝赤チップ
+        expect($html)->toContain('text-red-800');
+        // 健全な財務3項目は unmet＝グレーチップ（現行は met＝緑のため slate は出ない → Red）
+        expect($html)->toContain('bg-slate-50');
+        // 緑の met チップは出ない（財務が健全でも met＝赤にはしない・緑にもしない）
+        expect($html)->not->toContain('text-green-800');
+        // 実測値はチップ内に表示される（unmet でも「—」ではない）
+        expect($html)->toContain('15.2%');
+    });
+
+    test('毀損した財務（ROE 4.2%・自己資本比率 28%）の含み損銘柄は財務チップが赤 met になる', function () {
+        $user = User::factory()->create();
+        [, $snapshot] = signalListTestImportBatch();
+
+        $impaired = signalListTestLossReviewHolding($snapshot, ['symbol_code' => '6501', 'symbol_name' => '日立製作所']);
+        signalListTestFundamentalIndicator($impaired, [
+            'equity_ratio' => 28.0, 'roe' => 4.2, 'revenue_growth' => -3.0, 'operating_income_growth' => -1.0,
+        ]);
+
+        $html = Livewire::actingAs($user)->test(SignalList::class)->html();
+
+        // テクニカル・財務とも met＝赤チップ、緑の met チップは出ない
+        expect($html)->toContain('text-red-800');
+        expect($html)->not->toContain('text-green-800');
+        // 実測値はチップ内に表示される
+        expect($html)->toContain('4.2%');
+    });
+
+    test('整理検討セクションの達成数サマリは「整理シグナル」「投資根拠の毀損」の文言で表示される', function () {
+        $user = User::factory()->create();
+        [, $snapshot] = signalListTestImportBatch();
+
+        $holding = signalListTestLossReviewHolding($snapshot, ['symbol_code' => '7203', 'symbol_name' => 'トヨタ自動車']);
+        signalListTestFundamentalIndicator($holding, ['equity_ratio' => 58.0, 'roe' => 15.2]);
+
+        $component = Livewire::actingAs($user)->test(SignalList::class);
+
+        $component->assertSee('整理シグナル');
+        $component->assertSee('投資根拠の毀損');
+        // 利確・買い増しセクションの旧文言（「技術 ◯/7」「財務 ◯/3」）は整理セクションでは使わない
+        expect($component->html())->not->toContain('技術 7/7');
+    });
+
+    // /review MEDIUM 指摘（2026-09-06）: 整理検討テーブルのチェックリスト列
+    // グループ見出しが「判定チェックリスト（テクニカル）／（財務）」のままだと、
+    // 同じ列のサマリバッジ「整理シグナル ◯/7」「投資根拠の毀損 ◯/3」と語彙が
+    // ずれ、1テーブル内の意味の混同を消すという本リワークの主旨に反する。
+    // signal-table-head に variant を追加してヘッダーもサマリと揃える。
+    test('整理検討セクションのチェックリスト列グループ見出しはサマリバッジと同じ語彙（整理シグナル／投資根拠の毀損）で表示される', function () {
+        $user = User::factory()->create();
+        [, $snapshot] = signalListTestImportBatch();
+
+        $holding = signalListTestLossReviewHolding($snapshot, ['symbol_code' => '7203', 'symbol_name' => 'トヨタ自動車']);
+        signalListTestFundamentalIndicator($holding, ['equity_ratio' => 58.0, 'roe' => 15.2]);
+
+        $html = Livewire::actingAs($user)->test(SignalList::class)->html();
+
+        expect($html)->toContain('判定チェックリスト（整理シグナル）');
+        expect($html)->toContain('判定チェックリスト（投資根拠の毀損）');
+        // 整理検討テーブルのヘッダーに利確・買い増し用の「（テクニカル）／（財務）」見出しは出さない
+        // （※ この画面には利確・買い増しセクションも存在しうるが、このシナリオでは
+        //   整理検討の銘柄のみ・他2セクションは空のため、旧見出しは1つも描画されない）
+        expect($html)->not->toContain('判定チェックリスト（テクニカル）');
+        expect($html)->not->toContain('判定チェックリスト（財務）');
+    });
+
+    test('対象の含み損銘柄が無いとき、整理検討セクションは空状態メッセージを表示する', function () {
+        $user = User::factory()->create();
+
+        $component = Livewire::actingAs($user)->test(SignalList::class);
+
+        $component->assertSee('整理検討が必要な含み損銘柄はありません');
+    });
+
+    test('見出し下の注記に「自動売却は行いません」と NISA 区分の損益通算に関する注意が表示される', function () {
+        $user = User::factory()->create();
+
+        $component = Livewire::actingAs($user)->test(SignalList::class);
+
+        $component->assertSee('自動売却は行いません');
+        $component->assertSee('損益通算');
+    });
+
+    test('買い増し候補・利確検討・整理検討の3セクションが1画面に共存する', function () {
+        $user = User::factory()->create();
+        [, $snapshot] = signalListTestImportBatch();
+
+        // 買い増し候補側
+        $buyHolding = signalListTestHolding(['symbol_code' => '5201', 'market' => 'jp', 'symbol_name' => 'サンプル素材']);
+        $buyHoldingSnapshot = signalListTestHoldingSnapshot($snapshot, $buyHolding, ['unrealized_gain_rate' => -8.5]);
+        signalListTestBuySignal($buyHoldingSnapshot);
+        signalListTestFundamentalIndicator($buyHolding);
+
+        // 利確検討側
+        $sellHolding = signalListTestHolding(['symbol_code' => '7203', 'market' => 'jp', 'symbol_name' => 'トヨタ自動車']);
+        $sellHoldingSnapshot = signalListTestHoldingSnapshot($snapshot, $sellHolding, [
+            'quantity' => 300, 'average_cost' => 1000.00, 'current_price' => 1300.00, 'unrealized_gain_rate' => 30.0,
+        ]);
+        signalListTestSignal($sellHoldingSnapshot, ['signal_type' => 'rsi_reversal', 'reason_summary' => 'RSIが72から65に反落']);
+
+        // 整理検討側
+        $lossHolding = signalListTestLossReviewHolding($snapshot, ['symbol_code' => '6501', 'symbol_name' => '日立製作所']);
+        signalListTestFundamentalIndicator($lossHolding, ['equity_ratio' => 28.0, 'roe' => 4.2]);
+
+        $component = Livewire::actingAs($user)->test(SignalList::class);
+
+        $component->assertSee('買い増し候補');
+        $component->assertSee('利確検討');
+        $component->assertSee('整理検討');
+        $component->assertSee('サンプル素材');
+        $component->assertSee('トヨタ自動車');
+        $component->assertSee('日立製作所');
+    });
+
+    test('買い増し候補セクションのチップは緑・整理検討セクションのチップは赤が同一画面 HTML に両方出現する（色でセクションを区別できる）', function () {
+        $user = User::factory()->create();
+        [, $snapshot] = signalListTestImportBatch();
+
+        // 買い増し候補側（met チップ＝緑）: 押し目買いシグナル + テクニカル met + 財務健全
+        $buyHolding = signalListTestHolding(['symbol_code' => '5201', 'market' => 'jp', 'symbol_name' => 'サンプル素材']);
+        $buyHoldingSnapshot = signalListTestHoldingSnapshot($snapshot, $buyHolding, [
+            'quantity' => 100, 'average_cost' => 1200.00, 'current_price' => 1000.00, 'unrealized_gain_rate' => -8.5,
+        ]);
+        signalListTestBuySignal($buyHoldingSnapshot, ['signal_type' => 'rsi_oversold_rebound']);
+        signalListTestFundamentalIndicator($buyHolding, ['equity_ratio' => 58.0, 'roe' => 15.2]);
+        signalListTestTechnicalIndicator($buyHolding, [
+            'rsi' => 22.0, 'macd' => 2.0, 'macd_signal' => -1.0,
+            'bb_lower' => 1100.0, 'ma20' => 1200.0, 'week52_low' => 950.0,
+            'volume' => 2_500_000, 'volume_ma20' => 1_000_000.0,
+        ]);
+
+        // 整理検討側（met チップ＝赤）
+        $lossHolding = signalListTestLossReviewHolding($snapshot, ['symbol_code' => '6501', 'symbol_name' => '日立製作所']);
+        signalListTestFundamentalIndicator($lossHolding, ['equity_ratio' => 28.0, 'roe' => 4.2]);
+
+        $html = Livewire::actingAs($user)->test(SignalList::class)->html();
+
+        // 買い増し候補セクションの met チップ（緑: text-green-800）と
+        // 整理検討セクションの met チップ（赤: text-red-800）が同一画面 HTML に両方出現する
+        expect($html)->toContain('text-green-800');
+        expect($html)->toContain('text-red-800');
+    });
+});
