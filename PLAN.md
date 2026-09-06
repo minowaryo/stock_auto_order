@@ -52,9 +52,10 @@ Gate1/2/3/4 承認完了（2026-09-05）。**Green 完了**。
 - **LOW 見送り**: (1) eager load 最適化はパフォーマンス影響小のため任意（別タスク候補）。(3) `docs/product/user-guide.md` はプロジェクト全体で未記入のテンプレート（UC-001〜UC-010 も全て未記載）のため、F-011 単独で節を足すと不整合。プロジェクト横断の別対応とする
 - NIT: `evaluateLossReview()` docブロックの旧記述 → 修正済み
 
-**コミット状況（要判断）**: 作業ツリーに3系統の未コミット作業が混在。①**CHG-0010（F-011本体＋通貨単位横断バグ修正）**＝本セッション主管、②**CHG-0011（評価額列 market_value）**＝別セッション、③**CHG-0009運用化（`market-data:refetch-us-fundamentals` コマンド）**＝別セッション。①のコミット境界（`ShowSignalListAction`/`ShowBuySignalListAction` の `indicatorComparablePrice` ハンクは①、`market_value` ハンクは②。`signal-list.blade.php`/`SignalListTest.php`/`UC004`/`UC010`/`use-cases.md`/`traceability-matrix.md`/`common-commands.md`/`PLAN.md` は①②混在）を `git add -p` で選択ステージ予定。
+**コミット完了（2026-09-06、`b3d1793`、未push）**: ①**CHG-0010（F-011本体＋赤単一極性リワーク＋通貨単位横断バグ修正）**分のみを `git add -p` で選択ステージしてコミット（27ファイル）。作業ツリーに残る②**CHG-0011（評価額列 market_value）**・③**CHG-0009運用化（`market-data:refetch-us-fundamentals` コマンド）**は別セッションの未完了作業（②は `/review` 前）のため本セッションではコミットしない。混在ファイル（`ShowSignalListAction`/`ShowBuySignalListAction`/`signal-list.blade.php`/`SignalListTest.php`/`use-cases.md`/`traceability-matrix.md`/`PLAN.md`）は①分ハンクのみをコミット済み、②分ハンクは未ステージのまま残置。
 
-**次のアクション**: ①（CHG-0010）分のみを選択ステージしてコミット（push しない）。②③は各担当セッションがコミット。UC-011 は閲覧系フローで `.claude/rules/31-e2e-testing.md` のクリティカルフロー対象外のため Playwright E2E は追加しない（UC-004/UC-009/CHG-0007 と同じ判断）。
+UC-011 は閲覧系フローで `.claude/rules/31-e2e-testing.md` のクリティカルフロー対象外のため Playwright E2E は追加しない（UC-004/UC-009/CHG-0007 と同じ判断）。**PLAN.md の300行超過対応（旧エントリの `plan-archive.md` 退避）は CHG-0011 側の未コミット編集と重複するため、CHG-0011 コミット時にまとめて行う。**
+
 
 ## 米国株ファンダメンタルズ指標データソースとしてFinnhub採用（CHG-0009）Gate2/3承認完了（2026-09-05〜）
 
