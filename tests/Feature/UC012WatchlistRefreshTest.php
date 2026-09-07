@@ -339,6 +339,59 @@ test('お気に入りCSV取込が成功すると一括更新Jobがdispatchされ
     Bus::assertDispatched(RefreshWatchlistMarketDataJob::class);
 });
 
+// -----------------------------------------------------------------------
+// review 修正（2026-09-08）: run のライフサイクルを1行に統一する（#1/#3）、
+// per-symbol 永続化をトランザクション化する（#4）
+// -----------------------------------------------------------------------
+
+test('渡された queued run を引き継ぎ、2つ目の run 行を作らない。完了後 active() は false', function () {
+    uc012WatchlistHolding('QRUN', 'jp', 'ラン引継ぎ');
+    app()->instance(JpStockPriceClientInterface::class, new FakeJpStockPriceClient(['QRUN' => uc012Price(uc012RisingCloses())]));
+    app()->instance(UsStockPriceClientInterface::class, new FakeUsStockPriceClient);
+    app()->instance(JQuantsClientInterface::class, new FakeJQuantsClient);
+    app()->instance(FinnhubClientInterface::class, new FakeFinnhubClient);
+
+    $queued = WatchlistRefreshRun::create(['status' => 'queued']);
+
+    $returned = app(RefreshWatchlistMarketDataAction::class)->execute($queued);
+
+    expect($returned->id)->toBe($queued->id);
+    expect(WatchlistRefreshRun::count())->toBe(1);
+    expect($queued->fresh()->status)->toBe('completed');
+    expect(WatchlistRefreshRun::active()->exists())->toBeFalse();
+});
+
+test('Job の failed() ハンドラは queued/processing の run を failed にする（processing に張り付かない）', function () {
+    $run = WatchlistRefreshRun::create(['status' => 'processing', 'started_at' => now()]);
+
+    (new RefreshWatchlistMarketDataJob($run->id))->failed(new \RuntimeException('worker killed'));
+
+    expect($run->fresh()->status)->toBe('failed');
+    expect(WatchlistRefreshRun::active()->exists())->toBeFalse();
+});
+
+test('銘柄単位の途中失敗は既存の watchlist_buy_signals を消し残さない（トランザクション）', function () {
+    $holding = uc012WatchlistHolding('TXN1', 'jp', 'トランザクションテスト');
+    WatchlistBuySignal::create([
+        'holding_id' => $holding->id,
+        'signal_type' => 'rsi_oversold_rebound',
+        'reason_summary' => '前回分',
+        'determined_at' => now()->subWeek(),
+    ]);
+
+    app()->instance(JpStockPriceClientInterface::class, new FakeJpStockPriceClient(['TXN1' => uc012Price(uc012RisingCloses())]));
+    app()->instance(UsStockPriceClientInterface::class, new FakeUsStockPriceClient);
+    // fetchStatements が投げる → 銘柄処理が中断。delete も rollback されるべき。
+    app()->instance(JQuantsClientInterface::class, new FakeJQuantsClient([], [], [], throwsForStatements: ['TXN1']));
+    app()->instance(FinnhubClientInterface::class, new FakeFinnhubClient);
+
+    $run = app(RefreshWatchlistMarketDataAction::class)->execute();
+
+    expect($run->failed_count)->toBe(1);
+    expect(WatchlistBuySignal::where('holding_id', $holding->id)->count())->toBe(1);
+    expect(WatchlistBuySignal::where('holding_id', $holding->id)->first()->reason_summary)->toBe('前回分');
+});
+
 test('watchlist:refresh コマンドが一括更新を実行する', function () {
     uc012WatchlistHolding('6666', 'jp', 'コマンドテスト');
 

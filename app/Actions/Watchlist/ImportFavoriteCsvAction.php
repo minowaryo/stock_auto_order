@@ -7,6 +7,7 @@ use App\Exceptions\Import\CsvStructureException;
 use App\Jobs\RefreshWatchlistMarketDataJob;
 use App\Models\Holding;
 use App\Models\WatchlistItem;
+use App\Models\WatchlistRefreshRun;
 use App\Services\Import\RakutenFavoriteCsvParser;
 use App\Services\Import\Support\ParsedFavoriteRow;
 use Illuminate\Http\UploadedFile;
@@ -48,8 +49,12 @@ class ImportFavoriteCsvAction
         });
 
         // UC-012 フロー5: 取込完了後、未保有ウォッチリスト銘柄の指標取得を
-        // キューに投入する（同期的に待たせない）。
-        RefreshWatchlistMarketDataJob::dispatch();
+        // キューに投入する（同期的に待たせない）。既に更新中なら重ねて投入
+        // しない（refreshAll() と同じガード。review #2）。
+        if (! WatchlistRefreshRun::active()->exists()) {
+            $run = WatchlistRefreshRun::create(['status' => WatchlistRefreshRun::STATUS_QUEUED]);
+            RefreshWatchlistMarketDataJob::dispatch($run->id);
+        }
 
         return FavoriteImportResult::success(count($parsed->rows), $parsed->skippedCount);
     }

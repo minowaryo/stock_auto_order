@@ -20,6 +20,7 @@ use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\MarketData\MarketIndexClientInterface;
 use App\Services\MarketData\UsStockPriceClientInterface;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -61,45 +62,55 @@ class RefreshWatchlistMarketDataAction
         private readonly BuySignalDeterminationService $buySignalDeterminationService,
     ) {}
 
-    public function execute(): WatchlistRefreshRun
+    /**
+     * @param  WatchlistRefreshRun|null  $run  the run row to adopt (created by
+     *                                         refreshAll() / ImportFavoriteCsvAction as `queued`); when null a fresh
+     *                                         run is created (the `watchlist:refresh` command / a direct call). Either
+     *                                         way the SAME row is carried queued → processing → completed/failed, so
+     *                                         WatchlistRefreshRun::active() is never left stuck (review #1/#3).
+     */
+    public function execute(?WatchlistRefreshRun $run = null): WatchlistRefreshRun
     {
-        $run = WatchlistRefreshRun::create([
-            'status' => WatchlistRefreshRun::STATUS_PROCESSING,
-            'started_at' => now(),
-        ]);
+        $run ??= WatchlistRefreshRun::create(['status' => WatchlistRefreshRun::STATUS_QUEUED]);
+        $run->update(['status' => WatchlistRefreshRun::STATUS_PROCESSING, 'started_at' => now()]);
 
-        $targets = $this->unheldWatchlistItems();
-        $run->update(['total_count' => $targets->count()]);
+        try {
+            $targets = $this->unheldWatchlistItems();
+            $run->update(['total_count' => $targets->count()]);
 
-        $nikkeiReturn13w = $this->calculate13wReturn($this->safeFetchIndex('nikkei225'));
-        $sp500Return13w = $this->calculate13wReturn($this->safeFetchIndex('sp500'));
+            $nikkeiReturn13w = $this->calculate13wReturn($this->safeFetchIndex('nikkei225'));
+            $sp500Return13w = $this->calculate13wReturn($this->safeFetchIndex('sp500'));
 
-        foreach ($targets as $item) {
-            try {
-                $lastClose = $this->refreshHolding(
-                    $item->holding,
-                    $item->holding->market === 'jp' ? $nikkeiReturn13w : $sp500Return13w,
-                );
-                $item->update(['last_close' => $lastClose, 'last_refreshed_at' => now()]);
-            } catch (Throwable $e) {
-                // MarketData client exceptions carry only the request URL /
-                // status, never the API key (same safety note as
-                // FetchExternalMarketDataAction).
-                Log::warning('RefreshWatchlistMarketDataAction: per-symbol refresh failed', [
-                    'holding_id' => $item->holding_id,
-                    'symbol_code' => $item->holding->symbol_code,
-                    'exception' => $e->getMessage(),
-                ]);
-                $run->increment('failed_count');
-            } finally {
-                $run->increment('processed_count');
+            foreach ($targets as $item) {
+                try {
+                    $lastClose = $this->refreshHolding(
+                        $item->holding,
+                        $item->holding->market === 'jp' ? $nikkeiReturn13w : $sp500Return13w,
+                    );
+                    $item->update(['last_close' => $lastClose, 'last_refreshed_at' => now()]);
+                } catch (Throwable $e) {
+                    // MarketData client exceptions carry only the request URL /
+                    // status, never the API key (same safety note as
+                    // FetchExternalMarketDataAction).
+                    Log::warning('RefreshWatchlistMarketDataAction: per-symbol refresh failed', [
+                        'holding_id' => $item->holding_id,
+                        'symbol_code' => $item->holding->symbol_code,
+                        'exception' => $e->getMessage(),
+                    ]);
+                    $run->increment('failed_count');
+                } finally {
+                    $run->increment('processed_count');
+                }
             }
-        }
 
-        $run->update([
-            'status' => WatchlistRefreshRun::STATUS_COMPLETED,
-            'finished_at' => now(),
-        ]);
+            $run->update(['status' => WatchlistRefreshRun::STATUS_COMPLETED, 'finished_at' => now()]);
+        } catch (Throwable $e) {
+            // A batch-level failure (not a per-symbol one) — mark the run failed
+            // so active() clears and the button / progress bar recover.
+            $run->update(['status' => WatchlistRefreshRun::STATUS_FAILED, 'finished_at' => now()]);
+
+            throw $e;
+        }
 
         return $run->refresh();
     }
@@ -131,16 +142,16 @@ class RefreshWatchlistMarketDataAction
      */
     private function refreshHolding(Holding $holding, ?float $marketReturn13w): ?float
     {
+        // Fetches happen outside the transaction (long-running, no DB locks);
+        // all persistence for this symbol commits atomically so a mid-symbol
+        // failure never leaves it with fresh indicators but its
+        // watchlist_buy_signals deleted-and-not-recreated (review #4). Mirrors
+        // FetchExternalMarketDataAction, which wraps each holding in DB::transaction.
         $priceHistory = $holding->market === 'jp'
             ? $this->jpStockPriceClient->fetchWeeklyPriceHistory($holding->symbol_code)
             : $this->usStockPriceClient->fetchWeeklyPriceHistory($holding->symbol_code);
 
         $technical = $this->technicalIndicatorCalculator->calculate($priceHistory, $marketReturn13w, null);
-
-        TechnicalIndicator::updateOrCreate(
-            ['holding_id' => $holding->id],
-            [...$technical, 'computed_at' => now()],
-        );
 
         $currentPrice = $priceHistory !== []
             ? (float) $priceHistory[count($priceHistory) - 1]['close']
@@ -155,33 +166,38 @@ class RefreshWatchlistMarketDataAction
             $fundamental = $this->usFundamentalIndicatorMapper->map($metrics, $reportedFinancials);
         }
 
-        FundamentalIndicator::updateOrCreate(
-            ['holding_id' => $holding->id],
-            [...$fundamental, 'fetched_at' => now()],
-        );
-
-        $pegRatio = $fundamental['peg_ratio'] ?? null;
-
         $buySignals = $this->buySignalDeterminationService->determine(
             $priceHistory,
             $marketReturn13w,
             null,
-            $pegRatio,
+            $fundamental['peg_ratio'] ?? null,
         );
 
-        // Re-determination: drop this holding's previous rows before persisting
-        // the freshly-determined set (same drop-then-recreate pattern as
-        // FetchExternalMarketDataAction's buy_signals handling).
-        WatchlistBuySignal::where('holding_id', $holding->id)->delete();
+        DB::transaction(function () use ($holding, $technical, $fundamental, $buySignals) {
+            TechnicalIndicator::updateOrCreate(
+                ['holding_id' => $holding->id],
+                [...$technical, 'computed_at' => now()],
+            );
 
-        foreach ($buySignals as $signal) {
-            WatchlistBuySignal::create([
-                'holding_id' => $holding->id,
-                'signal_type' => $signal['signal_type'],
-                'reason_summary' => $signal['reason_summary'],
-                'determined_at' => now(),
-            ]);
-        }
+            FundamentalIndicator::updateOrCreate(
+                ['holding_id' => $holding->id],
+                [...$fundamental, 'fetched_at' => now()],
+            );
+
+            // Re-determination: drop this holding's previous rows before
+            // persisting the freshly-determined set (same drop-then-recreate
+            // pattern as FetchExternalMarketDataAction's buy_signals handling).
+            WatchlistBuySignal::where('holding_id', $holding->id)->delete();
+
+            foreach ($buySignals as $signal) {
+                WatchlistBuySignal::create([
+                    'holding_id' => $holding->id,
+                    'signal_type' => $signal['signal_type'],
+                    'reason_summary' => $signal['reason_summary'],
+                    'determined_at' => now(),
+                ]);
+            }
+        });
 
         return $currentPrice;
     }

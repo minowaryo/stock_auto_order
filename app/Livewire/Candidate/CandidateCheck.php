@@ -81,8 +81,8 @@ class CandidateCheck extends Component
             return;
         }
 
-        WatchlistRefreshRun::create(['status' => WatchlistRefreshRun::STATUS_QUEUED]);
-        RefreshWatchlistMarketDataJob::dispatch();
+        $run = WatchlistRefreshRun::create(['status' => WatchlistRefreshRun::STATUS_QUEUED]);
+        RefreshWatchlistMarketDataJob::dispatch($run->id);
         $this->importMessage = 'ウォッチリストの一括更新を開始しました。';
     }
 

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Watchlist\RefreshWatchlistMarketDataAction;
 use App\Jobs\RefreshWatchlistMarketDataJob;
 use App\Livewire\Candidate\CandidateCheck;
 use App\Models\FinancialStatement;
@@ -17,8 +18,18 @@ use App\Models\WatchlistBuySignal;
 use App\Models\WatchlistItem;
 use App\Models\WatchlistRefreshRun;
 use App\Models\WatchRecord;
+use App\Services\MarketData\FinnhubClientInterface;
+use App\Services\MarketData\JpStockPriceClientInterface;
+use App\Services\MarketData\JQuantsClientInterface;
+use App\Services\MarketData\MarketIndexClientInterface;
+use App\Services\MarketData\UsStockPriceClientInterface;
 use Illuminate\Support\Facades\Bus;
 use Livewire\Livewire;
+use Tests\Support\Fakes\FakeFinnhubClient;
+use Tests\Support\Fakes\FakeJpStockPriceClient;
+use Tests\Support\Fakes\FakeJQuantsClient;
+use Tests\Support\Fakes\FakeMarketIndexClient;
+use Tests\Support\Fakes\FakeUsStockPriceClient;
 
 /*
 |--------------------------------------------------------------------------
@@ -225,6 +236,41 @@ test('実行中のrunがある場合、一括更新は二重に実行されな�
 
     Bus::assertNotDispatched(RefreshWatchlistMarketDataJob::class);
     expect(WatchlistRefreshRun::count())->toBe(1);
+});
+
+test('一括更新は作成した run の id を Job に渡す（run のライフサイクルを1行に統一、review #1）', function () {
+    Bus::fake();
+    uc012ScreenWatchlist('9012', ['name' => 'ラン受け渡し']);
+
+    Livewire::actingAs(uc012ScreenUser())->test(CandidateCheck::class)
+        ->call('refreshAll');
+
+    $run = WatchlistRefreshRun::latest('id')->first();
+    Bus::assertDispatched(RefreshWatchlistMarketDataJob::class, fn ($job) => $job->runId === $run->id);
+});
+
+test('一括更新の完了後、次の一括更新がまた実行できる（queued run が孤立しない、review #1）', function () {
+    Bus::fake();
+    uc012ScreenWatchlist('3210', ['name' => 'リラン可能テスト']);
+    app()->instance(JpStockPriceClientInterface::class, new FakeJpStockPriceClient(['3210' => []]));
+    app()->instance(UsStockPriceClientInterface::class, new FakeUsStockPriceClient);
+    app()->instance(MarketIndexClientInterface::class, new FakeMarketIndexClient);
+    app()->instance(JQuantsClientInterface::class, new FakeJQuantsClient);
+    app()->instance(FinnhubClientInterface::class, new FakeFinnhubClient);
+
+    $component = Livewire::actingAs(uc012ScreenUser())->test(CandidateCheck::class);
+
+    $component->call('refreshAll');
+    $run = WatchlistRefreshRun::latest('id')->first();
+    // 同じ run 行がライフサイクルを引き継ぐので、Job 実行後に active() が解ける
+    (new RefreshWatchlistMarketDataJob($run->id))->handle(app(RefreshWatchlistMarketDataAction::class));
+    expect($run->fresh()->status)->toBe('completed');
+    expect(WatchlistRefreshRun::active()->exists())->toBeFalse();
+
+    // 2回目の一括更新がまた実行できる（Job が再度 dispatch される）
+    $component->call('refreshAll');
+    Bus::assertDispatchedTimes(RefreshWatchlistMarketDataJob::class, 2);
+    expect(WatchlistRefreshRun::count())->toBe(2);
 });
 
 test('ウォッチリストが空のとき空状態メッセージが表示される', function () {
