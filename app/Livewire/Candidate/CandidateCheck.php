@@ -4,66 +4,124 @@ namespace App\Livewire\Candidate;
 
 use App\Actions\Candidate\SaveWatchRecordAction;
 use App\Actions\Candidate\ShowCandidateCheckAction;
-use App\Actions\Candidate\ShowNewCandidateListAction;
+use App\Actions\Watchlist\ImportFavoriteCsvAction;
+use App\Actions\Watchlist\ShowWatchlistAction;
+use App\Jobs\RefreshWatchlistMarketDataJob;
 use App\Models\Holding;
+use App\Models\WatchlistItem;
+use App\Models\WatchlistRefreshRun;
 use Livewire\Attributes\Layout;
-use Livewire\Attributes\Url;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 /**
- * UC-006 + UC-008 (新規投資候補、統合画面): 上部の「おすすめ候補」一覧
- * (ShowNewCandidateListAction、副作用なし・render()毎に呼び直す) と、
- * 下部の「個別銘柄をチェック」フォーム (ShowCandidateCheckAction /
- * SaveWatchRecordAction) を1画面にまとめる。
+ * UC-012 (F-012 / ADR-0013): お気に入り未保有銘柄ウォッチリスト画面。
+ * 旧 UC-006（重複チェック）/ UC-008（おすすめ候補）を刷新して置き換える。
+ *
+ * ロジックは App\Actions\Watchlist\* / App\Actions\Candidate\* に委譲する
+ * （.claude/rules/15-frontend.md）。render() のたびに ShowWatchlistAction を
+ * 呼び直す参照専用パターン（SignalList と同じ）。
  */
-#[Layout('components.layouts.app', ['title' => '新規投資候補'])]
+#[Layout('components.layouts.app', ['title' => '新規投資候補', 'active' => 'candidate-check'])]
 class CandidateCheck extends Component
 {
-    /**
-     * SaveWatchRecordRequest と同じ許可値・上限（Gate 4 確定契約、
-     * docs/product/use-cases.md UC-006）。
-     *
-     * @var list<string>
-     */
+    use WithFileUploads;
+
     private const WATCH_STATUS_OPTIONS = ['様子見', '買い時', '次回購入候補', 'リバランス対象'];
 
     private const WATCH_MEMO_MAX = 2000;
 
-    #[Url(as: 'symbol_code')]
-    public string $symbolCode = '';
+    private const MAX_FILE_SIZE_KB = 5120; // 5MB
 
-    public ?string $checkError = null;
+    public $favorites_csv_file = null;
 
-    public ?array $checkResult = null;
+    public ?string $importError = null;
+
+    public ?string $importMessage = null;
+
+    public string $folderFilter = '';
+
+    public bool $starredOnly = false;
+
+    /** 行展開中の銘柄コード（UC-006 相当の詳細を表示する）。 */
+    public ?string $expandedSymbol = null;
+
+    public ?array $expandedDetail = null;
 
     public string $watchStatus = '';
 
     public string $watchMemo = '';
 
-    public function mount(): void
+    public function importFavorites(): void
     {
-        if (filled($this->symbolCode)) {
-            $this->checkCandidate();
-        }
-    }
+        $this->importError = null;
+        $this->importMessage = null;
 
-    public function checkCandidate(): void
-    {
-        $holding = Holding::where('symbol_code', $this->symbolCode)->first();
+        $this->validate([
+            'favorites_csv_file' => ['required', 'file', 'extensions:csv', 'max:'.self::MAX_FILE_SIZE_KB],
+        ], [], ['favorites_csv_file' => 'お気に入り銘柄CSV']);
 
-        if (! $holding) {
-            $this->checkError = '銘柄コードを確認してください';
-            $this->checkResult = null;
+        $result = app(ImportFavoriteCsvAction::class)->execute($this->favorites_csv_file);
+
+        if (! $result->success) {
+            $this->importError = $result->failureReason;
 
             return;
         }
 
-        $this->checkError = null;
-        $this->checkResult = app(ShowCandidateCheckAction::class)->execute($holding);
+        $this->favorites_csv_file = null;
+        $this->importMessage = "{$result->registeredCount}件を登録しました（対象外 {$result->skippedCount}件）。指標の取得を開始しました。";
+    }
+
+    public function refreshAll(): void
+    {
+        if (WatchlistRefreshRun::active()->exists()) {
+            $this->importMessage = '更新処理を実行中です。完了までお待ちください。';
+
+            return;
+        }
+
+        WatchlistRefreshRun::create(['status' => WatchlistRefreshRun::STATUS_QUEUED]);
+        RefreshWatchlistMarketDataJob::dispatch();
+        $this->importMessage = 'ウォッチリストの一括更新を開始しました。';
+    }
+
+    public function toggleStar(int $watchlistItemId): void
+    {
+        $item = WatchlistItem::find($watchlistItemId);
+
+        if ($item !== null) {
+            $item->update(['is_starred' => ! $item->is_starred]);
+        }
+    }
+
+    public function toggleExpand(string $symbolCode): void
+    {
+        if ($this->expandedSymbol === $symbolCode) {
+            $this->expandedSymbol = null;
+            $this->expandedDetail = null;
+
+            return;
+        }
+
+        $holding = Holding::where('symbol_code', $symbolCode)->first();
+
+        if ($holding === null) {
+            return;
+        }
+
+        $this->expandedSymbol = $symbolCode;
+        $this->expandedDetail = app(ShowCandidateCheckAction::class)->execute($holding);
+        $this->watchStatus = '';
+        $this->watchMemo = '';
     }
 
     public function saveWatchRecord(): void
     {
+        if ($this->expandedSymbol === null) {
+            return;
+        }
+
         if (blank($this->watchStatus) && blank($this->watchMemo)) {
             $this->addError('watchRecord', 'watch_statusまたはwatch_memoのいずれかを指定してください');
 
@@ -82,51 +140,40 @@ class CandidateCheck extends Component
             return;
         }
 
-        $holding = Holding::where('symbol_code', $this->symbolCode)->first();
+        $holding = Holding::where('symbol_code', $this->expandedSymbol)->first();
 
-        if (! $holding) {
-            $this->addError('watchRecord', '銘柄コードを確認してください');
-
+        if ($holding === null) {
             return;
         }
 
         app(SaveWatchRecordAction::class)->execute($holding, $this->watchStatus ?: null, $this->watchMemo ?: null);
 
-        $this->checkResult = app(ShowCandidateCheckAction::class)->execute($holding);
-
+        $this->expandedDetail = app(ShowCandidateCheckAction::class)->execute($holding);
         $this->watchStatus = '';
         $this->watchMemo = '';
     }
 
     public function render()
     {
-        $candidates = app(ShowNewCandidateListAction::class)->execute();
+        $rows = app(ShowWatchlistAction::class)->execute();
 
-        // ShowNewCandidateListAction の fundamental_summary は equity_ratio/ROE を
-        // 整数に丸める。おすすめ候補テーブルのモック
-        // (screen-UC006-candidate-check.html) は小数第1位まで表示するため、生の
-        // FundamentalIndicator 値から fundamental_summary を表示専用に組み直す
-        // （新しい計算ルールは作らない・他画面と同じ値）。
-        $rawFundamentals = Holding::query()
-            ->whereIn('symbol_code', array_column($candidates, 'symbol_code'))
-            ->with('fundamentalIndicator')
-            ->get()
-            ->keyBy('symbol_code');
+        $folders = collect($rows)->pluck('folder_name')->filter()->unique()->sort()->values()->all();
 
-        foreach ($candidates as $index => $candidate) {
-            $indicator = $rawFundamentals->get($candidate['symbol_code'])?->fundamentalIndicator;
+        $visibleRows = collect($rows)
+            ->when($this->starredOnly, fn ($c) => $c->where('is_starred', true))
+            ->when($this->folderFilter !== '', fn ($c) => $c->where('folder_name', $this->folderFilter))
+            ->values()
+            ->all();
 
-            if ($indicator !== null) {
-                $candidates[$index]['fundamental_summary'] = sprintf(
-                    '自己資本比率%s%%・ROE%s%%',
-                    number_format((float) $indicator->equity_ratio, 1),
-                    number_format((float) $indicator->roe, 1),
-                );
-            }
-        }
+        $activeRun = WatchlistRefreshRun::query()->orderByDesc('id')->first();
 
         return view('livewire.candidate.candidate-check', [
-            'candidates' => $candidates,
+            'rows' => $rows,
+            'visibleRows' => $visibleRows,
+            'folders' => $folders,
+            'watchlistCount' => WatchlistItem::count(),
+            'activeRun' => $activeRun,
+            'watchStatusOptions' => self::WATCH_STATUS_OPTIONS,
         ]);
     }
 }

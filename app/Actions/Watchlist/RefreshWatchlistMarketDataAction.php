@@ -76,10 +76,11 @@ class RefreshWatchlistMarketDataAction
 
         foreach ($targets as $item) {
             try {
-                $this->refreshHolding(
+                $lastClose = $this->refreshHolding(
                     $item->holding,
                     $item->holding->market === 'jp' ? $nikkeiReturn13w : $sp500Return13w,
                 );
+                $item->update(['last_close' => $lastClose, 'last_refreshed_at' => now()]);
             } catch (Throwable $e) {
                 // MarketData client exceptions carry only the request URL /
                 // status, never the API key (same safety note as
@@ -123,7 +124,12 @@ class RefreshWatchlistMarketDataAction
             ->get();
     }
 
-    private function refreshHolding(Holding $holding, ?float $marketReturn13w): void
+    /**
+     * @return float|null the latest weekly close (persisted as
+     *                    watchlist_items.last_close for the screen's
+     *                    "現在値" / 52週レンジ内位置 / 乖離チップ)
+     */
+    private function refreshHolding(Holding $holding, ?float $marketReturn13w): ?float
     {
         $priceHistory = $holding->market === 'jp'
             ? $this->jpStockPriceClient->fetchWeeklyPriceHistory($holding->symbol_code)
@@ -176,6 +182,8 @@ class RefreshWatchlistMarketDataAction
                 'determined_at' => now(),
             ]);
         }
+
+        return $currentPrice;
     }
 
     /**
