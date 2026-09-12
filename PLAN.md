@@ -194,7 +194,7 @@ UC-011 は閲覧系フローで `.claude/rules/31-e2e-testing.md` のクリテ�
 - コミット（2026-09-06、本セッション）: Part A + Part B + 付随ドキュメント（`use-cases.md` の `market_value` 行・承認記録、`traceability-matrix.md` の CHG-0011 追跡行＋F-004/F-010/F-011 行更新、`common-commands.md`）＋ PLAN.md 300行超過対応（Phase7 の2エントリを `plan-archive.md` へ退避）をまとめてコミット
 - プランファイル: `~/.claude/plans/stock_auto_order-signal-market-value-and-us-fundamentals-implementation-phase.md`
 
-## 米国株ファンダメンタルズ指標データソースとしてFinnhub採用（CHG-0009）Gate2/3承認完了（2026-09-05〜）
+## 米国株ファンダメンタルズ指標データソースとしてFinnhub採用（CHG-0009）実装完了・mainマージ済み（2026-09-05〜）
 
 ### Decision
 
@@ -209,11 +209,13 @@ UC-011 は閲覧系フローで `.claude/rules/31-e2e-testing.md` のクリテ�
 
 ### Files touched
 
-`.env.example`（`FINNHUB_API_KEY`プレースホルダ追加）、`docs/adr/ADR-0009-us-stock-fundamentals-finnhub.md`（新規）、`docs/product/use-cases.md`（UC-001/UC-003/UC-004/UC-010の記述改訂・承認記録追加）、`docs/architecture/data-model.md`（`fundamental_indicators`節・承認記録追加）、`docs/rcid/traceability-matrix.md`（CHG-0009）、`docs/ai-context/do-not-touch.md`（Finnhub APIキー追記）、`PLAN.md`（本エントリ追加、300行超過に伴い「UC-010 Gate4完了・コミット」エントリを`docs/history/plan-archive.md`へ退避）
+**ドキュメント（Gate2/3承認）**: `.env.example`（`FINNHUB_API_KEY`プレースホルダ追加）、`docs/adr/ADR-0009-us-stock-fundamentals-finnhub.md`（新規）、`docs/product/use-cases.md`（UC-001/UC-003/UC-004/UC-010の記述改訂・承認記録追加）、`docs/architecture/data-model.md`（`fundamental_indicators`節・承認記録追加）、`docs/rcid/traceability-matrix.md`（CHG-0009）、`docs/ai-context/do-not-touch.md`（Finnhub APIキー追記）
+
+**コード（Green、`fb894b1`）**: `app/Services/MarketData/FinnhubClient.php`＋`FinnhubClientInterface.php`（新規）、`app/Services/Analysis/UsFundamentalIndicatorMapper.php`（新規）、`app/Actions/Analysis/FetchExternalMarketDataAction.php`（US分岐の組み込み）、`app/Providers/AppServiceProvider.php`／`config/services.php`（バインディング・設定追加）。テスト: `tests/Feature/FetchExternalMarketDataActionTest.php`（拡張）、`tests/Unit/Services/MarketData/FinnhubClientTest.php`（新規）、`tests/Unit/Services/Analysis/UsFundamentalIndicatorMapperTest.php`（新規）、`tests/Support/Fakes/FakeFinnhubClient.php`（新規）
 
 ### Status
 
-Gate2/Gate3承認完了。DBスキーマ変更なし。次はGate4（`/tdd`のRed→Green→Refactorサイクル）で`UsFundamentalIndicatorMapper`（仮称）・Finnhub用HTTPクライアント（レート制限の自己スロットリング・429リトライ含む）・`FetchExternalMarketDataAction`への組み込みを実装する。未着手・未コミット。
+**Green実装・`/review`修正完了、mainマージ済み**（コミット`fb894b1`）。`/review`で2件修正: (1) `FinnhubClient`のリトライ例外メッセージにAPIキー（クエリパラメータ渡しのためJ-Quantsのヘッダー方式と異なり露出しやすい）が漏れないようサニタイズ、(2) XBRL概念値が`present-but-null`の場合に無言で`0.0`扱いされ自己資本比率が「0%」と誤判定される不具合を修正（unavailable扱いに）。両修正とも回帰テスト追加。実DB確認: `app/Services/Analysis/UsFundamentalIndicatorMapper.php`が存在し稼働中（CHG-0011の米国株ファンダ補完・F-012のウォッチリスト画面が実際にこの経路で米国株の指標を取得していることを確認済み）。
 
 ## 売買シグナル画面 判定チェックリスト表示（CHG-0007）（2026-08-29〜）
 
