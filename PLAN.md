@@ -3,6 +3,33 @@
 > 2026-08-27（フロントエンド実装Phase5完了時点。UC-010 Gate4完了・コミット`ba239fe`分も含む）以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、Phase2 UC-008（Cycle1・Cycle2）完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査完了、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了、利確・リバランス閾値の動的分岐ロジック検討〔検討事項の記録のみ、実装はCHG-0006として2026-08-28〜29に別途完了〕、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、フロントエンド実装Phase4（UC-003銘柄詳細画面）完了、UC-010 Gate2/Gate3正式承認（買いシグナル7種の前提条件追加）完了、UC-010 Gate4完了・コミット（`ba239fe`）、フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了、およびフロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了〔2026-09-05、CHG-0011作業時に退避〕等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 > **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。300行超過に伴い「数値表示フォーマット修正完了（2026-08-28）」「UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0012 Phase 0作業時）。約298行に達したため「利確検討ラインの動的分岐 CHG-0006（2026-08-28〜29）」「売買シグナル画面の可読性改善（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0013／ADR-0012作業時）。
 
+## お気に入り未保有銘柄ウォッチリスト／新規投資候補画面の刷新（F-012・UC-012・ADR-0013・CHG-0014）Phase 0 ドキュメント先行（2026-09-06〜）
+
+### Decision
+
+- 本人要望: 楽天証券のお気に入り銘柄CSV（`docs/original-docs/お気に入り銘柄CSV.csv`、216銘柄＝日本株144・米国株72・CFD 4）を取り込み、①既取得の指標と突き合わせた一覧、②そこからの買い時・買い足し候補、を出したい。主目的は**新規投資候補の選定**で「まだ持っていない銘柄」の情報が欲しい。保有済みは一律除外でよい
+- なぜ今できないか: 分析パイプライン（`FetchExternalMarketDataAction`）が保有銘柄（`holding_snapshots`）限定で、未保有のお気に入り銘柄は `technical_indicators`／`fundamental_indicators` に行が無い。工事の本体は画面ではなく「未保有銘柄も外部APIを叩いてDBに入れる仕組み」
+- Planフェーズ承認済み。プランファイル: `~/.claude/plans/stock_auto_order-favorites-watchlist-implementation-phase.md`
+- 本人と確定（AskUserQuestion 2回）: (1) アプリの常設画面、(2) 表示は未保有のみ・出す情報は売買シグナル画面と同等、(3) `/candidate-check`（新規投資候補タブ）を全面刷新して主役に、(4) 押し目買いシグナル＋財務健全性フィルタは**流用**するが絞り込みには使わず全件を透明マルチキーソート（F-011方式）、(5) データ取得はCSVアップロード時＋「一括更新」ボタン（キュー非同期＋進捗表示）、(6) CSV再取込は追加のみ＋画面上で★手動お気に入り
+- 既存画面の意図の棚卸し: UC-006（重複チェック）の価値ある部分（`overlap_rate` の可視化・ウォッチステータス／メモ・過去業績推移）は一覧の行展開に引き継ぐ。UC-008（軽量レコメンド）は候補供給が構造的に破綻（`holdings` 由来＝過去保有銘柄のみ・米国株ゼロ件）していたため置き換え。`NewCandidateFinder`／`watched_themes` は F-005 が流用するためコード残置。捨てるのは「銘柄コード手入力の入口」「注目テーマの手動登録」のみ
+- 中核設計: (D2) 未保有銘柄も `holdings` に `firstOrCreate`（data-model.md が既に想定する「作成経路②」）して既存の `technical_indicators`／`fundamental_indicators`／`financial_statements` を `holding_id` で共有。副作用（保有一覧混入・NEWバッジ誤作動・セクター配分）は調査済みでいずれも問題なし。(D3) 買いシグナルは未保有銘柄が `holding_snapshot_id` を持てないため専用テーブル `watchlist_buy_signals`（`holding_id` キー、`buy_signals` と値域同一）に分離（ADR-0007 D2 と同じ判断）。(D4) 押し目シグナルの共通前提〔52週高値85%以内〕は高値更新中の優良銘柄を取りこぼすため、絞り込みではなく表示＋ソートキー。`BuySignalDeterminationService` は無改修（前提緩和は実測後に別CR）
+- 新テーブル3件（`watchlist_items`／`watchlist_buy_signals`／`watchlist_refresh_runs`）、既存テーブルの変更なし。`compose.yaml` に `queue:work` サービス追加
+- ADR番号は **ADR-0013**（ADR-0012 は別セッションの成長率修正で使用済み）、CR番号は **CHG-0014**（CHG-0013 も同修正で使用済み）
+- **並行作業**: main に別セッションの ADR-0012（成長率修正）の未コミット作業（docs 3ファイル＋ Red テスト）が存在。本人の指示で「何も触らずブランチだけ切る」。`feat/f012-favorites-watchlist` を main から分岐（未コミット変更が作業ツリーに乗るが本ブランチでは一切コミット・変更しない）。**2026-09-12 追記**: 各セッションが作業を終えた後、本人の指示で3セッション分（ADR-0012／F-012／F-013 Phase0）の混在ファイルを行単位で突き合わせて再構成し、それぞれ独立したコミットに分離した（`data-model.md`／`traceability-matrix.md`／`PLAN.md`）
+- **実施タイミング**: 実装着手は F-011（`feat/f011-loss-review-list`）マージ後。本セッションは Phase 0（ドキュメント＋ADR-0013）のみ
+
+### Files touched
+
+**ドキュメント（Phase 0、本セッション、`feat/f012-favorites-watchlist` ブランチ）**: `docs/adr/ADR-0013-favorites-watchlist.md`（新規、Status: Accepted 予定＝Gate1/2/3承認をもって）、`docs/product/requirements.md`（2章 IN＋6章制約＋4章 F-012 追加・F-006/F-008 改訂＋7章）、`docs/product/use-cases.md`（UC一覧・UC-012 節新設・UC-006 統合注記・UC-008 Superseded 注記・承認記録）、`docs/architecture/data-model.md`（`watchlist_items`／`watchlist_buy_signals`／`watchlist_refresh_runs` 定義・`holdings` 作成経路②注記・`watched_themes` 注記・「保留・確定が必要な初期パラメータ値」表4行・承認記録・変更履歴）、`docs/product/ui-guidelines.md`（新規投資候補画面の刷新後構成・6タブ維持・配色は UC-010 と同一）、`docs/ai-context/module-map.md`（`app/Services/Watchlist/`・`app/Actions/Watchlist/`・`app/Jobs/`・`watchlist:refresh`）、`docs/ai-context/glossary.md`（お気に入り銘柄CSV／ウォッチリスト／一括更新／★お気に入り／注目テーマ・軽量レコメンドの改訂）、`docs/rcid/traceability-matrix.md`（F-012 行・CHG-0014 行）、`PLAN.md`（本エントリ）
+
+**コード**: 未着手（F-011 マージ後）。実装ステップ（Cycle 1 パーサ → Cycle 2 取込 Action → Cycle 3 一括更新＋キュー → Cycle 4 画面刷新、各 Red→Gate4→Green→Refactor）はプランファイル参照
+
+### Status
+
+Phase 0（ドキュメント先行）完了。**Gate 1／Gate 2（UC-012）／Gate 3（新規テーブル3件）を 2026-09-08 に本人が一括承認**。F-011・CHG-0012 はいずれも main にマージ済みのため、実装の前提条件は満たしている。次は Cycle 1（`RakutenFavoriteCsvParser` の Red）から。各サイクル Red→Gate4→Green→Refactor。ブランチ `feat/f012-favorites-watchlist`。
+
+> 注: 本ブランチの作業ツリーには別セッションの ADR-0012（成長率修正）作業が混在していたため、F-012 分の `data-model.md`／`traceability-matrix.md`／`PLAN.md` は当初コミットを保留していた。2026-09-12、他セッションが手を止めているタイミングで内容を行単位に再構成し分離コミット（詳細は上記「並行作業」参照）。
+
 ## 成長率算出バグの是正（CHG-0013・ADR-0012）＋押し目買いPEG下限バグ（2026-09-06〜）
 
 ### Decision

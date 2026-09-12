@@ -107,7 +107,7 @@
 **Index**: `(symbol_code, market)` unique（UC-001業務ルール「銘柄コード＋市場区分の組み合わせで一意」）、`sector_classification_id`
 **FK**: `sector_classification_id` → `sector_classifications(id)`
 
-> **作成経路は2つ**: ①CSV取込（UC-001）でのバッチ作成、②新規投資候補チェック（UC-006）・レコメンド（UC-008/UC-009）で未知の銘柄コードが指定された際の`find-or-create`。②の場合は保有していないため、`holding_snapshots`の行は作られない（＝一覧・チャートには出ない）が、`technical_indicators`/`fundamental_indicators`/`financial_statements`は参照できる。
+> **作成経路は2つ**: ①CSV取込（UC-001）でのバッチ作成、②新規投資候補チェック（UC-006）・レコメンド（UC-008/UC-009）・**お気に入り未保有銘柄ウォッチリスト（UC-012、ADR-0013）**で未知の銘柄コードが指定された際の`find-or-create`。②の場合は保有していないため、`holding_snapshots`の行は作られない（＝保有一覧・チャート・セクター配分には出ない）が、`technical_indicators`/`fundamental_indicators`/`financial_statements`は参照できる。UC-012 は経路②を主用途とし、お気に入りCSVの216銘柄（うち未保有分）を `firstOrCreate` で `holdings` に登録したうえで `watchlist_items` から参照する。UC-006 が「未知の銘柄コードは `Rule::exists` で422拒否（find-or-createしない）」としていた制約は UC-012 では適用しない（お気に入りCSVが銘柄の供給源になるため）。
 
 ---
 
@@ -347,6 +347,78 @@
 
 > `deleted_at`（テーマ削除）は持たない。UC-008に登録解除操作が定義されていないため（`.claude/rules/30-testing.md`のCRUD網羅ルールに従い、use-cases.mdで定義されていない削除機能を先回りして実装しない）。将来UC-008に登録解除フローを追加する場合はuse-cases.md更新とあわせて`deleted_at`を追加する。なお`deleted_at`を後付けする場合、MySQLのUNIQUE制約はNULL同士を区別せず`unique(name, deleted_at)`単体では有効レコード内の重複を防げない点に注意（アプリ層バリデーションが別途必要）。
 
+> **2026-09-06、ADR-0013（F-012／UC-012）**: UC-008 は UC-012（お気に入り未保有銘柄ウォッチリスト）に置き換えられ、`watched_themes` の画面からの手動登録は廃止される。ただし本テーブルと `NewCandidateFinder` は F-005（セクター配分ダッシュボードのリバランス候補）が流用しているため、テーブル・モデル・シーダは残置する（`/api/new-candidates` エンドポイントと既存テストも維持）。
+
+---
+
+### watchlist_items（お気に入り未保有銘柄ウォッチリスト・UC-012、ADR-0013）
+
+楽天証券のお気に入り銘柄CSVから取り込んだ銘柄、および画面上で★手動登録した銘柄を管理する。`holdings`（銘柄マスタ）への参照を持ち、指標は既存の `technical_indicators` / `fundamental_indicators` / `financial_statements` を `holding_id` で共有する（新規の指標テーブルは作らない）。
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| holding_id | bigint | NO | - | `holdings.id` への参照（1:1）。CSV取込時に `Holding::firstOrCreate(['symbol_code','market'], ...)` で解決する（`data-model.md` の holdings「作成経路②」） |
+| folder_name | varchar(255) | YES | null | お気に入りCSVのフォルダ名（本人のテーマ分類。例「訪日インバウンド旅行」「日本株 トレンド国策銘柄」）。`source='manual'` の場合は null |
+| exchange_label | varchar(20) | YES | null | お気に入りCSVの取引所ラベル（例「東Ｐ」「米国」）。表示補助のみ |
+| source | enum('rakuten_favorites_csv','manual') | NO | 'rakuten_favorites_csv' | 登録経路 |
+| is_starred | boolean | NO | false | 画面上で本人が手動登録した★お気に入りか。楽天証券側のお気に入り（CSV由来）とは独立で、CSVから消えても保持する |
+| last_close | decimal(15,2) | YES | null | 直近の週足終値。未保有銘柄には `holding_snapshots.current_price` が無いため、「現在値」表示・52週レンジ内位置・判定チェックリストの価格乖離チップに使う現在値を `RefreshWatchlistMarketDataAction` が保存する（既に取得済みの週足データで、追加の外部API呼び出しはない。2026-09-08 Gate 4 実装時に追加） |
+| last_refreshed_at | timestamp | YES | null | `last_close` および指標を最後に更新した日時（2026-09-08 Gate 4 実装時に追加） |
+| last_seen_in_csv_at | timestamp | YES | null | 直近でお気に入りCSVに含まれていた日時。取込のたびに更新。これが直近の取込日時より古い＝「楽天側でお気に入りから外された」と判定して `in_rakuten_favorites=false` バッジを出す |
+| registered_at | timestamp | NO | now() | 初回登録日時 |
+| created_at | timestamp | NO | now() | 作成日時 |
+| updated_at | timestamp | NO | now() | 更新日時 |
+
+**Index**: `holding_id` unique、`is_starred`
+**FK**: `holding_id` → `holdings(id)`
+
+> CSV再アップロードは追加のみ（前回あって今回無い銘柄も削除しない、UC-012業務ルール）。行の物理削除は「本人が画面から明示的にウォッチリストから外す」操作でのみ行う（UC-012 でこの操作を定義しているため `.claude/rules/30-testing.md` のCRUD網羅ルールの対象。`is_starred` の付け外しは UPDATE）。
+> `is_starred` を `watch_records`（UC-006、追記のみ）に寄せない理由: `watch_records` は履歴テーブルで「★を外す」が表現できない（外す＝『様子見』を追記では意味が変わる）。★は独立 boolean とする（ADR-0013 D7）。
+> 一覧に表示するのは「未保有」＝直近スナップショットの `holding_snapshots` に当該 `holding_id` が存在しない銘柄のみ。保有済みになった銘柄は行を残したまま一覧から自動的に外れる。
+
+---
+
+### watchlist_buy_signals（ウォッチリスト銘柄の押し目買いシグナル・UC-012、ADR-0013）
+
+未保有のウォッチリスト銘柄について `BuySignalDeterminationService` が判定した押し目買いシグナルを保存する。`buy_signals`（UC-010）とは値域が同一だが、未保有銘柄は `holding_snapshots` 行を持たないため `holding_snapshot_id` 外部キーを流用できず、`holding_id` をキーとする別テーブルにする（ADR-0013 D3。`buy_signals` を独立テーブルにした ADR-0007 D2 と同じ判断）。
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| holding_id | bigint | NO | - | `holdings.id` への参照 |
+| signal_type | enum('rsi_oversold_rebound','macd_golden_cross','bollinger_oversold','week52_low_proximity','ma_deviation_oversold','volume_spike_rebound','peg_undervalued') | NO | - | 押し目買いシグナル種別（`buy_signals` と同一） |
+| reason_summary | varchar(255) | NO | - | 判定根拠の一言サマリ |
+| determined_at | timestamp | NO | now() | 判定日時（一括更新の実行時刻） |
+| created_at | timestamp | NO | now() | 作成日時 |
+
+**Index**: `(holding_id, signal_type)` unique、`holding_id`
+**FK**: `holding_id` → `holdings(id)`
+
+> 一括更新（`RefreshWatchlistMarketDataAction`）のたびに銘柄単位で delete → 再作成する（`FetchExternalMarketDataAction` の `buy_signals` 再判定と同じパターン）。`signals` / `buy_signals` テーブルには一切書き込まない。
+
+---
+
+### watchlist_refresh_runs（ウォッチリスト一括更新の実行記録・UC-012、ADR-0013）
+
+「一括更新」ボタン／`watchlist:refresh` コマンドからキュー投入された更新ジョブの進捗を保持する。画面が `wire:poll` で読み、「更新中 42/150」の進捗表示に使う。
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| status | enum('queued','processing','completed','failed') | NO | 'queued' | 実行状態 |
+| total_count | int unsigned | NO | 0 | 対象（未保有ウォッチリスト銘柄）件数 |
+| processed_count | int unsigned | NO | 0 | 処理済み件数（1銘柄終えるごとに加算） |
+| failed_count | int unsigned | NO | 0 | 取得失敗しスキップした件数 |
+| started_at | timestamp | YES | null | ワーカーが処理を開始した日時 |
+| finished_at | timestamp | YES | null | 完了／失敗した日時 |
+| created_at | timestamp | NO | now() | キュー投入日時 |
+| updated_at | timestamp | NO | now() | 更新日時 |
+
+**Index**: `(status, created_at)`
+
+> 二重実行の防止: `status IN ('queued','processing')` の行が存在する間は新規のキュー投入を受け付けない（UC-012 エラーケース「更新処理を実行中です」）。古い実行記録は保持し続けても個人利用規模では問題にならないため、当面は自動削除しない。
+
 ---
 
 ### market_indicator_snapshots（市場全体指標・UC-007）
@@ -450,6 +522,10 @@
 | 整理チェックリスト③〜⑥（既存閾値の流用） | ③52週安値からの距離 ≦+10%（`BuySignalDeterminationService::WEEK52_LOW_PROXIMITY_RATE` 流用）／④**MA75**乖離率 ≦-10%（`MA_DEVIATION_OVERSOLD_PCT` の値を流用、参照MAはUC-010のMA20ではなく長期のMA75）／⑤MACD−シグナル線 <0（`MACD_CROSS_THRESHOLD`、`lt`方向）／⑥相対力〔対市場〕 ≦-5（`BuySignalDeterminationService::MIN_RELATIVE_STRENGTH` の値を流用） | UC-011 | 既存の確定済み閾値の値をそのまま可視化するもので新設しない（CHG-0007と同方針）。参照MAをMA75にする点・相対力を≦-5にする点はADR-0010の設計判断 |
 | 整理検討の財務健全性3項目 → **4項目（CHG-0012／ADR-0011）** | 閾値の値は ROE 10%／自己資本比率 40%／成長率 0%／**営業利益率 10%**（`FundamentalHealthEvaluator` の既存定数＋CHG-0012の新定数を流用）。**整理検討テーブルでは判定の向きを反転**し「基準割れ（＝投資根拠の毀損）」を `met`（赤チップ）とする（ADR-0010 D6、2026-09-06 改訂）。営業利益率も同じ反転フラグに乗せる（10%未満で `met`＝赤）。健全な財務は `unmet`（グレー）で表示し実測値はチップ内に見せる。集計はテクニカル7項目と分け、サマリは「投資根拠の毀損 ◯/4」と表示する | UC-011 | 閾値の値は既存流用＋CHG-0012。判定方向の反転は表示レイヤーのみ（`SignalCriteriaEvaluator::evaluateLossReview()` が `fundamentalRows()` を反転フラグ付きで呼ぶ）。`fundamental_status='failed'` の銘柄も一覧から除外しない（UC-010とは逆、ADR-0010 D4） |
 | 推定連続保有週数（`continuous_holding_weeks`） | 対象銘柄が直近スナップショットから連続して出現している `holding_snapshots` の数。最古スナップショットまで連続なら `is_truncated=true`（表示「N週以上」）。楽天CSVに取得日がないための代替であり正確な保有期間ではない | UC-011 | 叩き台のまま承認（2026-09-05、CHG-0010）。`ContinuousHoldingWeeksCalculator` のGate4実装時に`/tdd`サイクルで確定。DBスキーマ変更なし（`snapshots`／`holding_snapshots` の既存行のみ参照） |
+| ウォッチリスト候補一覧のソートキー | ①押し目買いシグナル件数（`watchlist_buy_signals` の件数）の降順 → ②財務健全性 `passed`→`unavailable`→`failed` → ③同セクター保有比率（`overlap_rate`）の昇順 → ④52週レンジ内位置の昇順 | UC-012 | 叩き台のまま承認（2026-09-08、CHG-0014／ADR-0013）。`ShowWatchlistAction`（仮称）のGate4実装時に`/tdd`サイクルで確定。合成スコアリングは用いない（ADR-0010 D8・ADR-0013 D4 と同方針） |
+| 52週レンジ内位置（`week52_range_position`） | `(現在値 − week52_low) ÷ (week52_high − week52_low)`。0＝52週安値、1＝52週高値。`week52_high == week52_low` または一方が null のとき null（チェックリスト④のMA75乖離率と同じくデータ不足時は表示のみ「—」） | UC-012 | 叩き台のまま承認（2026-09-08、CHG-0014）。表示レイヤーで既存 `technical_indicators` から都度算出し永続化しない |
+| ウォッチリスト一括更新の対象・除外 | 対象＝`watchlist_items` の銘柄のうち、直近スナップショットの `holding_snapshots` に `holding_id` が存在しないもの（未保有）。保有銘柄は週次CSV取込（`FetchExternalMarketDataAction`）で更新されるため一括更新の対象外 | UC-012 | 叩き台のまま承認（2026-09-08、CHG-0014／ADR-0013 D5）。本人の当初要望「保有＋お気に入りを一律更新」に対し、保有分は取込のたびに最新化されるため未保有のみに絞る調整。実行時間（Finnhub 60req/分律速で未保有100〜150銘柄＝数分）を `RefreshWatchlistMarketDataAction` のGate4実装時に実測する |
+| ウォッチリスト銘柄の小口購入額・NISA推奨 | UC-008 と同一（`suggested_amount`＝保有評価額合計の1%、NISA推奨＝自己資本比率50%以上・ROE15%以上） | UC-012 | UC-008 の確定値をそのまま流用（2026-09-08、CHG-0014）。`FundamentalHealthEvaluator`・小口購入額の算出ロジックを UC-012 の表示 Action から再利用する |
 
 ## 分析ロジックの計算仕様（`TechnicalIndicatorCalculator`、Gate4確定・2026-08-21）
 
@@ -495,6 +571,7 @@
 | 2026-08-29 | minowaryo | 承認（CR） | 売買シグナル画面の判定チェックリスト表示を新規承認（CHG-0007）。「保留・確定が必要な初期パラメータ値」表に「判定チェックリストの『あと一歩（`near`）』バッファ = 基準値の±20%手前、基準値0の項目は2値判定」行を新設。判定項目の基準値そのものは既存のシグナル判定閾値・財務健全性フィルタ値を流用するため新設せず、DBスキーマ変更もなし。新設`SignalCriteriaEvaluator`（表示専用の純粋計算クラス）で`ShowSignalListAction`/`ShowBuySignalListAction`に組み込む |
 | 2026-09-05 | minowaryo | 承認（CR） | 整理検討（含み損）候補一覧を新規承認（CHG-0010、ADR-0010、UC-011）。**DBスキーマ変更なし**（表示レイヤー完結、CHG-0006と同方式。`signals`/`buy_signals`/`FetchExternalMarketDataAction`不変、マイグレーションなし）のためGate3は影響範囲の確認のみ。「保留・確定が必要な初期パラメータ値」表に整理検討ライン(-20%)・52週高値下落率(-30%)・押し目0件・③〜⑥の既存閾値流用・財務3項目・推定連続保有週数の6行を追記。「分析ロジックの計算仕様」節に`recovery_required_rate`・`portfolio_loss_share`・MA75乖離率・`continuous_holding_weeks`の算出式を追記。新規閾値3件（-20%/-30%/押し目0件）はいずれも叩き台で、`ShowLossReviewListAction`/`LossReviewThresholds`/`ContinuousHoldingWeeksCalculator`のGate4実装時に`/tdd`サイクルで確定 |
 | 2026-09-06 | minowaryo | 承認（CR） | 整理検討テーブルの判定チェックリスト配色を「赤の単一極性」に変更（ADR-0010 D6 改訂）。1テーブル内でテクニカルの緑（＝売り後押し）と財務の緑（＝保留）が正反対の意味になり誤読される懸念が実装レビューで判明したため、財務健全性3項目の判定の向きを反転し「基準割れ（＝投資根拠の毀損）」を `met`（赤）とする。閾値の値（ROE 10%／自己資本比率 40%／成長率 0%）は既存流用のまま。反転は表示レイヤーのみ（`fundamentalRows()` に反転フラグ追加）で、UC-004/UC-010 の既定挙動・配色は不変。「整理検討の財務健全性3項目」行を改訂 |
+| 2026-09-08 | minowaryo | 承認（CR、Gate1/2/3一括） | **お気に入り未保有銘柄ウォッチリスト（UC-012、F-012、ADR-0013）**。新規テーブル3件を追加: `watchlist_items`（`holding_id` unique・フォルダ名・`is_starred`・`last_seen_in_csv_at`）／`watchlist_buy_signals`（`holding_id` キー、値域は `buy_signals` と同一。未保有銘柄は `holding_snapshot_id` を持てないため別テーブル）／`watchlist_refresh_runs`（一括更新の進捗）。**既存テーブルの変更なし**（`holdings` の「作成経路②」注記を UC-012 追記のみ）。「保留・確定が必要な初期パラメータ値」表にソートキー・52週レンジ内位置・一括更新の対象/除外・小口購入額の4行を追記。未保有銘柄の指標は既存の `technical_indicators`／`fundamental_indicators`／`financial_statements` を `holding_id` で共有。新設 `RefreshWatchlistMarketDataAction`（既存クライアント／Mapper／`BuySignalDeterminationService` を流用）＋ `RefreshWatchlistMarketDataJob`（キュー）＋ `watchlist:refresh` コマンド。`compose.yaml` に `queue:work` サービスを追加。F-011 マージ後に実装着手 | ADR-0013（CHG-0014） |
 | 2026-09-06 | （Gate3レビュー待ち） | 提案（CR） | 財務健全性フィルタに**営業利益率（`operating_margin`）を4条件目**として追加（CHG-0012／ADR-0011）。`fundamental_indicators` に `operating_margin decimal(10,4) nullable` を1列追加（**本CR唯一のスキーマ変更・マイグレーション必要**、`after('equity_ratio')`）。閾値は10%以上（叩き台。8%案との実測比較の経緯はADR-0011）。JP株は `operating_profit ÷ net_sales × 100` の実測算出、US株は Finnhub `operatingMarginTTM`（無ければ `operatingMarginAnnual`）採用で、`peg_ratio` と同様に算出方法混在。`\|営業利益率\| > 999%` は両Mapperでnull化。「財務健全性フィルタ」「買い増し用ファンダメンタルズ健全性フィルタ」「整理検討の財務健全性3項目（→4項目）」「判定チェックリストの near バッファ」の各行と `fundamental_indicators` カラム表を改訂。実測影響: 財務 `passed` が JP 15→11・US 12→11（合計 27→22）。F-011（`feat/f011-loss-review-list`）マージ後に独立CRとして実装着手する |
 
 ## 変更履歴
@@ -529,3 +606,4 @@
 | 2026-09-05 | **Gate3承認**（CHG-0009・ADR-0009）。米国株のファンダメンタルズ指標データソースとしてFinnhub APIを新規採用。`fundamental_indicators`のカラム構成（`per`/`pbr`/`roe`/`revenue_growth`/`operating_income_growth`/`equity_ratio`/`dividend_yield`/`dividend_payout_ratio`/`eps_growth`/`peg_ratio`）は市場非依存のnullable列のまま変更なし、DBマイグレーション不要。`fetched_at`の説明・UPSERT設計根拠のコメントをJP（J-Quants）/US（Finnhub）の両データソースを踏まえた記載に更新。自己資本比率・営業利益成長率の算出方法（`financials-reported`からの実測計算・YoY算出）を「実装完了」注記として追記（実装はGate4のTDDサイクルで行う） | ADR-0009 |
 | 2026-09-06 | 財務健全性フィルタに営業利益率（`operating_margin`）を4条件目として追加する提案（CHG-0012／ADR-0011、**Phase 0 ドキュメント先行**）。`fundamental_indicators` に `operating_margin decimal(10,4) nullable` を1列追加するマイグレーションが必要（CHG-0009以降で唯一のスキーマ変更）。閾値10%（叩き台）。カラム表・「保留・確定が必要な初期パラメータ値」表の4行・承認記録を改訂。実装（マイグレーション／Mapper／`FundamentalHealthEvaluator`／呼び出し元6機能／`SignalCriteriaEvaluator`／Blade）はGate3承認とF-011マージを待って着手 | ADR-0011（CHG-0012） |
 | 2026-09-06 | 成長率算出バグの是正（ADR-0012）。`revenue_growth`/`operating_income_growth`/`eps_growth`/`financial_statements.*_yoy_change` を「`fetchStatements()` 配列の4つ前との比較」から「最新の本決算（FY）と前期の本決算の比較（前期通期比）」に変更。原因は J-Quants `/fins/summary` の同一決算の重複開示・累計期（1Q/2Q/3Q/FY）混在で「通期売上÷1Q売上→+316%」のような無意味な値が算出・永続化されていたこと。`JQuantsClient::fetchStatements()` の返却行に `period_type`/`fiscal_year_end` を追加し取得件数を5→16に拡大。`FundamentalIndicatorMapper::annualGrowth()` を公開し `FetchExternalMarketDataAction` の private 複製を廃止。併せて `BuySignalDeterminationService::determinePegUndervalued()` に PEG 下限（`0 < peg`）を追加（負の Finnhub `pegTTM` を割安誤判定していたバグB）。DBスキーマ変更なし（`financial_statements` の保存件数が増えるのみ） | ADR-0012 |
+| 2026-09-06 | お気に入り未保有銘柄ウォッチリスト（CHG-0014／ADR-0013／UC-012、**Phase 0 ドキュメント先行**）。新規テーブル3件（`watchlist_items`／`watchlist_buy_signals`／`watchlist_refresh_runs`）を追加。**既存テーブルの変更なし**（`holdings` の「作成経路②」注記に UC-012 を追記のみ）。未保有のお気に入り銘柄を `holdings` に `firstOrCreate` して既存の `technical_indicators`／`fundamental_indicators`／`financial_statements` を `holding_id` で共有する。買いシグナルは未保有銘柄が `holding_snapshot_id` を持てないため `watchlist_buy_signals`（`holding_id` キー、`buy_signals` と値域同一）に分離（ADR-0007 D2 と同じ判断）。「保留・確定が必要な初期パラメータ値」表にソートキー・52週レンジ内位置・一括更新の対象/除外・小口購入額の4行を追記。UC-006／UC-008 は UC-012 に統合・刷新（`NewCandidateFinder`／`watched_themes` は F-005 が流用するためコード残置）。`compose.yaml` に `queue:work` サービスを追加。実装は F-011（`feat/f011-loss-review-list`）マージ後 | ADR-0013（CHG-0014） |
