@@ -17,7 +17,7 @@ namespace App\Services\Analysis;
 final class FundamentalIndicatorMapper
 {
     /**
-     * @param  array<int, array{disclosed_date: string, net_sales: float|null, operating_profit: float|null, profit: float|null, eps: float|null, book_value_per_share: float|null, equity_to_asset_ratio: float|null, roe: float|null, dividend_per_share_annual: float|null, payout_ratio_annual: float|null}>  $statements  Descending (latest-first) disclosed financial statements.
+     * @param  array<int, array{disclosed_date: string, period_type?: string|null, fiscal_year_end?: string|null, net_sales: float|null, operating_profit: float|null, profit: float|null, eps: float|null, book_value_per_share: float|null, equity_to_asset_ratio: float|null, roe: float|null, dividend_per_share_annual: float|null, payout_ratio_annual: float|null}>  $statements  Descending (latest-first) disclosed financial statements.
      * @return array{per: float|null, pbr: float|null, roe: float|null, revenue_growth: float|null, operating_income_growth: float|null, equity_ratio: float|null, operating_margin: float|null, dividend_yield: float|null, dividend_payout_ratio: float|null, eps_growth: float|null, peg_ratio: float|null}
      */
     public function map(array $statements, ?float $currentPrice): array
@@ -25,9 +25,9 @@ final class FundamentalIndicatorMapper
         $latest = $statements[0] ?? null;
 
         $per = $this->calculatePer($latest, $currentPrice);
-        $revenueGrowth = $this->calculateGrowth($statements, 'net_sales');
-        $operatingIncomeGrowth = $this->calculateGrowth($statements, 'operating_profit');
-        $epsGrowth = $this->calculateGrowth($statements, 'eps');
+        $revenueGrowth = $this->annualGrowth($statements, 'net_sales');
+        $operatingIncomeGrowth = $this->annualGrowth($statements, 'operating_profit');
+        $epsGrowth = $this->annualGrowth($statements, 'eps');
 
         return [
             'per' => $per,
@@ -126,19 +126,52 @@ final class FundamentalIndicatorMapper
     }
 
     /**
-     * Growth rate (%) between the latest statement (index 0) and the
-     * statement 4 periods before (index 4), for the given field.
+     * Growth rate (%) between the latest full-year (本決算 / FY) statement and
+     * the one for the previous fiscal year, for the given field
+     * (docs/adr/ADR-0012-growth-rate-fy-comparison.md).
      *
-     * @param  array<int, array<string, float|null>>  $statements
+     * J-Quants `/fins/summary` interleaves 1Q/2Q/3Q/FY disclosures and can
+     * repeat the same filing under two `disclosed_date`s, so a positional
+     * "index 4" comparison mixes a full-year figure with a single quarter.
+     * Instead: keep only `period_type === 'FY'` rows, dedupe by
+     * `fiscal_year_end` (rows arrive `disclosed_date` descending, so the
+     * first occurrence is the most recently disclosed), then compare the
+     * two most recent fiscal years. `null` when fewer than two fiscal years
+     * are available, or when either value is missing / the prior value is 0.
+     *
+     * Public so App\Actions\Analysis\FetchExternalMarketDataAction reuses
+     * the exact same logic for financial_statements.*_yoy_change instead of
+     * keeping a private duplicate (ADR-0012 D3).
+     *
+     * @param  array<int, array<string, mixed>>  $statements
      */
-    private function calculateGrowth(array $statements, string $field): ?float
+    public function annualGrowth(array $statements, string $field): ?float
     {
-        if (! isset($statements[0], $statements[4])) {
+        $annualByFiscalYear = [];
+
+        foreach ($statements as $statement) {
+            if (($statement['period_type'] ?? null) !== 'FY') {
+                continue;
+            }
+
+            $fiscalYearEnd = $statement['fiscal_year_end'] ?? null;
+
+            if ($fiscalYearEnd === null || isset($annualByFiscalYear[$fiscalYearEnd])) {
+                continue;
+            }
+
+            $annualByFiscalYear[$fiscalYearEnd] = $statement;
+        }
+
+        krsort($annualByFiscalYear); // most recent fiscal year first
+        $annual = array_values($annualByFiscalYear);
+
+        if (! isset($annual[0], $annual[1])) {
             return null;
         }
 
-        $latestValue = $statements[0][$field] ?? null;
-        $pastValue = $statements[4][$field] ?? null;
+        $latestValue = $annual[0][$field] ?? null;
+        $pastValue = $annual[1][$field] ?? null;
 
         if ($latestValue === null || $pastValue === null || $pastValue == 0.0) {
             return null;

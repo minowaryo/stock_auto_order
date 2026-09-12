@@ -154,12 +154,13 @@ test('fetchStatementsはDiscDate降順に並べ替え、指定件数に絞り込
     // Arrange: three fiscal periods returned out of order; only the two most
     // recent should be kept (periods=2). The most recent period (2025-05-09)
     // has an empty-string dividend, which must be coerced to null.
+    // ADR-0012: 各行に CurPerType(period_type) / CurFYEn(fiscal_year_end) が付く。
     Http::fake([
         'api.jquants.com/v2/fins/summary*' => Http::response([
             'data' => [
-                ['DiscDate' => '2023-05-10', 'DiscTime' => '12:00', 'Code' => '72030', 'Sales' => '40000000000000', 'OP' => '4000000000000', 'OdP' => '4200000000000', 'NP' => '3800000000000', 'EPS' => '300.00', 'BPS' => '2500.0', 'EqAR' => '35.0', 'ShEq' => '18000000000000', 'ROE' => '12.0', 'DivAnn' => '65', 'PayoutRatioAnn' => '21.0'],
-                ['DiscDate' => '2024-05-08', 'DiscTime' => '12:00', 'Code' => '72030', 'Sales' => '45095325000000', 'OP' => '5352934000000', 'OdP' => '5500000000000', 'NP' => '4944933000000', 'EPS' => '333.62', 'BPS' => '2870.0', 'EqAR' => '36.8', 'ShEq' => '19000000000000', 'ROE' => '13.5', 'DivAnn' => '75', 'PayoutRatioAnn' => '22.5'],
-                ['DiscDate' => '2025-05-09', 'DiscTime' => '12:00', 'Code' => '72030', 'Sales' => '45095325000000', 'OP' => '4795586000000', 'OdP' => '5000000000000', 'NP' => '4765461000000', 'EPS' => '347.49', 'BPS' => '3210.5', 'EqAR' => '38.7', 'ShEq' => '20000000000000', 'ROE' => '15.2', 'DivAnn' => '', 'PayoutRatioAnn' => '25.9'],
+                ['DiscDate' => '2023-05-10', 'DiscTime' => '12:00', 'Code' => '72030', 'CurPerType' => 'FY', 'CurFYEn' => '2023-03-31', 'Sales' => '40000000000000', 'OP' => '4000000000000', 'OdP' => '4200000000000', 'NP' => '3800000000000', 'EPS' => '300.00', 'BPS' => '2500.0', 'EqAR' => '35.0', 'ShEq' => '18000000000000', 'ROE' => '12.0', 'DivAnn' => '65', 'PayoutRatioAnn' => '21.0'],
+                ['DiscDate' => '2024-05-08', 'DiscTime' => '12:00', 'Code' => '72030', 'CurPerType' => 'FY', 'CurFYEn' => '2024-03-31', 'Sales' => '45095325000000', 'OP' => '5352934000000', 'OdP' => '5500000000000', 'NP' => '4944933000000', 'EPS' => '333.62', 'BPS' => '2870.0', 'EqAR' => '36.8', 'ShEq' => '19000000000000', 'ROE' => '13.5', 'DivAnn' => '75', 'PayoutRatioAnn' => '22.5'],
+                ['DiscDate' => '2025-05-09', 'DiscTime' => '12:00', 'Code' => '72030', 'CurPerType' => 'FY', 'CurFYEn' => '2025-03-31', 'Sales' => '45095325000000', 'OP' => '4795586000000', 'OdP' => '5000000000000', 'NP' => '4765461000000', 'EPS' => '347.49', 'BPS' => '3210.5', 'EqAR' => '38.7', 'ShEq' => '20000000000000', 'ROE' => '15.2', 'DivAnn' => '', 'PayoutRatioAnn' => '25.9'],
             ],
         ], 200),
     ]);
@@ -173,6 +174,8 @@ test('fetchStatementsはDiscDate降順に並べ替え、指定件数に絞り込
     expect($result)->toBe([
         [
             'disclosed_date' => '2025-05-09',
+            'period_type' => 'FY',
+            'fiscal_year_end' => '2025-03-31',
             'net_sales' => 45095325000000.0,
             'operating_profit' => 4795586000000.0,
             'profit' => 4765461000000.0,
@@ -185,6 +188,8 @@ test('fetchStatementsはDiscDate降順に並べ替え、指定件数に絞り込
         ],
         [
             'disclosed_date' => '2024-05-08',
+            'period_type' => 'FY',
+            'fiscal_year_end' => '2024-03-31',
             'net_sales' => 45095325000000.0,
             'operating_profit' => 5352934000000.0,
             'profit' => 4944933000000.0,
@@ -196,6 +201,38 @@ test('fetchStatementsはDiscDate降順に並べ替え、指定件数に絞り込
             'payout_ratio_annual' => 22.5,
         ],
     ]);
+});
+
+test('fetchStatementsは四半期・本決算の混在レスポンスから period_type / fiscal_year_end をマッピングし、既定で16期まで返す（ADR-0012）', function () {
+    // Source of truth: docs/adr/ADR-0012-growth-rate-fy-comparison.md D2
+    //   - CurPerType → period_type, CurFYEn → fiscal_year_end
+    //   - 既定取得件数 5 → 16（FY を2期ぶん window 内に収めるため）
+    $rows = [];
+    $seq = 0;
+    // 6会計年度ぶん × 4四半期 = 24行
+    for ($fy = 2021; $fy <= 2026; $fy++) {
+        foreach (['1Q', '2Q', '3Q', 'FY'] as $type) {
+            $seq++;
+            $rows[] = [
+                'DiscDate' => sprintf('2020-01-%02d', $seq), // 単調増加すればよい（昇順生成→client側でDiscDate降順ソート）
+                'DiscTime' => '12:00', 'Code' => '72030',
+                'CurPerType' => $type, 'CurFYEn' => sprintf('%04d-03-31', $fy),
+                'Sales' => '1000', 'OP' => '100', 'OdP' => '110', 'NP' => '90',
+                'EPS' => '10', 'BPS' => '100', 'EqAR' => '40.0', 'ShEq' => '1', 'ROE' => '10.0',
+                'DivAnn' => '5', 'PayoutRatioAnn' => '20.0',
+            ];
+        }
+    }
+
+    Http::fake(['api.jquants.com/v2/fins/summary*' => Http::response(['data' => $rows], 200)]);
+
+    $result = (new JQuantsClient)->fetchStatements('72030');
+
+    expect($result)->toHaveCount(16);
+    expect($result[0])->toHaveKeys(['period_type', 'fiscal_year_end']);
+    // FY 行が2期ぶん以上含まれること（成長率算出の前提）
+    $fyCount = count(array_filter($result, fn ($r) => $r['period_type'] === 'FY'));
+    expect($fyCount)->toBeGreaterThanOrEqual(2);
 });
 
 test('fetchStatementsは取得件数が指定期数より少ない場合は取得できた件数分のみ返す', function () {

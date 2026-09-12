@@ -199,14 +199,14 @@
 | per | decimal(10,2) | YES | null | PER |
 | pbr | decimal(10,2) | YES | null | PBR |
 | roe | decimal(7,4) | YES | null | ROE（%） |
-| revenue_growth | decimal(10,4) | YES | null | 売上高成長率（%、前年同期比）。ADR-0006により`decimal(7,4)`から拡張 |
-| operating_income_growth | decimal(10,4) | YES | null | 営業利益成長率（%、前年同期比）。ADR-0006により`decimal(7,4)`から拡張 |
+| revenue_growth | decimal(10,4) | YES | null | 売上高成長率（%）。**JP株は最新の本決算（FY）とその前期の本決算の比較（前期通期比、ADR-0012。2026-09-06に「配列4つ前との比較」から変更）**、US株はFinnhub`revenueGrowthTTMYoy`（TTM前年同期比）をそのまま採用。同一カラムに算出方法が異なる値が混在する（`peg_ratio`と同じ構図）。ADR-0006により`decimal(7,4)`から拡張 |
+| operating_income_growth | decimal(10,4) | YES | null | 営業利益成長率（%）。**JP株は最新の本決算（FY）とその前期の本決算の比較（前期通期比、ADR-0012）**、US株はFinnhubの`financials-reported`の`us-gaap_OperatingIncomeLoss`を直近期・前期で比較（ADR-0009）。ADR-0006により`decimal(7,4)`から拡張 |
 | equity_ratio | decimal(7,4) | YES | null | 自己資本比率（%） |
 | operating_margin | decimal(10,4) | YES | null | 営業利益率（%、営業利益÷売上高）。財務健全性フィルタの4条件目（CHG-0012／ADR-0011）。**JP株は決算期ベースの実測算出（`operating_profit ÷ net_sales × 100`、`FundamentalIndicatorMapper`）、US株はFinnhubの`operatingMarginTTM`（無ければ`operatingMarginAnnual`）をそのまま採用**しており、`peg_ratio`と同様に同一カラムに算出方法が異なる値が混在する（両者を比較する機能を追加する際は注意）。`\|営業利益率\| > 999%`（売上ほぼゼロのプレレベニュー企業。実データでFinnhubが`-243100`を返す例あり）は両Mapperでnull化してINSERTしない（ADR-0006のeps_growth桁あふれと同種の予防）。`decimal(10,4)`は成長率3列（ADR-0006）と揃えた |
 | dividend_yield | decimal(7,4) | YES | null | 配当利回り（%） |
 | dividend_payout_ratio | decimal(7,4) | YES | null | 配当性向（%） |
-| eps_growth | decimal(10,4) | YES | null | EPS成長率（%、前年同期比。`financial_statements.eps`から算出、ADR-0004）。実データでほぼゼロ近辺からの回復銘柄が999.9999%を超えINSERTエラーになったため、ADR-0006により`decimal(7,4)`から拡張 |
-| peg_ratio | decimal(10,4) | YES | null | PEGレシオ。JP株は`PER÷EPS成長率`で自前算出し、`eps_growth`が0以下の場合は算出せずnull（ADR-0004）。**US株はFinnhubの`pegTTM`をそのまま採用しており、算出方法がJP株と同一とは限らない**（ADR-0009。同一カラムに算出方法が異なる値が混在するため、両者を比較する機能を追加する際は注意が必要） |
+| eps_growth | decimal(10,4) | YES | null | EPS成長率（%）。**JP株は最新の本決算（FY）とその前期の本決算の`financial_statements.eps`を比較（前期通期比、ADR-0012。2026-09-06に「配列4つ前との比較」から変更）**、US株はFinnhub`epsGrowthTTMYoy`（ADR-0009）。実データでほぼゼロ近辺からの回復銘柄が999.9999%を超えINSERTエラーになったため、ADR-0006により`decimal(7,4)`から拡張 |
+| peg_ratio | decimal(10,4) | YES | null | PEGレシオ。JP株は`PER÷EPS成長率`で自前算出し、`eps_growth`が0以下の場合は算出せずnull（ADR-0004）。**US株はFinnhubの`pegTTM`をそのまま採用しており、算出方法がJP株と同一とは限らない**（ADR-0009。同一カラムに算出方法が異なる値が混在するため、両者を比較する機能を追加する際は注意が必要）。買い増しシグナル（`BuySignalDeterminationService::determinePegUndervalued`）は`0 < peg <= 1.0`のみを割安とする（負のPEGは減益・赤字成長を意味するため割安判定から除外、ADR-0012 D4） |
 | fetched_at | timestamp | NO | now() | 外部データソースからの取得日時（値が変化した時のみ更新）。JP株はJ-Quants由来で最大12週間遅延の可能性あり。US株はFinnhub由来（ADR-0009）でこの遅延制約は適用されない |
 
 **Index**: `holding_id` unique
@@ -226,8 +226,8 @@
 | revenue | decimal(18,2) | YES | null | 売上高。J-Quantsが当該期のSalesを欠損で返す場合がありnull許容（ADR-0008） |
 | operating_income | decimal(18,2) | YES | null | 営業利益。J-Quantsが当該期のOPを欠損で返す場合がありnull許容（ADR-0008） |
 | eps | decimal(10,2) | YES | null | 1株当たり利益（EPS）。`fundamental_indicators.eps_growth`/`peg_ratio`の算出元（ADR-0004） |
-| revenue_yoy_change | decimal(7,4) | YES | null | 売上高前年比増減（%） |
-| operating_income_yoy_change | decimal(7,4) | YES | null | 営業利益前年比増減（%） |
+| revenue_yoy_change | decimal(7,4) | YES | null | 売上高の前期本決算比増減（%）。最新の本決算行のみ算出（ADR-0012。2026-09-06に「4期前との比較」から変更） |
+| operating_income_yoy_change | decimal(7,4) | YES | null | 営業利益の前期本決算比増減（%）。最新の本決算行のみ算出（ADR-0012） |
 | fetched_at | timestamp | NO | now() | J-Quantsからの取得日時 |
 | created_at | timestamp | NO | now() | 作成日時 |
 
@@ -236,7 +236,9 @@
 
 > UC-006業務ルール「直近3〜5期分」の件数は**初期値5期**とし、取得できる期数がそれ未満の場合は取得可能な範囲のみ表示する。
 
-> **実装完了**（2026-08-23、UC-006 Cycle A Gate4）: `FetchExternalMarketDataAction`がJP株について既に取得している`jQuantsClient->fetchStatements()`の5期分をそのまま保存する（新規の外部API呼び出しは追加しない）。`revenue_yoy_change`/`operating_income_yoy_change`は**最新期（index 0）のみ**`FundamentalIndicatorMapper::calculateGrowth()`と同一ロジック（4期前との比較）で算出し、過去の期（index 1〜4）は比較対象期がフェッチ範囲外のためnullのままとする。US株・投信は対象外（fundamentals自体がJP限定のため）。
+> **実装完了**（2026-08-23、UC-006 Cycle A Gate4）: `FetchExternalMarketDataAction`がJP株について既に取得している`jQuantsClient->fetchStatements()`の結果をそのまま保存する（新規の外部API呼び出しは追加しない）。`revenue_yoy_change`/`operating_income_yoy_change`は**最新の本決算行のみ**`FundamentalIndicatorMapper::annualGrowth()`（最新FYと前期FYの比較）で算出し、それ以外の期はnullのままとする。US株・投信は対象外（fundamentals自体がJP限定のため）。
+>
+> **改定**（2026-09-06、ADR-0012）: `fetchStatements()`の取得件数を5→16期に拡大し、`revenue_yoy_change`等のYoYロジックを「配列4つ前との比較」から「最新の本決算（FY）と前期の本決算の比較」に変更（`/fins/summary`の重複開示・累計期混在で「通期売上÷1Q売上」のような無意味な値が算出されていたバグの是正）。UC-006の履歴表示は保存件数の拡大に伴い最大16期になる。
 
 > **`/review`拡張レベル指摘の修正**（2026-08-23、MEDIUM、ADR-0008）: `revenue`/`operating_income`は当初NOT NULLで定義していたが、データソースである`net_sales`/`operating_profit`（J-Quants）自体がnullを返しうるため、`financial_statements`のINSERTが同一銘柄の`technical_indicators`/`fundamental_indicators`/`signals`更新まで巻き添えでロールバックさせる不具合があった。両カラムをnullableに変更（`2026_08_23_000001_nullable_revenue_operating_income_on_financial_statements_table.php`）。
 
@@ -526,3 +528,4 @@
 | 2026-09-05 | 判定チェックリストの価格乖離項目の通貨単位バグを UC-004/UC-010/UC-011 横断で修正（CHG-0010、F-011 実データ確認で発見）。`SignalCriteriaEvaluator::indicatorComparablePrice()`（新設 public static）で米国株の円換算済み `current_price` を `fx_rate_used` で USD に割り戻してから乖離率を計算する。`ShowSignalListAction`/`ShowBuySignalListAction`/`ShowLossReviewListAction` の判定チェックリスト用 `current_price` のみに適用。DBスキーマ変更なし。「分析ロジックの計算仕様」節に注記を追記 | CHG-0010 |
 | 2026-09-05 | **Gate3承認**（CHG-0009・ADR-0009）。米国株のファンダメンタルズ指標データソースとしてFinnhub APIを新規採用。`fundamental_indicators`のカラム構成（`per`/`pbr`/`roe`/`revenue_growth`/`operating_income_growth`/`equity_ratio`/`dividend_yield`/`dividend_payout_ratio`/`eps_growth`/`peg_ratio`）は市場非依存のnullable列のまま変更なし、DBマイグレーション不要。`fetched_at`の説明・UPSERT設計根拠のコメントをJP（J-Quants）/US（Finnhub）の両データソースを踏まえた記載に更新。自己資本比率・営業利益成長率の算出方法（`financials-reported`からの実測計算・YoY算出）を「実装完了」注記として追記（実装はGate4のTDDサイクルで行う） | ADR-0009 |
 | 2026-09-06 | 財務健全性フィルタに営業利益率（`operating_margin`）を4条件目として追加する提案（CHG-0012／ADR-0011、**Phase 0 ドキュメント先行**）。`fundamental_indicators` に `operating_margin decimal(10,4) nullable` を1列追加するマイグレーションが必要（CHG-0009以降で唯一のスキーマ変更）。閾値10%（叩き台）。カラム表・「保留・確定が必要な初期パラメータ値」表の4行・承認記録を改訂。実装（マイグレーション／Mapper／`FundamentalHealthEvaluator`／呼び出し元6機能／`SignalCriteriaEvaluator`／Blade）はGate3承認とF-011マージを待って着手 | ADR-0011（CHG-0012） |
+| 2026-09-06 | 成長率算出バグの是正（ADR-0012）。`revenue_growth`/`operating_income_growth`/`eps_growth`/`financial_statements.*_yoy_change` を「`fetchStatements()` 配列の4つ前との比較」から「最新の本決算（FY）と前期の本決算の比較（前期通期比）」に変更。原因は J-Quants `/fins/summary` の同一決算の重複開示・累計期（1Q/2Q/3Q/FY）混在で「通期売上÷1Q売上→+316%」のような無意味な値が算出・永続化されていたこと。`JQuantsClient::fetchStatements()` の返却行に `period_type`/`fiscal_year_end` を追加し取得件数を5→16に拡大。`FundamentalIndicatorMapper::annualGrowth()` を公開し `FetchExternalMarketDataAction` の private 複製を廃止。併せて `BuySignalDeterminationService::determinePegUndervalued()` に PEG 下限（`0 < peg`）を追加（負の Finnhub `pegTTM` を割安誤判定していたバグB）。DBスキーマ変更なし（`financial_statements` の保存件数が増えるのみ） | ADR-0012 |

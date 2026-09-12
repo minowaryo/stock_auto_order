@@ -50,19 +50,29 @@ use App\Services\Analysis\FundamentalIndicatorMapper;
 
 /**
  * Builds a 5-period `fetchStatements()`-shaped fixture, `disclosed_date`
- * descending (index 0 = latest, index 4 = ~1 year / 4 quarterly filings
- * before index 0). All numeric fields are hand-picked to produce clean,
- * hand-verifiable expected outputs (see inline comments at each assertion
- * site) while still varying period to period.
+ * descending (index 0 = latest). All numeric fields are hand-picked to
+ * produce clean, hand-verifiable expected outputs (see inline comments at
+ * each assertion site) while still varying period to period.
  *
- * index 0 (latest)   : net_sales=1200, operating_profit=200, eps=120,
- *                       book_value_per_share=800, equity_to_asset_ratio=0.45,
- *                       roe=0.152, dividend_per_share_annual=36,
- *                       payout_ratio_annual=0.30
- * index 4 (4期前)     : net_sales=1000, operating_profit=160, eps=100
+ * -------------------------------------------------------------------------
+ * ADR-0012 (2026-09-06): 成長率は「最新の本決算(FY)」と「前期の本決算(FY)」の
+ * 比較で算出する（従来の「配列 index 0 と index 4 の比較」を廃止）。
+ * `fetchStatements()` の各行に `period_type`(1Q/2Q/3Q/FY) と
+ * `fiscal_year_end`(会計年度末) が付く。
+ *
+ * この基本フィクスチャは:
+ *   index 0 : FY   fiscal_year_end=2026-03-31 （最新の本決算）
+ *   index 1 : 3Q   fiscal_year_end=2026-03-31
+ *   index 2 : 2Q   fiscal_year_end=2026-03-31
+ *   index 3 : 1Q   fiscal_year_end=2026-03-31
+ *   index 4 : FY   fiscal_year_end=2025-03-31 （前期の本決算）
+ * とし、成長率は index 0(FY) vs index 4(FY) になる（値は従来テストと同じ）。
+ * -------------------------------------------------------------------------
  *
  * @return array<int, array{
  *     disclosed_date: string,
+ *     period_type: string,
+ *     fiscal_year_end: string,
  *     net_sales: float|null,
  *     operating_profit: float|null,
  *     profit: float|null,
@@ -79,6 +89,8 @@ function fimFiveStatements(): array
     return [
         [
             'disclosed_date' => '2026-05-15',
+            'period_type' => 'FY',
+            'fiscal_year_end' => '2026-03-31',
             'net_sales' => 1200.0,
             'operating_profit' => 200.0,
             'profit' => 150.0,
@@ -91,6 +103,8 @@ function fimFiveStatements(): array
         ],
         [
             'disclosed_date' => '2026-02-15',
+            'period_type' => '3Q',
+            'fiscal_year_end' => '2026-03-31',
             'net_sales' => 1150.0,
             'operating_profit' => 190.0,
             'profit' => 140.0,
@@ -103,6 +117,8 @@ function fimFiveStatements(): array
         ],
         [
             'disclosed_date' => '2025-11-15',
+            'period_type' => '2Q',
+            'fiscal_year_end' => '2026-03-31',
             'net_sales' => 1100.0,
             'operating_profit' => 175.0,
             'profit' => 130.0,
@@ -115,6 +131,8 @@ function fimFiveStatements(): array
         ],
         [
             'disclosed_date' => '2025-08-15',
+            'period_type' => '1Q',
+            'fiscal_year_end' => '2026-03-31',
             'net_sales' => 1050.0,
             'operating_profit' => 165.0,
             'profit' => 120.0,
@@ -127,6 +145,8 @@ function fimFiveStatements(): array
         ],
         [
             'disclosed_date' => '2025-05-15',
+            'period_type' => 'FY',
+            'fiscal_year_end' => '2025-03-31',
             'net_sales' => 1000.0,
             'operating_profit' => 160.0,
             'profit' => 110.0,
@@ -274,7 +294,7 @@ test('開示データが5件未満（3件）の場合、成長率系はnullだ�
 
     $result = (new FundamentalIndicatorMapper)->map($statements, currentPrice: 1800.0);
 
-    // 4期前 ($statements[4]) が存在しないため成長率系は算出不可
+    // 前期の本決算(FY)が window 内に無いため成長率系は算出不可（ADR-0012）
     expect($result['revenue_growth'])->toBeNull();
     expect($result['operating_income_growth'])->toBeNull();
     expect($result['eps_growth'])->toBeNull();
@@ -372,4 +392,118 @@ test('最新期の1株純資産が0以下の場合、PBRは算出せずnullに�
     $result = (new FundamentalIndicatorMapper)->map($statements, currentPrice: 1800.0);
 
     expect($result['pbr'])->toBeNull();
+});
+
+// -----------------------------------------------------------------------
+// CR (2026-09-06, ADR-0012): 成長率を「最新の本決算(FY) vs 前期の本決算(FY)」
+// で算出する（配列位置ベースの index0 vs index4 を廃止）
+// -----------------------------------------------------------------------
+// Source of truth:
+//   - docs/adr/ADR-0012-growth-rate-fy-comparison.md
+//   - docs/ai-context/known-pitfalls.md
+//     ("J-Quants API V2 `/fins/summary` — 同一決算の重複開示・累計期
+//     （1Q/2Q/3Q/FY）混在で「配列N件前」の位置ベース比較が壊れる")
+//
+// Expected Red: 現行 calculateGrowth() は period_type / fiscal_year_end を
+// 見ず $statements[0] と $statements[4] を比較するため、下記が assertion
+// 不一致で落ちる（annualGrowth() の存在チェックは fatal ではなく false）。
+
+describe('ADR-0012: 成長率は本決算(FY)どうしの前期比で算出する', function () {
+    /**
+     * `disclosed_date` 降順。FY を2期、その間に四半期行と重複開示をはさむ。
+     * 最新FY(2026-03-31): net_sales=1400, operating_profit=224, eps=140
+     * 前期FY(2025-03-31): net_sales=1000, operating_profit=160, eps=100
+     * 期待成長率: 売上 +40%, 営業利益 +40%, EPS +40%
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    function fimMixedPeriodStatements(): array
+    {
+        $base = [
+            'profit' => 100.0, 'book_value_per_share' => 800.0,
+            'equity_to_asset_ratio' => 0.45, 'roe' => 0.15,
+            'dividend_per_share_annual' => 30.0, 'payout_ratio_annual' => 0.3,
+        ];
+
+        return [
+            array_merge($base, ['disclosed_date' => '2026-05-10', 'period_type' => 'FY', 'fiscal_year_end' => '2026-03-31', 'net_sales' => 1400.0, 'operating_profit' => 224.0, 'eps' => 140.0]),
+            array_merge($base, ['disclosed_date' => '2026-02-12', 'period_type' => '3Q', 'fiscal_year_end' => '2026-03-31', 'net_sales' => 1050.0, 'operating_profit' => 170.0, 'eps' => 105.0]),
+            array_merge($base, ['disclosed_date' => '2026-02-05', 'period_type' => '3Q', 'fiscal_year_end' => '2026-03-31', 'net_sales' => 1050.0, 'operating_profit' => 170.0, 'eps' => 105.0]),
+            array_merge($base, ['disclosed_date' => '2025-11-05', 'period_type' => '2Q', 'fiscal_year_end' => '2026-03-31', 'net_sales' => 700.0, 'operating_profit' => 112.0, 'eps' => 70.0]),
+            array_merge($base, ['disclosed_date' => '2025-08-06', 'period_type' => '1Q', 'fiscal_year_end' => '2026-03-31', 'net_sales' => 350.0, 'operating_profit' => 56.0, 'eps' => 35.0]),
+            array_merge($base, ['disclosed_date' => '2025-05-12', 'period_type' => 'FY', 'fiscal_year_end' => '2025-03-31', 'net_sales' => 1000.0, 'operating_profit' => 160.0, 'eps' => 100.0]),
+        ];
+    }
+
+    test('四半期行や重複開示をはさんでも、最新の本決算と前期の本決算を比較して成長率を算出する', function () {
+        $result = (new FundamentalIndicatorMapper)->map(fimMixedPeriodStatements(), currentPrice: 2800.0);
+
+        // 位置ベース($statements[4] = 1Q, eps=35)なら (140-35)/35*100 = 300% になってしまう
+        expect($result['revenue_growth'])->toEqualWithDelta(40.0, 0.0001);
+        expect($result['operating_income_growth'])->toEqualWithDelta(40.0, 0.0001);
+        expect($result['eps_growth'])->toEqualWithDelta(40.0, 0.0001);
+        // peg = per / eps_growth = (2800/140) / 40 = 20 / 40 = 0.5
+        expect($result['peg_ratio'])->toEqualWithDelta(0.5, 0.0001);
+    });
+
+    test('同一会計年度の本決算が重複開示されても、片方を「前期」と誤認しない', function () {
+        $statements = fimMixedPeriodStatements();
+        array_splice($statements, 1, 0, [[
+            'disclosed_date' => '2026-05-08', 'period_type' => 'FY', 'fiscal_year_end' => '2026-03-31',
+            'net_sales' => 1400.0, 'operating_profit' => 224.0, 'eps' => 140.0, 'profit' => 100.0,
+            'book_value_per_share' => 800.0, 'equity_to_asset_ratio' => 0.45, 'roe' => 0.15,
+            'dividend_per_share_annual' => 30.0, 'payout_ratio_annual' => 0.3,
+        ]]);
+
+        $result = (new FundamentalIndicatorMapper)->map($statements, currentPrice: 2800.0);
+
+        // 重複FYを「前期」と扱うと成長率0%になる。正しくは前期FY(2025-03-31)と比較して+40%
+        expect($result['eps_growth'])->toEqualWithDelta(40.0, 0.0001);
+    });
+
+    test('本決算(FY)が1期ぶんしか無い場合、成長率系は算出できずnullになる', function () {
+        $statements = array_values(array_filter(
+            fimMixedPeriodStatements(),
+            fn (array $s) => $s['fiscal_year_end'] !== '2025-03-31',
+        ));
+
+        $result = (new FundamentalIndicatorMapper)->map($statements, currentPrice: 2800.0);
+
+        expect($result['revenue_growth'])->toBeNull();
+        expect($result['operating_income_growth'])->toBeNull();
+        expect($result['eps_growth'])->toBeNull();
+        expect($result['peg_ratio'])->toBeNull();
+    });
+
+    test('伊藤忠(8001)相当: 最新FYのEPSが前期FYより大幅減 → eps_growthは負・PEGレシオはnull', function () {
+        $base = [
+            'profit' => 100.0, 'book_value_per_share' => 942.78,
+            'equity_to_asset_ratio' => 0.394, 'roe' => 0.146,
+            'dividend_per_share_annual' => null, 'payout_ratio_annual' => 0.328,
+        ];
+        $statements = [
+            array_merge($base, ['disclosed_date' => '2026-05-01', 'period_type' => 'FY', 'fiscal_year_end' => '2026-03-31', 'net_sales' => 14823087.0, 'operating_profit' => 701888.0, 'eps' => 128.0]),
+            array_merge($base, ['disclosed_date' => '2026-02-13', 'period_type' => '3Q', 'fiscal_year_end' => '2026-03-31', 'net_sales' => 10986251.0, 'operating_profit' => 526438.0, 'eps' => 100.11]),
+            array_merge($base, ['disclosed_date' => '2026-02-06', 'period_type' => '3Q', 'fiscal_year_end' => '2026-03-31', 'net_sales' => 10986251.0, 'operating_profit' => 526438.0, 'eps' => 100.11]),
+            array_merge($base, ['disclosed_date' => '2025-11-05', 'period_type' => '2Q', 'fiscal_year_end' => '2026-03-31', 'net_sales' => 7249159.0, 'operating_profit' => 354140.0, 'eps' => 354.18]),
+            array_merge($base, ['disclosed_date' => '2025-08-06', 'period_type' => '1Q', 'fiscal_year_end' => '2026-03-31', 'net_sales' => 3558933.0, 'operating_profit' => 170735.0, 'eps' => 200.5]),
+            array_merge($base, ['disclosed_date' => '2025-05-02', 'period_type' => 'FY', 'fiscal_year_end' => '2025-03-31', 'net_sales' => 14724234.0, 'operating_profit' => 700000.0, 'eps' => 615.65]),
+        ];
+
+        $result = (new FundamentalIndicatorMapper)->map($statements, currentPrice: 2204.0);
+
+        expect($result['eps_growth'])->toEqualWithDelta((128.0 - 615.65) / 615.65 * 100, 0.01);
+        expect($result['peg_ratio'])->toBeNull();
+        // 位置ベースのバグ値(通期売上 ÷ 1Q売上 ≒ +316%)ではないこと
+        expect($result['revenue_growth'])->toEqualWithDelta((14823087.0 - 14724234.0) / 14724234.0 * 100, 0.01);
+        expect($result['revenue_growth'])->toBeLessThan(10.0);
+    });
+
+    test('annualGrowth()はpublicメソッドとして最新FYと前期FYの成長率を返す（FetchExternalMarketDataActionと共有）', function () {
+        $mapper = new FundamentalIndicatorMapper;
+
+        expect(method_exists($mapper, 'annualGrowth'))->toBeTrue();
+        expect($mapper->annualGrowth(fimFiveStatements(), 'net_sales'))->toEqualWithDelta(20.0, 0.0001);
+        expect($mapper->annualGrowth(fimFiveStatements(), 'eps'))->toEqualWithDelta(20.0, 0.0001);
+    });
 });

@@ -442,6 +442,20 @@ describe('SignalCriteriaEvaluator: 判定チェックリスト（CHG-0007）', f
             expect(criterionRow($unmet['technical'], 'PEGレシオ')['status'])->toBe('unmet');
         });
 
+        // ADR-0012 D4 (バグB): 買いチェックリストの PEG 行は direction='lte' で
+        // 閾値 1.0 のため、負の PEG（US株 Finnhub pegTTM がそのまま負値を返す）を
+        // 「1.0以下だから met（＝割安・買い後押し）」と誤判定していた。
+        // 0以下の PEG は met にしない（実測値は表示しつつ unmet）。
+        test('PEGレシオがマイナスの場合、買いチェックリストのPEG行は met にならない（ADR-0012 バグB）', function () {
+            $result = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet(['peg_ratio' => -34.7]));
+
+            $row = criterionRow($result['technical'], 'PEGレシオ');
+            expect($row['status'])->not->toBe('met');
+            expect($row['status'])->not->toBe('near');
+            // データ自体はあるので unavailable ではなく実測値を表示して unmet
+            expect($row['status'])->toBe('unmet');
+        });
+
         test('current_price が null のとき派生%項目（52週安値距離・BB下限乖離・MA20乖離）は unavailable', function () {
             $result = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet(['current_price' => null]));
 
