@@ -29,6 +29,12 @@
 - 原因: `docker compose exec`はデフォルトrootユーザーで実行されるため、`composer create-project`/`artisan`系コマンドで作られる`storage/`・`bootstrap/cache`配下のファイルがroot所有（mode 755）になる。一方、実際のWebサーバープロセス（`php artisan serve`、supervisord経由）は`sail`ユーザー（uid 1337）で動くため、ビューキャッシュ等への書き込みで権限エラーになる
 - 対処: `docker compose exec laravel.test chown -R sail:sail storage bootstrap/cache` を実行（Laravel雛形作成直後・初回`docker compose up`後に一度実行すればよい。以後`docker compose exec`でrootのままファイルを作った場合は同様の症状が出るので都度実行する）
 
+### Laravel + Monolog — 実HTTPリクエストが全ページ500（`UnexpectedValueException` / StreamHandler.php）
+
+- 現象: ブラウザ／`curl`でどのページを開いても500。`The stream or file "/var/www/html/storage/logs/laravel.log" could not be opened in append mode: Failed to open stream: Permission denied`（`vendor/monolog/monolog/src/Monolog/Handler/StreamHandler.php:164`）。`php artisan test` はGreenのまま
+- 原因: `docker compose exec laravel.test php artisan test` 等をデフォルトのrootユーザーで実行すると、Monologが `storage/logs/laravel.log` をroot所有（mode 644）で作成・追記する。以後Webプロセス（`sail` ユーザー / uid 1337）がログ追記できず、ログ出力のある全リクエストが500になる（上記「storage/配下に書き込めず…」の一種だが、テスト実行のたびに再発するので独立記載）
+- 対処: `docker exec <laravel.testコンテナ> sh -c 'rm -f storage/logs/laravel.log && chown -R sail:sail storage bootstrap/cache'`（ログファイルはgitignore対象なので削除でよい。Laravelが次回`sail`所有で作り直す）。テストをコンテナ内で回すときは `docker compose exec -u sail laravel.test ...` のように `-u sail` を付けると再発しない
+
 ### Laravel `php artisan serve`（Windows + Docker Desktop） — 実HTTPリクエストが数秒〜十数秒かかる
 
 - 現象: `curl`で`http://localhost`上のLaravelアプリを叩くと、1リクエストあたり2〜14秒程度かかる（`docker compose exec`経由のPHPUnit/Pestテスト実行は数百ms〜1秒程度と高速なままで、実HTTPリクエストのみ遅い）
@@ -69,6 +75,13 @@
 - 原因: J-Quants API V2の`/fins/summary`は`EqAR`/`ROE`/`PayoutRatioAnn`を比率（0〜1）で返す。`EPS`/`BPS`/`Sales`等の金額・株数系フィールドはそのままの単位（円・株）で返る
 - 対処: `JQuantsClient`自体は生の値をそのまま返す設計（変換責務を持たない）ため実装変更は不要。ただし、今後実装する「J-Quants生データ→`fundamental_indicators`」変換層（`FundamentalIndicatorMapper`等）では、`equity_ratio`/`roe`/`dividend_payout_ratio`（`data-model.md`でパーセント値として定義済み）にマッピングする際、`EqAR`/`ROE`/`PayoutRatioAnn`の値を**×100**すること。実装時にこの記録を必ず参照する
 - 補足: 四半期決算（`disclosed_date`が直近でも本決算でない回）では`BPS`/`ROE`/`DivAnn`/`PayoutRatioAnn`が空文字列で返り`null`になるケースを確認（本決算のみ開示される項目のため、想定通りの挙動）
+
+### J-Quants API V2 `/fins/summary` — 同一決算の重複開示・累計期（1Q/2Q/3Q/FY）混在で「配列N件前」の位置ベース比較が壊れる（ADR-0012）
+
+- 現象: `FundamentalIndicatorMapper::calculateGrowth()`（および`FetchExternalMarketDataAction::calculateStatementGrowth()`の複製）が成長率を「`fetchStatements()`が返す配列の index 0 と index 4 の比較」で算出しており、伊藤忠（8001）で`revenue_growth = +316%`（＝通期売上14.8兆 ÷ 1Q売上3.56兆）という無意味な値が算出され`financial_statements.revenue_yoy_change`に永続化されていた。下流の`FundamentalHealthEvaluator`（passed/failed）→`TakeProfitThresholdEvaluator`（+150%ライン）→UC-005/008/009/010/011に波及
+- 原因: (1) `/fins/summary`は同一決算を複数回返す（8001の3Q決算が`DiscDate=2026-02-06`と`2026-02-13`の2行、値はすべて同一）。(2) 1Q/2Q/3Q/FYが時系列で混在し、最新行がFY（通期累計）でもindex 4は1Q（四半期）になり得る。テストのモックが「年4回・重複なし・全期同種」の理想フィクスチャだったため検出できなかった
+- 対処: ADR-0012。生レスポンスの`CurPerType`（`1Q`/`2Q`/`3Q`/`FY`）・`CurFYEn`（会計年度末）を`fetchStatements()`が`period_type`/`fiscal_year_end`として返すようにし、`calculateGrowth()`を「`period_type==='FY'`の行だけ抽出→`fiscal_year_end`で重複排除→最新FYと前期FYを比較」に変更。取得件数を5→16に拡大（FYを2期ぶんwindow内に収めるため）。位置ベース（`$statements[4]`）の前提を捨てる
+- 補足: `/fins/summary`には予想値カラム（`FSales`/`FOP`/`FEPS`等）や来期予想（`NxF*`）も含まれる。今回は使っていないが、`Sales`等と混同しないこと
 
 ### Yahoo Finance chart API — 週足の最新1件が「未確定・進行中の週」のプレースホルダーになることがある
 

@@ -322,7 +322,10 @@ final class BuySignalDeterminationService
             return null;
         }
 
-        if ($pegRatio <= self::PEG_UNDERVALUED_THRESHOLD) {
+        // ADR-0012 D4: 下限が無いと負のPEG（減益・赤字成長。US株のFinnhub
+        // pegTTM がそのまま負値を返す）を「割安」と誤判定する。0 < peg <= 1.0
+        // のみを割安とする。
+        if ($pegRatio > 0.0 && $pegRatio <= self::PEG_UNDERVALUED_THRESHOLD) {
             return [
                 'signal_type' => 'peg_undervalued',
                 'reason_summary' => sprintf('PEGレシオが%sと割安水準です', $this->formatNumber($pegRatio, 1)),

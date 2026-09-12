@@ -444,6 +444,30 @@ test('PEGレシオが1.0を超える場合、peg_undervaluedシグナルは発�
     expect($result)->toBe([]);
 });
 
+// ADR-0012 D4 (バグB): PEGレシオに下限が無く、マイナスPEG（＝減益・赤字成長。
+// US株のFinnhub pegTTM がそのまま負値を返す。DB実データに WIT -34.7 等）を
+// 「1.0以下だから割安」と誤判定して peg_undervalued を出していた。
+// 0 < peg <= 1.0 のみを割安とする。
+
+test('PEGレシオがマイナス（減益・赤字成長）の場合、peg_undervaluedシグナルは発生しない（ADR-0012 バグB）', function () {
+    $closes = range(100, 151);
+    $priceHistory = bsdPriceHistory($closes);
+
+    $result = bsdService()->determine($priceHistory, marketReturn13w: 0.0, pegRatio: -34.7);
+
+    expect(bsdSignalTypes($result))->not->toContain('peg_undervalued');
+    expect($result)->toBe([]);
+});
+
+test('PEGレシオが0ちょうどの場合、peg_undervaluedシグナルは発生しない（下限は0を含まない）', function () {
+    $closes = range(100, 151);
+    $priceHistory = bsdPriceHistory($closes);
+
+    $result = bsdService()->determine($priceHistory, marketReturn13w: 0.0, pegRatio: 0.0);
+
+    expect(bsdSignalTypes($result))->not->toContain('peg_undervalued');
+});
+
 // -----------------------------------------------------------------------
 // 全シグナル共通の前提条件による抑制
 // -----------------------------------------------------------------------

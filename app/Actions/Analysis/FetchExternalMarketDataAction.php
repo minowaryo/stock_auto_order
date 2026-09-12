@@ -205,8 +205,9 @@ class FetchExternalMarketDataAction
                         // "financial_statements"）: 同じ$statementsを
                         // (holding_id, fiscal_period)単位でUPSERTする。
                         // revenue_yoy_change/operating_income_yoy_changeは
-                        // 最新期（index 0）のみFundamentalIndicatorMapper::
-                        // calculateGrowth()と同一ロジックで算出する。
+                        // 最新開示行（index 0）にのみ、FundamentalIndicatorMapper::
+                        // annualGrowth()（最新FYと前期FYの比較、ADR-0012）で算出した
+                        // 現時点の前期通期比を持たせる。
                         foreach ($statements as $index => $statement) {
                             FinancialStatement::updateOrCreate(
                                 ['holding_id' => $holding->id, 'fiscal_period' => $statement['disclosed_date']],
@@ -214,8 +215,8 @@ class FetchExternalMarketDataAction
                                     'revenue' => $statement['net_sales'],
                                     'operating_income' => $statement['operating_profit'],
                                     'eps' => $statement['eps'],
-                                    'revenue_yoy_change' => $index === 0 ? $this->calculateStatementGrowth($statements, 'net_sales') : null,
-                                    'operating_income_yoy_change' => $index === 0 ? $this->calculateStatementGrowth($statements, 'operating_profit') : null,
+                                    'revenue_yoy_change' => $index === 0 ? $this->fundamentalIndicatorMapper->annualGrowth($statements, 'net_sales') : null,
+                                    'operating_income_yoy_change' => $index === 0 ? $this->fundamentalIndicatorMapper->annualGrowth($statements, 'operating_profit') : null,
                                     'fetched_at' => now(),
                                 ],
                             );
@@ -360,30 +361,5 @@ class FetchExternalMarketDataAction
         }
 
         return (($current - $past) / $past) * 100;
-    }
-
-    /**
-     * Growth rate (%) between the latest statement (index 0) and the
-     * statement 4 periods before (index 4), for the given field. Same
-     * formula/inputs as FundamentalIndicatorMapper::calculateGrowth() (kept
-     * as a small private duplicate here since that method is private on a
-     * separate class).
-     *
-     * @param  array<int, array<string, float|null>>  $statements
-     */
-    private function calculateStatementGrowth(array $statements, string $field): ?float
-    {
-        if (! isset($statements[0], $statements[4])) {
-            return null;
-        }
-
-        $latestValue = $statements[0][$field] ?? null;
-        $pastValue = $statements[4][$field] ?? null;
-
-        if ($latestValue === null || $pastValue === null || $pastValue == 0.0) {
-            return null;
-        }
-
-        return ($latestValue - $pastValue) / $pastValue * 100;
     }
 }

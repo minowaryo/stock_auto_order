@@ -19,8 +19,11 @@
 
 | パス | 役割 | 注意 |
 |---|---|---|
-| `app/Services/Import/` | 楽天証券CSV（JP株/US株/投資信託）のパース | Shift-JISエンコード・カンマ区切りクォート付き数値に対応 |
+| `app/Services/Import/` | 楽天証券CSV（JP株/US株/投資信託）のパース、およびお気に入り銘柄CSV（`RakutenFavoriteCsvParser`、UC-012／ADR-0013）のパース | Shift-JISエンコード・カンマ区切りクォート付き数値に対応。お気に入りCSVはヘッダなし6列・CP932・CRLF |
+| `app/Services/Watchlist/` ／ `app/Actions/Watchlist/` | お気に入り未保有銘柄ウォッチリスト（UC-012／F-012／ADR-0013）。お気に入りCSV取込（`ImportFavoriteCsvAction`）、未保有銘柄の指標一括更新（`RefreshWatchlistMarketDataAction`、既存の `MarketData` クライアント・`Analysis` の Mapper／`BuySignalDeterminationService` を流用）、候補一覧の組み立て（`ShowWatchlistAction`） | `signals`/`buy_signals` には書き込まない。買いシグナルは `watchlist_buy_signals`（`holding_id` キー）に保存 |
+| `app/Jobs/RefreshWatchlistMarketDataJob` ／ `app/Console/Commands/`（`watchlist:refresh`） | ウォッチリスト一括更新の非同期実行と、その手動実行コマンド（`RefetchUsFundamentalsCommand` の先例に倣う） | 進捗は `watchlist_refresh_runs` に記録。`compose.yaml` の `queue:work` サービスで実行 |
 | `app/Services/Analysis/` | テクニカル指標（RSI/MACD/BB/移動平均）・ファンダメンタルズ指標（PER/PBR/ROE等）の計算、利確シグナル判定（`SignalDeterminationService`）・買い増しシグナル判定（`BuySignalDeterminationService`）・ファンダメンタルズ健全性評価（`FundamentalHealthEvaluator`） | 閾値・パラメータの持たせ方は `docs/architecture/data-model.md`（Gate 3）で確定。売り側と買い側は別クラスに分離（ADR-0007） |
+| `app/Actions/Portfolio/`（予定） | ポートフォリオ分類ダッシュボード（UC-013／F-013／ADR-0014）。`ClassifyHoldingsAction` が既存の抽出Action（`ShowSignalListAction`／`ShowBuySignalListAction`／`ShowLossReviewListAction`／`SectorAllocationCalculator`）を束ね、直近スナップショットの各保有銘柄を優先順位で1つのバケツ（`core_accumulation`／`loss_review`／`take_profit`／`add_on`／`hold`）に割り当てる純ロジック。第1段階はDB書き込みなし（表示専用）。第2段階で分類結果を `portfolio_classifications` に週次永続化し「先週→今週の遷移」を出す | `signals`／`buy_signals`／`FetchExternalMarketDataAction` には書き込まない。新しい抽出条件・閾値は作らず既存Actionの出力を再投影する。画面はサマリーレポートタブ（`app/Livewire/ImportSummaryReport/`）に相乗り |
 | `app/Services/MarketData/` | J-Quants API・Yahoo Finance相当の外部データ取得クライアント（個別銘柄の株価・指標に加え、日経平均・S&P500・米国10年債利回り・VIX指数・USD/JPY為替レート等の市場全体指標も取得する） | APIキー等は `docs/ai-context/do-not-touch.md` の外部連携セクション参照 |
 
 ## Frontend（選定結果: **Livewire**。`docs/adr/ADR-0001-frontend-stack-selection.md` 参照）

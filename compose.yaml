@@ -23,6 +23,27 @@ services:
             - sail
         depends_on:
             - mysql
+    # UC-012 / F-012 (ADR-0013 D5): a single queue worker for the watchlist
+    # bulk-refresh job (RefreshWatchlistMarketDataJob). Individual-scale, so no
+    # supervisor / multi-process setup — one `queue:work` is enough.
+    # NOTE: `queue:work` holds the code in memory. After changing job/action
+    # code run `docker compose restart queue` (or `php artisan queue:restart`)
+    # so the worker picks it up.
+    queue:
+        image: sail-8.5/app
+        extra_hosts:
+            - 'host.docker.internal:host-gateway'
+        environment:
+            WWWUSER: '${WWWUSER}'
+            LARAVEL_SAIL: 1
+        command: ['php', 'artisan', 'queue:work', '--tries=1', '--timeout=3600', '--sleep=3']
+        volumes:
+            - '.:/var/www/html'
+        networks:
+            - sail
+        depends_on:
+            - mysql
+        restart: unless-stopped
     mysql:
         image: 'mysql:8.4'
         ports:

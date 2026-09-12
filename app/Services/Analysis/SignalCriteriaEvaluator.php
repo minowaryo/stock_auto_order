@@ -201,7 +201,9 @@ final class SignalCriteriaEvaluator
                 sprintf('≤%s', number_format(BuySignalDeterminationService::PEG_UNDERVALUED_THRESHOLD, 1)),
                 $metrics['peg_ratio'] ?? null,
                 BuySignalDeterminationService::PEG_UNDERVALUED_THRESHOLD,
-                'lte',
+                // ADR-0012 D4: 負のPEG（減益・赤字成長）は割安ではないため
+                // met/near にしない（実測値は表示しつつ unmet）。
+                'lte_positive',
                 fn (float $v) => number_format($v, 2),
             ),
             $this->row(
@@ -461,6 +463,25 @@ final class SignalCriteriaEvaluator
             }
 
             if ($buffer > 0.0 && $value >= $threshold - $buffer) {
+                return 'near';
+            }
+
+            return 'unmet';
+        }
+
+        // lte_positive: same as lte, but a non-positive value is never a
+        // "met/near" (ADR-0012 D4 — a negative PEG means declining/negative
+        // earnings growth, not "cheap").
+        if ($direction === 'lte_positive') {
+            if ($value <= 0.0) {
+                return 'unmet';
+            }
+
+            if ($value <= $threshold) {
+                return 'met';
+            }
+
+            if ($buffer > 0.0 && $value <= $threshold + $buffer) {
                 return 'near';
             }
 

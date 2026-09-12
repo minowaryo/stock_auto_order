@@ -199,12 +199,17 @@ function femd13wReturn(array $priceHistory): ?float
 }
 
 /**
- * 5-period J-Quants statements fixture (descending, latest-first). Index 0..3
- * share the same "latest" figures; index 4 ("4 periods ago") is deliberately
- * lower so FundamentalIndicatorMapper::calculateGrowth() (which only reads
- * index 0 and 4) produces non-null, non-zero growth rates.
+ * 5-period J-Quants statements fixture (descending, latest-first).
  *
- * @return array<int, array{disclosed_date: string, net_sales: float|null, operating_profit: float|null, profit: float|null, eps: float|null, book_value_per_share: float|null, equity_to_asset_ratio: float|null, roe: float|null, dividend_per_share_annual: float|null, payout_ratio_annual: float|null}>
+ * ADR-0012: 成長率は「最新の本決算(FY)」と「前期の本決算(FY)」で算出する。
+ *   index 0 : FY  fiscal_year_end=2026-03-31  net_sales=120000 / operating_profit=15000 / eps=120
+ *   index 1 : 3Q  fiscal_year_end=2026-03-31
+ *   index 2 : 2Q  fiscal_year_end=2026-03-31
+ *   index 3 : 1Q  fiscal_year_end=2026-03-31
+ *   index 4 : FY  fiscal_year_end=2025-03-31  net_sales=100000 / operating_profit=12000 / eps=100
+ * → revenue_growth=+20% / operating_income_growth=+25% / eps_growth=+20%
+ *
+ * @return array<int, array{disclosed_date: string, period_type: string, fiscal_year_end: string, net_sales: float|null, operating_profit: float|null, profit: float|null, eps: float|null, book_value_per_share: float|null, equity_to_asset_ratio: float|null, roe: float|null, dividend_per_share_annual: float|null, payout_ratio_annual: float|null}>
  */
 function femdStatements(): array
 {
@@ -220,14 +225,21 @@ function femdStatements(): array
         'payout_ratio_annual' => 0.30,
     ];
 
+    $quarters = ['FY', '3Q', '2Q', '1Q'];
     $statements = [];
 
-    for ($i = 0; $i < 5; $i++) {
-        $statements[] = array_merge($latest, ['disclosed_date' => "2026Q{$i}"]);
+    for ($i = 0; $i < 4; $i++) {
+        $statements[] = array_merge($latest, [
+            'disclosed_date' => "2026Q{$i}",
+            'period_type' => $quarters[$i],
+            'fiscal_year_end' => '2026-03-31',
+        ]);
     }
 
     $statements[4] = array_merge($latest, [
-        'disclosed_date' => '2025Q1',
+        'disclosed_date' => '2025FY',
+        'period_type' => 'FY',
+        'fiscal_year_end' => '2025-03-31',
         'net_sales' => 100000.0,
         'operating_profit' => 12000.0,
         'eps' => 100.0,
@@ -956,7 +968,7 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
             }
         });
 
-        test('最新期（index 0）のrevenue_yoy_change・operating_income_yoy_changeが、4期前（index4）との比較で正しく算出される', function () {
+        test('最新開示行のrevenue_yoy_change・operating_income_yoy_changeが、最新FYと前期FYの比較で正しく算出される（ADR-0012）', function () {
             [$batch, $snapshot] = femdImportBatch();
             $holding = femdHolding([
                 'symbol_code' => '7203',
@@ -970,12 +982,11 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
             ]);
 
             $priceHistory = femdPriceHistory(femdCloses(2000.0, 5.0, 20));
-            // femdStatements(): index0 net_sales=120000/operating_profit=15000,
-            // index4 net_sales=100000/operating_profit=12000 ->
+            // femdStatements(): 最新FY(2026-03-31) net_sales=120000/operating_profit=15000,
+            // 前期FY(2025-03-31) net_sales=100000/operating_profit=12000 ->
             // revenue_yoy_change=(120000-100000)/100000*100=20%,
             // operating_income_yoy_change=(15000-12000)/12000*100=25%
-            // (identical formula/inputs to
-            // FundamentalIndicatorMapper::calculateGrowth()).
+            // (FundamentalIndicatorMapper::annualGrowth() と同一ロジック・入力).
             $statements = femdStatements();
 
             $action = femdAction(
@@ -999,7 +1010,7 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
             expect((float) $latestRow->operating_income_yoy_change)->toEqualWithDelta(25.0, 0.01);
         });
 
-        test('過去の期（index 1〜4）のrevenue_yoy_change・operating_income_yoy_changeはnullになる（5期分の取得データだけでは4期前を遡れないため）', function () {
+        test('最新開示行以外のrevenue_yoy_change・operating_income_yoy_changeはnullになる（最新の前期通期比のみ持たせる、ADR-0012）', function () {
             [$batch, $snapshot] = femdImportBatch();
             $holding = femdHolding([
                 'symbol_code' => '7203',
@@ -1036,6 +1047,62 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
                 expect($row->revenue_yoy_change)->toBeNull();
                 expect($row->operating_income_yoy_change)->toBeNull();
             }
+        });
+
+        // ADR-0012: 位置ベース($statements[4])ではなく「最新FY vs 前期FY」で
+        // yoy_change を算出する。fetchStatements() の結果に四半期行・重複開示が
+        // 混ざり、位置的な「4つ前」が前期FYではないケースの回帰テスト。
+        test('四半期行・重複開示をはさんだ取得データでも、revenue_yoy_changeは最新の本決算と前期の本決算の比較になる（ADR-0012）', function () {
+            [$batch, $snapshot] = femdImportBatch();
+            $holding = femdHolding([
+                'symbol_code' => '8001',
+                'market' => 'jp',
+                'instrument_type' => 'stock',
+                'symbol_name' => '伊藤忠商事',
+            ]);
+            femdHoldingSnapshot($snapshot, $holding, [
+                'current_price' => 2200.0,
+                'unrealized_gain_rate' => 5.0,
+            ]);
+
+            $priceHistory = femdPriceHistory(femdCloses(2000.0, 5.0, 20));
+            $base = [
+                'profit' => 100.0, 'book_value_per_share' => 900.0,
+                'equity_to_asset_ratio' => 0.39, 'roe' => 0.14,
+                'dividend_per_share_annual' => 30.0, 'payout_ratio_annual' => 0.3,
+            ];
+            // disclosed_date 降順。位置的な index 4 は 1Q（net_sales=3500）。
+            // 正しい比較対象は index 5 の前期FY（net_sales=14700）。
+            $statements = [
+                array_merge($base, ['disclosed_date' => '2026-05-01', 'period_type' => 'FY', 'fiscal_year_end' => '2026-03-31', 'net_sales' => 14800.0, 'operating_profit' => 700.0, 'eps' => 128.0]),
+                array_merge($base, ['disclosed_date' => '2026-02-13', 'period_type' => '3Q', 'fiscal_year_end' => '2026-03-31', 'net_sales' => 11000.0, 'operating_profit' => 520.0, 'eps' => 100.0]),
+                array_merge($base, ['disclosed_date' => '2026-02-06', 'period_type' => '3Q', 'fiscal_year_end' => '2026-03-31', 'net_sales' => 11000.0, 'operating_profit' => 520.0, 'eps' => 100.0]),
+                array_merge($base, ['disclosed_date' => '2025-11-05', 'period_type' => '2Q', 'fiscal_year_end' => '2026-03-31', 'net_sales' => 7200.0, 'operating_profit' => 350.0, 'eps' => 60.0]),
+                array_merge($base, ['disclosed_date' => '2025-08-06', 'period_type' => '1Q', 'fiscal_year_end' => '2026-03-31', 'net_sales' => 3500.0, 'operating_profit' => 170.0, 'eps' => 30.0]),
+                array_merge($base, ['disclosed_date' => '2025-05-02', 'period_type' => 'FY', 'fiscal_year_end' => '2025-03-31', 'net_sales' => 14700.0, 'operating_profit' => 690.0, 'eps' => 120.0]),
+            ];
+
+            $action = femdAction(
+                new FakeJpStockPriceClient(['8001' => $priceHistory]),
+                new FakeUsStockPriceClient,
+                new FakeMarketIndexClient([
+                    'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 20)),
+                    'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20)),
+                ]),
+                new FakeJQuantsClient(statementsResponses: ['8001' => $statements]),
+            );
+
+            $action->execute($batch);
+
+            $latestRow = FinancialStatement::where('holding_id', $holding->id)
+                ->where('fiscal_period', '2026-05-01')
+                ->first();
+
+            expect($latestRow)->not->toBeNull();
+            // 位置ベースだと (14800-3500)/3500*100 ≒ +323% になってしまう。
+            // 正しくは前期FYと比較して (14800-14700)/14700*100 ≒ +0.68%
+            expect((float) $latestRow->revenue_yoy_change)->toEqualWithDelta((14800.0 - 14700.0) / 14700.0 * 100, 0.05);
+            expect((float) $latestRow->revenue_yoy_change)->toBeLessThan(10.0);
         });
 
         test('US株の保有銘柄についてはfinancial_statementsが一切保存されない', function () {

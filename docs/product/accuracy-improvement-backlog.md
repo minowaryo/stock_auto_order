@@ -117,6 +117,18 @@
 - **精度を高める余地**: トライアル運用でシグナル発生履歴と実際の値動きを突き合わせ、閾値（RSI70→75、PEG2.0→2.5等）を調整する。あるいは複数シグナルの同時発生を「強いシグナル」として重み付けするロジックの追加
 - **優先度**: 高（データ取得元を変えるより低コストで、かつトライアル運用そのものが検証データになるため、真っ先に着手しやすい）
 
+### 内部計算ロジックの精度課題（2026-09-06、CHG-0013／ADR-0012 の調査で発見。低優先で持ち越し）
+
+> ADR-0012（成長率のFY比較化）・バグB（押し目買いPEG下限）は同CRで是正済み。以下は同じ監査で見つかった残りの課題。実害は限定的なため次に該当箇所へ手を入れる際に対処する。
+
+| # | 箇所 | 内容 | 影響 |
+|---|---|---|---|
+| C | `FundamentalIndicatorMapper::annualGrowth()` / `UsFundamentalIndicatorMapper::calculateOperatingIncomeGrowth()` | 前期の値がマイナス（赤字）だと `(当期−前期)/前期` の符号が反転。黒字転換（−100→+50）が「−150%減益」に見える。ガードは `==0` のみ | 「減益」判定・成長率チップの誤り。赤字→黒字の回復銘柄で発生 |
+| D | `FinnhubClient::fetchReportedFinancials()` | `JQuantsClient::fetchStatements()` と違い並べ替えなしで `data[0]`=当期前提。Finnhubが古い順で返すと `equity_ratio` が誤年・`operating_income_growth` が符号反転 | US株の自己資本比率・営業利益成長率。現状のFinnhub応答順に依存 |
+| E | `FinnhubClient::findConceptValue()` | XBRL は同一 concept を複数期コンテキストで返す。先頭一致だと前期比較値を拾うリスク（ADR-0009 で検証済みとあるが再確認推奨） | US株の実測算出値 |
+| F | `FetchExternalMarketDataAction`（セクター平均相対力） | `sectorReturnBuckets` に自銘柄の騰落率を含めて平均している（薄いセクターで信号が鈍る）。「簡易算出」と明記済み | 対セクター相対力（JP株）。既知の割り切り |
+| G | `TechnicalIndicatorCalculator`（week52_high/low） | 週足終値の最大/最小であり、ザラ場高値/安値ではない | 52週高値からの下落率等がやや浅めに出る。一般的な簡略化 |
+
 ---
 
 ## 全体の優先順位まとめ（暫定）

@@ -36,7 +36,7 @@ final class JQuantsClient implements JQuantsClientInterface
         ];
     }
 
-    public function fetchStatements(string $symbolCode, int $periods = 5): array
+    public function fetchStatements(string $symbolCode, int $periods = 16): array
     {
         $response = Http::withHeaders([
             'x-api-key' => config('services.jquants.api_key'),
@@ -56,6 +56,10 @@ final class JQuantsClient implements JQuantsClientInterface
 
         return array_map(fn (array $row) => [
             'disclosed_date' => $row['DiscDate'],
+            // ADR-0012: CurPerType(1Q/2Q/3Q/FY) と CurFYEn(会計年度末) を
+            // 成長率算出（最新FYと前期FYの比較）で使う。
+            'period_type' => $this->toStringOrNull($row['CurPerType'] ?? null),
+            'fiscal_year_end' => $this->toStringOrNull($row['CurFYEn'] ?? null),
             'net_sales' => $this->toFloatOrNull($row['Sales'] ?? null),
             'operating_profit' => $this->toFloatOrNull($row['OP'] ?? null),
             'profit' => $this->toFloatOrNull($row['NP'] ?? null),
@@ -75,5 +79,14 @@ final class JQuantsClient implements JQuantsClientInterface
         }
 
         return (float) $value;
+    }
+
+    private function toStringOrNull(?string $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return $value;
     }
 }
