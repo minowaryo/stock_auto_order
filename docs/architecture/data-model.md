@@ -226,8 +226,8 @@
 | revenue | decimal(18,2) | YES | null | 売上高。J-Quantsが当該期のSalesを欠損で返す場合がありnull許容（ADR-0008） |
 | operating_income | decimal(18,2) | YES | null | 営業利益。J-Quantsが当該期のOPを欠損で返す場合がありnull許容（ADR-0008） |
 | eps | decimal(10,2) | YES | null | 1株当たり利益（EPS）。`fundamental_indicators.eps_growth`/`peg_ratio`の算出元（ADR-0004） |
-| revenue_yoy_change | decimal(7,4) | YES | null | 売上高の前期本決算比増減（%）。最新の本決算行のみ算出（ADR-0012。2026-09-06に「4期前との比較」から変更） |
-| operating_income_yoy_change | decimal(7,4) | YES | null | 営業利益の前期本決算比増減（%）。最新の本決算行のみ算出（ADR-0012） |
+| revenue_yoy_change | decimal(7,4) | YES | null | 売上高の前期本決算比増減（%）。値は`FundamentalIndicatorMapper::annualGrowth()`（最新FYと前期FYの比較、ADR-0012。2026-09-06に「4期前との比較」から変更）で算出するが、付与先は最新の**本決算**行ではなく最新の**開示**行（`fetchStatements()`の index 0。直近開示が四半期決算の場合はその行に付く）。それ以外の行はnull |
+| operating_income_yoy_change | decimal(7,4) | YES | null | 営業利益の前期本決算比増減（%）。revenue_yoy_changeと同じ算出・付与ロジック（ADR-0012） |
 | fetched_at | timestamp | NO | now() | J-Quantsからの取得日時 |
 | created_at | timestamp | NO | now() | 作成日時 |
 
@@ -236,7 +236,7 @@
 
 > UC-006業務ルール「直近3〜5期分」の件数は**初期値5期**とし、取得できる期数がそれ未満の場合は取得可能な範囲のみ表示する。
 
-> **実装完了**（2026-08-23、UC-006 Cycle A Gate4）: `FetchExternalMarketDataAction`がJP株について既に取得している`jQuantsClient->fetchStatements()`の結果をそのまま保存する（新規の外部API呼び出しは追加しない）。`revenue_yoy_change`/`operating_income_yoy_change`は**最新の本決算行のみ**`FundamentalIndicatorMapper::annualGrowth()`（最新FYと前期FYの比較）で算出し、それ以外の期はnullのままとする。US株・投信は対象外（fundamentals自体がJP限定のため）。
+> **実装完了**（2026-08-23、UC-006 Cycle A Gate4）: `FetchExternalMarketDataAction`がJP株について既に取得している`jQuantsClient->fetchStatements()`の結果をそのまま保存する（新規の外部API呼び出しは追加しない）。`revenue_yoy_change`/`operating_income_yoy_change`は**最新の開示行（index 0）のみ**`FundamentalIndicatorMapper::annualGrowth()`（最新FYと前期FYの比較）で算出し、それ以外の行はnullのままとする（2026-09-06、`/review`指摘を受けて「最新の本決算行」という誤った記述を訂正。index 0 は直近の開示順で決まり、本決算とは限らない点に注意）。US株・投信は対象外（fundamentals自体がJP限定のため）。
 >
 > **改定**（2026-09-06、ADR-0012）: `fetchStatements()`の取得件数を5→16期に拡大し、`revenue_yoy_change`等のYoYロジックを「配列4つ前との比較」から「最新の本決算（FY）と前期の本決算の比較」に変更（`/fins/summary`の重複開示・累計期混在で「通期売上÷1Q売上」のような無意味な値が算出されていたバグの是正）。UC-006の履歴表示は保存件数の拡大に伴い最大16期になる。
 

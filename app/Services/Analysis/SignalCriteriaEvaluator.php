@@ -201,8 +201,9 @@ final class SignalCriteriaEvaluator
                 sprintf('≤%s', number_format(BuySignalDeterminationService::PEG_UNDERVALUED_THRESHOLD, 1)),
                 $metrics['peg_ratio'] ?? null,
                 BuySignalDeterminationService::PEG_UNDERVALUED_THRESHOLD,
-                // ADR-0012 D4: 負のPEG（減益・赤字成長）は割安ではないため
-                // met/near にしない（実測値は表示しつつ unmet）。
+                // ADR-0012 D4: a negative PEG (declining/negative earnings
+                // growth) is not undervalued, so it must not read as met/near
+                // (the raw value still displays, classified as unmet).
                 'lte_positive',
                 fn (float $v) => number_format($v, 2),
             ),

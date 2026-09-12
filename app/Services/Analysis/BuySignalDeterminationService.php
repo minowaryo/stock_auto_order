@@ -322,9 +322,10 @@ final class BuySignalDeterminationService
             return null;
         }
 
-        // ADR-0012 D4: 下限が無いと負のPEG（減益・赤字成長。US株のFinnhub
-        // pegTTM がそのまま負値を返す）を「割安」と誤判定する。0 < peg <= 1.0
-        // のみを割安とする。
+        // ADR-0012 D4: without a lower bound, a negative PEG (declining/
+        // negative earnings growth; US Finnhub pegTTM passes negative values
+        // through as-is) would be misread as "undervalued". Only 0 < peg <= 1.0
+        // counts as undervalued.
         if ($pegRatio > 0.0 && $pegRatio <= self::PEG_UNDERVALUED_THRESHOLD) {
             return [
                 'signal_type' => 'peg_undervalued',

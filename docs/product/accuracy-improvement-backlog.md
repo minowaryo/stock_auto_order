@@ -119,7 +119,7 @@
 
 ### 内部計算ロジックの精度課題（2026-09-06、CHG-0013／ADR-0012 の調査で発見。低優先で持ち越し）
 
-> ADR-0012（成長率のFY比較化）・バグB（押し目買いPEG下限）は同CRで是正済み。以下は同じ監査で見つかった残りの課題。実害は限定的なため次に該当箇所へ手を入れる際に対処する。
+> ADR-0012（成長率のFY比較化）・バグB（押し目買いPEG下限）は同CRで是正済み。C〜Gは同じ監査で見つかった残りの課題、H〜Kは`/review`（6観点並列エージェント、2026-09-06）で追加判明した課題。いずれも実害は限定的なため次に該当箇所へ手を入れる際に対処する。
 
 | # | 箇所 | 内容 | 影響 |
 |---|---|---|---|
@@ -128,6 +128,10 @@
 | E | `FinnhubClient::findConceptValue()` | XBRL は同一 concept を複数期コンテキストで返す。先頭一致だと前期比較値を拾うリスク（ADR-0009 で検証済みとあるが再確認推奨） | US株の実測算出値 |
 | F | `FetchExternalMarketDataAction`（セクター平均相対力） | `sectorReturnBuckets` に自銘柄の騰落率を含めて平均している（薄いセクターで信号が鈍る）。「簡易算出」と明記済み | 対セクター相対力（JP株）。既知の割り切り |
 | G | `TechnicalIndicatorCalculator`（week52_high/low） | 週足終値の最大/最小であり、ザラ場高値/安値ではない | 52週高値からの下落率等がやや浅めに出る。一般的な簡略化 |
+| H | `FetchExternalMarketDataAction`（`financial_statements`保存） | `revenue_yoy_change`/`operating_income_yoy_change`は「最新の開示行（`fetchStatements()`の index 0）」にのみ付与する既存パターン（ADR-0012以前から不変）。直近開示が本決算でなく四半期決算の場合、その四半期行に前期通期比の値が付き、実際の本決算行はnullのままになる。現状Blade側は`historical_performance`のyoy_change列を描画していないため実害なし（`/review`確認済み） | UC-006の過去業績推移に将来この列を表示する場合、行と数値の対応がずれる。表示追加時にindex 0ではなくperiod_type==='FY'の行へ付け替える改修が必要 |
+| I | `FundamentalIndicatorMapper::map()` / `FetchExternalMarketDataAction`（`annualGrowth()`呼び出し） | `map()`内でnet_sales/operating_profit/epsの3フィールド分`annualGrowth()`を個別呼び出し（FY2行の絞り込み・重複排除・ソートを3回重複実行）。`FetchExternalMarketDataAction`側も`revenue_growth`/`operating_income_growth`と同じ値をrevenue_yoy_change/operating_income_yoy_change用に再計算（`$fundamental`に既にある値を使わず二重計算）。1銘柄あたり本来1回で済む処理を計5回実行 | 実害はパフォーマンスのみ（保有銘柄数×5倍の配列処理）。`resolveTwoMostRecentFyStatements()`等への切り出しで解消可能 |
+| J | `SignalCriteriaEvaluator::classify()`の`lte_positive`分岐 | 既存`lte`分岐（met/near/unmet判定ロジック）をほぼそのままコピーし、値≦0のガードのみ追加（ADR-0012 D4のPEG下限用）。`lte`側のバッファ仕様が将来変わると2箇所が乖離するリスク | PEGレシオの判定チップのみ対象。実害は無いが保守性の課題 |
+| K | `JQuantsClient::toFloatOrNull()` / `toStringOrNull()`（ADR-0012で追加） | null/空文字列ガードが同一の2メソッドが並立（キャスト型のみ異なる） | 実害なし。共通ヘルパーへの統合は任意 |
 
 ---
 

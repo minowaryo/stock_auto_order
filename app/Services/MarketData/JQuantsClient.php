@@ -56,8 +56,8 @@ final class JQuantsClient implements JQuantsClientInterface
 
         return array_map(fn (array $row) => [
             'disclosed_date' => $row['DiscDate'],
-            // ADR-0012: CurPerType(1Q/2Q/3Q/FY) と CurFYEn(会計年度末) を
-            // 成長率算出（最新FYと前期FYの比較）で使う。
+            // ADR-0012: CurPerType (1Q/2Q/3Q/FY) and CurFYEn (fiscal year end)
+            // are used to compare the two most recent full-year filings.
             'period_type' => $this->toStringOrNull($row['CurPerType'] ?? null),
             'fiscal_year_end' => $this->toStringOrNull($row['CurFYEn'] ?? null),
             'net_sales' => $this->toFloatOrNull($row['Sales'] ?? null),
