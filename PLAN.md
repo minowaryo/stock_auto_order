@@ -1,7 +1,7 @@
 # PLAN.md
 
 > 2026-08-27（フロントエンド実装Phase5完了時点。UC-010 Gate4完了・コミット`ba239fe`分も含む）以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、Phase2 UC-008（Cycle1・Cycle2）完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査完了、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了、利確・リバランス閾値の動的分岐ロジック検討〔検討事項の記録のみ、実装はCHG-0006として2026-08-28〜29に別途完了〕、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、フロントエンド実装Phase4（UC-003銘柄詳細画面）完了、UC-010 Gate2/Gate3正式承認（買いシグナル7種の前提条件追加）完了、UC-010 Gate4完了・コミット（`ba239fe`）、フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了、およびフロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了〔2026-09-05、CHG-0011作業時に退避〕等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
-> **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。300行超過に伴い「数値表示フォーマット修正完了（2026-08-28）」「UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0012 Phase 0作業時）。約298行に達したため「利確検討ラインの動的分岐 CHG-0006（2026-08-28〜29）」「売買シグナル画面の可読性改善（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0013／ADR-0012作業時）。
+> **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。300行超過に伴い「数値表示フォーマット修正完了（2026-08-28）」「UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0012 Phase 0作業時）。約298行に達したため「利確検討ラインの動的分岐 CHG-0006（2026-08-28〜29）」「売買シグナル画面の可読性改善（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0013／ADR-0012作業時）。300行超過に伴い「取込後サマリーレポートのグローバルナビタブ化 CHG-0008（2026-09-05）」の1エントリを退避済み（2026-09-12、F-012・CHG-0012のステータス記述を実態〔mainマージ済み〕に修正した際に発生した増分に対応）。
 
 ## ポートフォリオ分類ダッシュボード（F-013・UC-013・ADR-0014・CHG-0015）Phase 0 ドキュメント先行（2026-09-08〜）
 
@@ -33,7 +33,7 @@ Phase 0（ドキュメント先行）完了。**Gate 1（requirements.md）／Ga
 
 > **ブランチ状況の注意（2026-09-08）**: 本 Phase 0 作業は `feat/f012-favorites-watchlist` ブランチ上で行ったが、同ブランチでは並行して別セッションが F-012 実装（Cycle 2 まで）と CHG-0013 成長率修正の未コミット作業を進めており、作業中に `git reset`／ブランチ往復が複数回発生した（glossary.md への追記が一度巻き戻され再適用）。本エントリのドキュメント変更はコミット前で、別セッションのコミット・リセットで再度巻き戻るリスクがある。ADR-0014（未追跡ファイル）は影響を受けない。コミット単位の切り分けは本人判断待ち。
 
-## お気に入り未保有銘柄ウォッチリスト／新規投資候補画面の刷新（F-012・UC-012・ADR-0013・CHG-0014）Phase 0 ドキュメント先行（2026-09-06〜）
+## お気に入り未保有銘柄ウォッチリスト／新規投資候補画面の刷新（F-012・UC-012・ADR-0013・CHG-0014）実装完了・mainマージ済み（2026-09-06〜09-12）
 
 ### Decision
 
@@ -52,11 +52,14 @@ Phase 0（ドキュメント先行）完了。**Gate 1（requirements.md）／Ga
 
 **ドキュメント（Phase 0、本セッション、`feat/f012-favorites-watchlist` ブランチ）**: `docs/adr/ADR-0013-favorites-watchlist.md`（新規、Status: Accepted 予定＝Gate1/2/3承認をもって）、`docs/product/requirements.md`（2章 IN＋6章制約＋4章 F-012 追加・F-006/F-008 改訂＋7章）、`docs/product/use-cases.md`（UC一覧・UC-012 節新設・UC-006 統合注記・UC-008 Superseded 注記・承認記録）、`docs/architecture/data-model.md`（`watchlist_items`／`watchlist_buy_signals`／`watchlist_refresh_runs` 定義・`holdings` 作成経路②注記・`watched_themes` 注記・「保留・確定が必要な初期パラメータ値」表4行・承認記録・変更履歴）、`docs/product/ui-guidelines.md`（新規投資候補画面の刷新後構成・6タブ維持・配色は UC-010 と同一）、`docs/ai-context/module-map.md`（`app/Services/Watchlist/`・`app/Actions/Watchlist/`・`app/Jobs/`・`watchlist:refresh`）、`docs/ai-context/glossary.md`（お気に入り銘柄CSV／ウォッチリスト／一括更新／★お気に入り／注目テーマ・軽量レコメンドの改訂）、`docs/rcid/traceability-matrix.md`（F-012 行・CHG-0014 行）、`PLAN.md`（本エントリ）
 
-**コード**: 未着手（F-011 マージ後）。実装ステップ（Cycle 1 パーサ → Cycle 2 取込 Action → Cycle 3 一括更新＋キュー → Cycle 4 画面刷新、各 Red→Gate4→Green→Refactor）はプランファイル参照
+**コード（新規、Cycle 1〜4）**: `app/Services/Import/RakutenFavoriteCsvParser.php`＋`Support/ParsedFavoriteFile.php`／`ParsedFavoriteRow.php`（Cycle 1、`ee48a26`）、`app/Actions/Watchlist/ImportFavoriteCsvAction.php`＋`Support/FavoriteImportResult.php`（Cycle 2、`0d285fa`）、`app/Actions/Watchlist/RefreshWatchlistMarketDataAction.php`／`app/Jobs/RefreshWatchlistMarketDataJob.php`／`app/Console/Commands/RefreshWatchlistCommand.php`（Cycle 3・キュー、`a2d4373`）、`app/Actions/Watchlist/ShowWatchlistAction.php`＋`/candidate-check`刷新（Cycle 4、`03f4776`）、`app/Models/WatchlistItem.php`／`WatchlistBuySignal.php`／`WatchlistRefreshRun.php`、migration4件（`watchlist_items`／`watchlist_buy_signals`／`watchlist_refresh_runs`／`last_close`列追加）、`compose.yaml`（`queue:work`サービス）。テスト: `tests/Feature/UC012WatchlistImportTest.php`／`UC012WatchlistRefreshTest.php`／`UC012WatchlistScreenTest.php`（新規、旧`CandidateCheckTest.php`608行は削除）
+
+**コード（`/review`修正、`085ac50`）**: watchlist refresh run のライフサイクル統一＋銘柄単位のアトミックな書き込みに修正
 
 ### Status
 
-Phase 0（ドキュメント先行）完了。**Gate 1／Gate 2（UC-012）／Gate 3（新規テーブル3件）を 2026-09-08 に本人が一括承認**。F-011・CHG-0012 はいずれも main にマージ済みのため、実装の前提条件は満たしている。次は Cycle 1（`RakutenFavoriteCsvParser` の Red）から。各サイクル Red→Gate4→Green→Refactor。ブランチ `feat/f012-favorites-watchlist`。
+**Green実装・Refactor・`/review`完了、mainマージ済み**（コミット `444ee65`、2026-09-12）。Cycle 1〜4すべて Red→Gate4承認→Green で完了、ブランチ`feat/f012-favorites-watchlist`はmainにマージ済み。UC012関連テスト36件Green（フルスイート606 passed / 24 deprecated・既存無関係 / 0 failed）。
+実データ確認（2026-09-07、本番相当）: 楽天のお気に入り銘柄CSV（216銘柄）を実際にアップロードし`watchlist_items`へ取込済み（`source=rakuten_favorites_csv`）。一括更新も複数回実行（`watchlist_refresh_runs` id 1〜7、いずれも`completed`・未保有対象90銘柄を処理・failed 0）、`watchlist_buy_signals`16件検出、対象216銘柄すべてに`technical_indicators`が格納済み。**候補CSVの取込・一括更新は既に実施済みであり、改めて試す必要はない状態**。
 
 > 注: 本ブランチの作業ツリーには別セッションの ADR-0012（成長率修正）作業が混在していたため、F-012 分の `data-model.md`／`traceability-matrix.md`／`PLAN.md` は当初コミットを保留していた。2026-09-12、他セッションが手を止めているタイミングで内容を行単位に再構成し分離コミット（詳細は上記「並行作業」参照）。
 
@@ -81,7 +84,7 @@ Phase 0（ドキュメント先行）完了。**Gate 1／Gate 2（UC-012）／Ga
 
 Green実装・Refactor完了。フルスイート582件Green（13 deprecated は既存・無関係）、pint適用済み。実データ（live J-Quants）で 8001/8058/1605/7203 の成長率が妥当な通期比になることを確認（8001 revenue_growth: +316% → +0.67%）。C〜G の低優先課題は `docs/product/accuracy-improvement-backlog.md`「内部計算ロジックの精度課題」節に記録済み。当初 `feat/chg0012-operating-margin-criterion` 上で未コミットのまま作業していたが、CHG-0012（営業利益率、無関係）とは別件のため独立ブランチ `feat/chg0013-growth-rate-fy-comparison` に分離してコミット、`/review`（コメント英訳・data-model.mdのindex 0記述誤りの訂正・backlog H〜K追加）を経て**mainマージ済み**（`f2a73a7`／`2a7bceb`。2026-09-12、`feat/f012-favorites-watchlist` 経由でmainへ統合後、この独立ブランチとの内容差分を突き合わせ`/review`分の差分を追加反映）。`feat/chg0013-growth-rate-fy-comparison` ブランチは以後削除可
 
-## 財務健全性フィルタに営業利益率を追加（CHG-0012・ADR-0011）Phase 0 ドキュメント先行（2026-09-06〜）
+## 財務健全性フィルタに営業利益率を追加（CHG-0012・ADR-0011）実装完了・mainマージ済み（2026-09-06〜09-07）
 
 ### Decision
 
@@ -96,11 +99,11 @@ Green実装・Refactor完了。フルスイート582件Green（13 deprecated は
 
 **ドキュメント（Phase 0、本セッション）**: `docs/adr/ADR-0011-operating-margin-health-criterion.md`（新規、Status: Proposed）、`docs/architecture/data-model.md`（`fundamental_indicators` に `operating_margin` 行・US Mapper注記・「保留・確定が必要な初期パラメータ値」表4行〔財務健全性フィルタ／買い増し用／整理検討3→4項目／near バッファ〕・承認記録・変更履歴）、`docs/product/use-cases.md`（UC-001フロー7・UC-003フロー4・UC-004/010/011 判定チェックリスト財務3→4項目・UC-005/008/009 健全性フィルタ・`criteria`データ辞書・`fundamental_summary`例・承認記録）、`docs/product/requirements.md`（3章ファンダ指標一覧・F-010説明）、`docs/product/ui-guidelines.md`（チップ配色規約・サマリバッジ文言・固定件数記述・テーブル幅注記）、`docs/product/accuracy-improvement-backlog.md`（営業利益率の行を追加）、`docs/rcid/traceability-matrix.md`（CHG-0012行・F-004/009/010/011行に注記）、`PLAN.md`（本エントリ＋2エントリ退避）
 
-**コード**: 未着手（F-011 マージ後）。実装ステップはプランファイル参照（migration → 両Mapper → `FundamentalHealthEvaluator` → 呼び出し元6機能 → `SignalCriteriaEvaluator` → Blade、Red→Gate4→Green→Refactor→`/review`）
+**コード（Green、`508a9fc`）**: migration `add_operating_margin_to_fundamental_indicators_table`（`decimal(10,4)` nullable）、`FundamentalIndicator`（fillable/cast/`healthEvaluatorArgs()`5要素化）、`FundamentalIndicatorMapper`（JP、`operating_profit/net_sales*100`）、`UsFundamentalIndicatorMapper`（US、`operatingMarginTTM`??`Annual`）、`FundamentalHealthEvaluator::evaluate()`（5引数化）、呼び出し元6機能（`ShowSignalListAction`／`ShowBuySignalListAction`／`ShowLossReviewListAction`／`NewCandidateFinder`／`ShowImportSummaryReportAction`／`TakeProfitThresholdEvaluator`）、`SignalCriteriaEvaluator::fundamentalRows()`（4項目目・整理検討テーブルは反転）、`holding-detail.blade.php`・`signal-list.blade.php`（テーブル幅+72px）。テスト9ファイル更新（`FundamentalHealthEvaluatorTest`/`FundamentalIndicatorMapperTest`/`UsFundamentalIndicatorMapperTest`/`SignalCriteriaEvaluatorTest`/`TakeProfitThresholdEvaluatorTest`ほかFeature Test6本）
 
 ### Status
 
-Phase 0（ドキュメント先行）完了。Gate 2（use-cases.md）／Gate 3（data-model.md、`operating_margin` 列追加のマイグレーションを伴うため実質的な承認が必要）は**本人レビュー待ち**。実装は F-011 マージ後。
+**Green実装完了、mainマージ済み**（コミット`6d5a9cb`、F-011マージ後に`feat/chg0012-operating-margin-criterion`ブランチで実装）。実DB確認: `fundamental_indicators.operating_margin`列が実際に存在。当時のフルスイート**572 passed**（現在は後続作業を含め606 passed）。実データ確認（保有135銘柄）: 財務`passed`がJP 15→11・US 12→11（合計27→22）、想定銘柄（マツキヨ7.6%/タカラトミー9.0%/アジアパイルHD9.4%/SWCC9.8%/IONQ-408%）が想定通りfailedになることをADR-0011どおり確認済み。
 
 ## 整理検討（含み損）候補一覧の新設（F-011・UC-011・ADR-0010・CHG-0010）（2026-09-05〜）
 
@@ -211,31 +214,6 @@ UC-011 は閲覧系フローで `.claude/rules/31-e2e-testing.md` のクリテ�
 ### Status
 
 Gate2/Gate3承認完了。DBスキーマ変更なし。次はGate4（`/tdd`のRed→Green→Refactorサイクル）で`UsFundamentalIndicatorMapper`（仮称）・Finnhub用HTTPクライアント（レート制限の自己スロットリング・429リトライ含む）・`FetchExternalMarketDataAction`への組み込みを実装する。未着手・未コミット。
-
-## 取込後サマリーレポートのグローバルナビタブ化（CHG-0008）完了（2026-09-05）
-
-### Decision
-
-- ユーザー要望: 取込後サマリーレポート（UC-009）は取込直後のリダイレクトでしか見られず、他画面へ移動すると取込バッチIDを知らない限り戻れない。「最新レポートだけでいいので、いつでも見られるようタブを作ってほしい」との依頼
-- Planフェーズで承認。設計（プランファイル: `~/.claude/plans/stock_auto_order-latest-summary-report-tab-implementation-phase.md`）:
-  - 新規ルート`GET /summary-report`（`app/Livewire/ImportSummaryReport/Latest.php`）を追加し、グローバルナビの右端（CSV取込の後、6タブ目）に「サマリーレポート」タブを新設
-  - 中身はスナップショットを持つ**最新の取込バッチ**を`ImportBatch::query()->whereHas('snapshot')->orderByDesc('imported_at')->orderByDesc('id')->first()`で特定し、既存`ShowImportSummaryReportAction`をそのまま呼んで毎回再計算（過去バッチの履歴閲覧は対象外）。DBスキーマ変更なし
-  - 既存`show.blade.php`のヘッドライン・上位10件・補足レコメンドの描画部を`resources/views/components/summary-report-body.blade.php`に切り出し、新旧2画面（取込直後リダイレクト先／恒常タブ）で共有。既存の`ImportSummaryReportShowTest`・`UC009ImportSummaryReportTest`・`CsvImportUploadTest`は無改変のままGreenを維持し、出力が変わっていないことを担保
-  - 取込バッチが1件も無い場合は「まだCSVの取込がありません」＋CSV取込導線を表示
-  - 取込直後リダイレクト先（`/import-batches/{id}/summary-report`）でも「サマリーレポート」タブがハイライトされるよう`Show.php`にも`active`指定を追加。あわせて両画面に取込日時のキャプション（`$importedAtLabel`）を追加
-- Gate2（`docs/product/use-cases.md` UC-009フロー7・業務ルール「タブからの再表示」・エラーケース）・`ui-guidelines.md`（5タブ→6タブ）・`traceability-matrix.md`（CHG-0008）を先に更新・承認。Gate3はDBスキーマ変更が無いため対象外
-- `test-writer`がRedフェーズで新規`ImportSummaryReportLatestTest.php`6件（最新バッチ選択・古いバッチ非表示・スナップショット無し失敗バッチのスキップ・空状態＋Action不実行・Action1回のみ呼び出し・未認証リダイレクト）＋`LayoutTest.php`にナビ回帰1件を作成。7件Red確認しGate4承認
-- `tdd-implementer`がGreenフェーズを実装。対象7件・関連する既存3ファイル（`ImportSummaryReportShowTest`/`UC009ImportSummaryReportTest`/`CsvImportUploadTest`、計37件）無改変Green・フルスイート422件Green
-- 実データ（保有134銘柄・取込バッチ3件）で実HTTP確認: Playwright MCPが接続不能だったため、`artisan tinker`から実際のセッションCookie（`CookieValuePrefix`＋`Crypt`でLaravelの暗号化Cookieを再現）を発行し、実行中のDockerコンテナへ本物のHTTP経由でアクセスして検証。(1) 全画面のナビ右端に「サマリーレポート」タブが表示される、(2) `/summary-report`で最新バッチ（id=133）のレポート（おすすめ上位10件含む）が表示されタブがハイライトされる、(3) `/import-batches/133/summary-report`（取込直後リダイレクト先）でも同タブがハイライトされる、(4) 応答にエラーマーカーなし、を確認。検証用に作成した一時セッション行は削除済み
-- UC-009タブ化は一覧→詳細遷移と同種の標準的な閲覧フローであり、`.claude/rules/31-e2e-testing.md`が対象とする「クリティカルフロー」に該当しないと判断しPlaywright E2Eテストは追加しない（UC-004のE2E見送り判断と同一の考え方）
-
-### Files touched
-
-`app/Livewire/ImportSummaryReport/Latest.php`（新規）、`app/Livewire/ImportSummaryReport/Show.php`（`active`指定・`importedAtLabel`追加）、`resources/views/components/summary-report-body.blade.php`（新規、描画部の移設）、`resources/views/livewire/import-summary-report/latest.blade.php`（新規）、`resources/views/livewire/import-summary-report/show.blade.php`（共通部品呼び出しへ置換・キャプション追加）、`resources/views/components/layouts/app.blade.php`（ナビタブ追加）、`routes/web.php`（`/summary-report`ルート追加）、`docs/product/use-cases.md`（UC-009フロー7・業務ルール・エラーケース・承認記録）、`docs/product/ui-guidelines.md`（6タブ化）、`docs/rcid/traceability-matrix.md`（CHG-0008）、`tests/Feature/ImportSummaryReportLatestTest.php`（新規、6件）、`tests/Feature/LayoutTest.php`（回帰テスト1件追加）、`PLAN.md`（本エントリ追加、300行超過に伴い「フロントエンド実装Phase3」エントリを`docs/history/plan-archive.md`へ退避）
-
-### Status
-
-Gate4完了（Red→Gate4承認→Green→`/review`→修正）。フルスイート422件Green（13 deprecatedは既存・無関係）。pint適用済み・実HTTP確認済み。`/review`でFat Livewireコンポーネント指摘（`Latest::mount()`への「最新バッチ」クエリ直書き）を修正（`ImportBatch::scopeLatestWithSnapshot()`に切り出し）。コミット済み（`bf3c0da`、`c43e1a2`、いずれも未push）。
 
 ## 売買シグナル画面 判定チェックリスト表示（CHG-0007）（2026-08-29〜）
 

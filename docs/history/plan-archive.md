@@ -1,6 +1,31 @@
-# PLAN.md アーカイブ（〜2026-08-28 フロントエンド実装Phase7完了時点）
+# PLAN.md アーカイブ（〜2026-09-05 CHG-0008完了時点）
 
-PLAN.md から退避した完了済みエントリ。利確検討ラインの動的分岐（CHG-0006、2026-08-28〜29）・売買シグナル画面の可読性改善（2026-08-28）の記録を追加（2026-09-06、CHG-0013／ADR-0012作業時に約298行に達したため退避）。数値表示フォーマット修正完了（2026-08-28）・UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）の記録を追加（2026-09-06、CHG-0012 Phase 0作業時に300行超過に伴い退避）。フロントエンド実装Phase7（UC-006/UC-008統合「新規投資候補」画面）完了・その`/review`指摘（MEDIUM 3件）修正完了の記録を追加（2026-09-06、CHG-0011コミット時に300行超過に伴い退避）。フロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了の記録を追加（2026-09-05、CHG-0011作業時に300行超過に伴い退避）。フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了までの記録を追加。UC-010（既存保有株の買い増しタイミングレコメンド）Gate4完了・コミット（`ba239fe`）までの記録を追加。Gate0セットアップ〜Phase1（UC-001/002/003/009）Gate4サイクル完了・ADR-0002 NISA区分CR・投資方針背景整理・ADR-0004（分析エンジンの指標セット拡張、設計確定〜TechnicalIndicatorCalculator〜MarketData層〜JQuantsClient〜SignalDeterminationService〜FundamentalIndicatorMapperの各TDDサイクル、UC-001への配線・UC-004画面実装・UC-003/UC-009への新指標反映を含む）完了、関連する`/review`指摘修正2件・UC-009サンプルレポート生成・per-holding非アトミック性修正、F-010（UC-010）のGate1〜3ドキュメント叩き台整備（ADR-0007新規作成、requirements.md/use-cases.md/data-model.md改訂）、NISA区分（口座区分）内訳の書き込み経路・UC-004消費側の実装完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、およびフロントエンド実装Phase4（UC-003銘柄詳細画面）完了までの記録。現在進行中のタスクとは直接関係しないため参照頻度は低いが、経緯確認が必要な場合はここを見る。
+PLAN.md から退避した完了済みエントリ。取込後サマリーレポートのグローバルナビタブ化（CHG-0008、2026-09-05）完了の記録を追加（2026-09-12、F-012・CHG-0012のステータス記述修正に伴いPLAN.mdが300行を超えたため退避）。利確検討ラインの動的分岐（CHG-0006、2026-08-28〜29）・売買シグナル画面の可読性改善（2026-08-28）の記録を追加（2026-09-06、CHG-0013／ADR-0012作業時に約298行に達したため退避）。数値表示フォーマット修正完了（2026-08-28）・UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）の記録を追加（2026-09-06、CHG-0012 Phase 0作業時に300行超過に伴い退避）。フロントエンド実装Phase7（UC-006/UC-008統合「新規投資候補」画面）完了・その`/review`指摘（MEDIUM 3件）修正完了の記録を追加（2026-09-06、CHG-0011コミット時に300行超過に伴い退避）。フロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了の記録を追加（2026-09-05、CHG-0011作業時に300行超過に伴い退避）。フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了までの記録を追加。UC-010（既存保有株の買い増しタイミングレコメンド）Gate4完了・コミット（`ba239fe`）までの記録を追加。Gate0セットアップ〜Phase1（UC-001/002/003/009）Gate4サイクル完了・ADR-0002 NISA区分CR・投資方針背景整理・ADR-0004（分析エンジンの指標セット拡張、設計確定〜TechnicalIndicatorCalculator〜MarketData層〜JQuantsClient〜SignalDeterminationService〜FundamentalIndicatorMapperの各TDDサイクル、UC-001への配線・UC-004画面実装・UC-003/UC-009への新指標反映を含む）完了、関連する`/review`指摘修正2件・UC-009サンプルレポート生成・per-holding非アトミック性修正、F-010（UC-010）のGate1〜3ドキュメント叩き台整備（ADR-0007新規作成、requirements.md/use-cases.md/data-model.md改訂）、NISA区分（口座区分）内訳の書き込み経路・UC-004消費側の実装完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、およびフロントエンド実装Phase4（UC-003銘柄詳細画面）完了までの記録。現在進行中のタスクとは直接関係しないため参照頻度は低いが、経緯確認が必要な場合はここを見る。
+
+## 取込後サマリーレポートのグローバルナビタブ化（CHG-0008）完了（2026-09-05）
+
+### Decision
+
+- ユーザー要望: 取込後サマリーレポート（UC-009）は取込直後のリダイレクトでしか見られず、他画面へ移動すると取込バッチIDを知らない限り戻れない。「最新レポートだけでいいので、いつでも見られるようタブを作ってほしい」との依頼
+- Planフェーズで承認。設計（プランファイル: `~/.claude/plans/stock_auto_order-latest-summary-report-tab-implementation-phase.md`）:
+  - 新規ルート`GET /summary-report`（`app/Livewire/ImportSummaryReport/Latest.php`）を追加し、グローバルナビの右端（CSV取込の後、6タブ目）に「サマリーレポート」タブを新設
+  - 中身はスナップショットを持つ**最新の取込バッチ**を`ImportBatch::query()->whereHas('snapshot')->orderByDesc('imported_at')->orderByDesc('id')->first()`で特定し、既存`ShowImportSummaryReportAction`をそのまま呼んで毎回再計算（過去バッチの履歴閲覧は対象外）。DBスキーマ変更なし
+  - 既存`show.blade.php`のヘッドライン・上位10件・補足レコメンドの描画部を`resources/views/components/summary-report-body.blade.php`に切り出し、新旧2画面（取込直後リダイレクト先／恒常タブ）で共有。既存の`ImportSummaryReportShowTest`・`UC009ImportSummaryReportTest`・`CsvImportUploadTest`は無改変のままGreenを維持し、出力が変わっていないことを担保
+  - 取込バッチが1件も無い場合は「まだCSVの取込がありません」＋CSV取込導線を表示
+  - 取込直後リダイレクト先（`/import-batches/{id}/summary-report`）でも「サマリーレポート」タブがハイライトされるよう`Show.php`にも`active`指定を追加。あわせて両画面に取込日時のキャプション（`$importedAtLabel`）を追加
+- Gate2（`docs/product/use-cases.md` UC-009フロー7・業務ルール「タブからの再表示」・エラーケース）・`ui-guidelines.md`（5タブ→6タブ）・`traceability-matrix.md`（CHG-0008）を先に更新・承認。Gate3はDBスキーマ変更が無いため対象外
+- `test-writer`がRedフェーズで新規`ImportSummaryReportLatestTest.php`6件（最新バッチ選択・古いバッチ非表示・スナップショット無し失敗バッチのスキップ・空状態＋Action不実行・Action1回のみ呼び出し・未認証リダイレクト）＋`LayoutTest.php`にナビ回帰1件を作成。7件Red確認しGate4承認
+- `tdd-implementer`がGreenフェーズを実装。対象7件・関連する既存3ファイル（`ImportSummaryReportShowTest`/`UC009ImportSummaryReportTest`/`CsvImportUploadTest`、計37件）無改変Green・フルスイート422件Green
+- 実データ（保有134銘柄・取込バッチ3件）で実HTTP確認: Playwright MCPが接続不能だったため、`artisan tinker`から実際のセッションCookie（`CookieValuePrefix`＋`Crypt`でLaravelの暗号化Cookieを再現）を発行し、実行中のDockerコンテナへ本物のHTTP経由でアクセスして検証。(1) 全画面のナビ右端に「サマリーレポート」タブが表示される、(2) `/summary-report`で最新バッチ（id=133）のレポート（おすすめ上位10件含む）が表示されタブがハイライトされる、(3) `/import-batches/133/summary-report`（取込直後リダイレクト先）でも同タブがハイライトされる、(4) 応答にエラーマーカーなし、を確認。検証用に作成した一時セッション行は削除済み
+- UC-009タブ化は一覧→詳細遷移と同種の標準的な閲覧フローであり、`.claude/rules/31-e2e-testing.md`が対象とする「クリティカルフロー」に該当しないと判断しPlaywright E2Eテストは追加しない（UC-004のE2E見送り判断と同一の考え方）
+
+### Files touched
+
+`app/Livewire/ImportSummaryReport/Latest.php`（新規）、`app/Livewire/ImportSummaryReport/Show.php`（`active`指定・`importedAtLabel`追加）、`resources/views/components/summary-report-body.blade.php`（新規、描画部の移設）、`resources/views/livewire/import-summary-report/latest.blade.php`（新規）、`resources/views/livewire/import-summary-report/show.blade.php`（共通部品呼び出しへ置換・キャプション追加）、`resources/views/components/layouts/app.blade.php`（ナビタブ追加）、`routes/web.php`（`/summary-report`ルート追加）、`docs/product/use-cases.md`（UC-009フロー7・業務ルール・エラーケース・承認記録）、`docs/product/ui-guidelines.md`（6タブ化）、`docs/rcid/traceability-matrix.md`（CHG-0008）、`tests/Feature/ImportSummaryReportLatestTest.php`（新規、6件）、`tests/Feature/LayoutTest.php`（回帰テスト1件追加）、`PLAN.md`（本エントリ追加、300行超過に伴い「フロントエンド実装Phase3」エントリを`docs/history/plan-archive.md`へ退避）
+
+### Status
+
+Gate4完了（Red→Gate4承認→Green→`/review`→修正）。フルスイート422件Green（13 deprecatedは既存・無関係）。pint適用済み・実HTTP確認済み。`/review`でFat Livewireコンポーネント指摘（`Latest::mount()`への「最新バッチ」クエリ直書き）を修正（`ImportBatch::scopeLatestWithSnapshot()`に切り出し）。コミット済み（`bf3c0da`、`c43e1a2`、いずれも未push）。
 
 ## 利確検討ラインの動的分岐（CHG-0006）実装完了（2026-08-28〜29）
 
