@@ -126,3 +126,15 @@
 - 原因: `overflow-wrap: break-word`はテキストの折り返しルールとして子孫に継承されるが、`display: inline-block`な要素自身の「置き換えられない限り自分の内容に基づいて幅を決める」というサイズ決定の性質までは変えない。`<td>`側で折り返しを許可していても、`inline-block`の中身が折り返せない1単語の場合、その`inline-block`要素自体が中身の全幅を必要とする箱として振る舞い、結果的に親セルの幅を無視してはみ出す
 - 対処: `inline-block`要素自身（`resources/views/components/badge.blade.php`）に直接`max-w-full break-words`を追加する。`max-w-full`で自身の幅を親の利用可能幅までに制限し、`break-words`（`overflow-wrap: break-word`）と組み合わせることで、はみ出す代わりにバッジ自身の中で改行されるようになる。バッジは他画面でも使う共有コンポーネントだが、通常の短いテキストでは`max-w-full`は何の影響も与えないため後方互換
 - 教訓: 折り返し系のCSSプロパティ（`overflow-wrap`/`word-break`）は継承されるが、`inline-block`のような「自身の内容で幅が決まる」表示タイプの要素には、**その要素自身にも**明示的に指定しないと効かないことがある。親要素にだけ付けて安心せず、実際にはみ出していないか（`getBoundingClientRect().width`が親セル幅を超えていないか）を実ブラウザで確認すること
+
+### Vite（`@vite`ディレクティブ、Sailコンテナ） — `resources/js/`配下のJSファイルを直接編集しても、ブラウザで動作確認すると変更前の挙動のまま
+
+- 現象: `resources/js/app.js`を編集し`php artisan test`はGreenのまま実ブラウザ（Playwright）で動作確認したところ、修正した処理が一切実行されていないように見えた（コンソールログも出ない）
+- 原因: Tailwind CSSと同様、`@vite(['resources/js/app.js'])`はビルド済み`public/build/assets/app-*.js`を配信する運用で、`npm run build`を再実行するまでソース変更が反映されない。CSSだけでなくJSも同じビルド成果物配信の対象であることを見落としていた
+- 対処: `resources/js/`配下のファイルを変更した場合も、Bladeファイル変更時と同様に必ず`docker compose exec laravel.test bash -c "cd /var/www/html && npm run build"`を実行してから実ブラウザで確認する（`verify`スキルの「Rebuild frontend assets」節も対象をJSに拡張）
+
+### Livewire 4.x — `document.addEventListener('livewire:updated', ...)`が発火しない（Livewire v3以降に存在しないイベント）
+
+- 現象: Livewireのフィルタ（`wire:model.live`）や`wire:poll`での再描画時にJSを再実行させたく`livewire:updated`というDOM CustomEventをリッスンする実装をしたが、実ブラウザで一切発火しなかった（`php artisan test`では検出不可。実ブラウザのconsole.logで初めて気づいた）
+- 原因: `vendor/livewire/livewire/dist/livewire.js`が実際にdispatchするDOM CustomEventは`livewire:init`/`livewire:initializing`/`livewire:initialized`/`livewire:navigate`/`livewire:navigating`/`livewire:navigated`のみで、`livewire:updated`（Livewire v2時代のイベント）はLivewire v3以降廃止されている。再描画ごとのフックはDOM CustomEventではなく`Livewire.hook(name, callback)`というJS APIで提供され、DOM差分適用（morphdom）完了後に発火する`morphed`（`Livewire.hook('morphed', ({ el, component }) => {...})`）が該当する
+- 対処: 再描画ごとの処理は`document.addEventListener('livewire:updated', ...)`ではなく`window.Livewire.hook('morphed', callback)`を使う（`resources/js/app.js`の横スクロール同期、CHG-0016）。使えるフック名は`vendor/livewire/livewire/dist/livewire.js`を`trigger2(`または`trigger(`でgrepすると確認できる（`morph`/`morph.updated`/`morphed`/`commit`等）。`@vite`でビルドされたJSを配信する構成のため、この種の実装ミスもTailwind同様「実際に動くかは実ブラウザで確認するまで分からない」（上記Viteの項目も参照）
