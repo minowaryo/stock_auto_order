@@ -3,7 +3,7 @@
 > 2026-08-27（フロントエンド実装Phase5完了時点。UC-010 Gate4完了・コミット`ba239fe`分も含む）以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、Phase2 UC-008（Cycle1・Cycle2）完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査完了、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了、利確・リバランス閾値の動的分岐ロジック検討〔検討事項の記録のみ、実装はCHG-0006として2026-08-28〜29に別途完了〕、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、フロントエンド実装Phase4（UC-003銘柄詳細画面）完了、UC-010 Gate2/Gate3正式承認（買いシグナル7種の前提条件追加）完了、UC-010 Gate4完了・コミット（`ba239fe`）、フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了、およびフロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了〔2026-09-05、CHG-0011作業時に退避〕等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 > **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。300行超過に伴い「数値表示フォーマット修正完了（2026-08-28）」「UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0012 Phase 0作業時）。約298行に達したため「利確検討ラインの動的分岐 CHG-0006（2026-08-28〜29）」「売買シグナル画面の可読性改善（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0013／ADR-0012作業時）。300行超過に伴い「取込後サマリーレポートのグローバルナビタブ化 CHG-0008（2026-09-05）」の1エントリを退避済み（2026-09-12、F-012・CHG-0012のステータス記述を実態〔mainマージ済み〕に修正した際に発生した増分に対応）。
 
-## ポートフォリオ分類ダッシュボード（F-013・UC-013・ADR-0014・CHG-0015）Phase 0 ドキュメント先行（2026-09-08〜）
+## ポートフォリオ分類ダッシュボード（F-013・UC-013・ADR-0014・CHG-0015）Gate1/2最終確定・実装着手待ち（2026-09-08〜09-17）
 
 ### Decision
 
@@ -17,21 +17,25 @@
   - **D4 リバランスは個別銘柄のバケツを動かさない**: セクター偏りは per-stock ではなくセクター単位の警告バッジ＋サマリで表示（UC-005 の設計に合わせる）。偏り警告セクター全銘柄を「減らす」に落とすと直感と齟齬
   - **D6 構成比は `market_value` ベース**（CHG-0011 の算出流用）。「保つ」は積立コア/キープの内訳を明示（ガチホ核比率の可視化）。`new_entry` は分母・分子に含めない
   - **D8 段階リリース**: 第1段階＝表示レイヤー完結（`ClassifyHoldingsAction` 相当の純ロジック＋Blade、DBスキーマ変更なし・永続化なし、CHG-0006/CHG-0010 と同方式）。第2段階＝`portfolio_classifications`（`holding_snapshot_id` FK・`bucket`・`reason`）を取込時に書き遷移表示＋トレードジャーナル（別CR、Gate3実質承認要）
-  - **D9 画面**: サマリーレポート（UC-009）タブ最上部に「分類俯瞰」セクションを追加。新タブなし（`ui-guidelines.md` タブ数6個維持）。UC-009 の非開示 top-10/20 は当面併存
-- **★本人レビューで確定が必要な判断（Gate2）**: (1) 排他の優先順位、(2) `loss_review`×`add_on` 競合をどちらに置くか、(3) リバランスをバッジに留めるか `rebalance` サブバケツを立てるか、(4) キープの「要観察（`hold_watch`）」を第1段階から出すか、(5) UC-009 top-10/20 を分類俯瞰に置き換えるか併存か
+  - **D9 画面**: サマリーレポート（UC-009）タブ最上部に「分類俯瞰」セクションを追加。新タブなし（`ui-guidelines.md` タブ数6個維持）
+- **Gate2最終確定（2026-09-17）**: 5つの判断ポイントをすべて確定。(1) 排他優先順位は叩き台通り採用、(2) `loss_review`×`add_on`競合は`loss_review`採用＋「買い増し候補にも掲載」注記、(3) リバランスはバッジ＋セクターサマリ止まり（`rebalance`サブバケツは作らない）、(4) `hold_watch`（要観察）は第1段階から表示、(5) **UC-009のtop-10/20は分類俯瞰に完全に置き換え**（併存しない）
+- **(5)の実装確認で判明した追加論点（すべてGate2で確定）**: UC-009（`ShowImportSummaryReportAction`）が既存UCを再利用せず独自に3種の候補選定ロジック（`buildTakeProfitCandidates`/`buildRebalanceCandidates`/`buildNewCandidateItems`）・非開示合成スコア（`composite_score`、ADR-0003）を重複実装していたことが判明。置き換えにあわせて退役させる（ADR-0014 D9-1）。永続化（`import_summary_reports`/`import_summary_report_items`）は書き込み専用・読み返し機能なしと判明したため廃止（`ImportCsvAction`のプレースホルダー行作成も削除、D9-2）。`portfolio_headline`はバケツ件数の集計文に変更（D9-3）。各行の一言評価（`bucket_reason`）は独自文章生成をやめ`SignalCriteriaEvaluator`の達成度データから機械生成（シンプル・理由明快限定、D9-4）。バケツ内ソート順を新規に全確定（D10）: `add_on`/`loss_review`/`new_entry`は供給元Actionの既存流用、`take_profit`は新規設計しUC-004本体`ShowSignalListAction`に実装（D10-1、本CR唯一の既存UC改修）、`hold`は`hold_watch`優先→含み損益率順、`core_accumulation`は評価額順、セクター偏りサマリは超過幅順。ADR-0003はSuperseded（D11）。`WatchedTheme`ベースの新規候補ロジックは退役（実データ確認済み・登録0件のため実質影響なし、モデル自体はF-005用に残置）
+- **本CRのスコープ外として`accuracy-improvement-backlog.md`へ記録**: `hold`内の「好調キープ強調」（判定基準が既存UCに無く新規閾値の発明になるため見送り）、20%アクティブ枠の予算トラッキング（D7、余力の別入力手段が必要）
 - 追加観点として本人に提示済み（別途 backlog 化候補）: インカム貢献度／単一銘柄集中度／買付余力・現金比率（20%枠トラッキングの分母、要別入力）／為替エクスポージャー／口座配置最適化／投資テーゼの陳腐化検知
 
 ### Files touched
 
-**ドキュメント（Phase 0、本セッション、`feat/f012-favorites-watchlist` ブランチ上で作業）**: `docs/adr/ADR-0014-portfolio-bucket-classification.md`（新規、Status: Proposed）、`docs/product/use-cases.md`（UC一覧に UC-013・UC-013 節新設・承認記録行）、`docs/product/requirements.md`（2章 IN・4章 F-013 行・7章フェーズ表＋段落）、`docs/rcid/traceability-matrix.md`（F-013 マトリクス行・CHG-0015 変更追跡行）、`docs/ai-context/glossary.md`（バケツ分類／分類俯瞰セクション／積立・インデックスコア／分類遷移）、`docs/ai-context/module-map.md`（`app/Actions/Portfolio/`）、`docs/product/ui-guidelines.md`（サマリーレポートタブの分類俯瞰セクション）、`PLAN.md`（本エントリ）
+**ドキュメント（Phase 0、`feat/f012-favorites-watchlist` ブランチ上で作業、2026-09-08）**: `docs/adr/ADR-0014-portfolio-bucket-classification.md`（新規、Status: Proposed）、`docs/product/use-cases.md`（UC一覧に UC-013・UC-013 節新設・承認記録行）、`docs/product/requirements.md`（2章 IN・4章 F-013 行・7章フェーズ表＋段落）、`docs/rcid/traceability-matrix.md`（F-013 マトリクス行・CHG-0015 変更追跡行）
 
-**コード**: 未着手（F-012 マージ後）。実装ステップ（第1段階: Cycle 1 `ClassifyHoldingsAction` の純ロジック → Cycle 2 サマリーレポートタブへのセクション追加、各 Red→Gate4→Green→Refactor）はプラン確定時に詳細化
+**ドキュメント（Gate2最終確定、`feat/f013-portfolio-buckets` ブランチ、2026-09-17）**: `docs/adr/ADR-0014-portfolio-bucket-classification.md`（Status: Accepted、D3〜D5・D9の★判断ポイントを確定内容で置換、D9-1〜D9-4・D10・D10-1・D11を新設）、`docs/adr/ADR-0003-f009-scoring-transparency-relaxation.md`（Status: Superseded by ADR-0014）、`docs/product/use-cases.md`（UC-013業務ルール全面改訂・承認記録2行追加、UC-009業務ルール全面改訂〔top-10/20廃止・分類俯瞰への委譲〕、UC-004に並び順ルール追加）、`docs/product/requirements.md`（F-013説明改訂、UC-004改修・UC-009ロジック退役を明記）、`docs/architecture/data-model.md`（`import_summary_reports`/`import_summary_report_items`に書き込み廃止の注記、初期パラメータ値表にバケツ内ソート順5行追加・UC-009の件数区分/合成スコア重み付け2行を廃止、承認記録・変更履歴各1行）、`docs/rcid/traceability-matrix.md`（F-013行・CHG-0015行を確定内容に更新）、`docs/product/accuracy-improvement-backlog.md`（`hold`好調キープ強調・20%アクティブ枠トラッキングの2行追加）、`PLAN.md`（本エントリ）
+
+**コード**: 未着手（F-012 マージ後、マージ済み）。実装ステップ（第1段階: Cycle 1 `ClassifyHoldingsAction` の純ロジック → Cycle 2 サマリーレポートタブへのセクション追加・UC-009旧ロジック削除 → Cycle 3 `ShowSignalListAction`への`take_profit`並び順追加、各 Red→Gate4→Green→Refactor）はプラン確定時に詳細化
 
 ### Status
 
-Phase 0（ドキュメント先行）完了。**Gate 1（requirements.md）／Gate 2（use-cases.md UC-013）は本人レビュー待ち**。第1段階は DB スキーマ変更を伴わないため Gate 3 は影響範囲確認のみ（第2段階の `portfolio_classifications` は別CRで Gate 3 実質承認）。実装は F-012 マージ後、`feat/f013-portfolio-buckets` 等の新ブランチで。
+**Gate1（requirements.md）／Gate2（use-cases.md UC-013）を2026-09-17に本人が最終承認**。第1段階は DB スキーマ変更を伴わないため Gate 3 は影響範囲確認のみ（2026-09-17確認済み。第2段階の `portfolio_classifications` は別CRで Gate 3 実質承認）。実装は F-012 マージ後（マージ済み）、ブランチ `feat/f013-portfolio-buckets` で。次はTDDサイクル（Cycle 1: `ClassifyHoldingsAction`のRed）から。
 
-> **ブランチ状況の注意（2026-09-08）**: 本 Phase 0 作業は `feat/f012-favorites-watchlist` ブランチ上で行ったが、同ブランチでは並行して別セッションが F-012 実装（Cycle 2 まで）と CHG-0013 成長率修正の未コミット作業を進めており、作業中に `git reset`／ブランチ往復が複数回発生した（glossary.md への追記が一度巻き戻され再適用）。本エントリのドキュメント変更はコミット前で、別セッションのコミット・リセットで再度巻き戻るリスクがある。ADR-0014（未追跡ファイル）は影響を受けない。コミット単位の切り分けは本人判断待ち。
+> **ブランチ状況の補足**: Phase 0（2026-09-08）は当時の`feat/f012-favorites-watchlist`ブランチ上で行われ、F-012マージ（`444ee65`）でmainに統合済み。Gate2最終確定分（2026-09-17）はmain（`4d6071e`）から新規に切った`feat/f013-portfolio-buckets`ブランチ上で作業（他の未マージ機能ブランチ〔`feat/chg0016-candidate-table-sticky-header`〕とは独立）。
 
 ## お気に入り未保有銘柄ウォッチリスト／新規投資候補画面の刷新（F-012・UC-012・ADR-0013・CHG-0014）実装完了・mainマージ済み（2026-09-06〜09-12）
 
