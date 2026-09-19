@@ -207,12 +207,12 @@ describe('SignalCriteriaEvaluator: 判定チェックリスト（CHG-0007）', f
             }
         });
 
-        test('evaluateBuy はテクニカル7項目・財務4項目とグループ別サマリを返す', function () {
+        test('evaluateBuy はテクニカル9項目（CHG-0018/ADR-0015でPER・PBRを追加）・財務4項目とグループ別サマリを返す', function () {
             $result = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet());
 
-            expect($result['technical'])->toHaveCount(7);
+            expect($result['technical'])->toHaveCount(9);
             expect($result['fundamental'])->toHaveCount(4);
-            expect($result['summary']['technical']['total'])->toBe(7);
+            expect($result['summary']['technical']['total'])->toBe(9);
             expect($result['summary']['fundamental']['total'])->toBe(4);
         });
     });
@@ -376,11 +376,53 @@ describe('SignalCriteriaEvaluator: 判定チェックリスト（CHG-0007）', f
     });
 
     describe('買い増し候補（evaluateBuy）', function () {
-        test('全項目を満たす銘柄はテクニカル7/7・財務4/4が met になる', function () {
+        test('全項目を満たす銘柄はテクニカル7/9・財務4/4が met になる（PER・PBRはbuyMetricsAllMet()未設定のためunavailable、CHG-0018/ADR-0015）', function () {
             $result = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet());
 
-            expect($result['summary']['technical'])->toMatchArray(['met' => 7, 'near' => 0, 'total' => 7]);
+            // buyMetricsAllMet()はper/pbrキーを持たないため、この2項目は
+            // unavailable（met/nearに数えない）。totalのみ9に増える。
+            expect($result['summary']['technical'])->toMatchArray(['met' => 7, 'near' => 0, 'total' => 9]);
             expect($result['summary']['fundamental'])->toMatchArray(['met' => 4, 'near' => 0, 'total' => 4]);
+        });
+
+        // -------------------------------------------------------------
+        // CHG-0018 / ADR-0015 D3: PER・PBRチップ（テクニカル8・9項目目）
+        // -------------------------------------------------------------
+        test('evaluateBuy のテクニカル配列の末尾2項目はPER・PBRである', function () {
+            $result = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet());
+
+            expect($result['technical'])->toHaveCount(9);
+            expect($result['technical'][7]['label'])->toBe('PER');
+            expect($result['technical'][8]['label'])->toBe('PBR');
+        });
+
+        test('PERは「≦15.0」で判定し、12.0→met・20.0→unmet・16.5→near（8割バッファ内）・null→unavailable', function () {
+            $met = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet(['per' => 12.0]));
+            $unmet = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet(['per' => 20.0]));
+            $near = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet(['per' => 16.5]));
+            $unavailable = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet(['per' => null]));
+
+            expect(criterionRow($met['technical'], 'PER')['status'])->toBe('met');
+            expect(criterionRow($unmet['technical'], 'PER')['status'])->toBe('unmet');
+            expect(criterionRow($near['technical'], 'PER')['status'])->toBe('near');
+            expect(criterionRow($unavailable['technical'], 'PER')['status'])->toBe('unavailable');
+            expect(criterionRow($unavailable['technical'], 'PER')['value_label'])->toBe('—');
+        });
+
+        test('PBRは判定基準を持たない実測値表示のため、値があれば met/near/unmet のいずれでもない info、nullなら unavailable', function () {
+            $withValue = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet(['pbr' => 3.5]));
+            $withoutValue = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet(['pbr' => null]));
+
+            $row = criterionRow($withValue['technical'], 'PBR');
+            expect($row['status'])->toBe('info');
+            expect($row['status'])->not->toBe('met');
+            expect($row['status'])->not->toBe('near');
+            expect($row['status'])->not->toBe('unmet');
+            expect($row['value_label'])->not->toBe('—');
+
+            $unavailableRow = criterionRow($withoutValue['technical'], 'PBR');
+            expect($unavailableRow['status'])->toBe('unavailable');
+            expect($unavailableRow['value_label'])->toBe('—');
         });
 
         // CR (2026-09-06, CHG-0012 / ADR-0011): 買い増し候補の営業利益率チップ

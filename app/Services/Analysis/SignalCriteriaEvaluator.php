@@ -215,6 +215,24 @@ final class SignalCriteriaEvaluator
                 'gte',
                 fn (float $v) => number_format($v, 2).'倍',
             ),
+            $this->row(
+                'PER',
+                sprintf('≤%s', number_format(BuySignalDeterminationService::PER_UNDERVALUED_THRESHOLD, 1)),
+                $metrics['per'] ?? null,
+                BuySignalDeterminationService::PER_UNDERVALUED_THRESHOLD,
+                'lte',
+                fn (float $v) => number_format($v, 1),
+            ),
+            $this->row(
+                'PBR',
+                // ADR-0015 D3: PBRは判定基準を持たない参考表示のため
+                // threshold_labelは空にする。
+                '',
+                $metrics['pbr'] ?? null,
+                0.0,
+                'none',
+                fn (float $v) => number_format($v, 2),
+            ),
         ];
 
         $fundamental = $this->fundamentalRows($metrics);
@@ -430,6 +448,12 @@ final class SignalCriteriaEvaluator
     {
         if ($value === null) {
             return 'unavailable';
+        }
+
+        // none: 判定基準を持たない実測値表示（ADR-0015 D3、PBR）。
+        // met/near/unmetのいずれでもない中立ステータス'info'を返す。
+        if ($direction === 'none') {
+            return 'info';
         }
 
         $buffer = abs($threshold) * self::NEAR_BUFFER_RATE;

@@ -58,7 +58,16 @@ final class BuySignalDeterminationService
 
     public const VOLUME_SPIKE_RATIO = 1.5;
 
-    public function __construct(private readonly TechnicalIndicatorCalculator $calculator) {}
+    /**
+     * PER単体シグナル（CHG-0018 / ADR-0015 D2）の閾値。PBRはAND条件に含めない
+     * （ADR-0015 D2 実測検証セクション参照）。
+     */
+    public const PER_UNDERVALUED_THRESHOLD = 15.0;
+
+    public function __construct(
+        private readonly TechnicalIndicatorCalculator $calculator,
+        private readonly FundamentalHealthEvaluator $healthEvaluator,
+    ) {}
 
     /**
      * @param  array<int, array{date: string, close: float, volume: int}>  $priceHistory  Ascending (oldest-first) weekly price history.
@@ -69,10 +78,24 @@ final class BuySignalDeterminationService
         ?float $marketReturn13w = null,
         ?float $sectorReturn13w = null,
         ?float $pegRatio = null,
+        ?float $per = null,
+        ?float $equityRatio = null,
+        ?float $roe = null,
+        ?float $revenueGrowth = null,
+        ?float $operatingIncomeGrowth = null,
+        ?float $operatingMargin = null,
     ): array {
         $current = $this->calculator->calculate($priceHistory, $marketReturn13w, $sectorReturn13w);
 
-        if (! $this->preconditionsSatisfied($priceHistory, $current)) {
+        $fundamentalStatus = $this->healthEvaluator->evaluate(
+            $equityRatio,
+            $roe,
+            $revenueGrowth,
+            $operatingIncomeGrowth,
+            $operatingMargin,
+        );
+
+        if (! $this->preconditionsSatisfied($priceHistory, $current, $fundamentalStatus)) {
             return [];
         }
 
@@ -111,6 +134,10 @@ final class BuySignalDeterminationService
             $signals[] = $signal;
         }
 
+        if (($signal = $this->determinePerUndervalued($per)) !== null) {
+            $signals[] = $signal;
+        }
+
         return $signals;
     }
 
@@ -118,25 +145,11 @@ final class BuySignalDeterminationService
      * @param  array<int, array{date: string, close: float, volume: int}>  $priceHistory
      * @param  array<string, float|int|null>  $current
      */
-    private function preconditionsSatisfied(array $priceHistory, array $current): bool
+    private function preconditionsSatisfied(array $priceHistory, array $current, string $fundamentalStatus): bool
     {
-        $week52High = $current['week52_high'];
-
-        if ($week52High === null) {
-            return false;
-        }
-
-        $threshold = $week52High * self::RECENT_STRENGTH_THRESHOLD_RATE;
-        $recentWindow = array_slice($priceHistory, -self::RECENT_STRENGTH_WINDOW_WEEKS);
-
-        $recentlyStrong = false;
-
-        foreach ($recentWindow as $row) {
-            if ((float) $row['close'] >= $threshold) {
-                $recentlyStrong = true;
-                break;
-            }
-        }
+        // 前提条件A（ADR-0015 D1）: 価格面（直近13週以内に52週高値-15%以内へ
+        // 到達）または財務健全性passedのOR条件に緩和する。
+        $recentlyStrong = $this->recentlyNearWeek52High($priceHistory, $current) || $fundamentalStatus === 'passed';
 
         if (! $recentlyStrong) {
             return false;
@@ -149,6 +162,33 @@ final class BuySignalDeterminationService
         }
 
         return true;
+    }
+
+    /**
+     * 前提条件Aの価格面判定: 直近13週以内に終値が week52_high * 0.85 以上へ
+     * 到達しているか。
+     *
+     * @param  array<int, array{date: string, close: float, volume: int}>  $priceHistory
+     * @param  array<string, float|int|null>  $current
+     */
+    private function recentlyNearWeek52High(array $priceHistory, array $current): bool
+    {
+        $week52High = $current['week52_high'];
+
+        if ($week52High === null) {
+            return false;
+        }
+
+        $threshold = $week52High * self::RECENT_STRENGTH_THRESHOLD_RATE;
+        $recentWindow = array_slice($priceHistory, -self::RECENT_STRENGTH_WINDOW_WEEKS);
+
+        foreach ($recentWindow as $row) {
+            if ((float) $row['close'] >= $threshold) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -330,6 +370,27 @@ final class BuySignalDeterminationService
             return [
                 'signal_type' => 'peg_undervalued',
                 'reason_summary' => sprintf('PEGレシオが%sと割安水準です', $this->formatNumber($pegRatio, 1)),
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * PER単体シグナル（CHG-0018 / ADR-0015 D2）。PBRはAND条件に含めない。
+     *
+     * @return array{signal_type: string, reason_summary: string}|null
+     */
+    private function determinePerUndervalued(?float $per): ?array
+    {
+        if ($per === null) {
+            return null;
+        }
+
+        if ($per <= self::PER_UNDERVALUED_THRESHOLD) {
+            return [
+                'signal_type' => 'per_undervalued',
+                'reason_summary' => sprintf('PERが%sと割安水準です', $this->formatNumber($per, 1)),
             ];
         }
 

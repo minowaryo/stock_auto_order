@@ -273,6 +273,12 @@ class FetchExternalMarketDataAction
                         $marketReturn13w,
                         $sectorReturn13w,
                         $pegRatio,
+                        per: $fundamental['per'] ?? null,
+                        equityRatio: $fundamental['equity_ratio'] ?? null,
+                        roe: $fundamental['roe'] ?? null,
+                        revenueGrowth: $fundamental['revenue_growth'] ?? null,
+                        operatingIncomeGrowth: $fundamental['operating_income_growth'] ?? null,
+                        operatingMargin: $fundamental['operating_margin'] ?? null,
                     );
 
                     // Re-determination: same drop-then-recreate pattern as the

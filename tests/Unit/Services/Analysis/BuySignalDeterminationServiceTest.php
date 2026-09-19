@@ -3,6 +3,7 @@
 namespace Tests\Unit\Services\Analysis;
 
 use App\Services\Analysis\BuySignalDeterminationService;
+use App\Services\Analysis\FundamentalHealthEvaluator;
 use App\Services\Analysis\TechnicalIndicatorCalculator;
 
 /*
@@ -153,7 +154,32 @@ function bsdSignalTypes(array $signals): array
 
 function bsdService(): BuySignalDeterminationService
 {
-    return new BuySignalDeterminationService(new TechnicalIndicatorCalculator);
+    return new BuySignalDeterminationService(new TechnicalIndicatorCalculator, new FundamentalHealthEvaluator);
+}
+
+/**
+ * 「RSI反発条件自体は満たすが、直近13週以内に52週高値付近へ到達した実績がない
+ * 場合（前提条件A不成立）」テスト（下記「全シグナル共通の前提条件による抑制」
+ * セクション）内でインラインに定義されている、価格面で前提条件Aが不成立になる
+ * 長期低迷プレリュード（300から-4/週で下落し、末尾3週だけ136/137/138に戻す、
+ * 39要素）を、CHG-0018のOR緩和セクションでも再利用するための複製ヘルパー。
+ * 既存テストのインライン定義は無改修のまま残し、値のみ完全一致させている。
+ *
+ * @return array<int, float>
+ */
+function bsdLongDeclinePrelude(): array
+{
+    $prelude = [];
+
+    for ($i = 0; $i <= 35; $i++) {
+        $prelude[] = 300 - 4 * $i;
+    }
+
+    $prelude[] = 136;
+    $prelude[] = 137;
+    $prelude[] = 138;
+
+    return array_map(fn (int $v) => (float) $v, $prelude);
 }
 
 /**
@@ -469,6 +495,66 @@ test('PEGレシオが0ちょうどの場合、peg_undervaluedシグナルは発�
 });
 
 // -----------------------------------------------------------------------
+// 8. per_undervalued（PER単体シグナル、CHG-0018／ADR-0015 D2）
+// -----------------------------------------------------------------------
+// PBRはAND条件に含めない（ADR-0015 D2）ため、per_undervaluedはPERのみで
+// 判定する。peg_undervaluedと同じ「穏やかな52週上昇」フィクスチャ
+// （range(100, 151)）を再利用する。このフィクスチャは前提条件A・Bを満たし
+// つつ、他のいかなる個別シグナルの条件も満たさないことを検証済み
+// （上記peg_undervaluedセクションの説明コメント参照）。
+
+test('PERが15.0以下で、全シグナル共通の前提条件も満たす場合、per_undervaluedシグナルが発生する（境界値）', function () {
+    $closes = range(100, 151); // 52週連続 +1/週
+    $priceHistory = bsdPriceHistory($closes);
+
+    // Act
+    $result = bsdService()->determine($priceHistory, marketReturn13w: 0.0, per: 15.0);
+
+    // Assert: このフィクスチャは他のいかなるシグナルも発生しないため、
+    // per_undervaluedのみが単独で含まれることまで厳密に確認する
+    expect($result)->toHaveCount(1);
+    expect($result[0]['signal_type'])->toBe('per_undervalued');
+    expect($result[0]['reason_summary'])->toContain('PER');
+});
+
+test('PERが15.0を超える場合、per_undervaluedシグナルは発生しない（境界値）', function () {
+    $closes = range(100, 151);
+    $priceHistory = bsdPriceHistory($closes);
+
+    // Act
+    $result = bsdService()->determine($priceHistory, marketReturn13w: 0.0, per: 15.01);
+
+    // Assert
+    expect($result)->toBe([]);
+});
+
+test('PERが渡されない（null）場合、per_undervaluedシグナルは発生しない', function () {
+    $closes = range(100, 151);
+    $priceHistory = bsdPriceHistory($closes);
+
+    // Act（per省略）
+    $result = bsdService()->determine($priceHistory, marketReturn13w: 0.0);
+
+    // Assert
+    expect(bsdSignalTypes($result))->not->toContain('per_undervalued');
+    expect($result)->toBe([]);
+});
+
+test('PERが10.0のとき、reason_summaryにPERの値が含まれる', function () {
+    $closes = range(100, 151);
+    $priceHistory = bsdPriceHistory($closes);
+
+    // Act
+    $result = bsdService()->determine($priceHistory, marketReturn13w: 0.0, per: 10.0);
+
+    // Assert
+    $signal = bsdFindSignal($result, 'per_undervalued');
+    expect($signal)->not->toBeNull();
+    expect($signal['reason_summary'])->toContain('PER');
+    expect($signal['reason_summary'])->toContain('10');
+});
+
+// -----------------------------------------------------------------------
 // 全シグナル共通の前提条件による抑制
 // -----------------------------------------------------------------------
 // use-cases.md UC-010業務ルール「全シグナル共通の前提条件（2026-08-23追加）」・
@@ -521,6 +607,99 @@ test('RSI反発条件自体は満たすが、marketReturn13wが渡されない�
 
     // Assert: 前提条件Bが全シグナル共通のゲートであることを示すため、
     // rsi_oversold_reboundだけでなく結果全体が空になることまで確認する
+    expect(bsdSignalTypes($result))->not->toContain('rsi_oversold_rebound');
+    expect($result)->toBe([]);
+});
+
+// -----------------------------------------------------------------------
+// 前提条件Aの財務健全性によるOR緩和（CHG-0018／ADR-0015 D1）
+// -----------------------------------------------------------------------
+// ADR-0015 D1: 前提条件Aを「価格面（直近13週以内に52週高値-15%以内へ到達）」
+// または「FundamentalHealthEvaluator::evaluate()がpassed」のOR条件に緩和する。
+// 前提条件B（相対力>=-5pt）は変更しない。
+//
+// 上記「RSI反発条件自体は満たすが…（前提条件A不成立）」テストと同一の
+// bsdLongDeclinePrelude()（価格面では前提条件Aが不成立、verified: week52_high=300、
+// 直近13週最大134 < 300*0.85=255）+同一のRSI反発テイルを再利用し、財務健全性の
+// 引数だけを変えて検証する。
+
+test('前提条件Aが価格面では不成立でも、財務健全性がpassedの場合はOR条件により成立し、rsi_oversold_reboundシグナルが発生する', function () {
+    // Arrange: bsdLongDeclinePrelude()（価格面で前提条件A不成立）+「1.
+    // rsi_oversold_rebound」のFIREテストと同一のRSI反発テイル。
+    // marketReturn13w=-35.0は前提条件Aのテストと同一（前提条件Bは独立して成立、
+    // relative_strength_vs_market≈+3.84、verified）。
+    // equityRatio=50.0・roe=15.0・revenueGrowth=5.0・operatingIncomeGrowth=5.0・
+    // operatingMargin=15.0はFundamentalHealthEvaluator::evaluate()の基準
+    // （自己資本比率40%以上・ROE10%以上・成長率>0%・営業利益率10%以上）を
+    // すべて満たすため'passed'を返す。
+    $closes = array_merge(bsdLongDeclinePrelude(), [134, 130, 126, 122, 118, 114, 110, 106, 102, 98, 94, 90, 95]);
+    $priceHistory = bsdPriceHistory($closes);
+
+    // Act
+    $result = bsdService()->determine(
+        $priceHistory,
+        marketReturn13w: -35.0,
+        equityRatio: 50.0,
+        roe: 15.0,
+        revenueGrowth: 5.0,
+        operatingIncomeGrowth: 5.0,
+        operatingMargin: 15.0,
+    );
+
+    // Assert: 前提条件Aの価格面が不成立でも、財務健全性passedによるOR成立で
+    // rsi_oversold_reboundシグナルが発生する
+    $signal = bsdFindSignal($result, 'rsi_oversold_rebound');
+    expect($signal)->not->toBeNull();
+});
+
+test('前提条件Aが価格面で不成立、かつ財務健全性もpassedにならない場合、依然としてrsi_oversold_reboundシグナルは発生しない', function () {
+    // Arrange: 上記と全く同じ価格系列・marketReturn13wだが、成長率をマイナス
+    // （revenueGrowth: -5.0, operatingIncomeGrowth: -5.0）にし、
+    // FundamentalHealthEvaluator::evaluate()が'failed'を返すようにする
+    // （自己資本比率・ROE・営業利益率は基準を満たすが、成長率条件のみ不成立）。
+    $closes = array_merge(bsdLongDeclinePrelude(), [134, 130, 126, 122, 118, 114, 110, 106, 102, 98, 94, 90, 95]);
+    $priceHistory = bsdPriceHistory($closes);
+
+    // Act
+    $result = bsdService()->determine(
+        $priceHistory,
+        marketReturn13w: -35.0,
+        equityRatio: 50.0,
+        roe: 15.0,
+        revenueGrowth: -5.0,
+        operatingIncomeGrowth: -5.0,
+        operatingMargin: 15.0,
+    );
+
+    // Assert: 前提条件Aは価格面・財務健全性面のどちらでも成立しないため、
+    // OR緩和後も依然としてrsi_oversold_reboundシグナルは発生しない
+    expect(bsdSignalTypes($result))->not->toContain('rsi_oversold_rebound');
+    expect($result)->toBe([]);
+});
+
+test('財務健全性がpassedでも、前提条件B（相対力>=-5pt）が不成立の場合はシグナルが発生しない', function () {
+    // Arrange: 上記のOR成立テストと全く同じ価格系列・財務健全性引数
+    // （passed）だが、marketReturn13wを0.0に変更する。
+    // stockReturn13w=(95-138)/138*100≈-31.16%（bsdLongDeclinePrelude()の
+    // index38=138を起点とするため、価格面が変わっても直近13週の値は同一）
+    // に対し、relative_strength_vs_market=-31.16-0.0≈-31.16(<-5.0)となり
+    // 前提条件Bが不成立になる（verified）。
+    $closes = array_merge(bsdLongDeclinePrelude(), [134, 130, 126, 122, 118, 114, 110, 106, 102, 98, 94, 90, 95]);
+    $priceHistory = bsdPriceHistory($closes);
+
+    // Act
+    $result = bsdService()->determine(
+        $priceHistory,
+        marketReturn13w: 0.0,
+        equityRatio: 50.0,
+        roe: 15.0,
+        revenueGrowth: 5.0,
+        operatingIncomeGrowth: 5.0,
+        operatingMargin: 15.0,
+    );
+
+    // Assert: 前提条件Aが財務健全性passedによりOR成立しても、前提条件Bは
+    // 独立して必須であるため、不成立ならシグナルは発生しない
     expect(bsdSignalTypes($result))->not->toContain('rsi_oversold_rebound');
     expect($result)->toBe([]);
 });

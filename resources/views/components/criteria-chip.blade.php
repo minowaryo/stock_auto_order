@@ -11,6 +11,9 @@
         $item['status'] === 'met' => 'bg-green-100 text-green-800 border-green-200',
         $item['status'] === 'near' => 'bg-green-50 text-green-700 border-green-100',
         $item['status'] === 'unmet' => 'bg-slate-50 text-slate-500 border-app-border',
+        // info: 判定基準を持たない実測値表示（ADR-0015 D3、PBR）。unavailableとは
+        // 視覚的に区別できるニュートラルな配色にする。
+        $item['status'] === 'info' => 'bg-slate-50 text-slate-700 border-app-border',
         default => 'bg-slate-50 text-slate-400 border-app-border', // unavailable
     };
 @endphp

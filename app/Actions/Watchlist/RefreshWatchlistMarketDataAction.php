@@ -171,6 +171,12 @@ class RefreshWatchlistMarketDataAction
             $marketReturn13w,
             null,
             $fundamental['peg_ratio'] ?? null,
+            per: $fundamental['per'] ?? null,
+            equityRatio: $fundamental['equity_ratio'] ?? null,
+            roe: $fundamental['roe'] ?? null,
+            revenueGrowth: $fundamental['revenue_growth'] ?? null,
+            operatingIncomeGrowth: $fundamental['operating_income_growth'] ?? null,
+            operatingMargin: $fundamental['operating_margin'] ?? null,
         );
 
         DB::transaction(function () use ($holding, $technical, $fundamental, $buySignals) {
