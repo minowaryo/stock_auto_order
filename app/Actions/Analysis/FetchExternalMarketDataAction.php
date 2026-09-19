@@ -212,6 +212,8 @@ class FetchExternalMarketDataAction
                             FinancialStatement::updateOrCreate(
                                 ['holding_id' => $holding->id, 'fiscal_period' => $statement['disclosed_date']],
                                 [
+                                    'period_type' => $statement['period_type'],
+                                    'fiscal_year_end' => $statement['fiscal_year_end'],
                                     'revenue' => $statement['net_sales'],
                                     'operating_income' => $statement['operating_profit'],
                                     'eps' => $statement['eps'],

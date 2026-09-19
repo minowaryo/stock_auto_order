@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'holding_id',
     'fiscal_period',
+    'period_type',
+    'fiscal_year_end',
     'revenue',
     'operating_income',
     'eps',

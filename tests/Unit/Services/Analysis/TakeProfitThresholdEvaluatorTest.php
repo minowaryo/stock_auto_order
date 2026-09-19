@@ -181,11 +181,24 @@ describe('TakeProfitThresholdEvaluator: 利確検討ラインの動的分岐判�
             expect($result['second_tier_price_multiplier'])->toEqualWithDelta(1.35, 0.001);
         });
 
-        test('シグナル0件だが自己資本比率・ROEが基準を満たし成長率のみfailed（両方マイナス）の場合、通常モードを返す', function () {
-            // FundamentalHealthEvaluatorが'failed'を返す境界（自己資本比率・
-            // ROEは基準を満たすが成長率が両方マイナス）でも高水準モードには
-            // ならないことを確認する。営業利益率は健全。
+        test('シグナル0件・自己資本比率58.0%/ROE15.2%（D1のRESCUE閾値も満たす）で成長率が両方マイナスの場合、D1救済により高水準モードを返す', function () {
+            // 2026-09-19改訂（CHG-0017／ADR-0015 D1）: 本テストは元々
+            // 「自己資本比率・ROEは基準を満たすが成長率が両方マイナスなら
+            // 高水準モードにならない」ことの確認だったが、これはまさに
+            // ADR-0015 D1（ROE≧15%かつ自己資本比率≧50%なら成長率を問わず
+            // 財務健全性を救済する）が対象とするシナリオそのもの。
+            // FundamentalHealthEvaluatorの挙動変更に伴い、期待値を
+            // 'high_water_mark' に更新する（意図した挙動変化であり回帰ではない）。
             $result = takeProfitThresholdEvaluator()->evaluate(0, 58.0, 15.2, -3.0, -1.0, 18.0);
+
+            expect($result['mode'])->toBe('high_water_mark');
+        });
+
+        test('シグナル0件・自己資本比率45.0%/ROE12.0%（基本条件は満たすがD1のRESCUE閾値は満たさない）で成長率が両方マイナスの場合、通常モードを返す', function () {
+            // D1救済が発動しない境界（RESCUE閾値50%/15%未満）でも、財務健全性
+            // 判定自体は成長率マイナスのためfailedのまま、通常モードを維持
+            // することを確認する（上記テストとの対比）。
+            $result = takeProfitThresholdEvaluator()->evaluate(0, 45.0, 12.0, -3.0, -1.0, 18.0);
 
             expect($result['mode'])->toBe('normal');
         });
@@ -219,8 +232,17 @@ describe('TakeProfitThresholdEvaluator: 利確検討ラインの動的分岐判�
             expect($result['second_tier_price_multiplier'])->toEqualWithDelta(1.35, 0.001);
         });
 
-        test('シグナル0件だが財務健全性がunavailable（自己資本比率・ROEは基準を満たすが成長率データが両方null）の場合、通常モードを返す', function () {
+        test('シグナル0件・自己資本比率58.0%/ROE15.2%（D1のRESCUE閾値も満たす）で成長率データが両方nullの場合、D1救済により高水準モードを返す', function () {
+            // 2026-09-19改訂（CHG-0017／ADR-0015 D1）: 上記と同じ理由で期待値を
+            // 'high_water_mark' に更新（D1は成長率が「マイナス」だけでなく
+            // 「未取得（null）」の場合も救済対象とする設計）。
             $result = takeProfitThresholdEvaluator()->evaluate(0, 58.0, 15.2, null, null, 18.0);
+
+            expect($result['mode'])->toBe('high_water_mark');
+        });
+
+        test('シグナル0件・自己資本比率45.0%/ROE12.0%（D1のRESCUE閾値は満たさない）で成長率データが両方nullの場合、通常モードを返す', function () {
+            $result = takeProfitThresholdEvaluator()->evaluate(0, 45.0, 12.0, null, null, 18.0);
 
             expect($result['mode'])->toBe('normal');
         });

@@ -32,7 +32,10 @@ final class SignalDeterminationService
 
     public const VOLUME_SPIKE_RATIO = 1.5;
 
-    public function __construct(private readonly TechnicalIndicatorCalculator $calculator) {}
+    public function __construct(
+        private readonly TechnicalIndicatorCalculator $calculator,
+        private readonly LowGrowthDeterminer $lowGrowthDeterminer = new LowGrowthDeterminer,
+    ) {}
 
     /**
      * @param  array<int, array{date: string, close: float, volume: int}>  $priceHistory  Ascending (oldest-first) weekly price history.
@@ -43,6 +46,8 @@ final class SignalDeterminationService
         ?float $marketReturn13w = null,
         ?float $sectorReturn13w = null,
         ?float $pegRatio = null,
+        ?float $revenueGrowth = null,
+        ?float $operatingIncomeGrowth = null,
     ): array {
         $current = $this->calculator->calculate($priceHistory, $marketReturn13w, $sectorReturn13w);
         $previous = $this->calculator->calculate(array_slice($priceHistory, 0, -1));
@@ -68,7 +73,8 @@ final class SignalDeterminationService
             $signals[] = $signal;
         }
 
-        if (($signal = $this->determinePegOvervalued($pegRatio)) !== null) {
+        if (! $this->lowGrowthDeterminer->isLowGrowth($revenueGrowth, $operatingIncomeGrowth)
+            && ($signal = $this->determinePegOvervalued($pegRatio)) !== null) {
             $signals[] = $signal;
         }
 

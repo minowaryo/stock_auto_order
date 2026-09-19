@@ -38,13 +38,24 @@ final class FundamentalHealthEvaluator
     public const MIN_OPERATING_MARGIN = 10.0;
 
     /**
+     * 財務指標ベースの成長率救済経路（CHG-0017 / ADR-0015 D1）の専用閾値。
+     * 既存の MIN_ROE/MIN_EQUITY_RATIO より高い水準を課すことで、この救済
+     * 経路が基本条件をバイパスしない（閾値が入れ子の関係にある）ように
+     * する。data-model.md「財務指標ベースの成長率救済経路」行、値は叩き台
+     * （トライアル運用実績でのキャリブレーション対象）。
+     */
+    public const RESCUE_MIN_ROE = 15.0;
+
+    public const RESCUE_MIN_EQUITY_RATIO = 50.0;
+
+    /**
      * Returns 'passed' / 'unavailable' / 'failed' (see
      * tests/Unit/Services/Analysis/FundamentalHealthEvaluatorTest.php for the
      * rationale behind this 3-way string return, including the growth-rate
      * OR-condition added by the 2026-08-25 CR and the operating_margin 4th
      * criterion added by CHG-0012 / ADR-0011).
      */
-    public function evaluate(?float $equityRatio, ?float $roe, ?float $revenueGrowth, ?float $operatingIncomeGrowth, ?float $operatingMargin): string
+    public function evaluate(?float $equityRatio, ?float $roe, ?float $revenueGrowth, ?float $operatingIncomeGrowth, ?float $operatingMargin, ?float $avgRevenueGrowth = null, ?float $avgOperatingIncomeGrowth = null): string
     {
         if ($equityRatio === null || $roe === null) {
             return 'unavailable';
@@ -70,12 +81,28 @@ final class FundamentalHealthEvaluator
             return 'unavailable';
         }
 
-        if ($revenueGrowth === null && $operatingIncomeGrowth === null) {
+        // 財務指標ベースの成長率救済経路（CHG-0017 / ADR-0015 D1）: equity/
+        // roe/営業利益率の基準割れ・null判定を通過した後、成長率の値（マイナス
+        // でもnullでも）を問わず、ROE・自己資本比率が専用の高い閾値を満たせば
+        // 成長率条件を満たしたものとして扱う。成長率のnull判定・OR判定より
+        // 先に評価する。
+        if ($roe >= self::RESCUE_MIN_ROE && $equityRatio >= self::RESCUE_MIN_EQUITY_RATIO) {
+            return 'passed';
+        }
+
+        // 直近3期平均成長率のOR救済経路（CHG-0017 / ADR-0015 D2）: 単年度の
+        // revenue_growth/operating_income_growthに加え、平均revenue/
+        // operatingIncome成長率も成長率条件のOR判定に含める（4値OR）。
+        // 4値すべてがnullのときのみunavailableとする。
+        if ($revenueGrowth === null && $operatingIncomeGrowth === null
+            && $avgRevenueGrowth === null && $avgOperatingIncomeGrowth === null) {
             return 'unavailable';
         }
 
         $growthPositive = ($revenueGrowth !== null && $revenueGrowth > self::MIN_GROWTH_RATE)
-            || ($operatingIncomeGrowth !== null && $operatingIncomeGrowth > self::MIN_GROWTH_RATE);
+            || ($operatingIncomeGrowth !== null && $operatingIncomeGrowth > self::MIN_GROWTH_RATE)
+            || ($avgRevenueGrowth !== null && $avgRevenueGrowth > self::MIN_GROWTH_RATE)
+            || ($avgOperatingIncomeGrowth !== null && $avgOperatingIncomeGrowth > self::MIN_GROWTH_RATE);
 
         return $growthPositive ? 'passed' : 'failed';
     }

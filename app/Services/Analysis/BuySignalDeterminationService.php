@@ -58,7 +58,14 @@ final class BuySignalDeterminationService
 
     public const VOLUME_SPIKE_RATIO = 1.5;
 
-    public function __construct(private readonly TechnicalIndicatorCalculator $calculator) {}
+    public const PER_UNDERVALUED_THRESHOLD = 15.0;
+
+    public const DIVIDEND_YIELD_UNDERVALUED_THRESHOLD = 3.0;
+
+    public function __construct(
+        private readonly TechnicalIndicatorCalculator $calculator,
+        private readonly LowGrowthDeterminer $lowGrowthDeterminer = new LowGrowthDeterminer,
+    ) {}
 
     /**
      * @param  array<int, array{date: string, close: float, volume: int}>  $priceHistory  Ascending (oldest-first) weekly price history.
@@ -69,6 +76,10 @@ final class BuySignalDeterminationService
         ?float $marketReturn13w = null,
         ?float $sectorReturn13w = null,
         ?float $pegRatio = null,
+        ?float $revenueGrowth = null,
+        ?float $operatingIncomeGrowth = null,
+        ?float $per = null,
+        ?float $dividendYield = null,
     ): array {
         $current = $this->calculator->calculate($priceHistory, $marketReturn13w, $sectorReturn13w);
 
@@ -107,7 +118,7 @@ final class BuySignalDeterminationService
             $signals[] = $signal;
         }
 
-        if (($signal = $this->determinePegUndervalued($pegRatio)) !== null) {
+        if (($signal = $this->determinePegUndervalued($pegRatio, $revenueGrowth, $operatingIncomeGrowth, $per, $dividendYield)) !== null) {
             $signals[] = $signal;
         }
 
@@ -316,8 +327,37 @@ final class BuySignalDeterminationService
     /**
      * @return array{signal_type: string, reason_summary: string}|null
      */
-    private function determinePegUndervalued(?float $pegRatio): ?array
-    {
+    private function determinePegUndervalued(
+        ?float $pegRatio,
+        ?float $revenueGrowth,
+        ?float $operatingIncomeGrowth,
+        ?float $per,
+        ?float $dividendYield,
+    ): ?array {
+        if ($this->lowGrowthDeterminer->isLowGrowth($revenueGrowth, $operatingIncomeGrowth)) {
+            if ($per === null || $dividendYield === null) {
+                return null;
+            }
+
+            // Finnhub's peTTM passes negative values through as-is for
+            // loss-making companies (UsFundamentalIndicatorMapper), the same
+            // hazard ADR-0012 D4 already guards against for pegRatio below.
+            // Without a lower bound, a loss-making stock's negative PER would
+            // satisfy "<= 15.0" and be misread as cheap.
+            if ($per > 0.0 && $per <= self::PER_UNDERVALUED_THRESHOLD && $dividendYield >= self::DIVIDEND_YIELD_UNDERVALUED_THRESHOLD) {
+                return [
+                    'signal_type' => 'peg_undervalued',
+                    'reason_summary' => sprintf(
+                        'PERが%s倍・配当利回りが%s%%と低成長銘柄の割安水準です',
+                        $this->formatNumber($per, 1),
+                        $this->formatNumber($dividendYield, 1),
+                    ),
+                ];
+            }
+
+            return null;
+        }
+
         if ($pegRatio === null) {
             return null;
         }

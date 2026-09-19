@@ -507,3 +507,210 @@ describe('ADR-0012: 成長率は本決算(FY)どうしの前期比で算出す�
         expect($mapper->annualGrowth(fimFiveStatements(), 'eps'))->toEqualWithDelta(20.0, 0.0001);
     });
 });
+
+/*
+|--------------------------------------------------------------------------
+| ADR-0015 D2: averageAnnualGrowth() — 直近3〜5期平均成長率のOR救済経路
+|--------------------------------------------------------------------------
+|
+| Source of truth:
+|   - docs/adr/ADR-0015-value-cyclical-stock-judgment-branching.md (D2)
+|   - docs/architecture/data-model.md
+|     ("成長率OR救済の算出期数" / financial_statements.period_type /
+|     financial_statements.fiscal_year_end)
+|
+| App\Services\Analysis\FundamentalIndicatorMapper::averageAnnualGrowth()
+| does not exist yet. Every test below is expected to fail with a fatal
+| "Call to undefined method
+| App\Services\Analysis\FundamentalIndicatorMapper::averageAnnualGrowth()"
+| error — the intentional, expected Red state (same convention as the
+| operating_margin block above before CHG-0012's Green phase).
+|
+| Specified contract (task description + chosen fail-safe behavior for
+| missing values, documented inline at each relevant test):
+|   - Same FY-only filter + fiscal_year_end dedup + descending sort as
+|     annualGrowth() (duplicated logic is acceptable for this Cycle; a
+|     Refactor-phase extraction is out of scope here).
+|   - Computes the most recent `$periods` YoY growth rates (each comparing
+|     two consecutive FY rows, same formula as annualGrowth()) and returns
+|     their simple average.
+|   - Requires at least `$periods + 1` FY rows (to form `$periods`
+|     consecutive comparisons); otherwise returns null.
+|   - Chosen missing-value behavior (see below): if ANY of the `$periods`
+|     comparisons is unavailable (either side null, or the past side 0),
+|     the whole method returns null rather than averaging over the
+|     remaining computable periods. This matches annualGrowth()'s existing
+|     "fail-safe → null" pattern (annualGrowth() never partially computes;
+|     it's all-or-nothing), so averageAnnualGrowth() is kept consistent
+|     with it instead of introducing a different partial-average behavior.
+|   - `$periods` defaults to 3 (data-model.md: "3期・4期・5期のどれを採用す
+|     るかは実装時に実データで比較して確定" — 3 is the provisional default).
+|
+*/
+
+describe('ADR-0015 D2: averageAnnualGrowth()は直近$periods期のYoY成長率の単純平均を返す', function () {
+    /**
+     * 5期分のFY（本決算）行。disclosed_date降順・fiscal_year_end降順。
+     * net_salesは意図的に「なめらかでない」値にして、平均計算の取り違えを
+     * 検知しやすくしている。
+     *
+     * FY2026: net_sales=1200 <- FY2025比 (1200-1000)/1000*100 = +20%
+     * FY2025: net_sales=1000 <- FY2024比 (1000-800)/800*100  = +25%
+     * FY2024: net_sales=800  <- FY2023比 (800-500)/500*100   = +60%
+     * FY2023: net_sales=500  <- FY2022比 (500-400)/400*100   = +25%
+     * FY2022: net_sales=400
+     *
+     * 直近3期平均（periods=3、FY2026/2025/2024の3成長率）:
+     *   (20 + 25 + 60) / 3 = 35.0
+     *
+     * @return array<int, array{disclosed_date: string, period_type: string, fiscal_year_end: string, net_sales: float}>
+     */
+    function famgFiveFyStatements(): array
+    {
+        return [
+            ['disclosed_date' => '2026-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2026-03-31', 'net_sales' => 1200.0],
+            ['disclosed_date' => '2025-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2025-03-31', 'net_sales' => 1000.0],
+            ['disclosed_date' => '2024-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2024-03-31', 'net_sales' => 800.0],
+            ['disclosed_date' => '2023-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2023-03-31', 'net_sales' => 500.0],
+            ['disclosed_date' => '2022-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2022-03-31', 'net_sales' => 400.0],
+        ];
+    }
+
+    /**
+     * famgFiveFyStatements()に、FY2021(net_sales=300)を加えた6期分。
+     * FY2022比 (400-300)/300*100 = +33.3333...%
+     * periods=5で使う直近5成長率: 20, 25, 60, 25, 33.3333... の平均に使用。
+     *
+     * @return array<int, array{disclosed_date: string, period_type: string, fiscal_year_end: string, net_sales: float}>
+     */
+    function famgSixFyStatements(): array
+    {
+        $statements = famgFiveFyStatements();
+        $statements[] = ['disclosed_date' => '2021-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2021-03-31', 'net_sales' => 300.0];
+
+        return $statements;
+    }
+
+    test('FYが十分な期数（5期）ある場合、デフォルト(periods=3)で直近3期分のYoY成長率の単純平均が返る', function () {
+        $mapper = new FundamentalIndicatorMapper;
+
+        $result = $mapper->averageAnnualGrowth(famgFiveFyStatements(), 'net_sales');
+
+        // (20 + 25 + 60) / 3 = 35.0
+        expect($result)->toEqualWithDelta(35.0, 0.0001);
+    });
+
+    test('FY期数がちょうどperiods+1（4期）ぴったりの場合、境界値として正しく算出される', function () {
+        $mapper = new FundamentalIndicatorMapper;
+        $statements = array_slice(famgFiveFyStatements(), 0, 4); // FY2026〜FY2023の4期
+
+        $result = $mapper->averageAnnualGrowth($statements, 'net_sales', periods: 3);
+
+        // (20 + 25 + 60) / 3 = 35.0 (FY2023はFY2022無しに比較不能なため使わない)
+        expect($result)->toEqualWithDelta(35.0, 0.0001);
+    });
+
+    test('FY期数がperiods+1未満（3期しかなく2成長率しか作れない）の場合、nullを返す', function () {
+        $mapper = new FundamentalIndicatorMapper;
+        $statements = array_slice(famgFiveFyStatements(), 0, 3); // FY2026〜FY2024の3期（periods=3にはFY4期必要）
+
+        $result = $mapper->averageAnnualGrowth($statements, 'net_sales', periods: 3);
+
+        expect($result)->toBeNull();
+    });
+
+    test('FYでない行（1Q/2Q/3Q）が混在していても、FY行のみを対象に正しく算出される', function () {
+        $mapper = new FundamentalIndicatorMapper;
+        $statements = famgFiveFyStatements();
+
+        // 各FYの間に、FYとは全く異なる値を持つ四半期行を挟み込む。
+        // これらがフィルタされず計算に混入すると 35.0 からずれるはず。
+        array_splice($statements, 1, 0, [
+            ['disclosed_date' => '2026-02-15', 'period_type' => '3Q', 'fiscal_year_end' => '2026-03-31', 'net_sales' => 99999.0],
+        ]);
+        array_splice($statements, 3, 0, [
+            ['disclosed_date' => '2025-02-15', 'period_type' => '2Q', 'fiscal_year_end' => '2025-03-31', 'net_sales' => 1.0],
+        ]);
+
+        $result = $mapper->averageAnnualGrowth($statements, 'net_sales');
+
+        expect($result)->toEqualWithDelta(35.0, 0.0001);
+    });
+
+    test('同一fiscal_year_endの重複開示行がある場合、重複排除されて正しく算出される', function () {
+        $mapper = new FundamentalIndicatorMapper;
+        $statements = famgFiveFyStatements();
+
+        // FY2026の重複開示（同一fiscal_year_end、net_salesが異なる異常値）を
+        // 直後に挿入。annualGrowth()と同じdedupロジックなら、配列で先に現れる
+        // （＝最新開示）方が採用され、重複行は無視されるはず。
+        array_splice($statements, 1, 0, [
+            ['disclosed_date' => '2026-05-08', 'period_type' => 'FY', 'fiscal_year_end' => '2026-03-31', 'net_sales' => 77777.0],
+        ]);
+
+        $result = $mapper->averageAnnualGrowth($statements, 'net_sales');
+
+        expect($result)->toEqualWithDelta(35.0, 0.0001);
+    });
+
+    test('比較対象期のいずれかの値がnullを含む場合、全体がnullになる（fail-safe、annualGrowth()と同じ挙動に統一）', function () {
+        $mapper = new FundamentalIndicatorMapper;
+        $statements = famgFiveFyStatements();
+        // FY2024のnet_salesが非開示(null)になったケース。
+        // periods=3の3成長率のうち、FY2025→FY2024間の比較が算出不可になる。
+        // 選択した仕様: 算出可能な残り2成長率だけで平均せず、全体をnullにする。
+        $statements[2]['net_sales'] = null;
+
+        $result = $mapper->averageAnnualGrowth($statements, 'net_sales', periods: 3);
+
+        expect($result)->toBeNull();
+    });
+
+    test('比較対象期のいずれかの値が0を含む場合も、全体がnullになる（ゼロ除算防止、fail-safe）', function () {
+        $mapper = new FundamentalIndicatorMapper;
+        $statements = famgFiveFyStatements();
+        // FY2022(直近3成長率には含まれない最古期の1つ前)のnet_salesを0にする。
+        // これはFY2023→FY2022間の比較にのみ影響するが、periods=3では
+        // FY2026/2025/2024の3成長率を使うため、この0はそもそも計算対象外
+        // ——という前提を崩さないよう、periods=4に指定してFY2023→FY2022比較を
+        // 計算範囲に含める。
+        $statements[4]['net_sales'] = 0.0;
+
+        $result = $mapper->averageAnnualGrowth($statements, 'net_sales', periods: 4);
+
+        expect($result)->toBeNull();
+    });
+
+    test('periods=4を明示的に指定した場合、直近4期分のYoY成長率の平均が返る', function () {
+        $mapper = new FundamentalIndicatorMapper;
+
+        $result = $mapper->averageAnnualGrowth(famgFiveFyStatements(), 'net_sales', periods: 4);
+
+        // (20 + 25 + 60 + 25) / 4 = 32.5
+        expect($result)->toEqualWithDelta(32.5, 0.0001);
+    });
+
+    test('periods=5を明示的に指定した場合、直近5期分のYoY成長率の平均が返る', function () {
+        $mapper = new FundamentalIndicatorMapper;
+
+        $result = $mapper->averageAnnualGrowth(famgSixFyStatements(), 'net_sales', periods: 5);
+
+        // (20 + 25 + 60 + 25 + 33.3333...) / 5 = 32.66666...
+        $expected = (20.0 + 25.0 + 60.0 + 25.0 + ((400.0 - 300.0) / 300.0 * 100)) / 5;
+        expect($result)->toEqualWithDelta($expected, 0.0001);
+    });
+
+    test('periods=5指定でFYが5期しかない場合（periods+1に満たない）、nullを返す', function () {
+        $mapper = new FundamentalIndicatorMapper;
+
+        $result = $mapper->averageAnnualGrowth(famgFiveFyStatements(), 'net_sales', periods: 5);
+
+        expect($result)->toBeNull();
+    });
+
+    test('averageAnnualGrowth()はpublicメソッドとして存在する', function () {
+        $mapper = new FundamentalIndicatorMapper;
+
+        expect(method_exists($mapper, 'averageAnnualGrowth'))->toBeTrue();
+    });
+});

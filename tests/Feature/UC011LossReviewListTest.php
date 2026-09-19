@@ -672,9 +672,15 @@ describe('UC-011: 整理検討（含み損）候補一覧', function () {
             [, $snapshot] = ucFrom011TestBatch();
             $holding = ucFrom011TestHolding(['symbol_code' => '3407', 'symbol_name' => '旭化成']);
             ucFrom011TestHoldingSnapshot($snapshot, $holding);
-            // ROE・自己資本比率は健全、成長率のみちょうど 0.0（FundamentalHealthEvaluator は >0 で健全判定のため failed になる）
+            // ROE・自己資本比率は健全、成長率のみちょうど 0.0（FundamentalHealthEvaluator は >0 で健全判定のため failed になる）。
+            // 2026-09-19修正（CHG-0017／ADR-0015 D1）: roe/equity_ratio は元々
+            // 15.2/58.0 だったが、これはD1のRESCUE閾値（roe>=15.0 &&
+            // equityRatio>=50.0）と衝突し 'passed' に反転してしまうため、基本
+            // 条件（10%/40%）は満たすがRESCUE閾値（15%/50%）は満たさない値
+            // （12.0/45.0）に変更した。本テストの意図（成長率0%の文言表記）は
+            // 変更していない。
             ucFrom011TestFundamentalIndicator($holding, [
-                'roe' => 15.2, 'equity_ratio' => 58.0, 'revenue_growth' => 0.0, 'operating_income_growth' => -2.0,
+                'roe' => 12.0, 'equity_ratio' => 45.0, 'revenue_growth' => 0.0, 'operating_income_growth' => -2.0,
             ]);
 
             $row = ucFrom011TestFindRow(ucFrom011TestExecute(), '3407');

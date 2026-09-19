@@ -558,3 +558,246 @@ test('データ不足（15週未満）の場合、例外を投げずいずれの
     // Assert
     expect($result)->toBe([]);
 });
+
+// -----------------------------------------------------------------------
+// 8. peg_undervalued の低成長銘柄向け分岐（CHG-0017 / ADR-0015 D3, Cycle 3b — 買い側）
+// -----------------------------------------------------------------------
+// Source of truth追加: docs/adr/ADR-0015-value-cyclical-stock-judgment-branching.md
+//   (Decision D3)、docs/architecture/data-model.md「低成長銘柄のPEG除外条件と
+//   PER/配当利回り絶対閾値」行、app/Services/Analysis/SignalDeterminationService.php
+//   の Cycle 3a 実装（isLowGrowth()、LOW_GROWTH_THRESHOLD=5.0）— 売り側と全く同じ
+//   成長率判定ロジックを買い側にも実装する想定であるため、そのミラー。
+//
+// Assumed new signature (Cycle 3b, not yet implemented — every test below is
+// expected to fail either with an "Unknown named parameter" TypeError, per
+// PHP's named-argument matching against the current 4-argument determine()
+// signature, or with an incorrect signal_type/count because the low-growth
+// branch does not exist yet):
+//   determine(array $priceHistory, ?float $marketReturn13w = null,
+//     ?float $sectorReturn13w = null, ?float $pegRatio = null,
+//     ?float $revenueGrowth = null, ?float $operatingIncomeGrowth = null,
+//     ?float $per = null, ?float $dividendYield = null): array
+//
+// Assumed new constants: LOW_GROWTH_THRESHOLD = 5.0 (mirrors
+// SignalDeterminationService), PER_UNDERVALUED_THRESHOLD = 15.0,
+// DIVIDEND_YIELD_UNDERVALUED_THRESHOLD = 3.0.
+//
+// Shared baseline fixture: the same 52-week gentle monotonic rise
+// (100..151, marketReturn13w=0.0) used by the existing peg_undervalued tests
+// above (「7. peg_undervalued」section) — already verified there to satisfy
+// both common preconditions (A/B) while triggering none of the other 6
+// individual signal conditions, and to yield the same pegRatio-driven
+// peg_undervalued behavior when growth is not low. This isolates the new
+// low-growth/PER/dividend-yield branch from interference by other signals.
+
+test('成長率が高い（8.0%）場合、PEGレシオが0.8（0<peg<=1.0）なら従来通りpeg_undervaluedシグナルが発生する（回帰確認）', function () {
+    // Arrange: revenueGrowth=8.0（>5.0、高成長） -> 低成長と判定されず、従来通り
+    // PEGレシオベースの判定が使われる
+    $closes = range(100, 151);
+    $priceHistory = bsdPriceHistory($closes);
+
+    // Act
+    $result = bsdService()->determine(
+        $priceHistory,
+        marketReturn13w: 0.0,
+        pegRatio: 0.8,
+        revenueGrowth: 8.0,
+        operatingIncomeGrowth: null,
+    );
+
+    // Assert
+    expect($result)->toHaveCount(1);
+    expect($result[0]['signal_type'])->toBe('peg_undervalued');
+});
+
+test('成長率が5.0%以下（低成長）の場合、PEGレシオが0.8（PEG基準では割安）でもPER/配当利回りの基準を満たさなければpeg_undervaluedシグナルは発生しない', function () {
+    // Arrange: revenueGrowth=3.0（<=5.0、低成長） -> PEGベースの判定は評価されず
+    // PER/配当利回りの絶対閾値判定に置き換わる。per=20.0(>15.0)・dividendYield=1.0(<3.0%)
+    // のためAND条件を満たさず、pegRatio=0.8が本来PEG基準では割安水準であっても発生しない
+    $closes = range(100, 151);
+    $priceHistory = bsdPriceHistory($closes);
+
+    // Act
+    $result = bsdService()->determine(
+        $priceHistory,
+        marketReturn13w: 0.0,
+        pegRatio: 0.8,
+        revenueGrowth: 3.0,
+        operatingIncomeGrowth: null,
+        per: 20.0,
+        dividendYield: 1.0,
+    );
+
+    // Assert: このフィクスチャは他のいかなる個別シグナル条件も満たさないため、
+    // 結果全体が空になることまで確認する
+    expect(bsdSignalTypes($result))->not->toContain('peg_undervalued');
+    expect($result)->toBe([]);
+});
+
+test('成長率が低く、PER≦15.0かつ配当利回り≧3.0%を満たす場合、PEGレシオがnullでもpeg_undervaluedシグナルが発生する', function () {
+    // Arrange: revenueGrowth=3.0（低成長）、pegRatio=null（PEGは一切参照されない想定）、
+    // per=10.0(<=15.0)・dividendYield=5.0(>=3.0%)でPER/配当利回りの絶対閾値を満たす
+    $closes = range(100, 151);
+    $priceHistory = bsdPriceHistory($closes);
+
+    // Act
+    $result = bsdService()->determine(
+        $priceHistory,
+        marketReturn13w: 0.0,
+        pegRatio: null,
+        revenueGrowth: 3.0,
+        operatingIncomeGrowth: null,
+        per: 10.0,
+        dividendYield: 5.0,
+    );
+
+    // Assert
+    expect($result)->toHaveCount(1);
+    expect($result[0]['signal_type'])->toBe('peg_undervalued');
+});
+
+test('成長率が低く、PERがマイナス（赤字企業のFinnhub peTTM等）で配当利回りが基準を満たす場合でも、peg_undervaluedシグナルは発生しない（PERの下限ガード、/review指摘）', function () {
+    // Arrange: revenueGrowth=3.0（低成長）、per=-8.0（赤字企業。Finnhubの
+    // peTTMは負値をそのまま返すため発生しうる、ADR-0012 D4がpegRatioに
+    // 課しているのと同種のガードがPERにも必要）、dividendYield=4.0（基準3.0%以上）。
+    // per<=15.0 という素朴な比較だけだと -8.0 <= 15.0 で満たしてしまうため、
+    // per > 0.0 の下限ガードで防ぐ。
+    $closes = range(100, 151);
+    $priceHistory = bsdPriceHistory($closes);
+
+    // Act
+    $result = bsdService()->determine(
+        $priceHistory,
+        marketReturn13w: 0.0,
+        pegRatio: null,
+        revenueGrowth: 3.0,
+        operatingIncomeGrowth: null,
+        per: -8.0,
+        dividendYield: 4.0,
+    );
+
+    // Assert
+    expect($result)->toHaveCount(0);
+});
+
+test('成長率が低く、PERは基準を満たすが配当利回りが基準未満の場合、peg_undervaluedシグナルは発生しない（AND条件の確認）', function () {
+    // Arrange: revenueGrowth=3.0（低成長）、per=15.0（満たす、境界値）、
+    // dividendYield=2.9（3.0%未満、満たさない）
+    $closes = range(100, 151);
+    $priceHistory = bsdPriceHistory($closes);
+
+    // Act
+    $result = bsdService()->determine(
+        $priceHistory,
+        marketReturn13w: 0.0,
+        pegRatio: null,
+        revenueGrowth: 3.0,
+        operatingIncomeGrowth: null,
+        per: 15.0,
+        dividendYield: 2.9,
+    );
+
+    // Assert
+    expect(bsdSignalTypes($result))->not->toContain('peg_undervalued');
+    expect($result)->toBe([]);
+});
+
+test('成長率が低く、配当利回りは基準を満たすがPERが僅かに基準を超える場合、peg_undervaluedシグナルは発生しない（境界値・AND条件の確認）', function () {
+    // Arrange: revenueGrowth=3.0（低成長）、per=15.01（15.0を僅かに超え、満たさない）、
+    // dividendYield=3.0（満たす、境界値）
+    $closes = range(100, 151);
+    $priceHistory = bsdPriceHistory($closes);
+
+    // Act
+    $result = bsdService()->determine(
+        $priceHistory,
+        marketReturn13w: 0.0,
+        pegRatio: null,
+        revenueGrowth: 3.0,
+        operatingIncomeGrowth: null,
+        per: 15.01,
+        dividendYield: 3.0,
+    );
+
+    // Assert
+    expect(bsdSignalTypes($result))->not->toContain('peg_undervalued');
+    expect($result)->toBe([]);
+});
+
+test('成長率が低く、PERがちょうど15.0・配当利回りがちょうど3.0%の場合、peg_undervaluedシグナルが発生する（境界値）', function () {
+    // Arrange: PER/配当利回りの両方が閾値ちょうど（境界を含む側）
+    $closes = range(100, 151);
+    $priceHistory = bsdPriceHistory($closes);
+
+    // Act
+    $result = bsdService()->determine(
+        $priceHistory,
+        marketReturn13w: 0.0,
+        pegRatio: null,
+        revenueGrowth: 3.0,
+        operatingIncomeGrowth: null,
+        per: 15.0,
+        dividendYield: 3.0,
+    );
+
+    // Assert
+    expect($result)->toHaveCount(1);
+    expect($result[0]['signal_type'])->toBe('peg_undervalued');
+});
+
+test('revenueGrowthとoperatingIncomeGrowthが両方nullの場合、成長率は低いと判定されず従来通りPEGレシオベースの判定が使われる（回帰確認）', function () {
+    // Arrange: 両方明示的にnull -> isLowGrowth()は「低いと判定しない」ため除外されず、
+    // PEGレシオ0.8（0<peg<=1.0）なら従来通りpeg_undervaluedシグナルが発生する
+    $closes = range(100, 151);
+    $priceHistory = bsdPriceHistory($closes);
+
+    // Act
+    $result = bsdService()->determine(
+        $priceHistory,
+        marketReturn13w: 0.0,
+        pegRatio: 0.8,
+        revenueGrowth: null,
+        operatingIncomeGrowth: null,
+    );
+
+    // Assert
+    expect($result)->toHaveCount(1);
+    expect($result[0]['signal_type'])->toBe('peg_undervalued');
+});
+
+test('新規引数（revenueGrowth/operatingIncomeGrowth/per/dividendYield）をすべて省略した既存呼び出しは影響を受けない（後方互換）', function () {
+    // Arrange: 新規4引数を一切渡さない既存互換の呼び出し
+    $closes = range(100, 151);
+    $priceHistory = bsdPriceHistory($closes);
+
+    // Act
+    $result = bsdService()->determine($priceHistory, marketReturn13w: 0.0, pegRatio: 0.5);
+
+    // Assert
+    expect($result)->toHaveCount(1);
+    expect($result[0]['signal_type'])->toBe('peg_undervalued');
+});
+
+test('低成長でPEG除外・PER/配当利回りでも救済されない場合でも、他のシグナル（RSIオーバーソールド反発）は引き続き検出される', function () {
+    // Arrange: 「1. rsi_oversold_rebound」のFIREテストと同じフィクスチャに、
+    // 低成長（revenueGrowth=3.0）・PEGレシオ0.8（本来PEG基準では割安）・
+    // PER=20.0/配当利回り1.0%（基準未達）を同時に渡す。rsi_oversold_reboundは
+    // PEG除外分岐の影響を受けず引き続き検出され、peg_undervaluedのみが除外される想定
+    $closes = array_merge(bsdPrelude(), [134, 130, 126, 122, 118, 114, 110, 106, 102, 98, 94, 90, 95]);
+    $priceHistory = bsdPriceHistory($closes);
+
+    // Act
+    $result = bsdService()->determine(
+        $priceHistory,
+        marketReturn13w: -35.0,
+        pegRatio: 0.8,
+        revenueGrowth: 3.0,
+        operatingIncomeGrowth: 3.0,
+        per: 20.0,
+        dividendYield: 1.0,
+    );
+
+    // Assert
+    expect(bsdSignalTypes($result))->toContain('rsi_oversold_rebound');
+    expect(bsdSignalTypes($result))->not->toContain('peg_undervalued');
+});

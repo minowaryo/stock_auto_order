@@ -180,6 +180,61 @@ final class FundamentalIndicatorMapper
         return ($latestValue - $pastValue) / $pastValue * 100;
     }
 
+    /**
+     * Simple average of the most recent `$periods` consecutive YoY growth
+     * rates (%) for the given field, using the same FY-only filter +
+     * fiscal_year_end dedup + descending sort as annualGrowth()
+     * (docs/adr/ADR-0015-value-cyclical-stock-judgment-branching.md D2).
+     *
+     * Requires at least `$periods` + 1 FY rows (to form `$periods`
+     * consecutive comparisons); otherwise null. If any of the `$periods`
+     * comparisons is unavailable (either side null, or the past side 0),
+     * the whole method returns null (all-or-nothing, same fail-safe
+     * pattern as annualGrowth()).
+     *
+     * @param  array<int, array<string, mixed>>  $statements
+     */
+    public function averageAnnualGrowth(array $statements, string $field, int $periods = 3): ?float
+    {
+        $annualByFiscalYear = [];
+
+        foreach ($statements as $statement) {
+            if (($statement['period_type'] ?? null) !== 'FY') {
+                continue;
+            }
+
+            $fiscalYearEnd = $statement['fiscal_year_end'] ?? null;
+
+            if ($fiscalYearEnd === null || isset($annualByFiscalYear[$fiscalYearEnd])) {
+                continue;
+            }
+
+            $annualByFiscalYear[$fiscalYearEnd] = $statement;
+        }
+
+        krsort($annualByFiscalYear); // most recent fiscal year first
+        $annual = array_values($annualByFiscalYear);
+
+        if (count($annual) < $periods + 1) {
+            return null;
+        }
+
+        $growthRates = [];
+
+        for ($i = 0; $i < $periods; $i++) {
+            $latestValue = $annual[$i][$field] ?? null;
+            $pastValue = $annual[$i + 1][$field] ?? null;
+
+            if ($latestValue === null || $pastValue === null || $pastValue == 0.0) {
+                return null;
+            }
+
+            $growthRates[] = ($latestValue - $pastValue) / $pastValue * 100;
+        }
+
+        return array_sum($growthRates) / count($growthRates);
+    }
+
     private function toPercent(?float $ratio): ?float
     {
         return $ratio === null ? null : $ratio * 100;

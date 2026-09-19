@@ -968,6 +968,62 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
             }
         });
 
+        // CR (2026-09-19, CHG-0017 / ADR-0015 D2 "2026-09-19追記"): financial_statements
+        // now has period_type/fiscal_year_end columns (added by this Cycle's migration,
+        // 2026_09_19_000000_add_period_type_and_fiscal_year_end_to_financial_statements_table),
+        // but FetchExternalMarketDataAction does not yet write to them (only
+        // fiscal_period/revenue/operating_income/eps/*_yoy_change/fetched_at
+        // are set in the FinancialStatement::updateOrCreate() call as of
+        // this test's writing). femdStatements() already carries
+        // period_type/fiscal_year_end per row (added earlier for
+        // FundamentalIndicatorMapper::annualGrowth(), ADR-0012), so this Red
+        // assertion fails not because the fixture lacks the data, but
+        // because execute() discards it before the INSERT — same "data
+        // fetched but never persisted" gap the migration's docblock
+        // describes. Expected Red: assertion mismatch (both columns come
+        // back null from the DB), not a fatal error — the migration+model
+        // column already exist and are readable.
+        test('J-QuantsのCurPerType/CurFYEn由来のperiod_type・fiscal_year_endが、開示行ごとにfinancial_statementsへそのまま保存される（ADR-0015 D2）', function () {
+            [$batch, $snapshot] = femdImportBatch();
+            $holding = femdHolding([
+                'symbol_code' => '7203',
+                'market' => 'jp',
+                'instrument_type' => 'stock',
+                'symbol_name' => 'トヨタ自動車',
+            ]);
+            femdHoldingSnapshot($snapshot, $holding, [
+                'current_price' => 2500.0,
+                'unrealized_gain_rate' => 5.0, // <=20% -> シグナル判定の副作用を避ける
+            ]);
+
+            $priceHistory = femdPriceHistory(femdCloses(2000.0, 5.0, 20));
+            $statements = femdStatements();
+
+            $action = femdAction(
+                new FakeJpStockPriceClient(['7203' => $priceHistory]),
+                new FakeUsStockPriceClient,
+                new FakeMarketIndexClient([
+                    'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 20)),
+                    'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20)),
+                ]),
+                new FakeJQuantsClient(statementsResponses: ['7203' => $statements]),
+            );
+
+            $action->execute($batch);
+
+            expect(FinancialStatement::where('holding_id', $holding->id)->count())->toBe(5);
+
+            foreach ($statements as $statement) {
+                $row = FinancialStatement::where('holding_id', $holding->id)
+                    ->where('fiscal_period', $statement['disclosed_date'])
+                    ->first();
+
+                expect($row)->not->toBeNull();
+                expect($row->period_type)->toBe($statement['period_type']);
+                expect($row->fiscal_year_end)->toBe($statement['fiscal_year_end']);
+            }
+        });
+
         test('最新開示行のrevenue_yoy_change・operating_income_yoy_changeが、最新FYと前期FYの比較で正しく算出される（ADR-0012）', function () {
             [$batch, $snapshot] = femdImportBatch();
             $holding = femdHolding([
