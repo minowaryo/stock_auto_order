@@ -10,7 +10,6 @@ use App\Models\Holding;
 use App\Models\HoldingSnapshot;
 use App\Models\HoldingSnapshotAccount;
 use App\Models\ImportBatch;
-use App\Models\ImportSummaryReport;
 use App\Models\Snapshot;
 use App\Services\Import\JpStockCsvParser;
 use App\Services\Import\MutualFundCsvParser;
@@ -155,15 +154,10 @@ class ImportCsvAction
                 'imported_at' => $importedAt,
             ])->save();
 
-            // UC-009: a summary report is auto-generated the moment an import
-            // completes. The full composite-score/priority ranking logic is
-            // implemented in UC-009's own /tdd cycle; here we only guarantee a
-            // report row with a non-empty headline exists (per Gate 4 scope).
-            ImportSummaryReport::create([
-                'import_batch_id' => $batch->id,
-                'portfolio_headline' => sprintf('%d件の保有銘柄を取り込みました。', count($aggregatedHoldings)),
-                'generated_at' => now(),
-            ]);
+            // ADR-0014 D9-2: import_summary_reports への書き込み（取込完了時の
+            // プレースホルダー行作成）を廃止。UC-009のサマリーレポートは
+            // ShowImportSummaryReportAction が毎回その場で再計算する表示専用
+            // 機能になったため、取込フロー側で先に行を作る必要がなくなった。
 
             return ImportResult::success(
                 importBatchId: $batch->id,

@@ -3,76 +3,67 @@
 namespace Tests\Feature;
 
 use App\Actions\ImportSummaryReport\ShowImportSummaryReportAction;
+use App\Actions\Portfolio\ClassifyHoldingsAction;
 use App\Livewire\ImportSummaryReport\Show;
+use App\Models\BuySignal;
 use App\Models\FundamentalIndicator;
 use App\Models\Holding;
 use App\Models\HoldingSnapshot;
 use App\Models\ImportBatch;
 use App\Models\SectorClassification;
+use App\Models\Signal;
 use App\Models\Snapshot;
 use App\Models\TechnicalIndicator;
 use App\Models\User;
-use App\Models\WatchedTheme;
 use Livewire\Livewire;
 
 /*
 |--------------------------------------------------------------------------
-| UC-009: 取込後サマリーレポート画面（Livewireフルページ） — Red phase Feature Test
+| UC-009: 取込後サマリーレポート画面（Livewireフルページ） — Red phase Feature
+| Test (F-013 Cycle 2)
 |--------------------------------------------------------------------------
 |
 | Source of truth:
-|   - docs/product/use-cases.md (UC-009)
-|   - docs/architecture/data-model.md (import_summary_reports /
-|     import_summary_report_items)
-|   - stock_auto_order-frontend-implementation-phase.md Phase 2
+|   - docs/product/use-cases.md UC-009（2026-09-17改訂）・UC-013（分類俯瞰の
+|     基本フロー2〜8・出力表・業務ルール）
+|   - docs/adr/ADR-0014-portfolio-bucket-classification.md D9〜D9-4
 |
-| App\Livewire\ImportSummaryReport\Show does not exist yet (no class, no
-| route, no Blade view). Every test in describe('UC-009: 取込後サマリー
-| レポート画面（Livewire）') is expected to fail with a "class not found"
-| style fatal error (or a 404 for the not-yet-registered
-| /import-batches/{id}/summary-report route, for the two plain-HTTP tests).
-| That is the intended Red state, not a typo/setup bug.
+| -------------------------------------------------------------------------
+| このファイルの位置づけ（Cycle 2、既存テストの書き換え）
+| -------------------------------------------------------------------------
+| App\Livewire\ImportSummaryReport\Show / resources/views/livewire/
+| import-summary-report/show.blade.php / resources/views/components/
+| summary-report-body.blade.php はいずれも実装済みだが、中身は旧・候補選定
+| ロジック（top_recommendations/supplementary_recommendations、ADR-0003）の
+| ままである。そのため以下のテストは「クラスが無くて fatal error になる」
+| Redではなく、「分類俯瞰セクションが表示されない／旧バッジ文言
+| （おすすめ上位10件・補足レコメンド）が残っている／$report に
+| classification キーが無い」等の**アサーション不一致によるRed**になる想定
+| （意図した失敗であり、セットアップミスではない）。
 |
-| Seed helper functions below (importSummaryReportShowTest*) are a verbatim
-| duplicate (unique prefix to avoid cross-file redeclaration errors) of the
-| equivalent helpers already proven in tests/Feature/UC009ImportSummaryReportTest.php,
-| so Green behavior for the underlying ShowImportSummaryReportAction stays
-| consistent with that already-approved contract. This file does not
-| re-assert the Action's scoring/ranking edge cases (already covered there)
-| — it only asserts that the Livewire screen correctly displays whatever
-| the Action returns, calls the Action exactly once (mount()-only, per the
-| task's side-effect note: the Action deletes+reinserts
-| import_summary_report_items on every call), and wires up the UC-003/
-| UC-005/UC-006 navigation links.
+| ClassifyHoldingsAction自体の分類ロジック（バケツ判定・hold_watch判定・
+| ソート順）はtests/Unit/Actions/Portfolio/ClassifyHoldingsActionTest.php
+| （F-013 Cycle 1、既にGreen）の責務であり、本ファイルでは再検証しない。
+| 本ファイルは「Show画面がShowImportSummaryReportActionの返す
+| classificationデータを正しく受け取り、俯瞰セクションとして表示すること」
+| に専念する。
 |
-| Assumptions made while writing these tests (flag at Gate 4 if a different
-| contract is preferred):
-|   - Route: GET /import-batches/{importBatch}/summary-report, `auth`
-|     middleware, route-model-bound on import_batches.id (mirrors the
-|     existing JSON API's ImportSummaryReportController::show() route
-|     model binding — a nonexistent id is expected to 404 automatically).
-|     NOTE: because the route does not exist AT ALL yet in this Red state,
-|     the "存在しない取込バッチIDへのアクセスは404になる" test below
-|     coincidentally also returns 404 today (Laravel's default "no matching
-|     route" response), for the WRONG reason. This must be re-verified once
-|     Green work adds the route, to confirm the 404 then comes from route
-|     model binding rejecting a bad id, not from the route being entirely
-|     absent. Flagged explicitly here and in the completion report so this
-|     particular test is not mistaken for a meaningful Red-phase failure.
-|   - The Livewire component's mount(ImportBatch $importBatch) resolves
-|     ShowImportSummaryReportAction via Laravel's container (method
-|     injection), exactly like ImportSummaryReportController::show()
-|     already does — this lets the "呼び出しは1回だけ" test below bind a
-|     Mockery double via $this->mock() and have it picked up automatically.
-|   - Temporary link shape (see the file's own header docblock note in the
-|     task instructions this file was generated from): 利確検討/新規投資候補
-|     rows link to "/holdings?symbol_code={symbol_code}" (query-param based,
-|     since UC-003's own holding-detail screen isn't built until Phase 4
-|     and the list screen that could resolve symbol_code→id isn't built
-|     until Phase 3 either) and リバランス rows link to "/sector-dashboard"
-|     (a single dashboard page, no per-sector route). This is explicitly
-|     NOT a locked contract — confirm at Gate 4, and expect it to be
-|     replaced with a proper "/holdings/{id}" link once Phase 3/4 exist.
+| Assumptions made while writing these tests (Gate 4で異なる契約が良ければ
+| 指摘してください):
+|   - Show::mount(ImportBatch $importBatch)は`$this->report`に
+|     ShowImportSummaryReportAction::execute($importBatch)の戻り値
+|     （portfolio_headline/generated_at/classification）をそのまま代入する
+|     （既存のtop_recommendations版と同じ構造の踏襲）。Livewireコンポーネント
+|     の`report`プロパティに`$component->get('report')`でアクセスできる想定
+|     （Livewire::test()の標準機能）。
+|   - Blade側の具体的なバッジ文言・DOM構造までは厳密にアサートせず、
+|     「該当銘柄のsymbol_code/symbol_nameが画面に表示されること」
+|     （バケツごとの俯瞰表示が実際にレンダリングされていること）と、
+|     「$component->get('report')の中身が正しいこと」（データ配線の正しさ）
+|     の両方で契約レベルの検証に留める（Green実装時の文言自由度を残すため）。
+|   - 空状態メッセージは UC-009業務ルール「対象となる保有銘柄が存在しない」
+|     エラーケースの文言「分類対象の保有銘柄がありません」（UC-013エラー
+|     ケース準拠、2026-09-17改訂）を用いる想定。
 |
 */
 
@@ -144,7 +135,8 @@ function importSummaryReportShowTestTechnicalIndicator(Holding $holding, array $
 {
     return TechnicalIndicator::create(array_merge([
         'holding_id' => $holding->id,
-        'rsi' => 70.0,
+        'rsi' => 50.0,
+        'relative_strength_vs_market' => 6.0,
         'computed_at' => now(),
     ], $attributes));
 }
@@ -158,173 +150,213 @@ function importSummaryReportShowTestFundamentalIndicator(Holding $holding, array
         'holding_id' => $holding->id,
         'per' => 15.0,
         'pbr' => 1.5,
-        'roe' => 8.0,
-        'revenue_growth' => 5.0,
-        'operating_income_growth' => 4.0,
-        'equity_ratio' => 35.0,
-        // CHG-0012 / ADR-0011: 財務健全性フィルタの4条件目（健全な既定値）。
-        // 新規投資候補として掲載されることを期待するテストは equity_ratio /
-        // roe を override するため、営業利益率も健全でないと passed にならない。
-        'operating_margin' => 15.0,
+        'roe' => 15.2,
+        'revenue_growth' => 8.0,
+        'operating_income_growth' => 12.3,
+        'equity_ratio' => 58.0,
+        'operating_margin' => 18.3,
         'dividend_yield' => 2.0,
         'dividend_payout_ratio' => 30.0,
         'fetched_at' => now(),
     ], $attributes));
 }
 
-function importSummaryReportShowTestWatchedTheme(string $name): WatchedTheme
-{
-    return WatchedTheme::create(['name' => $name]);
-}
-
 /**
- * Seed $count individually-qualifying 利確検討 candidates (含み益+20%超),
- * each in its own sector (mirrors
- * UC009ImportSummaryReportTest.php::ucFrom009TestSeedManyTakeProfitCandidates()),
- * used here only to push the total candidate count past 10 so the 11〜20位
- * supplementary section actually renders something.
+ * @param  array<string, mixed>  $attributes
  */
-function importSummaryReportShowTestSeedManyTakeProfitCandidates(Snapshot $snapshot, int $count): void
+function importSummaryReportShowTestSignal(HoldingSnapshot $holdingSnapshot, array $attributes = []): Signal
 {
-    for ($i = 0; $i < $count; $i++) {
-        $sector = importSummaryReportShowTestSectorClassification("テストセクター{$i}", sprintf('%03d', $i));
-        $holding = importSummaryReportShowTestHolding([
-            'symbol_code' => sprintf('90%02d', $i),
-            'market' => 'jp',
-            'symbol_name' => "テスト銘柄{$i}",
-            'sector_classification_id' => $sector->id,
-        ]);
-
-        $gainRate = 21.0 + $i;
-        $averageCost = 1000.0;
-        $currentPrice = $averageCost * (1 + $gainRate / 100);
-
-        importSummaryReportShowTestHoldingSnapshot($snapshot, $holding, [
-            'quantity' => 10,
-            'average_cost' => $averageCost,
-            'current_price' => $currentPrice,
-            'unrealized_gain_amount' => ($currentPrice - $averageCost) * 10,
-            'unrealized_gain_rate' => $gainRate,
-        ]);
-
-        importSummaryReportShowTestTechnicalIndicator($holding, ['rsi' => 60.0 + $i]);
-    }
+    return Signal::create(array_merge([
+        'holding_snapshot_id' => $holdingSnapshot->id,
+        'signal_type' => 'rsi_reversal',
+        'reason_summary' => 'RSIが72から65に反落',
+    ], $attributes));
 }
 
 /**
- * Seed one scenario containing all three recommendation types at once
- * (利確検討 / リバランス / 新規投資候補), reusing the same numbers as
- * UC009ImportSummaryReportTest.php's individual per-type tests so the
- * expected composite behavior (sector allocation crossing 70%, financial
- * health filter passing) is already a proven combination.
+ * @param  array<string, mixed>  $attributes
+ */
+function importSummaryReportShowTestBuySignal(HoldingSnapshot $holdingSnapshot, array $attributes = []): BuySignal
+{
+    return BuySignal::create(array_merge([
+        'holding_snapshot_id' => $holdingSnapshot->id,
+        'signal_type' => 'rsi_oversold_rebound',
+        'reason_summary' => 'RSIが28から34へ反発しました',
+    ], $attributes));
+}
+
+/**
+ * Seeds one holding per bucket (core_accumulation/loss_review/take_profit/
+ * add_on/hold), mirroring UC009ImportSummaryReportTest.php's
+ * ucFrom009TestSeedAllBuckets() (duplicated with a unique prefix per this
+ * repo's existing multi-file test convention).
  *
- * @return array{take_profit_symbol: string, rebalance_sector: string, new_candidate_symbol: string}
+ * @return array<string, string> symbol_code keyed by bucket name
  */
-function importSummaryReportShowTestSeedAllThreeTypes(Snapshot $snapshot): array
+function importSummaryReportShowTestSeedAllBuckets(Snapshot $snapshot): array
 {
-    // 利確検討: 含み益+30%・RSI75
-    $takeProfitSector = importSummaryReportShowTestSectorClassification('サンプルセクター1', 'TP1');
-    $takeProfitHolding = importSummaryReportShowTestHolding([
-        'symbol_code' => '1111', 'market' => 'jp', 'symbol_name' => '利確対象銘柄',
-        'sector_classification_id' => $takeProfitSector->id,
+    $etf = importSummaryReportShowTestHolding([
+        'symbol_code' => 'VTI', 'market' => 'us', 'instrument_type' => 'etf',
+        'symbol_name' => 'Vanguard Total Stock Market ETF',
     ]);
-    importSummaryReportShowTestHoldingSnapshot($snapshot, $takeProfitHolding, [
-        'average_cost' => 1000.0, 'current_price' => 1300.0,
-        'unrealized_gain_amount' => 3000.0, 'unrealized_gain_rate' => 30.0,
-    ]);
-    importSummaryReportShowTestTechnicalIndicator($takeProfitHolding, ['rsi' => 75.0]);
+    importSummaryReportShowTestHoldingSnapshot($snapshot, $etf, ['quantity' => 50, 'current_price' => 300]);
 
-    // リバランス: 電気機器セクターへの偏り90%（UC009ImportSummaryReportTest.phpと同じ数値）
-    $overweightSector = importSummaryReportShowTestSectorClassification('電気機器', '3650');
-    $otherSector = importSummaryReportShowTestSectorClassification('輸送用機器', '3750');
+    $lossReview = importSummaryReportShowTestHolding(['symbol_code' => 'LR01', 'symbol_name' => '整理検討テスト']);
+    importSummaryReportShowTestHoldingSnapshot($snapshot, $lossReview, [
+        'current_price' => 750, 'unrealized_gain_amount' => -25000, 'unrealized_gain_rate' => -25.0,
+    ]);
+    importSummaryReportShowTestTechnicalIndicator($lossReview);
+    importSummaryReportShowTestFundamentalIndicator($lossReview);
 
-    foreach (['9001', '9002', '9003'] as $code) {
-        $holding = importSummaryReportShowTestHolding([
-            'symbol_code' => $code, 'market' => 'jp', 'symbol_name' => "偏りテスト銘柄{$code}",
-            'sector_classification_id' => $overweightSector->id,
-        ]);
-        importSummaryReportShowTestHoldingSnapshot($snapshot, $holding, [
-            'quantity' => 1000, 'average_cost' => 2910.0, 'current_price' => 3000.0,
-            'unrealized_gain_amount' => 90000.0, 'unrealized_gain_rate' => 3.0,
-        ]);
-    }
+    $takeProfit = importSummaryReportShowTestHolding(['symbol_code' => 'TP01', 'symbol_name' => '利確検討テスト']);
+    $takeProfitSnapshot = importSummaryReportShowTestHoldingSnapshot($snapshot, $takeProfit, [
+        'current_price' => 1250, 'unrealized_gain_amount' => 25000, 'unrealized_gain_rate' => 25.0,
+    ]);
+    importSummaryReportShowTestSignal($takeProfitSnapshot);
+    importSummaryReportShowTestTechnicalIndicator($takeProfit);
+    importSummaryReportShowTestFundamentalIndicator($takeProfit);
 
-    $balancingHolding = importSummaryReportShowTestHolding([
-        'symbol_code' => '7203', 'market' => 'jp', 'symbol_name' => 'トヨタ自動車',
-        'sector_classification_id' => $otherSector->id,
-    ]);
-    importSummaryReportShowTestHoldingSnapshot($snapshot, $balancingHolding, [
-        'quantity' => 1000, 'average_cost' => 970.0, 'current_price' => 1000.0,
-        'unrealized_gain_amount' => 30000.0, 'unrealized_gain_rate' => 3.0,
-    ]);
+    $addOn = importSummaryReportShowTestHolding(['symbol_code' => 'AO01', 'symbol_name' => '買い増し検討テスト']);
+    $addOnSnapshot = importSummaryReportShowTestHoldingSnapshot($snapshot, $addOn);
+    importSummaryReportShowTestBuySignal($addOnSnapshot);
+    importSummaryReportShowTestTechnicalIndicator($addOn);
+    importSummaryReportShowTestFundamentalIndicator($addOn);
 
-    // 新規投資候補: 注目テーマ「AI半導体」合致・財務健全性フィルタ通過
-    importSummaryReportShowTestWatchedTheme('AI半導体');
-    $themeSector = importSummaryReportShowTestSectorClassification('AI半導体', '9999');
-    $candidateHolding = importSummaryReportShowTestHolding([
-        'symbol_code' => '6920', 'market' => 'jp', 'symbol_name' => 'レーザーテック',
-        'sector_classification_id' => $themeSector->id,
+    $hold = importSummaryReportShowTestHolding(['symbol_code' => 'HD01', 'symbol_name' => 'キープテスト']);
+    importSummaryReportShowTestHoldingSnapshot($snapshot, $hold, [
+        'current_price' => 1050, 'unrealized_gain_amount' => 5000, 'unrealized_gain_rate' => 5.0,
     ]);
-    importSummaryReportShowTestFundamentalIndicator($candidateHolding, [
-        'equity_ratio' => 60.0,
-        'roe' => 15.0,
-    ]);
+    importSummaryReportShowTestTechnicalIndicator($hold);
+    importSummaryReportShowTestFundamentalIndicator($hold);
 
     return [
-        'take_profit_symbol' => '1111',
-        'rebalance_sector' => '電気機器',
-        'new_candidate_symbol' => '6920',
+        'core_accumulation' => 'VTI',
+        'loss_review' => 'LR01',
+        'take_profit' => 'TP01',
+        'add_on' => 'AO01',
+        'hold' => 'HD01',
     ];
 }
 
-describe('UC-009: 取込後サマリーレポート画面（Livewire）', function () {
-    describe('正常系', function () {
-        test('headline・上位10件（利確検討・リバランス・新規投資候補を含む）が正しく表示される', function () {
+describe('UC-009: 取込後サマリーレポート画面（Livewire）— 分類俯瞰（ADR-0014 D9）', function () {
+    describe('正常系（分類俯瞰セクションの表示）', function () {
+        test('3分類（減らす/保つ/増やす）それぞれの銘柄が表示され、group_summaryの件数に反映される', function () {
             $user = User::factory()->create();
             [$batch, $snapshot] = importSummaryReportShowTestImportBatch();
-            importSummaryReportShowTestSeedAllThreeTypes($snapshot);
+            $symbolsByBucket = importSummaryReportShowTestSeedAllBuckets($snapshot);
 
             $component = Livewire::actingAs($user)->test(Show::class, ['importBatch' => $batch]);
 
-            $component->assertSee('利確対象銘柄');
-            $component->assertSee('1111');
-            $component->assertSee('電気機器');
-            $component->assertSee('レーザーテック');
-            $component->assertSee('6920');
+            foreach ($symbolsByBucket as $symbolCode) {
+                $component->assertSee($symbolCode);
+            }
 
-            // x-badgeコンポーネントの想定バリアント文言（Phase0で正式化されたinfoバリアントを含む）
-            $component->assertSee('利確検討');
-            $component->assertSee('リバランス');
-            $component->assertSee('新規投資候補');
-
-            // portfolio_headline は空文字であってはならない（UC-009業務ルール）
-            $report = app(ShowImportSummaryReportAction::class)->execute($batch->fresh());
-            expect(trim((string) $report['portfolio_headline']))->not->toBe('');
+            expect($component->get('report'))->toHaveKey('classification');
+            $groupSummary = collect($component->get('report')['classification']['group_summary'])->keyBy('group');
+            expect($groupSummary['reduce']['holding_count'])->toBe(2); // loss_review + take_profit
+            expect($groupSummary['hold']['holding_count'])->toBe(2); // core_accumulation + hold
+            expect($groupSummary['increase']['holding_count'])->toBe(1); // add_on
         });
 
-        test('候補が11件以上ある場合11〜20位の補足レコメンドセクションにも項目が表示される', function () {
+        test('『保つ』の内訳（積立・インデックスコア/キープ）がhold_breakdownに反映され、両方の銘柄が表示される', function () {
             $user = User::factory()->create();
             [$batch, $snapshot] = importSummaryReportShowTestImportBatch();
-            importSummaryReportShowTestSeedManyTakeProfitCandidates($snapshot, 15);
+            $symbolsByBucket = importSummaryReportShowTestSeedAllBuckets($snapshot);
 
-            // 15件中、含み益率が最も低い（優先度が最も低い）候補群が11〜20位の
-            // 補足レコメンドに回る想定（rankはcomposite_score降順）。
-            // i=0のテスト銘柄90"00"（gainRate 21%）が最も優先度が低いため
-            // 補足レコメンド側に表示されるはず。
-            Livewire::actingAs($user)->test(Show::class, ['importBatch' => $batch])
-                ->assertSee('9000') // 最も優先度が低い候補のsymbol_code
-                ->assertSee('テスト銘柄0');
+            $component = Livewire::actingAs($user)->test(Show::class, ['importBatch' => $batch]);
+
+            $component->assertSee($symbolsByBucket['core_accumulation']);
+            $component->assertSee($symbolsByBucket['hold']);
+
+            expect($component->get('report'))->toHaveKey('classification');
+            $holdBreakdown = $component->get('report')['classification']['hold_breakdown'];
+            expect($holdBreakdown['core_accumulation']['holding_count'])->toBe(1);
+            expect($holdBreakdown['hold']['holding_count'])->toBe(1);
         });
-    });
 
-    describe('0件時', function () {
-        test('該当バッチにおすすめ候補が無い場合は空状態が表示される', function () {
+        test('セクター偏りサマリが表示され、偏り警告セクターの銘柄行にoverweight_sectorが立つ', function () {
+            $user = User::factory()->create();
+            [$batch, $snapshot] = importSummaryReportShowTestImportBatch();
+
+            $semiconductor = importSummaryReportShowTestSectorClassification('半導体');
+            $automobile = importSummaryReportShowTestSectorClassification('自動車');
+
+            $overweight = importSummaryReportShowTestHolding(['symbol_code' => 'SEC1', 'symbol_name' => '半導体株', 'sector_classification_id' => $semiconductor->id]);
+            importSummaryReportShowTestHoldingSnapshot($snapshot, $overweight, ['current_price' => 800, 'unrealized_gain_rate' => 0.0]);
+            importSummaryReportShowTestTechnicalIndicator($overweight);
+            importSummaryReportShowTestFundamentalIndicator($overweight);
+
+            $healthy = importSummaryReportShowTestHolding(['symbol_code' => 'AUTO1', 'symbol_name' => '自動車株', 'sector_classification_id' => $automobile->id]);
+            importSummaryReportShowTestHoldingSnapshot($snapshot, $healthy, ['current_price' => 200, 'unrealized_gain_rate' => 0.0]);
+            importSummaryReportShowTestTechnicalIndicator($healthy);
+            importSummaryReportShowTestFundamentalIndicator($healthy);
+
+            $component = Livewire::actingAs($user)->test(Show::class, ['importBatch' => $batch]);
+
+            $component->assertSee('半導体');
+
+            expect($component->get('report'))->toHaveKey('classification');
+            $classification = $component->get('report')['classification'];
+            expect(collect($classification['sector_overweight_summary'])->pluck('sector_name')->all())->toContain('半導体');
+
+            $holdBucket = collect($classification['buckets'])->firstWhere('bucket', 'hold');
+            $overweightRow = collect($holdBucket['holdings'])->firstWhere('symbol_code', 'SEC1');
+            expect($overweightRow['overweight_sector'])->toBeTrue();
+        });
+
+        test('holdバケツの要観察（hold_watch）フラグが立つ銘柄が表示データ・画面の両方に反映される', function () {
+            $user = User::factory()->create();
+            [$batch, $snapshot] = importSummaryReportShowTestImportBatch();
+
+            $watched = importSummaryReportShowTestHolding(['symbol_code' => 'WATCH1', 'symbol_name' => '要観察株']);
+            importSummaryReportShowTestHoldingSnapshot($snapshot, $watched, [
+                'current_price' => 1020, 'unrealized_gain_amount' => 2000, 'unrealized_gain_rate' => 2.0,
+            ]);
+            importSummaryReportShowTestTechnicalIndicator($watched);
+            // 財務健全性 failed（ADR-0014 D5 hold_watch判定(a)）。
+            importSummaryReportShowTestFundamentalIndicator($watched, ['equity_ratio' => 20.0, 'roe' => 3.0]);
+
+            $component = Livewire::actingAs($user)->test(Show::class, ['importBatch' => $batch]);
+
+            $component->assertSee('WATCH1');
+
+            expect($component->get('report'))->toHaveKey('classification');
+            $holdBucket = collect($component->get('report')['classification']['buckets'])->firstWhere('bucket', 'hold');
+            $row = collect($holdBucket['holdings'])->firstWhere('symbol_code', 'WATCH1');
+            expect($row['hold_watch'])->toBeTrue();
+        });
+
+        test('保有銘柄が0件の場合、分類対象なしの空状態が表示される', function () {
             $user = User::factory()->create();
             [$batch] = importSummaryReportShowTestImportBatch();
             // Deliberately no Holding/HoldingSnapshot rows created at all.
 
             Livewire::actingAs($user)->test(Show::class, ['importBatch' => $batch])
-                ->assertSee('現時点でおすすめできる項目はありません');
+                ->assertSee('分類対象の保有銘柄がありません');
+        });
+    });
+
+    describe('旧フィールド・旧表示の廃止（ADR-0014 D9-1）', function () {
+        test('$report に旧フィールド（top_recommendations/supplementary_recommendations）が含まれない', function () {
+            $user = User::factory()->create();
+            [$batch, $snapshot] = importSummaryReportShowTestImportBatch();
+            importSummaryReportShowTestSeedAllBuckets($snapshot);
+
+            $component = Livewire::actingAs($user)->test(Show::class, ['importBatch' => $batch]);
+
+            expect($component->get('report'))->not->toHaveKey('top_recommendations');
+            expect($component->get('report'))->not->toHaveKey('supplementary_recommendations');
+        });
+
+        test('旧・上位10件/補足レコメンドの見出し文言は画面に表示されない', function () {
+            $user = User::factory()->create();
+            [$batch, $snapshot] = importSummaryReportShowTestImportBatch();
+            importSummaryReportShowTestSeedAllBuckets($snapshot);
+
+            $component = Livewire::actingAs($user)->test(Show::class, ['importBatch' => $batch]);
+
+            $component->assertDontSee('おすすめ上位10件');
+            $component->assertDontSee('補足レコメンド（11〜20位）');
         });
     });
 
@@ -332,9 +364,6 @@ describe('UC-009: 取込後サマリーレポート画面（Livewire）', functi
         test('存在しない取込バッチIDを指定した場合は404になる', function () {
             $user = User::factory()->create();
 
-            // NOTE: coincidentally already 404s today because the route
-            // itself does not exist yet — see file-level docblock caveat.
-            // Re-verify once the route/route-model-binding is added.
             $this->actingAs($user)->get('/import-batches/999999/summary-report')->assertStatus(404);
         });
     });
@@ -352,16 +381,20 @@ describe('UC-009: 取込後サマリーレポート画面（Livewire）', functi
         });
     });
 
-    describe('副作用（GETで再集計・書き込みが走るAction）', function () {
+    describe('副作用（GETで再集計が走るAction）', function () {
         test('ShowImportSummaryReportActionはmount時に1回だけ呼び出される', function () {
             $user = User::factory()->create();
             [$batch] = importSummaryReportShowTestImportBatch();
 
+            // 有効な（キーが揃った）空のclassification構造を、実際の
+            // ClassifyHoldingsAction（保有銘柄0件）から得て使う — Blade側が
+            // classificationの各キーを前提に描画してもキー欠落で落ちない
+            // ようにするため（旧版のtop_recommendations:[]と同じ意図）。
+            $classification = app(ClassifyHoldingsAction::class)->execute();
             $fakeResult = [
                 'portfolio_headline' => 'テスト用ヘッドライン',
                 'generated_at' => now(),
-                'top_recommendations' => [],
-                'supplementary_recommendations' => [],
+                'classification' => $classification,
             ];
 
             $this->mock(ShowImportSummaryReportAction::class, function ($mock) use ($fakeResult) {
@@ -371,138 +404,20 @@ describe('UC-009: 取込後サマリーレポート画面（Livewire）', functi
             Livewire::actingAs($user)->test(Show::class, ['importBatch' => $batch])
                 ->assertSee('テスト用ヘッドライン');
 
-            // Mockery::once()の検証（未実装クラスのためこの行に到達する前に
-            // 「class not found」でRedになる想定 — Show作成後も、mount()以外
-            // （render()等）でexecute()を再度呼んでいれば
-            // "should be called exactly 1 times but called 2 times"で
-            // Redのままになる）。
+            // Mockery::once()の検証はこのテスト関数を抜ける際に行われる。
         });
     });
 
-    describe('リンクhref（暫定仕様、Gate4確認事項）', function () {
-        test('利確検討・新規投資候補の行は/holdings?symbol_code={symbol_code}へのリンクを持つ', function () {
+    describe('永続化なし（ADR-0014 D9-2）', function () {
+        test('画面表示後もimport_summary_reports/import_summary_report_itemsへの書き込みは発生しない', function () {
             $user = User::factory()->create();
             [$batch, $snapshot] = importSummaryReportShowTestImportBatch();
-            importSummaryReportShowTestSeedAllThreeTypes($snapshot);
+            importSummaryReportShowTestSeedAllBuckets($snapshot);
 
-            $component = Livewire::actingAs($user)->test(Show::class, ['importBatch' => $batch]);
+            Livewire::actingAs($user)->test(Show::class, ['importBatch' => $batch]);
 
-            $component->assertSeeHtml('href="/holdings?symbol_code=1111"'); // 利確検討
-            $component->assertSeeHtml('href="/holdings?symbol_code=6920"'); // 新規投資候補
+            $this->assertDatabaseCount('import_summary_reports', 0);
+            $this->assertDatabaseCount('import_summary_report_items', 0);
         });
-
-        test('リバランスの行は/sector-dashboardへのリンクを持つ', function () {
-            $user = User::factory()->create();
-            [$batch, $snapshot] = importSummaryReportShowTestImportBatch();
-            importSummaryReportShowTestSeedAllThreeTypes($snapshot);
-
-            Livewire::actingAs($user)->test(Show::class, ['importBatch' => $batch])
-                ->assertSeeHtml('href="/sector-dashboard"');
-        });
-    });
-});
-
-/*
-|--------------------------------------------------------------------------
-| symbol_code フィールド追加（Green phase予定） — backend Action assertion
-|--------------------------------------------------------------------------
-|
-| ShowImportSummaryReportAction::toResponseItem() currently omits a stable
-| identifier for 利確検討/新規投資候補 items ($item['target'] is only the
-| display string "{symbol_code} {symbol_name}"). The Show screen above
-| needs a bare symbol_code to build its temporary "/holdings?symbol_code=..."
-| link (see file-level docblock). This calls the Action directly (not
-| through Livewire/HTTP) so the failure reason is isolated to "the array key
-| doesn't exist / isn't correct" rather than entangled with the Livewire
-| class not existing yet.
-|
-*/
-describe('ShowImportSummaryReportAction: symbol_codeフィールド追加（Green phase予定、Gate4確認事項）', function () {
-    test('利確検討レコメンド項目にsymbol_codeが含まれる', function () {
-        [$batch, $snapshot] = importSummaryReportShowTestImportBatch();
-        $holding = importSummaryReportShowTestHolding(['symbol_code' => '7203', 'market' => 'jp', 'symbol_name' => 'トヨタ自動車']);
-        importSummaryReportShowTestHoldingSnapshot($snapshot, $holding, [
-            'average_cost' => 1000.0, 'current_price' => 1300.0,
-            'unrealized_gain_amount' => 3000.0, 'unrealized_gain_rate' => 30.0,
-        ]);
-        importSummaryReportShowTestTechnicalIndicator($holding, ['rsi' => 75.0]);
-
-        $data = app(ShowImportSummaryReportAction::class)->execute($batch);
-
-        $item = collect($data['top_recommendations'])->firstWhere('recommendation_type', '利確検討');
-        expect($item)->not->toBeNull();
-        expect($item['symbol_code'] ?? null)->toBe('7203');
-    });
-
-    test('新規投資候補レコメンド項目にsymbol_codeが含まれる', function () {
-        [$batch, $snapshot] = importSummaryReportShowTestImportBatch();
-
-        // 保有銘柄が0件だと新規投資候補判定のロジック自体には影響しないが、
-        // UC-009の前提条件（保有銘柄が存在する）に合わせ、軽く1件保有させる。
-        $heldHolding = importSummaryReportShowTestHolding(['symbol_code' => '9432', 'market' => 'jp', 'symbol_name' => 'NTT']);
-        importSummaryReportShowTestHoldingSnapshot($snapshot, $heldHolding, [
-            'unrealized_gain_amount' => 500.0,
-            'unrealized_gain_rate' => 5.0,
-        ]);
-
-        importSummaryReportShowTestWatchedTheme('AI半導体');
-        $themeSector = importSummaryReportShowTestSectorClassification('AI半導体', '9999');
-        $candidateHolding = importSummaryReportShowTestHolding([
-            'symbol_code' => '6920', 'market' => 'jp', 'symbol_name' => 'レーザーテック',
-            'sector_classification_id' => $themeSector->id,
-        ]);
-        importSummaryReportShowTestFundamentalIndicator($candidateHolding, [
-            'equity_ratio' => 60.0,
-            'roe' => 15.0,
-        ]);
-
-        $data = app(ShowImportSummaryReportAction::class)->execute($batch);
-
-        $allItems = collect($data['top_recommendations'])->merge($data['supplementary_recommendations']);
-        $item = $allItems->firstWhere('recommendation_type', '新規投資候補');
-        expect($item)->not->toBeNull();
-        expect($item['symbol_code'] ?? null)->toBe('6920');
-    });
-
-    test('リバランスレコメンド項目にはsymbol_codeが含まれない', function () {
-        // NOTE: this assertion already passes today (the key has never
-        // existed on any item, リバランス included), since
-        // toResponseItem() adds no fields at all yet. It is not a
-        // Red-phase failure — it is included as an explicit regression
-        // guard so that once Green work adds 'symbol_code' to the 利確検討/
-        // 新規投資候補 branches, a reviewer can confirm the リバランス branch
-        // was deliberately left out rather than accidentally also gaining
-        // the field. Flagged in the completion report.
-        [$batch, $snapshot] = importSummaryReportShowTestImportBatch();
-
-        $overweightSector = importSummaryReportShowTestSectorClassification('電気機器', '3650');
-        $otherSector = importSummaryReportShowTestSectorClassification('輸送用機器', '3750');
-
-        foreach (['9001', '9002', '9003'] as $code) {
-            $holding = importSummaryReportShowTestHolding([
-                'symbol_code' => $code, 'market' => 'jp', 'symbol_name' => "偏りテスト銘柄{$code}",
-                'sector_classification_id' => $overweightSector->id,
-            ]);
-            importSummaryReportShowTestHoldingSnapshot($snapshot, $holding, [
-                'quantity' => 1000, 'average_cost' => 2910.0, 'current_price' => 3000.0,
-                'unrealized_gain_amount' => 90000.0, 'unrealized_gain_rate' => 3.0,
-            ]);
-        }
-
-        $balancingHolding = importSummaryReportShowTestHolding([
-            'symbol_code' => '7203', 'market' => 'jp', 'symbol_name' => 'トヨタ自動車',
-            'sector_classification_id' => $otherSector->id,
-        ]);
-        importSummaryReportShowTestHoldingSnapshot($snapshot, $balancingHolding, [
-            'quantity' => 1000, 'average_cost' => 970.0, 'current_price' => 1000.0,
-            'unrealized_gain_amount' => 30000.0, 'unrealized_gain_rate' => 3.0,
-        ]);
-
-        $data = app(ShowImportSummaryReportAction::class)->execute($batch);
-
-        $allItems = collect($data['top_recommendations'])->merge($data['supplementary_recommendations']);
-        $rebalanceItem = $allItems->firstWhere('recommendation_type', 'リバランス');
-        expect($rebalanceItem)->not->toBeNull();
-        expect($rebalanceItem['symbol_code'] ?? null)->toBeNull();
     });
 });

@@ -807,6 +807,64 @@ describe('UC-004: 利確シグナル一覧', function () {
         });
     });
 
+    describe('ソート順（ADR-0014 D10-1、F-013 Cycle 2 追加）', function () {
+        // ADR-0014 D10-1: ShowSignalListAction（UC-004本体）に並び順ロジックを
+        // 新規追加する（きょうだいのShowBuySignalListAction::compareRows()/
+        // ShowLossReviewListAction::compareRows()と同じ思想）。①シグナル数
+        // （多い順）②判定チェックリストのテクニカル達成数（多い順）③含み益率
+        // （高い順）。全ホールディングにシグナルを1件以上持たせ、CHG-0006の
+        // 動的閾値分岐（シグナル0件・財務健全性passedで高水準モードに切り替わる
+        // 挙動）の影響を受けないようにする。
+        test('①シグナル数(多い順)②テクニカル達成数(多い順)③含み益率(高い順)に並ぶ', function () {
+            [, $snapshot] = ucFrom004TestImportBatch();
+
+            // A: シグナル2件・テクニカル7/7達成・含み益+190%（Bとシグナル数・
+            //    テクニカル達成数が同点のため、含み益率の高さで先頭に来る）
+            $holdingA = ucFrom004TestHolding(['symbol_code' => '9911', 'market' => 'jp', 'symbol_name' => 'テストA']);
+            $snapshotA = ucFrom004TestHoldingSnapshot($snapshot, $holdingA, ['unrealized_gain_rate' => 190.0]);
+            ucFrom004TestSignal($snapshotA, ['signal_type' => 'rsi_reversal']);
+            ucFrom004TestSignal($snapshotA, ['signal_type' => 'macd_dead_cross', 'reason_summary' => 'MACDがデッドクロスしました']);
+            ucFrom004TestTechnicalIndicator($holdingA);
+            ucFrom004TestHealthyFundamentalIndicator($holdingA, ['peg_ratio' => 2.6]);
+
+            // B: シグナル2件・テクニカル7/7達成・含み益+25%（Aと同点条件だが
+            //    含み益率が低いため2番目）
+            $holdingB = ucFrom004TestHolding(['symbol_code' => '9912', 'market' => 'jp', 'symbol_name' => 'テストB']);
+            $snapshotB = ucFrom004TestHoldingSnapshot($snapshot, $holdingB, ['unrealized_gain_rate' => 25.0]);
+            ucFrom004TestSignal($snapshotB, ['signal_type' => 'rsi_reversal']);
+            ucFrom004TestSignal($snapshotB, ['signal_type' => 'macd_dead_cross', 'reason_summary' => 'MACDがデッドクロスしました']);
+            ucFrom004TestTechnicalIndicator($holdingB);
+            ucFrom004TestHealthyFundamentalIndicator($holdingB, ['peg_ratio' => 2.6]);
+
+            // C: シグナル2件・テクニカル1/7達成のみ（TechnicalIndicator/
+            //    FundamentalIndicator未作成→含み益率項目のみmet）・含み益率は
+            //    極端に高いが、テクニカル達成数で劣るためA/Bより後ろ
+            $holdingC = ucFrom004TestHolding(['symbol_code' => '9913', 'market' => 'jp', 'symbol_name' => 'テストC']);
+            $snapshotC = ucFrom004TestHoldingSnapshot($snapshot, $holdingC, ['unrealized_gain_rate' => 999.0]);
+            ucFrom004TestSignal($snapshotC, ['signal_type' => 'rsi_reversal']);
+            ucFrom004TestSignal($snapshotC, ['signal_type' => 'macd_dead_cross', 'reason_summary' => 'MACDがデッドクロスしました']);
+
+            // D: シグナル1件のみ（テクニカル7/7達成・含み益+200%と最も好条件
+            //    だが、シグナル数が最優先キーのためA/B/Cより後ろ）
+            $holdingD = ucFrom004TestHolding(['symbol_code' => '9914', 'market' => 'jp', 'symbol_name' => 'テストD']);
+            $snapshotD = ucFrom004TestHoldingSnapshot($snapshot, $holdingD, ['unrealized_gain_rate' => 200.0]);
+            ucFrom004TestSignal($snapshotD, ['signal_type' => 'rsi_reversal']);
+            ucFrom004TestTechnicalIndicator($holdingD);
+            ucFrom004TestHealthyFundamentalIndicator($holdingD, ['peg_ratio' => 2.6]);
+
+            $response = ucFrom004TestFetch($this);
+
+            $response->assertSuccessful();
+            $rows = $response->json('data');
+            $order = array_values(array_intersect(
+                array_column($rows, 'symbol_code'),
+                ['9911', '9912', '9913', '9914']
+            ));
+
+            expect($order)->toBe(['9911', '9912', '9913', '9914']);
+        });
+    });
+
     describe('評価額（market_value、CHG-0011）', function () {
         test('各行に market_value（保有数量 × 現在値）が含まれる', function () {
             [, $snapshot] = ucFrom004TestImportBatch();

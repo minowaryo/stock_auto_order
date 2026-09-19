@@ -58,7 +58,7 @@ class ShowSignalListAction
             ->with(['holding', 'holding.fundamentalIndicator', 'holding.technicalIndicator', 'signals', 'accounts'])
             ->get();
 
-        return $holdingSnapshots
+        $rows = $holdingSnapshots
             ->map(function (HoldingSnapshot $holdingSnapshot) {
                 $threshold = $this->resolveThreshold($holdingSnapshot);
 
@@ -71,6 +71,30 @@ class ShowSignalListAction
             ->filter(fn (?array $row) => $row !== null)
             ->values()
             ->all();
+
+        usort($rows, fn (array $a, array $b) => $this->compareRows($a, $b));
+
+        return array_map(function (array $row) {
+            unset($row['_signal_count'], $row['_technical_met']);
+
+            return $row;
+        }, $rows);
+    }
+
+    /**
+     * ソート順（ADR-0014 D10/D10-1、透明マルチキー。add_on/loss_review と
+     * 同じ思想〔シグナル性→チェックリスト達成度→含み損益率〕で揃える）:
+     * ①シグナル数（多い順）②判定チェックリストのテクニカル達成数（多い順）
+     * ③含み益率（高い順）。
+     *
+     * @param  array<string, mixed>  $a
+     * @param  array<string, mixed>  $b
+     */
+    private function compareRows(array $a, array $b): int
+    {
+        return ($b['_signal_count'] <=> $a['_signal_count'])
+            ?: ($b['_technical_met'] <=> $a['_technical_met'])
+            ?: ((float) $b['unrealized_gain_rate'] <=> (float) $a['unrealized_gain_rate']);
     }
 
     /**
@@ -108,6 +132,10 @@ class ShowSignalListAction
             $signalReasonSummary .= '（利確ラインを+150%まで引き上げています）';
         }
 
+        $criteria = $this->criteriaEvaluator->evaluateTakeProfit(
+            $this->buildCriteriaMetrics($holdingSnapshot, $threshold),
+        );
+
         return [
             'id' => $holding->id,
             'symbol_code' => $holding->symbol_code,
@@ -126,9 +154,9 @@ class ShowSignalListAction
             'is_high_water_mark' => $threshold['mode'] === 'high_water_mark',
             // 判定チェックリスト（CHG-0007）: 基準点・実測値・達成状態を並べた
             // 表示用データ。含み益率の基準ラベルは高水準モード時+150%に追従する。
-            'criteria' => $this->criteriaEvaluator->evaluateTakeProfit(
-                $this->buildCriteriaMetrics($holdingSnapshot, $threshold),
-            ),
+            'criteria' => $criteria,
+            '_signal_count' => $signals->count(),
+            '_technical_met' => $criteria['summary']['technical']['met'],
         ];
     }
 
