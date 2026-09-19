@@ -68,11 +68,12 @@ use Livewire\Livewire;
 */
 
 /**
+ * @param  array<string, mixed>  $batchAttributes
  * @return array{0: ImportBatch, 1: Snapshot}
  */
-function importSummaryReportShowTestImportBatch(): array
+function importSummaryReportShowTestImportBatch(array $batchAttributes = []): array
 {
-    $batch = ImportBatch::create([
+    $batch = ImportBatch::create(array_merge([
         'status' => 'completed',
         'jp_stock_filename' => 'jp_stock.csv',
         'us_stock_filename' => 'us_stock.csv',
@@ -80,11 +81,11 @@ function importSummaryReportShowTestImportBatch(): array
         'imported_count' => 0,
         'error_count' => 0,
         'imported_at' => now(),
-    ]);
+    ], $batchAttributes));
 
     $snapshot = Snapshot::create([
         'import_batch_id' => $batch->id,
-        'snapshotted_at' => now(),
+        'snapshotted_at' => $batchAttributes['imported_at'] ?? now(),
     ]);
 
     return [$batch, $snapshot];
@@ -418,6 +419,45 @@ describe('UC-009: 取込後サマリーレポート画面（Livewire）— 分�
 
             $this->assertDatabaseCount('import_summary_reports', 0);
             $this->assertDatabaseCount('import_summary_report_items', 0);
+        });
+    });
+
+    describe('最新スナップショットの反映（F-013第1段階は直近のみが対象、/review指摘対応）', function () {
+        test('古い取込バッチのURLを開いても、分類俯瞰は最新スナップショットを反映し、基準日時のキャプションも最新スナップショットの日時と一致する（取込バッチ自身の日時とは食い違わない）', function () {
+            $user = User::factory()->create();
+
+            [$oldBatch, $oldSnapshot] = importSummaryReportShowTestImportBatch([
+                'imported_at' => now()->subWeek(),
+            ]);
+            $oldOnlyHolding = importSummaryReportShowTestHolding(['symbol_code' => 'OLD1', 'symbol_name' => '旧バッチ限定株']);
+            importSummaryReportShowTestHoldingSnapshot($oldSnapshot, $oldOnlyHolding, [
+                'current_price' => 1050, 'unrealized_gain_amount' => 5000, 'unrealized_gain_rate' => 5.0,
+            ]);
+            importSummaryReportShowTestTechnicalIndicator($oldOnlyHolding);
+            importSummaryReportShowTestFundamentalIndicator($oldOnlyHolding);
+
+            [$newBatch, $newSnapshot] = importSummaryReportShowTestImportBatch([
+                'imported_at' => now(),
+            ]);
+            $newOnlyHolding = importSummaryReportShowTestHolding(['symbol_code' => 'NEW1', 'symbol_name' => '新バッチ限定株']);
+            importSummaryReportShowTestHoldingSnapshot($newSnapshot, $newOnlyHolding, [
+                'current_price' => 1050, 'unrealized_gain_amount' => 5000, 'unrealized_gain_rate' => 5.0,
+            ]);
+            importSummaryReportShowTestTechnicalIndicator($newOnlyHolding);
+            importSummaryReportShowTestFundamentalIndicator($newOnlyHolding);
+
+            // 古いバッチ（$oldBatch）のURLを開く。
+            $component = Livewire::actingAs($user)->test(Show::class, ['importBatch' => $oldBatch]);
+
+            // 中身は最新スナップショット（$newSnapshot）のものが表示され、
+            // 旧バッチにしかいない銘柄は表示されない。
+            $component->assertSee('NEW1')->assertDontSee('OLD1');
+
+            // キャプションの基準日時は「開いたURLの取込バッチ（$oldBatch）の
+            // 日時」ではなく「実際に表示している最新スナップショット
+            // （$newSnapshot）の日時」と一致する（食い違わない）。
+            expect($component->get('importedAtLabel'))->toBe($newSnapshot->snapshotted_at->format('Y-m-d H:i'));
+            expect($component->get('importedAtLabel'))->not->toBe($oldBatch->imported_at->format('Y-m-d H:i'));
         });
     });
 });

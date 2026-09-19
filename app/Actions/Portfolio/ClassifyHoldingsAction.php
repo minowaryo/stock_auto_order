@@ -104,6 +104,25 @@ class ClassifyHoldingsAction
         $takeProfitHoldingIds = $eligibleHoldingIds($takeProfitRows);
         $addOnHoldingIds = $eligibleHoldingIds($addOnRows);
 
+        // ADR-0014 D9-4: bucket_reason を SignalCriteriaEvaluator の達成度
+        // データから機械生成するため、供給元Actionが既に算出済みの criteria
+        // を holding id 単位で引けるようにする（新しい判定は追加しない）。
+        $criteriaByHoldingIdFor = function (array $sourceRows) use ($holdingIdsBySymbol): array {
+            $map = [];
+
+            foreach ($sourceRows as $row) {
+                foreach ($holdingIdsBySymbol->get($row['symbol_code'], []) as $id) {
+                    $map[$id] = $row['criteria'] ?? null;
+                }
+            }
+
+            return $map;
+        };
+
+        $lossReviewCriteriaById = $criteriaByHoldingIdFor($lossReviewRows);
+        $takeProfitCriteriaById = $criteriaByHoldingIdFor($takeProfitRows);
+        $addOnCriteriaById = $criteriaByHoldingIdFor($addOnRows);
+
         /** @var array<int, array{bucket: string, also_matched: array<int, string>}> $classified */
         $classified = [];
 
@@ -143,7 +162,14 @@ class ClassifyHoldingsAction
             $holdingId = $holdingSnapshot->holding->id;
             $info = $classified[$holdingId];
 
-            $rowsById[$holdingId] = $this->buildRow($holdingSnapshot, $info['bucket'], $info['also_matched'], $sectorStatusByName);
+            $criteria = match ($info['bucket']) {
+                'loss_review' => $lossReviewCriteriaById[$holdingId] ?? null,
+                'take_profit' => $takeProfitCriteriaById[$holdingId] ?? null,
+                'add_on' => $addOnCriteriaById[$holdingId] ?? null,
+                default => null,
+            };
+
+            $rowsById[$holdingId] = $this->buildRow($holdingSnapshot, $info['bucket'], $info['also_matched'], $sectorStatusByName, $criteria);
         }
 
         $coreAccumulationHoldings = collect($rowsById)
@@ -302,9 +328,10 @@ class ClassifyHoldingsAction
     /**
      * @param  array<int, string>  $alsoMatched
      * @param  Collection<string, array<string, mixed>>  $sectorStatusByName
+     * @param  array<string, mixed>|null  $criteria  loss_review/take_profit/add_on のみ、供給元Actionが算出済みのSignalCriteriaEvaluator出力
      * @return array<string, mixed>
      */
-    private function buildRow(HoldingSnapshot $holdingSnapshot, string $bucket, array $alsoMatched, Collection $sectorStatusByName): array
+    private function buildRow(HoldingSnapshot $holdingSnapshot, string $bucket, array $alsoMatched, Collection $sectorStatusByName, ?array $criteria = null): array
     {
         $holding = $holdingSnapshot->holding;
         $unrealizedGainRate = $holdingSnapshot->unrealized_gain_rate !== null ? (float) $holdingSnapshot->unrealized_gain_rate : null;
@@ -328,7 +355,7 @@ class ClassifyHoldingsAction
             'instrument_type' => $holding->instrument_type,
             'market_value' => $this->marketValue($holdingSnapshot),
             'unrealized_gain_rate' => $unrealizedGainRate,
-            'bucket_reason' => $this->bucketReason($bucket),
+            'bucket_reason' => $this->bucketReason($bucket, $criteria),
             'also_matched' => $alsoMatched,
             'overweight_sector' => $overweightSector,
             'hold_watch' => $holdWatch,
@@ -426,16 +453,46 @@ class ClassifyHoldingsAction
         );
     }
 
-    private function bucketReason(string $bucket): string
+    /**
+     * ADR-0014 D9-4: 一言評価はシンプルかつ理由が明快なものに限定し、
+     * SignalCriteriaEvaluatorが既に算出済みの「基準値・実測値・達成状態」
+     * データから機械的に生成する（例:「技術3/7達成・RSI72.1が基準≥70を
+     * 満たす」）。複数要素を独自の重みで合成する文章生成は行わない。
+     * `core_accumulation`/`hold`は供給元Actionのcriteriaを持たないため、
+     * 固定文言のまま（`hold`はhealth_lineが個別値を別途表示する）。
+     *
+     * @param  array<string, mixed>|null  $criteria
+     */
+    private function bucketReason(string $bucket, ?array $criteria): string
     {
-        return match ($bucket) {
-            'core_accumulation' => '積立・インデックスコア（ETF/投資信託、またはNISAつみたて投資枠のみ）',
-            'loss_review' => '整理検討ラインを超える含み損',
-            'take_profit' => '利確検討条件を満たすシグナルあり',
-            'add_on' => '押し目買いシグナル発生中',
-            'hold' => 'いずれの条件にも該当しないキープ銘柄',
-            default => '',
-        };
+        if ($criteria === null) {
+            return match ($bucket) {
+                'core_accumulation' => '積立・インデックスコア（ETF/投資信託、またはNISAつみたて投資枠のみ）',
+                'hold' => 'いずれの条件にも該当しないキープ銘柄',
+                default => '',
+            };
+        }
+
+        $summary = $criteria['summary']['technical'] ?? null;
+        $sample = collect($criteria['technical'] ?? [])->firstWhere('status', 'met');
+
+        if ($summary === null || $sample === null) {
+            return match ($bucket) {
+                'loss_review' => '整理検討ラインを超える含み損',
+                'take_profit' => '利確検討条件を満たすシグナルあり',
+                'add_on' => '押し目買いシグナル発生中',
+                default => '',
+            };
+        }
+
+        return sprintf(
+            '技術%d/%d達成・%s%sが基準%sを満たす',
+            $summary['met'],
+            $summary['total'],
+            $sample['label'],
+            $sample['value_label'],
+            $sample['threshold_label'],
+        );
     }
 
     /**

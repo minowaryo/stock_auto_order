@@ -484,6 +484,40 @@ describe('UC-013: ポートフォリオ分類ダッシュボード（ClassifyHol
             expect(ucFrom013TestFindHolding($bucket['holdings'], '9004'))->not->toBeNull();
         });
 
+        test('take_profit の bucket_reason は SignalCriteriaEvaluator の達成度データから機械生成され、銘柄ごとに内容が異なる（ADR-0014 D9-4、/review指摘対応）', function () {
+            [, $snapshot] = ucFrom013TestBatch();
+
+            $holdingA = ucFrom013TestHolding(['symbol_code' => '9101', 'symbol_name' => '利確A']);
+            $snapshotA = ucFrom013TestHoldingSnapshot($snapshot, $holdingA, [
+                'current_price' => 1250, 'unrealized_gain_amount' => 25000, 'unrealized_gain_rate' => 25.0,
+            ]);
+            ucFrom013TestSignal($snapshotA);
+            ucFrom013TestTechnicalIndicator($holdingA, ['rsi' => 82.0]);
+            ucFrom013TestFundamentalIndicator($holdingA);
+
+            $holdingB = ucFrom013TestHolding(['symbol_code' => '9102', 'symbol_name' => '利確B']);
+            $snapshotB = ucFrom013TestHoldingSnapshot($snapshot, $holdingB, [
+                'current_price' => 1300, 'unrealized_gain_amount' => 30000, 'unrealized_gain_rate' => 30.0,
+            ]);
+            ucFrom013TestSignal($snapshotB);
+            ucFrom013TestTechnicalIndicator($holdingB, ['rsi' => 40.0]);
+            ucFrom013TestFundamentalIndicator($holdingB);
+
+            $result = ucFrom013TestExecute();
+            $bucket = ucFrom013TestFindBucket($result['buckets'], 'take_profit');
+            $rowA = ucFrom013TestFindHolding($bucket['holdings'], '9101');
+            $rowB = ucFrom013TestFindHolding($bucket['holdings'], '9102');
+
+            // 固定文言（旧実装）ではないこと。
+            expect($rowA['bucket_reason'])->not->toBe('利確検討条件を満たすシグナルあり');
+            // SignalCriteriaEvaluator の達成度（技術◯/◯達成）を含む機械生成の文言であること。
+            expect($rowA['bucket_reason'])->toMatch('/技術\d+\/\d+達成/');
+            expect($rowB['bucket_reason'])->toMatch('/技術\d+\/\d+達成/');
+            // 銘柄ごとに実測値が異なるため、bucket_reason の内容も異なること
+            // （固定のバケツ種別文言に戻っていないことの確認）。
+            expect($rowA['bucket_reason'])->not->toBe($rowB['bucket_reason']);
+        });
+
         test('未保有のウォッチリスト銘柄は new_entry_reference に参考表示され、buckets 側の new_entry の内容・順序も ShowWatchlistAction と一致する', function () {
             ucFrom013TestWatchlistItem('5555', ['name' => 'アルファ工業', 'buy_signals' => 1]);
             ucFrom013TestWatchlistItem('6666', ['name' => 'ベータ商事']);
