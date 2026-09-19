@@ -554,6 +554,34 @@ test('PERが10.0のとき、reason_summaryにPERの値が含まれる', function
     expect($signal['reason_summary'])->toContain('10');
 });
 
+test('PERが負値（赤字企業、US株Finnhub peTTMがそのまま渡るケース）の場合、per_undervaluedシグナルは発生しない（`/review`回帰テスト、ADR-0012 D4のPEG下限ガードと同種のバグ防止）', function () {
+    // Arrange: JP側FundamentalIndicatorMapper::calculatePer()はeps<=0でnull化
+    // するが、US側UsFundamentalIndicatorMapperはFinnhubのpeTTMをそのまま採用
+    // しており赤字企業では負値になりうる（pegTTMの負値と同じ構図）。下限
+    // ガードがないと「PERが低い（負値）＝割安」と誤判定してしまう。
+    $closes = range(100, 151);
+    $priceHistory = bsdPriceHistory($closes);
+
+    // Act
+    $result = bsdService()->determine($priceHistory, marketReturn13w: 0.0, per: -20.0);
+
+    // Assert
+    expect(bsdSignalTypes($result))->not->toContain('per_undervalued');
+    expect($result)->toBe([]);
+});
+
+test('PERがちょうど0.0の場合、per_undervaluedシグナルは発生しない（下限ガードの境界値）', function () {
+    $closes = range(100, 151);
+    $priceHistory = bsdPriceHistory($closes);
+
+    // Act
+    $result = bsdService()->determine($priceHistory, marketReturn13w: 0.0, per: 0.0);
+
+    // Assert
+    expect(bsdSignalTypes($result))->not->toContain('per_undervalued');
+    expect($result)->toBe([]);
+});
+
 // -----------------------------------------------------------------------
 // 全シグナル共通の前提条件による抑制
 // -----------------------------------------------------------------------

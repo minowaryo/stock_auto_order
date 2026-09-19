@@ -409,6 +409,14 @@ describe('SignalCriteriaEvaluator: 判定チェックリスト（CHG-0007）', f
             expect(criterionRow($unavailable['technical'], 'PER')['value_label'])->toBe('—');
         });
 
+        test('PERが負値・ゼロの場合はunmet（`/review`回帰テスト: US株Finnhub peTTMが赤字企業で負値を返しうるため、lte_positiveで met/near と誤読させない、ADR-0012 D4のPEGチップと同種）', function () {
+            $negative = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet(['per' => -20.0]));
+            $zero = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet(['per' => 0.0]));
+
+            expect(criterionRow($negative['technical'], 'PER')['status'])->toBe('unmet');
+            expect(criterionRow($zero['technical'], 'PER')['status'])->toBe('unmet');
+        });
+
         test('PBRは判定基準を持たない実測値表示のため、値があれば met/near/unmet のいずれでもない info、nullなら unavailable', function () {
             $withValue = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet(['pbr' => 3.5]));
             $withoutValue = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet(['pbr' => null]));

@@ -220,7 +220,11 @@ final class SignalCriteriaEvaluator
                 sprintf('≤%s', number_format(BuySignalDeterminationService::PER_UNDERVALUED_THRESHOLD, 1)),
                 $metrics['per'] ?? null,
                 BuySignalDeterminationService::PER_UNDERVALUED_THRESHOLD,
-                'lte',
+                // `/review`指摘: US株のFinnhub peTTMは赤字企業で負値になりうる
+                // （BuySignalDeterminationService::determinePerUndervalued()の
+                // 下限ガードと同じ理由、ADR-0012 D4のPEGチップと同じ扱い）。
+                // 負値・ゼロは met/near と誤読させないため lte_positive を使う。
+                'lte_positive',
                 fn (float $v) => number_format($v, 1),
             ),
             $this->row(

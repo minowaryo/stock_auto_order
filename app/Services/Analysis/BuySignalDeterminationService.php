@@ -387,7 +387,12 @@ final class BuySignalDeterminationService
             return null;
         }
 
-        if ($per <= self::PER_UNDERVALUED_THRESHOLD) {
+        // `/review`指摘（ADR-0012 D4のPEG下限ガードと同種のバグ）: JP側
+        // FundamentalIndicatorMapper::calculatePer()はeps<=0でnull化するが、
+        // US側UsFundamentalIndicatorMapperはFinnhubのpeTTMをそのまま採用して
+        // おり、赤字（トレーリング12ヶ月の実質赤字）企業では負値になりうる。
+        // 下限ガードなしだと赤字企業を「PERが低い＝割安」と誤判定してしまう。
+        if ($per > 0.0 && $per <= self::PER_UNDERVALUED_THRESHOLD) {
             return [
                 'signal_type' => 'per_undervalued',
                 'reason_summary' => sprintf('PERが%sと割安水準です', $this->formatNumber($per, 1)),

@@ -60,6 +60,12 @@ PBRは条件に含めない（D2実測検証セクション参照）。
 
 対象は買い増し候補セクション（UC-010）のみとし、利確検討（UC-004）・整理検討（UC-011）は対象外とする。
 
+### D2追記（`/review`指摘、2026-09-19）: PERにも下限ガードが必要
+
+D2策定時「PERは`FundamentalIndicatorMapper::calculatePer()`が既にeps<=0でnull化済み」と整理したが、これはJP側のみに当てはまる。US側`UsFundamentalIndicatorMapper`はFinnhubの`peTTM`をそのまま採用しており、赤字（トレーリング12ヶ月で実質赤字）企業では負値になりうる（ADR-0009参照。`peg_ratio`の`pegTTM`が負値を返しうるのと同じ構図で、ADR-0012 D4で修正済みのPEG下限ガードと同一クラスのバグ）。下限ガードなしでは`determinePerUndervalued()`が「PERが低い（実際は負値）＝割安」と誤判定し、赤字の米国株を`per_undervalued`として買い増し候補に表示してしまう。
+
+`BuySignalDeterminationService::determinePerUndervalued()`の条件を`$per > 0.0 && $per <= self::PER_UNDERVALUED_THRESHOLD`に修正し、`SignalCriteriaEvaluator::evaluateBuy()`のPER行の`direction`も`'lte'`から`'lte_positive'`（負値・ゼロを`met`/`near`と誤読させない、PEGチップと同じ扱い）に修正した。回帰テストを`BuySignalDeterminationServiceTest`・`SignalCriteriaEvaluatorTest`に追加。
+
 ## Rationale
 
 ### 却下案
