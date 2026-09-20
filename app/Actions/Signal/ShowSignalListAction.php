@@ -4,6 +4,8 @@ namespace App\Actions\Signal;
 
 use App\Models\HoldingSnapshot;
 use App\Models\Snapshot;
+use App\Services\Analysis\BuySignalDeterminationService;
+use App\Services\Analysis\LowGrowthDeterminer;
 use App\Services\Analysis\SignalCriteriaEvaluator;
 use App\Services\Analysis\TakeProfitThresholdEvaluator;
 
@@ -22,6 +24,7 @@ class ShowSignalListAction
     public function __construct(
         private readonly TakeProfitThresholdEvaluator $takeProfitThresholdEvaluator,
         private readonly SignalCriteriaEvaluator $criteriaEvaluator,
+        private readonly LowGrowthDeterminer $lowGrowthDeterminer,
     ) {}
 
     /**
@@ -149,6 +152,7 @@ class ShowSignalListAction
             'unrealized_gain_rate' => $holdingSnapshot->unrealized_gain_rate,
             'signal_types' => $signals->pluck('signal_type')->values()->all(),
             'signal_reason_summary' => $signalReasonSummary,
+            'valuation_zone_badge' => $this->valuationZoneBadge($holdingSnapshot),
             'split_limit_suggestion' => $this->splitLimitSuggestion($holdingSnapshot, $threshold),
             // CHG-0006: lets the view render the correct price-band labels
             // (+100%/+150% vs +20%/+35%) instead of hardcoding the normal
@@ -160,6 +164,35 @@ class ShowSignalListAction
             '_signal_count' => $signals->count(),
             '_technical_met' => $criteria['summary']['technical']['met'],
         ];
+    }
+
+    private function valuationZoneBadge(HoldingSnapshot $holdingSnapshot): ?string
+    {
+        $fundamentalIndicator = $holdingSnapshot->holding->fundamentalIndicator;
+        $revenueGrowth = $fundamentalIndicator?->revenue_growth !== null
+            ? (float) $fundamentalIndicator->revenue_growth
+            : null;
+        $operatingIncomeGrowth = $fundamentalIndicator?->operating_income_growth !== null
+            ? (float) $fundamentalIndicator->operating_income_growth
+            : null;
+        $per = $fundamentalIndicator?->per !== null ? (float) $fundamentalIndicator->per : null;
+        $dividendYield = $fundamentalIndicator?->dividend_yield !== null
+            ? (float) $fundamentalIndicator->dividend_yield
+            : null;
+
+        if (! $this->lowGrowthDeterminer->isLowGrowth($revenueGrowth, $operatingIncomeGrowth)) {
+            return null;
+        }
+
+        if ($per === null || $dividendYield === null) {
+            return null;
+        }
+
+        return $per > 0.0
+            && $per <= BuySignalDeterminationService::PER_UNDERVALUED_THRESHOLD
+            && $dividendYield >= BuySignalDeterminationService::DIVIDEND_YIELD_UNDERVALUED_THRESHOLD
+                ? '絶対バリュエーション上は割安ゾーン'
+                : null;
     }
 
     /**

@@ -19,6 +19,7 @@
 - **`/review`2回目実施（7角度）・Cycle4d修正完了**: 収束した実害バグ1件を修正——`RefreshWatchlistMarketDataAction::refreshHolding()`（未保有ウォッチリスト銘柄パイプライン）が`avg_revenue_growth`/`avg_operating_income_growth`を一切計算・保存しておらず、watchlist専用銘柄（一度も保有したことがない銘柄）ではD2の平均成長率レスキューが発火しない不整合だった（cross-file tracer／altitude／line-by-lineの3角度が独立発見）。Red（`UC012WatchlistRefreshTest`に新規テスト追加）→Gate4→Green（`FetchExternalMarketDataAction`のCycle4aと同じ`averageAnnualGrowth()`呼び出しを追加）で修正。あわせて`FundamentalIndicatorMapper::annualGrowth()`/`averageAnnualGrowth()`間で重複していたFY絞り込み・重複排除・ソートの18行を`annualStatementsDescending()`に共通化（reuse／simplification角度、挙動は不変）。`docs/architecture/data-model.md`に`avg_revenue_growth`/`avg_operating_income_growth`カラム説明・承認記録・変更履歴を追記（conventions角度が「PLAN.md側は追記済みと主張しているが実際は未追記」という整合性ギャップを発見、今回で解消）。フルスイート686→687 passed（0 failed）。対象外・記録のみ: `ClassifyHoldingsAction`5→7引数ギャップ（F-013由来・他ブランチ継承ファイルのためスコープ外、既知事項のまま）、`SignalCriteriaEvaluator`の判定チェックリストがD1/D2レスキュー閾値を認識せずバッジと矛盾しうるUX不整合（新規発見、次項ロードマップの候補Kまわりに記録要）、Show*ListAction間の7引数展開の共通化・`determinePegUndervalued()`の分割（simplification角度、不具合ではなく任意整理のため見送り）
 - **D4（対セクター相対力フォールバック）は別セッションで実装・マージ済み**（`feat/chg0017-d4-sector-relative-fallback`ブランチ、コミット`be0f00c`→`418172b`マージでこのブランチに統合、本人が実施・プッシュ済み）。`BuySignalDeterminationService::preconditionsSatisfied()`の事前条件Bを`relative_strength_vs_sector ?? relative_strength_vs_market`に変更、テスト5件追加。本人の依頼でレビューを実施し、実装自体はADR-0015 D4設計と一致・テストカバレッジ十分・フルスイート692 passed（0 failed）・pintクリーンを確認
 - **Cycle4e（D4レビューで発見した表示層ギャップの修正）**: `SignalCriteriaEvaluator::evaluateLossReview()`（UC-011整理検討チェックリストの「相対力」行）がD4改訂後も`relative_strength_vs_market`のみを見ており、対セクター相対力を考慮していなかった（対セクターでは基準以上でも対市場のみ見ると誤って「基準割れ」表示になりうる不整合）。Red（`UC011LossReviewListTest`に新規テスト追加）→Green（`ShowLossReviewListAction`が`relative_strength_vs_sector`を`$metrics`に追加、`SignalCriteriaEvaluator`に`preferredRelativeStrength()`/`relativeStrengthLabel()`ヘルパーを追加し対セクター優先判定＋ラベル動的切替`相対力(対セクター)`/`相対力(対市場)`に対応）で修正、Unit Test 2件を追加補強。`docs/architecture/data-model.md`「全シグナル共通の前提条件」注記と平仄が取れた
+- **Cycle D7（UC-004 `valuation_zone_badge`）Gate4承認・Green完了（2026-09-21）**: `ShowSignalListAction`へ既存`LowGrowthDeterminer`をDIし、低成長かつ`PER > 0 && PER <= BuySignalDeterminationService::PER_UNDERVALUED_THRESHOLD`かつ`dividend_yield >= BuySignalDeterminationService::DIVIDEND_YIELD_UNDERVALUED_THRESHOLD`の場合だけ「絶対バリュエーション上は割安ゾーン」を返す表示専用項目を追加。UC-004 Bladeの銘柄セルにSuccess配色の補助バッジを表示。負PER・PER 0・各閾値外・成長率5%超の回帰テストを追加。UC-010は既存の`signals->isNotEmpty()`除外により同時掲載されないため無変更。Red 6件を確認後にGate4本人承認、Green後はUC-004 Feature Test 31件、フルスイート708件がGreen。対象PHP 2ファイルのPintはクリーン、`npm run build`成功。全体Pintは本Cycle外の既存migration 1件、`npm run lint`はスクリプト未定義のため完了条件外の既知制約として記録
 - 次: pintクリーン確認→コミット（push要再確認）。その後D5（週足MA75中期トレンド）・D7（`valuation_zone_badge`）・Feature Test拡充
 
 ### Files touched
@@ -29,7 +30,7 @@
 
 ### Status
 
-**Gate1〜4承認済み、Cycle1〜3b（D1/D2/D3判定ロジック本体）・配線Cycle4a〜4e・D4（別セッション実装）Green完了**（フルスイート692+2 passed / 0 failed、pintクリーン確認予定）。D1・D2・D3・D4すべてが`FetchExternalMarketDataAction`/`RefreshWatchlistMarketDataAction`（シグナル永続化）・`FundamentalHealthEvaluator::evaluate()`の全6呼び出し元（財務健全性判定、F-013除く）・`SignalCriteriaEvaluator`（判定チェックリスト表示）に配線され、watchlist専用銘柄も含めD2平均成長率レスキューとD4対セクターフォールバックが表示・判定の両面で一貫して機能する状態になった。**本CRの主目的（伊藤忠等の低成長健全銘柄の救済）が実際に機能する状態**。次はpintクリーン確認→コミット（push要再確認）、その後D5/D7
+**Gate1〜4承認済み、Cycle1〜3b（D1/D2/D3判定ロジック本体）・配線Cycle4a〜4e・D4（別セッション実装）・D7（UC-004補助バッジ）Green完了**（D7完了時フルスイート708 passed / 0 failed）。D1・D2・D3・D4すべてが`FetchExternalMarketDataAction`/`RefreshWatchlistMarketDataAction`（シグナル永続化）・`FundamentalHealthEvaluator::evaluate()`の全6呼び出し元（財務健全性判定、F-013除く）・`SignalCriteriaEvaluator`（判定チェックリスト表示）に配線され、watchlist専用銘柄も含めD2平均成長率レスキューとD4対セクターフォールバックが表示・判定の両面で一貫して機能する。D7では同じ低成長判定・絶対閾値をUC-004の表示へ再利用し、UC-010への同時掲載は行わない。**本CRの主目的（伊藤忠等の低成長健全銘柄の救済）が実際に機能する状態**。次はD5（週足MA75中期トレンド）の残作業確認
 
 ## 売買戦略の深化ロードマップ策定（2026-09-19）
 
@@ -280,5 +281,4 @@ UC-011 は閲覧系フローで `.claude/rules/31-e2e-testing.md` のクリテ�
 
 - **フロントエンドUI（Livewire画面化）**: UC-001〜UC-009はこれまで全てAPIのみで実装してきた（`app/Livewire/`・`resources/views/`配下のBladeビューは0件、`docs/product/mockups/`は静的HTMLモックのみで実際に動く画面ではない）。Phase2（F-005/F-006/F-007/F-008）がAPIレベルで全完了したため、**次はLivewireコンポーネント・Bladeビューの実装（実際にブラウザでCSV取込〜各画面確認ができる状態にする）に着手する**方針をユーザーと確認済み
 - **F-007（UC-007 市場全体指標表示）の3指標が未実装**: `GET /market-indicators`エンドポイント自体は実装完了したが、**米国10年債利回り・VIX指数・USD/JPY為替レートの3指標は取得ロジック自体が無く**（J-Quantsの範囲外のデータで、別途新規の外部APIクライアント選定〔ADR要〕が必要）、常に`null`のプレースホルダを返す。3指標の外部データ取得自体は別タスクとして先送り
-
 

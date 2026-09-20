@@ -949,6 +949,89 @@ describe('UC-004: 利確シグナル一覧', function () {
         });
     });
 
+    describe('valuation_zone_badge（CHG-0017、ADR-0015 D7）', function () {
+        test('低成長でPERと配当利回りが絶対閾値ちょうどの銘柄は割安ゾーンの補助バッジが表示される', function () {
+            [, $snapshot] = ucFrom004TestImportBatch();
+            $holding = ucFrom004TestHolding([
+                'symbol_code' => '8001',
+                'symbol_name' => '伊藤忠商事',
+            ]);
+            $holdingSnapshot = ucFrom004TestHoldingSnapshot($snapshot, $holding, [
+                'unrealized_gain_rate' => 30.0,
+            ]);
+            ucFrom004TestSignal($holdingSnapshot);
+            ucFrom004TestHealthyFundamentalIndicator($holding, [
+                // LowGrowthDeterminerは売上高・営業利益の高い方が5%以下なら低成長。
+                'revenue_growth' => 5.0,
+                'operating_income_growth' => 5.0,
+                'per' => 15.0,
+                'dividend_yield' => 3.0,
+            ]);
+
+            $response = ucFrom004TestFetch($this);
+            $response->assertSuccessful();
+
+            $row = ucFrom004TestFindRow($response, '8001');
+            expect($row)->not->toBeNull();
+            expect($row['valuation_zone_badge'])->toBe('絶対バリュエーション上は割安ゾーン');
+
+            $this->actingAs(User::factory()->create())
+                ->get('/signals')
+                ->assertSuccessful()
+                ->assertSee('絶対バリュエーション上は割安ゾーン');
+        });
+
+        test('絶対バリュエーションの割安条件を満たさない銘柄は補助バッジがnullになる', function (array $fundamentals) {
+            [, $snapshot] = ucFrom004TestImportBatch();
+            $holding = ucFrom004TestHolding([
+                'symbol_code' => 'D7-NO-BADGE',
+                'symbol_name' => 'バッジ非該当銘柄',
+            ]);
+            $holdingSnapshot = ucFrom004TestHoldingSnapshot($snapshot, $holding, [
+                'unrealized_gain_rate' => 30.0,
+            ]);
+            ucFrom004TestSignal($holdingSnapshot);
+            ucFrom004TestHealthyFundamentalIndicator($holding, $fundamentals);
+
+            $row = ucFrom004TestFindRow(ucFrom004TestFetch($this), 'D7-NO-BADGE');
+
+            expect($row)->not->toBeNull();
+            expect($row)->toHaveKey('valuation_zone_badge');
+            expect($row['valuation_zone_badge'])->toBeNull();
+        })->with([
+            '成長率の高い方が5%を超える' => [[
+                'revenue_growth' => 5.0001,
+                'operating_income_growth' => 5.0,
+                'per' => 15.0,
+                'dividend_yield' => 3.0,
+            ]],
+            'PERが15を超える' => [[
+                'revenue_growth' => 5.0,
+                'operating_income_growth' => 5.0,
+                'per' => 15.01,
+                'dividend_yield' => 3.0,
+            ]],
+            '配当利回りが3%未満' => [[
+                'revenue_growth' => 5.0,
+                'operating_income_growth' => 5.0,
+                'per' => 15.0,
+                'dividend_yield' => 2.9999,
+            ]],
+            '赤字企業の負PERは割安と判定しない' => [[
+                'revenue_growth' => 5.0,
+                'operating_income_growth' => 5.0,
+                'per' => -10.0,
+                'dividend_yield' => 3.0,
+            ]],
+            'PERが0でも割安と判定しない' => [[
+                'revenue_growth' => 5.0,
+                'operating_income_growth' => 5.0,
+                'per' => 0.0,
+                'dividend_yield' => 3.0,
+            ]],
+        ]);
+    });
+
     describe('権限', function () {
         test('未認証ユーザーは利確シグナル一覧を取得できない', function () {
             [, $snapshot] = ucFrom004TestImportBatch();

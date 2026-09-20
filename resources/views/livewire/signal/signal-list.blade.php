@@ -102,6 +102,9 @@
                             <tr class="border-b border-app-border last:border-b-0">
                                 <td class="py-1.5 px-1.5 sticky left-0 z-10 bg-surface">
                                     <div><a href="/holdings/{{ $row['id'] }}" wire:navigate class="text-primary hover:underline">{{ $row['symbol_name'] }}</a> {{ $row['symbol_code'] }}</div>
+                                    @if ($row['valuation_zone_badge'])
+                                        <x-badge variant="success">{{ $row['valuation_zone_badge'] }}</x-badge>
+                                    @endif
                                     <x-signal-criteria-summary-badges :criteria="$row['criteria']" />
                                 </td>
                                 <td class="py-1.5 px-1.5 text-right">{{ number_format($row['market_value']) }}円</td>
