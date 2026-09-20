@@ -286,7 +286,7 @@
 
 > `signals`（利確シグナル）とはあえて別テーブルに分離している（ADR-0007）。`signals`にenum拡張＋方向カラムを追加する案も検討したが、`FetchExternalMarketDataAction`の再判定時の削除処理・`ShowSignalListAction`の一覧抽出・`ShowImportSummaryReportAction`の`composite_score`加点ロジックの3箇所に買いシグナルが混入するリスクがあり、別テーブルへの分離によってこれらの既存ロジックを一切変更せずに済む設計とした。
 > `split_buy_down_suggestion`（分割買い下がり提案）は`signals`の`split_limit_suggestion`と同様、テーブルには持たずアプリケーション層で都度計算する。**初期パラメータ値**: 現在値×1.00／×0.93（-7%）／×0.85（-15%）の3段階、各段の目安金額はポートフォリオ評価総額×2%（UC-008の小口方針を流用）。含み益率による対象銘柄の絞り込みは行わない（`signals`の「+20%未満は対象外」とは非対称。ADR-0007）。
-> **全シグナル共通の前提条件（2026-08-23追加、use-cases.md UC-010業務ルール参照）**: 長期低迷銘柄・個別要因での下落銘柄を誤って拾わないよう、7種いずれのシグナルも(1)直近13週以内に`week52_high`の-15%以内に到達していたこと、(2)`relative_strength_vs_market`が-5pt以上であること、の2条件を満たした場合のみ検出する。(1)は`TechnicalIndicatorCalculator`が計算時に保持する週次価格系列から追加の外部データ取得なしに算出可能（`technical_indicators`には永続化せず、MA20乖離率と同様に判定時にアプリケーション層で計算する）。(2)は既存の`relative_strength_vs_market`カラムをそのまま流用する。
+> **全シグナル共通の前提条件（2026-08-23追加、2026-09-19改訂、use-cases.md UC-010業務ルール参照）**: 長期低迷銘柄・個別要因での下落銘柄を誤って拾わないよう、7種いずれのシグナルも(1)直近13週以内に`week52_high`の-15%以内に到達していたこと、(2)`relative_strength_vs_sector`が非nullならその値、nullなら`relative_strength_vs_market`が-5pt以上であること、の2条件を満たした場合のみ検出する。(1)は`TechnicalIndicatorCalculator`が計算時に保持する週次価格系列から追加の外部データ取得なしに算出可能（`technical_indicators`には永続化せず、MA20乖離率と同様に判定時にアプリケーション層で計算する）。(2)は既存の対セクター・対市場カラムを優先順位付きで流用する（ADR-0015 D4）。
 > `signal_type`のENUM定義は新規追加のため`.claude/rules/20-mysql.md`が定める「危険な操作」に該当しない（既存カラムの型変更ではなく、`CREATE TABLE`による新規追加）。
 
 ---

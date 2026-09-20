@@ -52,12 +52,13 @@ use App\Services\Analysis\TechnicalIndicatorCalculator;
 |         $priceHistory, or fewer if history is shorter), at least one
 |         close is >= week52_high * 0.85. If week52_high itself is null
 |         (fewer than 52 data points), precondition A cannot be satisfied.
-|     (B) 連れ安の確認: relative_strength_vs_market (computed from
-|         $marketReturn13w, same as the sell side) is not null and >= -5.0.
+|     (B) 連れ安の確認: relative_strength_vs_sector is preferred
+|         when available; otherwise relative_strength_vs_market is used. The
+|         selected value must be not null and >= -5.0 (ADR-0015 D4).
 |   This means every "fire" fixture below needs >= 52 weeks of price
-|   history (to make week52_high/week52_low non-null) AND a $marketReturn13w
-|   argument chosen so relative_strength_vs_market >= -5.0, on top of that
-|   signal's own individual condition. Two dedicated tests
+|   history (to make week52_high/week52_low non-null) AND a benchmark return
+|   chosen so the preferred relative strength is >= -5.0, on top of that
+|   signal's own individual condition. Dedicated tests
 |   (「前提条件による抑制」section below) demonstrate that an individual
 |   condition being met is NOT sufficient by itself when either precondition
 |   fails.
@@ -523,6 +524,86 @@ test('RSI反発条件自体は満たすが、marketReturn13wが渡されない�
     // rsi_oversold_reboundだけでなく結果全体が空になることまで確認する
     expect(bsdSignalTypes($result))->not->toContain('rsi_oversold_rebound');
     expect($result)->toBe([]);
+});
+
+// -----------------------------------------------------------------------
+// 前提条件B: 対セクター相対力優先・対市場フォールバック
+// （CHG-0017 / ADR-0015 D4）
+// -----------------------------------------------------------------------
+// range(100, 151) の13週騰落率は (151 - 138) / 138 * 100。PEGシグナル以外の
+// 個別条件を満たさない既存fixtureのため、結果の有無が共通前提条件Bのみによることを
+// 切り分けられる。ベンチマーク騰落率は「銘柄騰落率 - 期待する相対力」で逆算する。
+
+test('対セクター相対力が算出済みの場合、対市場が基準未満でも対セクターが基準以上なら買い増しシグナルが発生する', function () {
+    $priceHistory = bsdPriceHistory(range(100, 151));
+    $stockReturn13w = ((151 - 138) / 138) * 100;
+
+    $result = bsdService()->determine(
+        $priceHistory,
+        marketReturn13w: $stockReturn13w + 10.0, // 対市場 -10.0（基準未満）
+        sectorReturn13w: $stockReturn13w, // 対セクター 0.0（基準以上）
+        pegRatio: 0.8,
+    );
+
+    expect($result)->toHaveCount(1);
+    expect($result[0]['signal_type'])->toBe('peg_undervalued');
+});
+
+test('対セクター相対力が算出済みの場合、対市場が基準以上でも対セクターが-5.0未満なら買い増しシグナルは発生しない', function () {
+    $priceHistory = bsdPriceHistory(range(100, 151));
+    $stockReturn13w = ((151 - 138) / 138) * 100;
+
+    $result = bsdService()->determine(
+        $priceHistory,
+        marketReturn13w: $stockReturn13w, // 対市場 0.0（基準以上）
+        sectorReturn13w: $stockReturn13w + 5.01, // 対セクター -5.01（基準未満）
+        pegRatio: 0.8,
+    );
+
+    expect($result)->toBe([]);
+});
+
+test('対セクター相対力がnullの場合、対市場相対力にフォールバックして買い増しシグナルが発生する', function () {
+    $priceHistory = bsdPriceHistory(range(100, 151));
+    $stockReturn13w = ((151 - 138) / 138) * 100;
+
+    $result = bsdService()->determine(
+        $priceHistory,
+        marketReturn13w: $stockReturn13w, // 対市場 0.0（基準以上）
+        sectorReturn13w: null,
+        pegRatio: 0.8,
+    );
+
+    expect($result)->toHaveCount(1);
+    expect($result[0]['signal_type'])->toBe('peg_undervalued');
+});
+
+test('対セクターと対市場の相対力がともにnullの場合、買い増しシグナルは発生しない', function () {
+    $priceHistory = bsdPriceHistory(range(100, 151));
+
+    $result = bsdService()->determine(
+        $priceHistory,
+        marketReturn13w: null,
+        sectorReturn13w: null,
+        pegRatio: 0.8,
+    );
+
+    expect($result)->toBe([]);
+});
+
+test('優先される対セクター相対力がちょうど-5.0の場合、境界値を含み買い増しシグナルが発生する', function () {
+    $priceHistory = bsdPriceHistory(range(100, 151));
+    $stockReturn13w = ((151 - 138) / 138) * 100;
+
+    $result = bsdService()->determine(
+        $priceHistory,
+        marketReturn13w: $stockReturn13w + 10.0, // 対市場 -10.0（基準未満）
+        sectorReturn13w: $stockReturn13w + 5.0, // 対セクター -5.0（包含境界）
+        pegRatio: 0.8,
+    );
+
+    expect($result)->toHaveCount(1);
+    expect($result[0]['signal_type'])->toBe('peg_undervalued');
 });
 
 // -----------------------------------------------------------------------

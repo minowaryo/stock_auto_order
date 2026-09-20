@@ -13,7 +13,8 @@ namespace App\Services\Analysis;
  * conditions reversed (押し目/反発方向), gated by the all-signals-common
  * preconditions added 2026-08-23 (ADR-0007 Addendum): none of the 7 signal
  * types may fire unless BOTH (A) the stock recently approached its 52-week
- * high and (B) it is not underperforming the market by more than -5pt.
+ * high and (B) it is not underperforming its sector (or the market when
+ * sector-relative strength is unavailable) by more than -5pt.
  *
  * Pure calculation logic only — no DB/HTTP dependency.
  */
@@ -28,8 +29,8 @@ final class BuySignalDeterminationService
     private const RECENT_STRENGTH_THRESHOLD_RATE = 0.85;
 
     /**
-     * All-signals-common precondition B: relative_strength_vs_market must
-     * not be null and must be >= this value.
+     * All-signals-common precondition B: the preferred relative strength
+     * (sector first, then market) must not be null and must be >= this value.
      *
      * Promoted to `public` (2026-09-06, CHG-0010) so
      * App\Services\Analysis\SignalCriteriaEvaluator::evaluateLossReview()
@@ -153,7 +154,8 @@ final class BuySignalDeterminationService
             return false;
         }
 
-        $relativeStrength = $current['relative_strength_vs_market'];
+        $relativeStrength = $current['relative_strength_vs_sector']
+            ?? $current['relative_strength_vs_market'];
 
         if ($relativeStrength === null || $relativeStrength < self::MIN_RELATIVE_STRENGTH) {
             return false;
