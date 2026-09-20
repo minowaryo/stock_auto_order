@@ -146,6 +146,11 @@ class ShowLossReviewListAction
             'macd' => $technicalIndicator?->macd !== null ? (float) $technicalIndicator->macd : null,
             'macd_signal' => $technicalIndicator?->macd_signal !== null ? (float) $technicalIndicator->macd_signal : null,
             'relative_strength_vs_market' => $technicalIndicator?->relative_strength_vs_market !== null ? (float) $technicalIndicator->relative_strength_vs_market : null,
+            // ADR-0015 D4（2回目の/reviewでチェックリスト側の未配線を発見）:
+            // BuySignalDeterminationService::preconditionsSatisfied()は対セクター
+            // 相対力を優先し対市場へフォールバックするため、このチェックリスト
+            // 行も同じ優先順位で判定できるよう両方渡す。
+            'relative_strength_vs_sector' => $technicalIndicator?->relative_strength_vs_sector !== null ? (float) $technicalIndicator->relative_strength_vs_sector : null,
             'rebound_buy_signal_count' => (float) $reboundCount,
             'roe' => $roe,
             'equity_ratio' => $equityRatio,

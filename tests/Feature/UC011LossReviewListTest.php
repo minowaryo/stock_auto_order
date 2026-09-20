@@ -560,6 +560,42 @@ describe('UC-011: 整理検討（含み損）候補一覧', function () {
         });
 
         // ---------------------------------------------------------------
+        // CHG-0017 / ADR-0015 D4（別セッションでbe0f00c/418172bとして実装・
+        // マージ済み）のレビュー指摘: BuySignalDeterminationService::
+        // preconditionsSatisfied()の事前条件Bは対セクター相対力を優先し
+        // 対市場相対力へフォールバックするよう変更されたが、この判定チェック
+        // リスト（相対力(対市場)行）は改訂前のまま`relative_strength_vs_market`
+        // のみを見ており、対セクター相対力を一切考慮していなかった。
+        //
+        // Expected Red cause: 対市場では基準未満（-12.0 <= -5.0）だが対セクター
+        // では基準以上（0.0 > -5.0）の銘柄で、実際の押し目買い事前条件Bは
+        // セクター優先により満たされる（弱くない）はずなのに、本チェックリスト
+        // 行は対市場のみを見て「met」（整理検討テーブルの反転極性で「基準割れ
+        // ＝投資根拠毀損」を意味する赤チップ）を返してしまう。配線後は対セクター
+        // が優先され「unmet」になる想定。
+        // ---------------------------------------------------------------
+        test('対セクター相対力が対市場より優れる銘柄は、判定チェックリストの相対力行が対セクターの値で判定される', function () {
+            [, $snapshot] = ucFrom011TestBatch();
+            $holding = ucFrom011TestHolding(['symbol_code' => '9001', 'symbol_name' => '相対力優先テスト']);
+            ucFrom011TestHoldingSnapshot($snapshot, $holding);
+            ucFrom011TestTechnicalIndicator($holding, [
+                'relative_strength_vs_market' => -12.0, // 基準(-5.0)未満、対市場のみ見ると met（弱い）
+                'relative_strength_vs_sector' => 0.0, // 基準以上、対セクター優先なら unmet（弱くない）
+            ]);
+            ucFrom011TestFundamentalIndicator($holding);
+
+            $row = ucFrom011TestFindRow(ucFrom011TestExecute(), '9001');
+
+            // 相対力行は technical 配列の6番目（0-indexed 5）に固定位置で存在する
+            // （含み損率／52週高値下落率／52週安値距離／MA75乖離率／MACD-シグナル線／
+            // 相対力／押し目買いシグナル件数の順、本ファイル上部のヘルパーdocblock参照）。
+            $relativeStrengthItem = $row['criteria']['technical'][5];
+            expect($relativeStrengthItem['label'])->toContain('相対力');
+            expect($relativeStrengthItem['status'])->toBe('unmet');
+            expect($relativeStrengthItem['value_label'])->toBe('+0.0');
+        });
+
+        // ---------------------------------------------------------------
         // CR (2026-09-06, CHG-0012 / ADR-0011): 営業利益率の反転チップ
         // ---------------------------------------------------------------
         test('含み損-40%かつ営業利益率5.0%（基準割れ）の銘柄は、判定チェックリストの営業利益率チップが met（反転）・fundamental_status=failed・サマリの投資根拠の毀損に数えられる', function () {
