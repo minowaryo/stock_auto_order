@@ -12,9 +12,12 @@ namespace App\Services\Analysis;
  * Mirrors SignalDeterminationService's structure with the 7 signal
  * conditions reversed (押し目/反発方向), gated by the all-signals-common
  * preconditions added 2026-08-23 (ADR-0007 Addendum): none of the 7 signal
- * types may fire unless BOTH (A) the stock recently approached its 52-week
- * high and (B) it is not underperforming its sector (or the market when
- * sector-relative strength is unavailable) by more than -5pt.
+ * types may fire unless (A) the stock recently approached its 52-week
+ * high, (B) it is not underperforming its sector (or the market when
+ * sector-relative strength is unavailable) by more than -5pt, and (C) its
+ * weekly MA75 medium-term trend is not confirmed falling (ADR-0015 D5,
+ * 2026-09-21 — unlike A/B, an unknown/insufficient-data trend does not
+ * block, only a confirmed `false` does).
  *
  * Pure calculation logic only — no DB/HTTP dependency.
  */
@@ -128,7 +131,7 @@ final class BuySignalDeterminationService
 
     /**
      * @param  array<int, array{date: string, close: float, volume: int}>  $priceHistory
-     * @param  array<string, float|int|null>  $current
+     * @param  array<string, float|int|bool|null>  $current
      */
     private function preconditionsSatisfied(array $priceHistory, array $current): bool
     {
@@ -158,6 +161,16 @@ final class BuySignalDeterminationService
             ?? $current['relative_strength_vs_market'];
 
         if ($relativeStrength === null || $relativeStrength < self::MIN_RELATIVE_STRENGTH) {
+            return false;
+        }
+
+        // 前提条件C（ADR-0015 D5）: 週足MA75の中期トレンドが明確に下向きと
+        // 判定された場合のみブロックする。null（88週未満でデータ不足）は
+        // 不明扱いとしてブロックしない——事前条件A/Bと異なり、この判定には
+        // 88週分という高いデータ要件があるため、null=即ブロックにすると
+        // 直近上場銘柄等で押し目買いシグナルが一律に出なくなる（本人確認済み、
+        // 2026-09-21）。
+        if ($current['ma75_trend_rising'] === false) {
             return false;
         }
 

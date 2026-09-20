@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'week52_low',
     'relative_strength_vs_market',
     'relative_strength_vs_sector',
+    'ma75_trend_rising',
     'computed_at',
 ])]
 class TechnicalIndicator extends Model
@@ -52,6 +53,7 @@ class TechnicalIndicator extends Model
             'week52_low' => 'decimal:2',
             'relative_strength_vs_market' => 'decimal:4',
             'relative_strength_vs_sector' => 'decimal:4',
+            'ma75_trend_rising' => 'boolean',
             'computed_at' => 'datetime',
         ];
     }

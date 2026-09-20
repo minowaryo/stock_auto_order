@@ -607,6 +607,75 @@ test('優先される対セクター相対力がちょうど-5.0の場合、境�
 });
 
 // -----------------------------------------------------------------------
+// 前提条件C: 週足MA75の中期トレンド確認（CHG-0017 / ADR-0015 D5）
+// -----------------------------------------------------------------------
+// TechnicalIndicatorCalculator::calculate()のma75_trend_risingは直近のMA75が
+// 13週前時点のMA75より厳密に上向きかを表す（88週分の週足データが必要、
+// TechnicalIndicatorCalculatorTest参照）。前提条件Cは「ma75_trend_rising===false
+// （データが十分にあり、かつ明確に下向きと判定された）の場合のみブロックする」
+// 設計とする。ma75_trend_risingがnull（88週未満でデータ不足）の場合はブロック
+// しない（本人確認済み、2026-09-21: 既存の事前条件A/Bのようにnullで即ブロック
+// すると、88週未満の履歴しかない銘柄〔直近上場・データ未整備等〕で押し目買い
+// シグナルが一律に出なくなる回帰リスクがあるため）。
+//
+// フィクスチャ設計: 「1. rsi_oversold_rebound」のFIREテスト
+// （bsdPrelude()39週+テイル13週=52週、marketReturn13w=-35.0）の直近52週は
+// 一切変更せず、その手前に定数値（200.0 or 50.0）の36週を追加して合計88週
+// にする。週52高値・RSI・相対力（いずれも直近52週以内のデータのみ参照）は
+// 追加した36週の影響を受けないため、既存FIREテストの前提条件A/B・個別RSI
+// 条件の成立状態を完全に保ったまま、前提条件Cのみを切り替えられる
+// （tinkerで実行し実測値を確認済み: 定数200.0を追加するとma75_trend_rising=
+// false、定数50.0を追加するとtrue。week52_high=138・
+// relative_strength_vs_market≈3.84・rsi≈11.111はどちらの場合も不変）。
+
+test('MA75中期トレンドが下向き（ma75_trend_rising=false）の場合、他の前提条件・個別シグナル条件を満たしていてもシグナルは発生しない', function () {
+    // Arrange: 88週前から36週分、定数200.0（既存FIREテストの直近52週の
+    // 終値水準100〜138より十分高い）を追加。直近52週の終値・
+    // marketReturn13wはFIREテストと完全に同一。
+    $closes = array_merge(
+        array_fill(0, 36, 200.0),
+        bsdPrelude(),
+        [134, 130, 126, 122, 118, 114, 110, 106, 102, 98, 94, 90, 95],
+    );
+    $priceHistory = bsdPriceHistory($closes);
+
+    $result = bsdService()->determine($priceHistory, marketReturn13w: -35.0);
+
+    // Assert: 前提条件Cが全シグナル共通のゲートであることを示すため、
+    // rsi_oversold_reboundだけでなく結果全体が空になることまで確認する
+    expect(bsdSignalTypes($result))->not->toContain('rsi_oversold_rebound');
+    expect($result)->toBe([]);
+});
+
+test('MA75中期トレンドが上向き（ma75_trend_rising=true）の場合、シグナルは通常通り発生する', function () {
+    // Arrange: 上と同じ構成だが、追加する36週を定数50.0（直近52週の水準より
+    // 十分低い）にすることでma75_trend_rising=trueにする。
+    $closes = array_merge(
+        array_fill(0, 36, 50.0),
+        bsdPrelude(),
+        [134, 130, 126, 122, 118, 114, 110, 106, 102, 98, 94, 90, 95],
+    );
+    $priceHistory = bsdPriceHistory($closes);
+
+    $result = bsdService()->determine($priceHistory, marketReturn13w: -35.0);
+
+    $signal = bsdFindSignal($result, 'rsi_oversold_rebound');
+    expect($signal)->not->toBeNull();
+});
+
+test('88週未満でma75_trend_risingがnull（データ不足）の場合、前提条件Cではブロックされずシグナルが発生する（既存フィクスチャとの後方互換性）', function () {
+    // Arrange: 「1. rsi_oversold_rebound」のFIREテストと全く同じ52週のみ
+    // （88週に満たないためma75_trend_rising=null）。
+    $closes = array_merge(bsdPrelude(), [134, 130, 126, 122, 118, 114, 110, 106, 102, 98, 94, 90, 95]);
+    $priceHistory = bsdPriceHistory($closes);
+
+    $result = bsdService()->determine($priceHistory, marketReturn13w: -35.0);
+
+    $signal = bsdFindSignal($result, 'rsi_oversold_rebound');
+    expect($signal)->not->toBeNull();
+});
+
+// -----------------------------------------------------------------------
 // シグナルなし・データ不足
 // -----------------------------------------------------------------------
 

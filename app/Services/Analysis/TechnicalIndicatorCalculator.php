@@ -16,7 +16,7 @@ final class TechnicalIndicatorCalculator
      * @param  array<int, array{date: string, close: float, volume: int}>  $priceHistory  Ascending (oldest-first) weekly price history.
      * @param  float|null  $marketReturn13w  Benchmark (market) 13-week return in percent.
      * @param  float|null  $sectorReturn13w  Benchmark (sector) 13-week return in percent.
-     * @return array{rsi: float|null, macd: float|null, macd_signal: float|null, ma20: float|null, ma75: float|null, bb_upper: float|null, bb_lower: float|null, volume: int|null, volume_ma20: float|null, week52_high: float|null, week52_low: float|null, relative_strength_vs_market: float|null, relative_strength_vs_sector: float|null}
+     * @return array{rsi: float|null, macd: float|null, macd_signal: float|null, ma20: float|null, ma75: float|null, bb_upper: float|null, bb_lower: float|null, volume: int|null, volume_ma20: float|null, week52_high: float|null, week52_low: float|null, relative_strength_vs_market: float|null, relative_strength_vs_sector: float|null, ma75_trend_rising: bool|null}
      */
     public function calculate(array $priceHistory, ?float $marketReturn13w = null, ?float $sectorReturn13w = null): array
     {
@@ -40,6 +40,7 @@ final class TechnicalIndicatorCalculator
             'week52_low' => $count >= 52 ? min(array_slice($closes, -52)) : null,
             'relative_strength_vs_market' => $this->calculateRelativeStrength($closes, $count, $marketReturn13w),
             'relative_strength_vs_sector' => $this->calculateRelativeStrength($closes, $count, $sectorReturn13w),
+            'ma75_trend_rising' => $this->calculateMa75TrendRising($closes, $count),
         ];
     }
 
@@ -191,5 +192,26 @@ final class TechnicalIndicatorCalculator
         $stockReturn13w = (($current - $past) / $past) * 100;
 
         return $stockReturn13w - $benchmarkReturn13w;
+    }
+
+    /**
+     * 押し目買いの中期トレンド確認（CHG-0017 / ADR-0015 D5）: 直近のMA75が
+     * 13週前時点のMA75より厳密に上向きか。13週前時点のMA75を算出するには
+     * 直近のMA75用の75件に加えてさらに13件、計88件の週足終値が必要。
+     * どちらか一方でも算出できない場合はnull（他の指標と同じnull伝播方針）。
+     * 変化なし（同値）は「上向き」に含めない。
+     *
+     * @param  array<int, float>  $closes
+     */
+    private function calculateMa75TrendRising(array $closes, int $count): ?bool
+    {
+        $current = $this->simpleMovingAverage($closes, $count, 75);
+        $past = $this->simpleMovingAverage(array_slice($closes, 0, $count - 13), $count - 13, 75);
+
+        if ($current === null || $past === null) {
+            return null;
+        }
+
+        return $current > $past;
     }
 }
