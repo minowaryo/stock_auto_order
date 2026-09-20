@@ -102,8 +102,8 @@ class ShowSignalListAction
      */
     private function resolveThreshold(HoldingSnapshot $holdingSnapshot): array
     {
-        [$equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin] = $holdingSnapshot->holding->fundamentalIndicator?->healthEvaluatorArgs()
-            ?? [null, null, null, null, null];
+        [$equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin, $avgRevenueGrowth, $avgOperatingIncomeGrowth] = $holdingSnapshot->holding->fundamentalIndicator?->healthEvaluatorArgs()
+            ?? [null, null, null, null, null, null, null];
 
         return $this->takeProfitThresholdEvaluator->evaluate(
             $holdingSnapshot->signals->count(),
@@ -112,6 +112,8 @@ class ShowSignalListAction
             $revenueGrowth,
             $operatingIncomeGrowth,
             $operatingMargin,
+            $avgRevenueGrowth,
+            $avgOperatingIncomeGrowth,
         );
     }
 

@@ -404,3 +404,152 @@ test('watchlist:refresh コマンドが一括更新を実行する', function ()
 
     expect(WatchlistRefreshRun::where('status', 'completed')->count())->toBe(1);
 });
+
+// -----------------------------------------------------------------------
+// ADR-0015 D3 (Cycle4b): 低成長銘柄でのPEG除外配線 — watchlist_buy_signals
+//
+// Source of truth: docs/adr/ADR-0015-value-cyclical-stock-judgment-branching.md
+// D3。BuySignalDeterminationService::determine()自体は既にGreenで
+// revenueGrowth/operatingIncomeGrowth/per/dividendYield引数を受け付けるが、
+// このCycle4b着手前時点ではRefreshWatchlistMarketDataAction::refreshHolding()
+// の呼び出し側がこの4引数を一切渡していない（現状は
+// $this->buySignalDeterminationService->determine($priceHistory,
+// $marketReturn13w, null, $fundamental['peg_ratio'] ?? null) の4引数のみ）。
+//
+// 価格推移フィクスチャは「押し目買いシグナルはwatchlist_buy_signalsに保存され」
+// テスト（本ファイル上部）と同一の closes（uc012RisingCloses(1000.0, 50) +
+// 急落→反発の13週分のテール、最終値1050）を再利用する。最終週の終値1050が
+// refreshHolding()内でcurrentPriceとしてそのままFundamentalIndicatorMapperに
+// 渡される（watchlist側はholding_snapshotsを持たないため、holdingSnapshotの
+// current_priceではなく価格履歴の最終値を使う設計、RefreshWatchlistMarketDataAction
+// ::refreshHolding()参照）。
+//
+// Expected Red cause: 低成長フィクスチャ（revenue_growth=3.0% /
+// operating_income_growth=3.0%、いずれも5.0%以下）かつeps_growth=5.0%から
+// PER≈10.0・PEG≈2.0（従来のPEG割安条件<=1.0は満たさない）。配線前は
+// isLowGrowth(null, null)=falseのままPEGのみで判定されPEG=2.0は<=1.0を
+// 満たさないためpeg_undervaluedは発生しない。配線後は低成長と判定され
+// PER=10.0<=15・配当利回り3.33%(=35/1050*100)>=3.0%の絶対閾値を満たし
+// peg_undervaluedが発生する想定。本テストは「現状は発生しない（Red）」を、
+// 「発生するはず」というアサーションで捕捉する。
+// -----------------------------------------------------------------------
+
+test('成長率が低い（5%以下）未保有JP銘柄は、PEGレシオが割安基準(<=1.0)を満たさなくてもPER/配当利回りの絶対閾値を満たせばpeg_undervaluedがwatchlist_buy_signalsに保存される', function () {
+    $h = uc012WatchlistHolding('7777', 'jp', '低成長割安テスト');
+
+    // 2026-09-20修正: 元のフィクスチャ（50週上昇後に1290→880まで急落し1050へ戻す
+    // 10週のテール）は、beforeEach()が設定する市場ベンチマーク（nikkei225/sp500、
+    // uc012RisingCloses(30000.0, 60)で終始なだらかに上昇）に対して大きく劣後し、
+    // relative_strength_vs_market が約-14.85%となり
+    // BuySignalDeterminationService::preconditionsSatisfied()の事前条件B
+    // （対市場相対力-5.0%以上）を満たさず、peg_undervaluedを含む全シグナルが
+    // 発生しない状態だった（Cycle4bのGreenフェーズでtdd-implementerが発見）。
+    // 配線ロジック自体はバグではなく、テストのフィクスチャ不備だったため、
+    // 市場と同様になだらかに上昇し最終値が1050ちょうどになる系列に置き換える
+    // （PER=1050/105=10.0は変えない）。60週かけて755→1050へ5ずつ上昇するため、
+    // 直近13週も52週高値（=最終値1050）付近を維持し事前条件A（52週高値の85%
+    // 以内に接近）も満たす。
+    $closes = uc012RisingCloses(755.0, 60);
+
+    // 低成長フィクスチャ: revenue_growth=3.0% / operating_income_growth=3.0%
+    // （いずれも5.0%以下 -> 低成長） / eps_growth=5.0% -> 最終週終値1050で
+    // PER=1050/105=10.0（<=15） / PEG=10.0/5.0=2.0（>1.0、従来のPEG割安条件は
+    // 満たさない）。配当利回り = 35/1050*100 ≈ 3.33%（>=3.0%）。
+    $statements = [
+        [
+            'disclosed_date' => '2026-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2026-03-31',
+            'net_sales' => 103000.0, 'operating_profit' => 10300.0, 'profit' => 8000.0, 'eps' => 105.0,
+            'book_value_per_share' => 800.0, 'equity_to_asset_ratio' => 0.55, 'roe' => 0.125,
+            'dividend_per_share_annual' => 35.0, 'payout_ratio_annual' => 0.30,
+        ],
+        [
+            'disclosed_date' => '2025-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2025-03-31',
+            'net_sales' => 100000.0, 'operating_profit' => 10000.0, 'profit' => 7800.0, 'eps' => 100.0,
+            'book_value_per_share' => 780.0, 'equity_to_asset_ratio' => 0.55, 'roe' => 0.125,
+            'dividend_per_share_annual' => 32.0, 'payout_ratio_annual' => 0.30,
+        ],
+    ];
+
+    app()->instance(JpStockPriceClientInterface::class, new FakeJpStockPriceClient(['7777' => uc012Price($closes)]));
+    app()->instance(UsStockPriceClientInterface::class, new FakeUsStockPriceClient);
+    app()->instance(JQuantsClientInterface::class, new FakeJQuantsClient(
+        statementsResponses: ['7777' => $statements],
+    ));
+    app()->instance(FinnhubClientInterface::class, new FakeFinnhubClient);
+
+    app(RefreshWatchlistMarketDataAction::class)->execute();
+
+    $signalTypes = WatchlistBuySignal::where('holding_id', $h->id)->pluck('signal_type')->all();
+    expect($signalTypes)->toContain('peg_undervalued');
+});
+
+// -----------------------------------------------------------------------
+// ADR-0015 D2（2回目の/review・Cycle4d）: watchlist専用銘柄でも直近3期平均
+// 成長率(avg_revenue_growth/avg_operating_income_growth)を計算・保存する。
+//
+// Source of truth: docs/adr/ADR-0015-value-cyclical-stock-judgment-branching.md D2。
+// FetchExternalMarketDataAction（保有銘柄パイプライン、Cycle4a）は
+// FundamentalIndicatorMapper::averageAnnualGrowth()の結果をfundamental_indicators.
+// avg_revenue_growth/avg_operating_income_growthとして保存するが、
+// RefreshWatchlistMarketDataAction::refreshHolding()（未保有ウォッチリスト銘柄
+// パイプライン）はこの計算を一切行っていない（$fundamental = map(...)のみ）。
+// このため一度も保有したことのないwatchlist専用銘柄ではD2の平均成長率レスキューが
+// 発火しない（/review 2回目でcross-file tracer・altitude・line-by-lineの3角度が
+// 独立に発見）。
+//
+// Expected Red cause: 配線前はFundamentalIndicator.avg_revenue_growth /
+// avg_operating_income_growthがnullのまま保存される。配線後は
+// averageAnnualGrowth($statements, 'net_sales'/'operating_profit')の計算結果
+// （直近4期のFY決算から3期分のYoY平均）が保存される想定。
+// -----------------------------------------------------------------------
+
+test('未保有のウォッチリスト銘柄（JP）でも直近3期平均成長率が計算・保存される', function () {
+    $h = uc012WatchlistHolding('AVGG', 'jp', '平均成長率テスト');
+
+    // 4期分のFY決算（直近が2029-03期、最古が2026-03期）: net_salesは
+    // 100000→110000→121000→133100と毎期+10%、operating_profitは
+    // 10000→11000→12100→13310と同じく毎期+10%で、3期平均成長率は
+    // どちらも10.0%になる想定。
+    $statements = [
+        [
+            'disclosed_date' => '2029-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2029-03-31',
+            'net_sales' => 133100.0, 'operating_profit' => 13310.0, 'profit' => 10000.0, 'eps' => 120.0,
+            'book_value_per_share' => 800.0, 'equity_to_asset_ratio' => 0.55, 'roe' => 0.125,
+            'dividend_per_share_annual' => 30.0, 'payout_ratio_annual' => 0.30,
+        ],
+        [
+            'disclosed_date' => '2028-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2028-03-31',
+            'net_sales' => 121000.0, 'operating_profit' => 12100.0, 'profit' => 9000.0, 'eps' => 110.0,
+            'book_value_per_share' => 760.0, 'equity_to_asset_ratio' => 0.55, 'roe' => 0.125,
+            'dividend_per_share_annual' => 28.0, 'payout_ratio_annual' => 0.30,
+        ],
+        [
+            'disclosed_date' => '2027-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2027-03-31',
+            'net_sales' => 110000.0, 'operating_profit' => 11000.0, 'profit' => 8000.0, 'eps' => 100.0,
+            'book_value_per_share' => 720.0, 'equity_to_asset_ratio' => 0.55, 'roe' => 0.125,
+            'dividend_per_share_annual' => 26.0, 'payout_ratio_annual' => 0.30,
+        ],
+        [
+            'disclosed_date' => '2026-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2026-03-31',
+            'net_sales' => 100000.0, 'operating_profit' => 10000.0, 'profit' => 7000.0, 'eps' => 90.0,
+            'book_value_per_share' => 680.0, 'equity_to_asset_ratio' => 0.55, 'roe' => 0.125,
+            'dividend_per_share_annual' => 24.0, 'payout_ratio_annual' => 0.30,
+        ],
+    ];
+
+    app()->instance(JpStockPriceClientInterface::class, new FakeJpStockPriceClient(['AVGG' => uc012Price(uc012RisingCloses())]));
+    app()->instance(UsStockPriceClientInterface::class, new FakeUsStockPriceClient);
+    app()->instance(JQuantsClientInterface::class, new FakeJQuantsClient(
+        statementsResponses: ['AVGG' => $statements],
+    ));
+    app()->instance(FinnhubClientInterface::class, new FakeFinnhubClient);
+
+    app(RefreshWatchlistMarketDataAction::class)->execute();
+
+    $indicator = FundamentalIndicator::where('holding_id', $h->id)->first();
+    expect($indicator)->not->toBeNull();
+    expect($indicator->avg_revenue_growth)->not->toBeNull();
+    expect(round($indicator->avg_revenue_growth, 1))->toBe(10.0);
+    expect($indicator->avg_operating_income_growth)->not->toBeNull();
+    expect(round($indicator->avg_operating_income_growth, 1))->toBe(10.0);
+});

@@ -160,6 +160,14 @@ class RefreshWatchlistMarketDataAction
         if ($holding->market === 'jp') {
             $statements = $this->jQuantsClient->fetchStatements($holding->symbol_code);
             $fundamental = $this->fundamentalIndicatorMapper->map($statements, $currentPrice);
+
+            // ADR-0015 D2（2回目の/review・Cycle4d）: 保有銘柄パイプライン
+            // （FetchExternalMarketDataAction）と同様、直近3期平均のYoY成長率を
+            // 単年度revenue_growth/operating_income_growthとは別カラムに保存する。
+            // これがないとwatchlist専用銘柄（一度も保有したことがない銘柄）で
+            // D2の平均成長率レスキューが発火しない。
+            $fundamental['avg_revenue_growth'] = $this->fundamentalIndicatorMapper->averageAnnualGrowth($statements, 'net_sales');
+            $fundamental['avg_operating_income_growth'] = $this->fundamentalIndicatorMapper->averageAnnualGrowth($statements, 'operating_profit');
         } else {
             $metrics = $this->finnhubClient->fetchMetrics($holding->symbol_code) ?? [];
             $reportedFinancials = $this->finnhubClient->fetchReportedFinancials($holding->symbol_code);
@@ -171,6 +179,10 @@ class RefreshWatchlistMarketDataAction
             $marketReturn13w,
             null,
             $fundamental['peg_ratio'] ?? null,
+            $fundamental['revenue_growth'] ?? null,
+            $fundamental['operating_income_growth'] ?? null,
+            $fundamental['per'] ?? null,
+            $fundamental['dividend_yield'] ?? null,
         );
 
         DB::transaction(function () use ($holding, $technical, $fundamental, $buySignals) {

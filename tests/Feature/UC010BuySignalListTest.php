@@ -493,6 +493,38 @@ describe('UC-010: 既存保有株の買い増しタイミングレコメンド�
         });
 
         // ---------------------------------------------------------------
+        // CR (2026-09-20, CHG-0017 / ADR-0015 D2 配線 Cycle 4c)
+        // ---------------------------------------------------------------
+        // FundamentalHealthEvaluator自体はD2救済（直近3期平均成長率>0%の
+        // OR救済）を実装済みだが、ShowBuySignalListAction はまだ
+        // avg_revenue_growth/avg_operating_income_growth を evaluate() に
+        // 渡していない。
+        // Red の出方（2026-09-20）: equity_ratio=45.0/roe=12.0
+        // （D1のRESCUE閾値ROE≧15%/自己資本比率≧50%は満たさない）・単年度
+        // 成長率は両方マイナスのため、現行実装は fundamental_status='failed'
+        // のまま一覧から除外される → 以下の `not->toBeNull()` が失敗する。
+        test('自己資本比率45.0%/ROE12.0%（D1のRESCUE閾値は満たさない）で単年度成長率が両方マイナスだが3期平均売上高成長率がプラスの銘柄は、D2救済によりfundamental_status=passedとして一覧に含まれる', function () {
+            [, $snapshot] = ucFrom010TestImportBatch();
+            $holding = ucFrom010TestHolding(['symbol_code' => '5019', 'market' => 'jp', 'symbol_name' => '出光興産']);
+            $holdingSnapshot = ucFrom010TestHoldingSnapshot($snapshot, $holding);
+            ucFrom010TestBuySignal($holdingSnapshot);
+            ucFrom010TestFundamentalIndicator($holding, [
+                'equity_ratio' => 45.0,
+                'roe' => 12.0,
+                'revenue_growth' => -3.0,
+                'operating_income_growth' => -1.0,
+                'avg_revenue_growth' => 2.0,
+            ]);
+
+            $response = ucFrom010TestFetch($this);
+
+            $response->assertSuccessful();
+            $row = ucFrom010TestFindRow($response, '5019');
+            expect($row)->not->toBeNull();
+            expect($row['fundamental_status'])->toBe('passed');
+        });
+
+        // ---------------------------------------------------------------
         // CR (2026-09-06, CHG-0012 / ADR-0011): 営業利益率フィルタ（4条件目）
         // ---------------------------------------------------------------
         // ADR-0011: 財務健全性フィルタに営業利益率10%以上を追加する。ROE・

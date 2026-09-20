@@ -147,24 +147,7 @@ final class FundamentalIndicatorMapper
      */
     public function annualGrowth(array $statements, string $field): ?float
     {
-        $annualByFiscalYear = [];
-
-        foreach ($statements as $statement) {
-            if (($statement['period_type'] ?? null) !== 'FY') {
-                continue;
-            }
-
-            $fiscalYearEnd = $statement['fiscal_year_end'] ?? null;
-
-            if ($fiscalYearEnd === null || isset($annualByFiscalYear[$fiscalYearEnd])) {
-                continue;
-            }
-
-            $annualByFiscalYear[$fiscalYearEnd] = $statement;
-        }
-
-        krsort($annualByFiscalYear); // most recent fiscal year first
-        $annual = array_values($annualByFiscalYear);
+        $annual = $this->annualStatementsDescending($statements);
 
         if (! isset($annual[0], $annual[1])) {
             return null;
@@ -196,24 +179,7 @@ final class FundamentalIndicatorMapper
      */
     public function averageAnnualGrowth(array $statements, string $field, int $periods = 3): ?float
     {
-        $annualByFiscalYear = [];
-
-        foreach ($statements as $statement) {
-            if (($statement['period_type'] ?? null) !== 'FY') {
-                continue;
-            }
-
-            $fiscalYearEnd = $statement['fiscal_year_end'] ?? null;
-
-            if ($fiscalYearEnd === null || isset($annualByFiscalYear[$fiscalYearEnd])) {
-                continue;
-            }
-
-            $annualByFiscalYear[$fiscalYearEnd] = $statement;
-        }
-
-        krsort($annualByFiscalYear); // most recent fiscal year first
-        $annual = array_values($annualByFiscalYear);
+        $annual = $this->annualStatementsDescending($statements);
 
         if (count($annual) < $periods + 1) {
             return null;
@@ -233,6 +199,37 @@ final class FundamentalIndicatorMapper
         }
 
         return array_sum($growthRates) / count($growthRates);
+    }
+
+    /**
+     * FY決算のみを抽出し、fiscal_year_endで重複排除した上で新しい順に
+     * 並べ替える（annualGrowth() / averageAnnualGrowth() 共通処理、
+     * 2回目の/review・Cycle4dで重複を統合）。
+     *
+     * @param  array<int, array<string, mixed>>  $statements
+     * @return array<int, array<string, mixed>>
+     */
+    private function annualStatementsDescending(array $statements): array
+    {
+        $annualByFiscalYear = [];
+
+        foreach ($statements as $statement) {
+            if (($statement['period_type'] ?? null) !== 'FY') {
+                continue;
+            }
+
+            $fiscalYearEnd = $statement['fiscal_year_end'] ?? null;
+
+            if ($fiscalYearEnd === null || isset($annualByFiscalYear[$fiscalYearEnd])) {
+                continue;
+            }
+
+            $annualByFiscalYear[$fiscalYearEnd] = $statement;
+        }
+
+        krsort($annualByFiscalYear); // most recent fiscal year first
+
+        return array_values($annualByFiscalYear);
     }
 
     private function toPercent(?float $ratio): ?float

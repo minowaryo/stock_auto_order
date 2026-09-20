@@ -277,6 +277,58 @@ function femdStatementsWithExtremeEpsGrowth(): array
 }
 
 /**
+ * 4-fiscal-year (FY-only, no quarterly rows needed) J-Quants statements
+ * fixture, descending (latest-first) — used by the
+ * "ADR-0015 D2 (Cycle4a)" describe block below to exercise
+ * FundamentalIndicatorMapper::averageAnnualGrowth()'s default $periods=3,
+ * which requires at least $periods+1 = 4 distinct fiscal_year_end FY rows
+ * (see averageAnnualGrowth()'s docblock: "count($annual) < $periods + 1 ->
+ * null"). femdStatements() above only carries 2 FY rows (index 0 and 4),
+ * which is enough for annualGrowth() (single-year) but NOT enough for
+ * averageAnnualGrowth() — that gap is exactly what this fixture exists to
+ * fill.
+ *
+ *   index 0 : FY  fiscal_year_end=2026-03-31  net_sales=130000 / operating_profit=16000 / eps=135
+ *   index 1 : FY  fiscal_year_end=2025-03-31  net_sales=120000 / operating_profit=15000 / eps=120
+ *   index 2 : FY  fiscal_year_end=2024-03-31  net_sales=100000 / operating_profit=12000 / eps=100
+ *   index 3 : FY  fiscal_year_end=2023-03-31  net_sales= 90000 / operating_profit=10000 / eps= 85
+ *
+ * Single-year (annualGrowth(), index 0 vs index 1):
+ *   revenue_growth          = (130000-120000)/120000*100 ≈  8.333333%
+ *   operating_income_growth = ( 16000- 15000)/ 15000*100 ≈  6.666667%
+ *
+ * 3-period average (averageAnnualGrowth(), default $periods=3):
+ *   revenue YoY legs          : (130000-120000)/120000*100 ≈  8.333333%
+ *                                (120000-100000)/100000*100 = 20.000000%
+ *                                (100000- 90000)/ 90000*100 ≈ 11.111111%
+ *     -> average ≈ 13.148148%
+ *   operating_profit YoY legs : ( 16000- 15000)/ 15000*100 ≈  6.666667%
+ *                                ( 15000- 12000)/ 12000*100 = 25.000000%
+ *                                ( 12000- 10000)/ 10000*100 = 20.000000%
+ *     -> average ≈ 17.222222%
+ *
+ * @return array<int, array{disclosed_date: string, period_type: string, fiscal_year_end: string, net_sales: float|null, operating_profit: float|null, profit: float|null, eps: float|null, book_value_per_share: float|null, equity_to_asset_ratio: float|null, roe: float|null, dividend_per_share_annual: float|null, payout_ratio_annual: float|null}>
+ */
+function femdMultiYearFyStatements(): array
+{
+    $base = [
+        'profit' => 8000.0,
+        'book_value_per_share' => 850.0,
+        'equity_to_asset_ratio' => 0.52,
+        'roe' => 0.16,
+        'dividend_per_share_annual' => 25.0,
+        'payout_ratio_annual' => 0.28,
+    ];
+
+    return [
+        array_merge($base, ['disclosed_date' => '2026-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2026-03-31', 'net_sales' => 130000.0, 'operating_profit' => 16000.0, 'eps' => 135.0]),
+        array_merge($base, ['disclosed_date' => '2025-05-14', 'period_type' => 'FY', 'fiscal_year_end' => '2025-03-31', 'net_sales' => 120000.0, 'operating_profit' => 15000.0, 'eps' => 120.0]),
+        array_merge($base, ['disclosed_date' => '2024-05-13', 'period_type' => 'FY', 'fiscal_year_end' => '2024-03-31', 'net_sales' => 100000.0, 'operating_profit' => 12000.0, 'eps' => 100.0]),
+        array_merge($base, ['disclosed_date' => '2023-05-12', 'period_type' => 'FY', 'fiscal_year_end' => '2023-03-31', 'net_sales' => 90000.0, 'operating_profit' => 10000.0, 'eps' => 85.0]),
+    ];
+}
+
+/**
  * @return array{0: ImportBatch, 1: Snapshot}
  */
 function femdImportBatch(?\DateTimeInterface $snapshottedAt = null): array
@@ -1251,6 +1303,161 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
         });
     });
 
+    describe('ADR-0015 D2 (Cycle4a): averageAnnualGrowth()のfundamental_indicators配線', function () {
+        /*
+        |----------------------------------------------------------------
+        | Background (see task description for this Red-phase addition,
+        | and docs/adr/ADR-0015-value-cyclical-stock-judgment-branching.md
+        | D2): FundamentalIndicatorMapper::averageAnnualGrowth() (直近3期の
+        | YoY成長率の単純平均、$periods=3既定) is already implemented and
+        | already Green at the Unit level
+        | (tests/Unit/Services/Analysis/FundamentalIndicatorMapperTest.php
+        | "ADR-0015 D2: averageAnnualGrowth()は直近$periods期のYoY成長率の
+        | 単純平均を返す" describe block, which also already covers the
+        | "insufficient FY periods -> null" edge case). This Cycle (4a) is
+        | only about *wiring* that already-tested pure calculation into
+        | FetchExternalMarketDataAction's persistence step — the new
+        | `fundamental_indicators.avg_revenue_growth` /
+        | `avg_operating_income_growth` columns (migration added by this
+        | same Red-phase change,
+        | 2026_09_19_000001_add_avg_growth_columns_to_fundamental_indicators_table)
+        | — so this describe block deliberately does not re-test
+        | averageAnnualGrowth()'s own edge cases (insufficient-periods
+        | fallback etc.) as a Feature test; that would duplicate the
+        | already-Green Unit coverage without exercising anything new.
+        |
+        | Expected Red state: the columns exist (migration applied) and are
+        | nullable, but FetchExternalMarketDataAction's JP branch (~line 189
+        | of app/Actions/Analysis/FetchExternalMarketDataAction.php, as of
+        | this test's writing) never calls averageAnnualGrowth() and never
+        | includes these two keys in the `FundamentalIndicator::
+        | updateOrCreate()` payload — so the persisted row's
+        | avg_revenue_growth/avg_operating_income_growth stay at their
+        | column default (null) regardless of the fixture. The first test
+        | below therefore fails as an *assertion mismatch* (expected a
+        | non-null 3-period average, actual null), not a fatal error — same
+        | "data derivable but never persisted" shape as the D2 period_type/
+        | fiscal_year_end Red test above.
+        |
+        | Gate 4 flag: the second test below (US market) asserts
+        | avg_revenue_growth/avg_operating_income_growth stay null for US
+        | holdings. Because *no* market currently gets these columns
+        | populated (the wiring doesn't exist yet at all), this specific
+        | assertion is already true today and this test currently PASSES,
+        | not fails — it cannot be constructed as a genuine Red assertion
+        | (the desired end-state for US holdings is byte-for-byte identical
+        | to today's default state, since US holdings are intentionally
+        | never supposed to get these columns populated, ADR-0009's
+        | "financial_statementsはJP株限定" precedent). It is included
+        | anyway per this Cycle's explicit test-case list, as a regression
+        | lock-in for the Green-phase implementer (guards against a
+        | ADR-0009-violating "populate avg growth for US too" mistake) —
+        | flagging this explicitly since every other test in this file is
+        | Red-by-construction.
+        |----------------------------------------------------------------
+        */
+
+        test('JP個別株で本決算(FY)が4期以上ある場合、fundamental_indicators.avg_revenue_growth・avg_operating_income_growthに直近3期平均成長率が保存される。既存の単年度revenue_growth/operating_income_growthの保存も引き続き正しく動作する（ADR-0015 D2, Cycle4a）', function () {
+            [$batch, $snapshot] = femdImportBatch();
+            $holding = femdHolding([
+                'symbol_code' => '7203',
+                'market' => 'jp',
+                'instrument_type' => 'stock',
+                'symbol_name' => 'トヨタ自動車',
+            ]);
+            femdHoldingSnapshot($snapshot, $holding, [
+                'current_price' => 2500.0,
+                'unrealized_gain_rate' => 5.0, // <=20% -> シグナル判定の副作用を避ける
+            ]);
+
+            $priceHistory = femdPriceHistory(femdCloses(2000.0, 5.0, 20));
+            $statements = femdMultiYearFyStatements();
+
+            $action = femdAction(
+                new FakeJpStockPriceClient(['7203' => $priceHistory]),
+                new FakeUsStockPriceClient,
+                new FakeMarketIndexClient([
+                    'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 20)),
+                    'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20)),
+                ]),
+                new FakeJQuantsClient(statementsResponses: ['7203' => $statements]),
+            );
+
+            $action->execute($batch);
+
+            // Expected values are derived by calling the real, already-Green
+            // FundamentalIndicatorMapper directly against the same fixture
+            // (same convention as this file's other "compare against the
+            // real dependency" tests, e.g. the JP正常系 test above) rather
+            // than hand-rounding the arithmetic — see femdMultiYearFyStatements()'s
+            // docblock for the hand-derived reference figures
+            // (avg_revenue_growth ≈ 13.148148%, avg_operating_income_growth
+            // ≈ 17.222222%).
+            $mapper = new FundamentalIndicatorMapper;
+
+            femdAssertFundamentalIndicatorMatches($holding->id, [
+                'avg_revenue_growth' => $mapper->averageAnnualGrowth($statements, 'net_sales'),
+                'avg_operating_income_growth' => $mapper->averageAnnualGrowth($statements, 'operating_profit'),
+                // Regression: the pre-existing single-year growth columns
+                // (annualGrowth(), latest FY vs previous FY only) must keep
+                // working unaffected by the new avg_* wiring.
+                'revenue_growth' => $mapper->annualGrowth($statements, 'net_sales'),
+                'operating_income_growth' => $mapper->annualGrowth($statements, 'operating_profit'),
+            ]);
+        });
+
+        test('US個別株の場合、avg_revenue_growth・avg_operating_income_growthは保存されない（financial_statementsをUS株には保存しない設計と同じ理由、ADR-0009。回帰確認）', function () {
+            [$batch, $snapshot] = femdImportBatch();
+            $holding = femdHolding([
+                'symbol_code' => 'AAPL',
+                'market' => 'us',
+                'instrument_type' => 'stock',
+                'symbol_name' => 'Apple Inc.',
+            ]);
+            femdHoldingSnapshot($snapshot, $holding, [
+                'current_price' => 25000.0,
+                'fx_rate_used' => 150.0,
+                'unrealized_gain_rate' => 8.0,
+            ]);
+
+            $priceHistory = femdPriceHistory(femdCloses(150.0, 2.0, 60));
+            $sp500History = femdPriceHistory(femdCloses(4500.0, 20.0, 30), 1_000_000, '2023-01-02');
+
+            $metrics = [
+                'peTTM' => 37.3169,
+                'pbAnnual' => 50.978,
+                'roeTTM' => 137.18,
+                'revenueGrowthTTMYoy' => 14.24,
+                'epsGrowthTTMYoy' => 32.61,
+                'dividendYieldIndicatedAnnual' => 0.50534,
+                'payoutRatioTTM' => 12.13,
+                'pegTTM' => 2.93443,
+            ];
+            $reportedFinancials = [
+                ['operating_income' => 100000000000.0, 'total_assets' => 359241000000.0, 'total_equity' => 73733000000.0],
+                ['operating_income' => 80000000000.0, 'total_assets' => 352755000000.0, 'total_equity' => 56950000000.0],
+            ];
+
+            $action = femdAction(
+                new FakeJpStockPriceClient,
+                new FakeUsStockPriceClient(['AAPL' => $priceHistory]),
+                new FakeMarketIndexClient([
+                    'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 30), 1_000_000, '2023-01-02'),
+                    'sp500' => $sp500History,
+                ]),
+                new FakeJQuantsClient,
+                new FakeFinnhubClient(['AAPL' => $metrics], ['AAPL' => $reportedFinancials]),
+            );
+
+            $action->execute($batch);
+
+            femdAssertFundamentalIndicatorMatches($holding->id, [
+                'avg_revenue_growth' => null,
+                'avg_operating_income_growth' => null,
+            ]);
+        });
+    });
+
     describe('ADR-0004 再発防止: 実データ由来のバグの回帰テスト', function () {
         /*
         |----------------------------------------------------------------
@@ -1654,6 +1861,92 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
 
             $this->assertDatabaseHas('technical_indicators', ['holding_id' => $okHolding->id]);
             $this->assertDatabaseHas('fundamental_indicators', ['holding_id' => $okHolding->id]);
+        });
+    });
+
+    describe('ADR-0015 D3 (Cycle4b): 低成長銘柄でのPEG除外配線 — 売り側signals', function () {
+        /*
+        |----------------------------------------------------------------
+        | Source of truth:
+        |   - docs/adr/ADR-0015-value-cyclical-stock-judgment-branching.md
+        |     D3（成長率5%以下の銘柄でPEG判定を除外する。
+        |     SignalDeterminationService::determine()自体は既にGreenで
+        |     revenueGrowth/operatingIncomeGrowth引数を受け付けるが、この
+        |     Cycle4b着手前時点ではFetchExternalMarketDataAction::execute()の
+        |     呼び出し側がこの2引数を一切渡していない — その配線ギャップを
+        |     検証する）。
+        |   - tests/Unit/Services/Analysis/SignalDeterminationServiceTest.php
+        |     「5b. 成長率が低い銘柄でのPEG除外」ブロック（このCycleが再利用する
+        |     「穏やかな価格推移」フィクスチャ range(100,179) 相当 = 80週、
+        |     他のいかなるシグナルも発生しないことをUnitレベルで確認済み。
+        |     ここではそのフィクスチャに市場指数の13週騰落率を足した状態でも
+        |     追加シグナル（relative_strength_weakening等）が発生しないよう、
+        |     自社13週騰落率(約+7.83%) > 市場(nikkei225, 約+4.11%)になる
+        |     組み合わせを選んでいる）。
+        |
+        | Expected Red cause: FetchExternalMarketDataAction::execute()は現状
+        | $this->signalDeterminationService->determine($priceHistory,
+        | $marketReturn13w, $sectorReturn13w, $pegRatio) の4引数のみで呼んで
+        | おり、revenueGrowth/operatingIncomeGrowthを渡していない。そのため
+        | determine()内部のLowGrowthDeterminer::isLowGrowth(null, null)は
+        | 常にfalse（「両方nullなら低成長と判定しない」仕様）を返し、
+        | 成長率3.0%（低成長）の銘柄でもPEGレシオ4.0（>=2.0）にもとづき
+        | peg_overvaluedシグナルが発生してしまう。Green化（配線）後は
+        | isLowGrowth(3.0, 3.0)=true となりPEG評価自体が除外され、
+        | peg_overvaluedは発生しなくなる想定。このテストはその「除外され
+        | ないこと（Red）」を捕捉する — 実行結果は「signal_typeに
+        | peg_overvaluedが含まれる」という現状の誤った状態になり、
+        | 「含まれない」ことを期待する本テストのアサーションが失敗する。
+        |----------------------------------------------------------------
+        */
+        test('成長率が低い（5%以下）JP株は、PEGレシオが2.0以上でもpeg_overvaluedシグナルがsignalsに保存されない', function () {
+            [$batch, $snapshot] = femdImportBatch();
+            $holding = femdHolding([
+                'symbol_code' => '7203',
+                'market' => 'jp',
+                'symbol_name' => 'トヨタ自動車',
+            ]);
+            $holdingSnapshot = femdHoldingSnapshot($snapshot, $holding, [
+                'current_price' => 2100.0, // PER = 2100/105 = 20.0
+                'unrealized_gain_rate' => 25.0, // >20% -> シグナル判定の対象
+            ]);
+
+            // 「穏やかな価格推移」フィクスチャ（80週、range(100,179)相当）:
+            // 他のいかなるシグナルも単独では発生しない（Unit
+            // SignalDeterminationServiceTestの同フィクスチャで確認済み）。
+            $priceHistory = femdPriceHistory(femdCloses(100.0, 1.0, 80));
+
+            // 低成長フィクスチャ: revenue_growth=3.0% / operating_income_growth=3.0%
+            // （いずれも5.0%以下 -> 低成長） / eps_growth=5.0% -> PER 20.0 / PEG=4.0（>=2.0）
+            $statements = [
+                [
+                    'disclosed_date' => '2026-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2026-03-31',
+                    'net_sales' => 103000.0, 'operating_profit' => 10300.0, 'profit' => 8000.0, 'eps' => 105.0,
+                    'book_value_per_share' => 800.0, 'equity_to_asset_ratio' => 0.55, 'roe' => 0.125,
+                    'dividend_per_share_annual' => 30.0, 'payout_ratio_annual' => 0.30,
+                ],
+                [
+                    'disclosed_date' => '2025-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2025-03-31',
+                    'net_sales' => 100000.0, 'operating_profit' => 10000.0, 'profit' => 7800.0, 'eps' => 100.0,
+                    'book_value_per_share' => 780.0, 'equity_to_asset_ratio' => 0.55, 'roe' => 0.125,
+                    'dividend_per_share_annual' => 28.0, 'payout_ratio_annual' => 0.30,
+                ],
+            ];
+
+            $action = femdAction(
+                new FakeJpStockPriceClient(['7203' => $priceHistory]),
+                new FakeUsStockPriceClient,
+                new FakeMarketIndexClient([
+                    'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 30), 1_000_000, '2023-01-02'),
+                    'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 30), 1_000_000, '2023-01-02'),
+                ]),
+                new FakeJQuantsClient(statementsResponses: ['7203' => $statements]),
+            );
+
+            $action->execute($batch);
+
+            $signalTypes = Signal::where('holding_snapshot_id', $holdingSnapshot->id)->pluck('signal_type')->all();
+            expect($signalTypes)->not->toContain('peg_overvalued');
         });
     });
 });

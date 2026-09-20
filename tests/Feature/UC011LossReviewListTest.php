@@ -690,6 +690,33 @@ describe('UC-011: 整理検討（含み損）候補一覧', function () {
             expect($row['fundamental_summary'])->toContain('0%以下');
         });
 
+        // ---------------------------------------------------------------
+        // CR (2026-09-20, CHG-0017 / ADR-0015 D2 配線 Cycle 4c)
+        // ---------------------------------------------------------------
+        // FundamentalHealthEvaluator自体はD2救済（直近3期平均成長率>0%の
+        // OR救済）を実装済みだが、ShowLossReviewListAction はまだ
+        // avg_revenue_growth/avg_operating_income_growth を evaluate() に
+        // 渡していない。
+        // Red の出方（2026-09-20）: roe=12.0/equity_ratio=45.0（D1のRESCUE閾値
+        // ROE≧15%/自己資本比率≧50%は満たさない）・単年度成長率は両方マイナス
+        // のため、現行実装は fundamental_status='failed' のままとなり、
+        // 'passed' を期待する以下のアサーションが不一致になる。
+        test('自己資本比率45.0%/ROE12.0%（D1のRESCUE閾値は満たさない）で単年度成長率が両方マイナスだが3期平均営業利益成長率がプラスの銘柄は、D2救済によりfundamental_status=passedになる', function () {
+            [, $snapshot] = ucFrom011TestBatch();
+            $holding = ucFrom011TestHolding(['symbol_code' => '1605', 'symbol_name' => 'INPEX']);
+            ucFrom011TestHoldingSnapshot($snapshot, $holding);
+            ucFrom011TestFundamentalIndicator($holding, [
+                'roe' => 12.0, 'equity_ratio' => 45.0,
+                'revenue_growth' => -3.0, 'operating_income_growth' => -1.0,
+                'avg_operating_income_growth' => 1.5,
+            ]);
+
+            $row = ucFrom011TestFindRow(ucFrom011TestExecute(), '1605');
+
+            expect($row)->not->toBeNull();
+            expect($row['fundamental_status'])->toBe('passed');
+        });
+
         test('財務 passed の銘柄に押し目シグナルがあれば also_on_buy_list は true（買い増しリストにも載る）', function () {
             [, $snapshot] = ucFrom011TestBatch();
             $holding = ucFrom011TestHolding(['symbol_code' => '4063', 'symbol_name' => '信越化学工業']);

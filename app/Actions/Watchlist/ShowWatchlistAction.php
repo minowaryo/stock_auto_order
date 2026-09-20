@@ -94,13 +94,10 @@ class ShowWatchlistAction
         $technical = $holding->technicalIndicator;
         $fundamental = $holding->fundamentalIndicator;
 
-        $equityRatio = $fundamental?->equity_ratio !== null ? (float) $fundamental->equity_ratio : null;
-        $roe = $fundamental?->roe !== null ? (float) $fundamental->roe : null;
-        $revenueGrowth = $fundamental?->revenue_growth !== null ? (float) $fundamental->revenue_growth : null;
-        $operatingIncomeGrowth = $fundamental?->operating_income_growth !== null ? (float) $fundamental->operating_income_growth : null;
-        $operatingMargin = $fundamental?->operating_margin !== null ? (float) $fundamental->operating_margin : null;
+        [$equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin, $avgRevenueGrowth, $avgOperatingIncomeGrowth] = $fundamental?->healthEvaluatorArgs()
+            ?? [null, null, null, null, null, null, null];
 
-        $fundamentalStatus = $this->evaluator->evaluate($equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin);
+        $fundamentalStatus = $this->evaluator->evaluate($equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin, $avgRevenueGrowth, $avgOperatingIncomeGrowth);
 
         $currentPrice = $item->last_close !== null ? (float) $item->last_close : null;
         $week52High = $technical?->week52_high !== null ? (float) $technical->week52_high : null;

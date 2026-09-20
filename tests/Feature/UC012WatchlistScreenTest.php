@@ -105,7 +105,11 @@ function uc012ScreenWatchlist(string $code, array $opts = []): WatchlistItem
         'roe' => $opts['roe'] ?? 12.0,
         'equity_ratio' => $opts['equity_ratio'] ?? 45.0,
         'revenue_growth' => $opts['revenue_growth'] ?? 5.0,
-        'operating_income_growth' => 5.0,
+        'operating_income_growth' => $opts['operating_income_growth'] ?? 5.0,
+        // CHG-0017 / ADR-0015 D2 配線 Cycle 4c: 直近3期平均成長率の
+        // 救済経路検証用（デフォルトnull＝救済なし、既存テストは無改変）。
+        'avg_revenue_growth' => $opts['avg_revenue_growth'] ?? null,
+        'avg_operating_income_growth' => $opts['avg_operating_income_growth'] ?? null,
         'operating_margin' => $opts['operating_margin'] ?? 12.0,
         'eps_growth' => 5.0,
         'peg_ratio' => 1.0,
@@ -289,6 +293,33 @@ test('各行に同セクター保有比率・財務健全性・小口購入額�
     expect($row)->toHaveKeys(['overlap_rate', 'fundamental_status', 'suggested_amount', 'criteria', 'week52_range_position']);
     expect($row['criteria'])->toHaveKey('technical');
     expect($row['criteria'])->toHaveKey('fundamental');
+});
+
+// ---------------------------------------------------------------------
+// CR (2026-09-20, CHG-0017 / ADR-0015 D2 配線 Cycle 4c)
+// ---------------------------------------------------------------------
+// FundamentalHealthEvaluator自体はD2救済（直近3期平均成長率>0%のOR救済）を
+// 実装済みだが、ShowWatchlistAction はまだ avg_revenue_growth/
+// avg_operating_income_growth を evaluate() に渡していない。
+// Red の出方（2026-09-20）: roe=12.0/equity_ratio=45.0（D1のRESCUE閾値
+// ROE≧15%/自己資本比率≧50%は満たさない）・単年度成長率は両方マイナスの
+// ため、現行実装は fundamental_status='failed' のままとなり、'passed' を
+// 期待する以下のアサーションが不一致になる。
+test('単年度成長率はマイナスだが3期平均成長率がプラスの銘柄は、D2救済によりfundamental_statusがpassedになる', function () {
+    uc012ScreenWatchlist('7777', [
+        'name' => 'D2救済銘柄',
+        'roe' => 12.0,
+        'equity_ratio' => 45.0,
+        'revenue_growth' => -3.0,
+        'operating_income_growth' => -1.0,
+        'avg_revenue_growth' => 2.0,
+    ]);
+
+    $component = Livewire::actingAs(uc012ScreenUser())->test(CandidateCheck::class);
+
+    $row = collect($component->viewData('rows'))->firstWhere('symbol_code', '7777');
+    expect($row)->not->toBeNull();
+    expect($row['fundamental_status'])->toBe('passed');
 });
 
 test('刷新後の画面に「おすすめ候補」「銘柄コード手入力」セクションは無い', function () {
