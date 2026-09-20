@@ -1,7 +1,37 @@
 # PLAN.md
 
 > 2026-08-27（フロントエンド実装Phase5完了時点。UC-010 Gate4完了・コミット`ba239fe`分も含む）以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、Phase2 UC-008（Cycle1・Cycle2）完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査完了、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了、利確・リバランス閾値の動的分岐ロジック検討〔検討事項の記録のみ、実装はCHG-0006として2026-08-28〜29に別途完了〕、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、フロントエンド実装Phase4（UC-003銘柄詳細画面）完了、UC-010 Gate2/Gate3正式承認（買いシグナル7種の前提条件追加）完了、UC-010 Gate4完了・コミット（`ba239fe`）、フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了、およびフロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了〔2026-09-05、CHG-0011作業時に退避〕等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
-> **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。300行超過に伴い「数値表示フォーマット修正完了（2026-08-28）」「UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0012 Phase 0作業時）。約298行に達したため「利確検討ラインの動的分岐 CHG-0006（2026-08-28〜29）」「売買シグナル画面の可読性改善（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0013／ADR-0012作業時）。300行超過に伴い「取込後サマリーレポートのグローバルナビタブ化 CHG-0008（2026-09-05）」の1エントリを退避済み（2026-09-12、F-012・CHG-0012のステータス記述を実態〔mainマージ済み〕に修正した際に発生した増分に対応）。
+> **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。300行超過に伴い「数値表示フォーマット修正完了（2026-08-28）」「UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0012 Phase 0作業時）。約298行に達したため「利確検討ラインの動的分岐 CHG-0006（2026-08-28〜29）」「売買シグナル画面の可読性改善（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0013／ADR-0012作業時）。300行超過に伴い「取込後サマリーレポートのグローバルナビタブ化 CHG-0008（2026-09-05）」の1エントリを退避済み（2026-09-12、F-012・CHG-0012のステータス記述を実態〔mainマージ済み〕に修正した際に発生した増分に対応）。300行超過に伴い「売買シグナル画面 判定チェックリスト表示 CHG-0007（2026-08-29〜09-05）」の1エントリを退避済み（2026-09-12、CHG-0016〔新規投資候補テーブルの固定ヘッダー化〕作業時）。
+
+## 新規投資候補テーブルの固定ヘッダー化・重複列マージ・判定チェックリスト1項目=1列化（CHG-0016）実装完了（2026-09-12）
+
+### Decision
+
+- ユーザー要望: `/candidate-check`（新規投資候補、UC-012）のテーブルでヘッダーが縦・横スクロールで固定されない、判定チェックリストが1つの`<td>`内で`grid grid-cols-4`により複数列に折り返され読みづらい。「シグナルの画面（`/signals`、CHG-0007）で同様の変更を行っているはずなのでそのピットフォールも踏まえて」との指示
+- 調査の結果、シグナル画面と同じ課題に加え、この画面固有の問題として**左側の素の数値列（RSI・ROE・自己資本比率・営業利益率）と判定チェックリストのチップが同じ指標を二重表示**していることが判明（チップは実測値・基準・達成色を持つ上位互換の表示）。レビューフィードバックで「重複する情報はチップ側にマージする」方針に確定
+- 設計（プランファイル: `~/.claude/plans/stock_auto_order-implementation-phase.md`。実体は `/root/.claude/plans/hidden-splashing-scone.md`）:
+  - CHG-0007と同じ「ヘッダー用/本文用`<table>`2分割＋ヘッダー側divに`overflow-x-auto sticky top-0`＋横スクロール同期」を適用（`x-watchlist-table-colgroup`/`x-watchlist-table-head`、新規）
+  - 判定チェックリストは`x-signal-criteria-cells`をそのまま流用し、チップ1項目=テーブル1列に分解
+  - 重複列（RSI・ROE・自己資本比率・営業利益率の単独列、財務健全性の内訳サマリ文）を削除。財務健全性の総合判定バッジ（健全／基準割れ／取得不可）は維持。PER・PBRはチップに対応項目が無いため残す
+  - ★列を`w-8`→`w-10`に拡大（padding+border控除後に★グリフが収まらない不具合を事前修正）、★・銘柄の2列を横方向に固定（`sticky left-0`/`left-10`）
+  - `resources/js/app.js`: `wire:poll`・フィルタの`wire:model.live`によるLivewire再描画で片方のスクロールコンテナだけ`scrollLeft`がずれる懸念に対処するため、`livewire:navigated`に加えLivewireのJSフック`morphed`（`livewire:updated`というDOMイベントはv3+に存在しないため不採用）でも再同期。リスナー重複登録を避けるため対象要素を`WeakSet`で管理する形に拡張
+  - `$visibleRows`が0件になるケースの添字エラー（`<colgroup>`/`<thead>`が`$visibleRows[0]['criteria']`に依存）をガードし空状態「該当する銘柄はありません」を表示
+- Gate 4（テストケース承認）を経てGreen実装（TDD Red→Green）
+
+### Files touched
+
+`resources/views/livewire/candidate/candidate-check.blade.php`、`resources/views/components/watchlist-table-colgroup.blade.php`（新規）、`resources/views/components/watchlist-table-head.blade.php`（新規）、`resources/js/app.js`、`tests/Feature/UC012WatchlistScreenTest.php`（Red 4件追加）、`docs/product/use-cases.md`（UC-012の表示項目・業務ルール改訂）、`docs/product/ui-guidelines.md`（テーブル節に本CRの統一・重複回避の原則を追記）、`docs/rcid/traceability-matrix.md`（F-012行にCHG-0016追記）、`docs/history/plan-archive.md`（CHG-0007退避）、`PLAN.md`（本エントリ）
+
+### Status
+
+**Green実装完了**。Redテスト4件（判定チェックリストの2段ヘッダー構造・重複列マージの実測値重複排除・0件ガード・展開行colspan整合）を追加しGate4承認を得た上でGreen実装、フルスイート610件Green（pint適用済み、1件のインポート整理を自動修正）。`npm run build`でTailwind CSS再ビルド後、Sailコンテナ内Playwright（実データ216件・90未保有銘柄）で実ブラウザ検証: 縦スクロールでヘッダーが`top:0`に固定、横スクロールで★・銘柄列が固定されヘッダーと本文の`scrollLeft`が一致（443px同期）、チップ・バッジのはみ出しなし、固定列の罫線消失なし、0件時の空状態表示も確認。検証用`storage/app/pw-scratch/`は削除済み
+
+**`/code-review`（medium）で1件判明・修正**（2026-09-13）:
+- **確定バグ**: `resources/js/app.js`に追加した`document.addEventListener('livewire:updated', bindScrollSync)`が、実際にはLivewire 4.x（v3以降）に存在しないDOM CustomEventを購読しており、フィルタ変更（`wire:model.live`）・`wire:poll`での再描画時に一切発火しない死んだコードだった。reviewが`vendor/livewire/livewire/dist/livewire.js`を実際にgrepして裏付け（実際にdispatchされる`livewire:*`イベントは`init`/`navigate`系のみ）。前回の実ブラウザ検証（上記）は「フィルタ変更後もスクロール位置ずれなし」を確認済みとしていたが、これはたまたま列幅が変わらない操作だったため実害が顕在化しなかっただけで、修正の有効性自体は検証できていなかった
+- 対処: `Livewire.hook('morphed', callback)`（DOM差分適用完了後に発火するLivewire公式JSフック）に置き換え。修正直後、Tailwindと同様`resources/js/`の変更も`npm run build`しないと反映されないことを失念し一度誤った「動作せず」という診断をしかけたが、再ビルド後に解消（`docs/ai-context/known-pitfalls.md`に両方追記: Vite JSビルド漏れ／Livewire `livewire:updated`不存在）
+- 再検証（Playwright、強制デシンク手法）: 本文側を横スクロール後、ヘッダー側の`scrollLeft`のみ手動で0に戻し、フォルダフィルタを変更→`morphed`フック発火→ヘッダーが本文と同じ`scrollLeft`（443px）に正しく再同期されることを実測確認（`header=443 body=443`）。フルスイート610件Green再確認・pint適用済み。検証用`storage/app/pw-scratch/`は削除済み
+- 次: コミット（push禁止）
+- **本CRのスコープ外（CHG-0017として後続）**: 「財務健全性が大半`passed`になり選びきれない」課題への対応として、対市場13週相対リターン（`relative_strength_vs_market`、既に算出・保存済みで未表示）・基準からの余裕度スコア・判定チェックリスト達成数・ユニバース内パーセンタイル順位の4軸を序列づけに追加し、列ヘッダークリックでのソート切替、フォルダ別グループ表示を行う方針で本人と合意済み（2026-09-12）。今回のレイアウトはこれらと前方互換（2段ヘッダー・列定義とも拡張余地を残す設計）
 
 ## ポートフォリオ分類ダッシュボード（F-013・UC-013・ADR-0014・CHG-0015）Phase 0 ドキュメント先行（2026-09-08〜）
 
@@ -216,61 +246,6 @@ UC-011 は閲覧系フローで `.claude/rules/31-e2e-testing.md` のクリテ�
 ### Status
 
 **Green実装・`/review`修正完了、mainマージ済み**（コミット`fb894b1`）。`/review`で2件修正: (1) `FinnhubClient`のリトライ例外メッセージにAPIキー（クエリパラメータ渡しのためJ-Quantsのヘッダー方式と異なり露出しやすい）が漏れないようサニタイズ、(2) XBRL概念値が`present-but-null`の場合に無言で`0.0`扱いされ自己資本比率が「0%」と誤判定される不具合を修正（unavailable扱いに）。両修正とも回帰テスト追加。実DB確認: `app/Services/Analysis/UsFundamentalIndicatorMapper.php`が存在し稼働中（CHG-0011の米国株ファンダ補完・F-012のウォッチリスト画面が実際にこの経路で米国株の指標を取得していることを確認済み）。
-
-## 売買シグナル画面 判定チェックリスト表示（CHG-0007）（2026-08-29〜）
-
-### Decision
-
-- ユーザー要望: `/signals`（利確検討・買い増し候補の両セクション）で、良し悪しの判断根拠を「基準点 × その銘柄の実測値 × 達成状態」の形で一覧に出したい。達成は緑、基準の8割まで来ていれば達成より淡い緑、で見づらくならない程度に。ファンダメンタルズ・財務健全性・シグナル基準から大事な項目を過不足なくピックアップ。横に長くなるのは許容
-- Planフェーズで承認。設計（プランファイル: `~/.claude/plans/stock_auto_order-signal-criteria-panel-implementation-phase.md`）:
-  - 各銘柄行の直下にフル幅サブ行（`<tr><td colspan>`）で判定チェックリストを敷く（列は増やさない）
-  - **テクニカル7項目**（利確: 含み益率>ライン/RSI≧70/52週高値下落率≦-10%/BB上限乖離≧0%/MACD−シグナル線<0/PEG≧2.0/相対力<0。買い増し: RSI≦30/52週安値距離≦+10%/BB下限乖離≦0%/MACD−シグナル線>0/MA20乖離≦-10%/PEG≦1.0/出来高倍率≧1.5）＋ **財務健全性3項目**（ROE≧10%/自己資本比率≧40%/成長率>0%）を別グループで表示・別集計
-  - 基準値は既存の確定済みシグナル判定閾値・`FundamentalHealthEvaluator`の閾値をそのまま可視化（新設なし）。`near`（あと一歩）= 基準値の±20%手前、基準値0の項目は達成/未達の2値（`data-model.md`で新規確定）
-  - 新設 `SignalCriteriaEvaluator`（表示専用の純粋計算クラス）＋ Bladeコンポーネント2つ（`criteria-chip`/`criteria-panel`）。`SignalDeterminationService`/`BuySignalDeterminationService`/`FundamentalHealthEvaluator`のハードコード閾値を`public const`に抽出して共有（CHG-0005型の二重管理を防ぐ。判定ロジックは不変）
-  - 両Actionに`holding.technicalIndicator`のEager Load追加（CHG-0006のN+1回帰と同じ轍を踏まない）
-  - DBスキーマ変更なし
-- Gate2（use-cases.md UC-004/UC-010）・Gate3（data-model.md `near`バッファ）・`ui-guidelines.md`（「一覧に全指標の内訳を出さない」方針の例外化＋チップ配色規約）・traceability-matrix.md（CHG-0007）を先に更新済み
-
-### Files touched
-
-`app/Services/Analysis/SignalCriteriaEvaluator.php`（新規）、`app/Services/Analysis/SignalDeterminationService.php`（閾値をpublic const化）、`app/Services/Analysis/BuySignalDeterminationService.php`（同）、`app/Services/Analysis/FundamentalHealthEvaluator.php`（同）、`app/Actions/Signal/ShowSignalListAction.php`、`app/Actions/Signal/ShowBuySignalListAction.php`、`resources/views/components/criteria-chip.blade.php`（新規、サイズ縮小のため後日修正）、`resources/views/components/signal-table-colgroup.blade.php`（新規）、`resources/views/components/signal-table-head.blade.php`（新規）、`resources/views/components/signal-criteria-cells.blade.php`（新規）、`resources/views/components/signal-criteria-summary-badges.blade.php`（新規）、`resources/views/livewire/signal/signal-list.blade.php`、`docs/product/use-cases.md`、`docs/architecture/data-model.md`、`docs/product/ui-guidelines.md`、`docs/rcid/traceability-matrix.md`、`tests/Unit/Services/Analysis/SignalCriteriaEvaluatorTest.php`（新規）、`tests/Feature/UC004SignalListTest.php`、`tests/Feature/UC010BuySignalListTest.php`、`tests/Feature/SignalListTest.php`、`.claude/skills/verify/SKILL.md`（Tailwindリビルド必須の注記・Playwright MCP不通時のcurlログインfallback手順を追記）、`docs/ai-context/known-pitfalls.md`（Tailwind CSS v4の同様の記録を追記）、`PLAN.md`（本エントリ）
-
-### Status
-
-Gate4承認・Green実装完了（フルスイート73件Green、うちSignalCriteriaEvaluatorTest 16件・UC004/UC010/SignalList各Feature Test追加分含む）。Green完了後、実画面レビューで判定チェックリストのレイアウトをユーザーフィードバックに基づき2段階で改訂:
-1. 当初実装（`resources/views/components/criteria-panel.blade.php`を新設し、銘柄行直下のフル幅サブ行に1個のパネルとして配置）は1銘柄=2行になり視認しづらいとの指摘で、パネルを銘柄行の末尾に1列で集約する1銘柄=1行構成に変更
-2. その1列集約案も、列内でチップが折り返され銘柄ごとに折返し位置がずれて見づらいとの追加指摘で、**チップ1項目=テーブル1列**に分解する最終形に変更。`criteria-panel.blade.php`は不要になったため削除し、`criteria-chip.blade.php`を`signal-list.blade.php`から直接、2段ヘッダー（グループ`colspan`＋項目ラベル）付きで列ごとに呼び出す構成に変更
-`ui-guidelines.md`のCHG-0007該当箇所を最終形に合わせて更新済み。フルスイート422件Green再確認。
-- 実データ（保有134銘柄・シグナル187件）で実HTTP確認: Playwright MCPが接続不能だったため、CHG-0008と同じ手法（`artisan tinker`で実セッションCookieを発行し実行中コンテナへ本物のHTTP経由でアクセス）で検証。最終形（チップ1項目=1列、2段ヘッダー）が意図通り描画され、met（緑濃）/near（緑薄）/unmet（グレー）/unavailable（薄グレー、値`—`）の4状態が実データで正しく出現することを確認。検証用の一時セッション行は削除済み
-- `/review`（medium）で2件判明、両方修正: (1) **確定バグ**: 「相対力(対市場)」チップが基準0に対し`lte`（≤0）で判定しており、`SignalDeterminationService::determineRelativeStrengthWeakening()`の厳密な`<0`判定と境界値0.0で食い違っていた（Red時点のテスト仕様コメントは`<0`と明記済みだったが、Green実装が`lte`を誤って流用）。`SignalCriteriaEvaluator::classify()`に`lt`（厳密未満）方向を追加し、当該項目のみ`lt`＋ラベル`<0`に修正。(2) **効率**: `evaluateTakeProfit()`/`evaluateBuy()`がそれぞれ`fundamentalRows()`を2回呼んでいたのをローカル変数に一度だけ格納する形に修正。修正後フルスイート422件Green再確認・実HTTP確認で反映を再確認（相対力チップの基準ラベルが`<0`表示に変わり、境界値-6.8等が正しくmet判定）・pint適用済み
-- UC-004/UC-010の一覧→チェックリスト表示は`.claude/rules/31-e2e-testing.md`が対象とする「クリティカルフロー」に該当しないと判断しPlaywright E2Eテストは追加しない（UC-004本編・UC-009タブ化と同一の考え方）
-
-**実画面確認（2026-09-05）**: 上記コミット準備が整った後、ユーザーから「デザイン崩れが激しい」と報告あり、Playwright MCPで確認しようとしたが本セッションでは接続不通（`CONNECT_TIMEOUT`）、コンテナ内に`chromium-cli`・ブラウザ・表示系フォールバックも無し。代わりに`verify`スキルへ追記した手順で、Livewireのログイン画面（`wire:submit`コンポーネント）に対して実際のLivewire update AJAXプロトコルをcurl+pythonで再現してログインし、本物のセッションCookieで`/signals`の実HTMLを取得して確認した。
-- 判明した実際の原因: `compose.yaml`にVite dev serverが無く、CSSは`npm run build`による静的ビルド。Tailwind v4はビルド時点でBladeをスキャンするJIT方式のため、今回のレイアウト変更で新規に使い始めた`overflow-x-auto`・`whitespace-nowrap`クラスが、直近のビルド済みCSS（ビルド日時がこの変更より前）に含まれておらず、テーブルの横スクロール・ヘッダーの折返し防止が効かないまま配信されていた（`php artisan test`はコンパイル済みCSSを見ないため検出不可）
-- 対処: `docker compose exec laravel.test bash -c "cd /var/www/html && npm run build"`でCSSを再ビルド（`app-C9OyCJfb.css`43KB→`app-Czb6vJjq.css`62KB、両クラスの定義を確認）。取得した実HTMLをパースし、両テーブルとも2段ヘッダーの実効列数（5+7+3=15）とtbody各行（買い増し9行・利確48行）のcolspan合計が全て一致することを確認済み（構造上の崩れは無し）。再ビルド後にフルスイート422件Green再確認
-- 再発防止として`docs/ai-context/known-pitfalls.md`に本件を記録し、`verify`スキルに「Blade変更時は`npm run build`必須」「Playwright不通時のcurlログインfallback手順」を追記
-
-**表フォーマットの統一・固定表示・縮小（2026-09-05）**: 続けてユーザーから「利確検討と買い増し候補のフォーマットが異なる」「ヘッダー・銘柄名を固定表示にしてほしい」「セル全体を10〜20%程度縮小して画面に収まりやすくしてほしい」と依頼あり
-- 原因分析: 2表は列数・列順は同じだが列ごとの内容（財務健全性／理由サマリ等）が異なり、個別にBladeを手書きしていたため対応列の実測幅（ブラウザの自動レイアウト）が表ごとにずれていた
-- 対処: `<colgroup>`（`resources/views/components/signal-table-colgroup.blade.php`、新規）・2段ヘッダー（`signal-table-head.blade.php`、新規）・判定チェックリストの`<td>`群（`signal-criteria-cells.blade.php`、新規）を共通コンポーネント化し、両テーブルが完全に同一の列幅定義を共有する構成に変更（`table-fixed`＋`colgroup`で列幅を内容量に依存させず固定）。取得した実HTMLで両テーブルの`colgroup`が完全一致することを確認済み
-- 固定表示: `<thead>`に`sticky top-0 z-20 bg-surface`、銘柄列（ヘッダー・本文とも）に`sticky left-0`を付与し、縦スクロールでヘッダーが、横スクロールで銘柄名列が常に見える状態にした
-- 縮小: 表全体`text-[13px]`→`text-[11px]`、セルpadding`py-2 px-2`→`py-1.5 px-1.5`、`criteria-chip`の固定`min-w-[88px]`を廃止しセル幅（`w-[72px]`）に追従させ内部フォントも1段階縮小。列幅固定に伴い長いシグナル種別名がはみ出さないよう`[&_td]:break-words`を追加
-- `docs/product/ui-guidelines.md`のCHG-0007該当箇所に本改訂を追記。再ビルド後、実データで両テーブルの`colgroup`一致・列数一致（構造崩れ無し）を確認、フルスイート422件Green再確認
-
-**達成数サマリの復活・固定表示の実効化（2026-09-05）**: ユーザーが実ブラウザのスクリーンショットで確認したところ2点の追加指摘: (1) 判定チェックリストを横スクロールすると達成数（テクニカル/財務それぞれ何項目達成か）が分からなくなる、(2) ヘッダー行（銘柄・含み益率等のラベル行）が縦スクロールで固定されていない
-- (1)への対処: 一度「列見出しと冗長」として省略した「◯/N 達成」テキストサマリを`x-signal-criteria-summary-badges`（新規）として復活。判定チェックリスト列側ではなく、横スクロールしても常に見える**銘柄セル（sticky left-0）内・銘柄名の直下**に「技術 3/7」「財務 2/3」の2行で表示し、達成率に応じて簡易配色（全達成=緑／0件=グレー／それ以外=amber）。値は既に`criteria.summary`としてAction側で計算済みだったため追加計算は不要
-- (2)への原因調査: 実HTMLには`sticky top-0`のクラス自体は正しく出力されており、静的HTML確認だけでは検出できない**実ブラウザのレンダリング挙動の不具合**だった。原因はテーブルの横スクロール用ラッパー`<div class="overflow-x-auto">`が`overflow-y`を指定していなかったこと。CSS仕様上、`overflow-x`と`overflow-y`の片方が`visible`でもう片方がそうでない場合は両方`auto`に補正されるルールがあり、このdivが（実際は縦オーバーフローしないにも関わらず）縦スクロールの祖先要素とみなされてしまい、`position: sticky`の基準がページではなくこのdivになって効かなくなっていた
-- (2)への対処（1回目、誤り）: ラッパーに`overflow-y-hidden`を追加（`overflow-x-auto overflow-y-hidden`）し補正ルールの発動条件を外せば解消すると考えたが、ユーザーが実ブラウザで再確認したところ「まだヘッダーが固定されない」と再度指摘があり誤りと判明
-- **原因の再調査と正しい対処**: `overflow: hidden`は`auto`と同様それ自体がスクロールコンテナを成立させる値であり、`visible`から`hidden`に変えても「このdivが`sticky`の基準になってしまう」問題自体は解消していなかった（`visible`⇄`auto`の補正ルールは事実だが、「`visible`以外なら何でも良い」という結論部分が誤りだった）。正しくは`overflow-y-clip`（`overflow-y: clip`）を使う必要がある。`clip`は`hidden`と異なりスクロールコンテナを一切成立させない仕様上明確に区別された値で、`overflow-x-auto overflow-y-clip`とすることで水平方向は実際にスクロールコンテナとして機能しつつ、垂直方向は`sticky`の基準として無視されページ本体まで正しく伝播する。修正後、再ビルドし実データ取得したHTMLで両ラッパーのクラスが`overflow-x-auto overflow-y-clip`になっていること・コンパイル済みCSSに`.overflow-y-clip{overflow-y:clip}`が生成されていることを確認
-- `docs/product/ui-guidelines.md`・`docs/ai-context/known-pitfalls.md`を`hidden`ではなく`clip`が正しい理由込みで訂正・追記。フルスイート422件Green再確認
-- **さらにユーザーから「まだ直っていなそう」と3度目の指摘**。`overflow-y-clip`も実ブラウザでは効果がなかった（後述の通り根本原因の理解自体が誤りだった）。この時点で理論だけで直すのをやめ、実ブラウザでの検証手段を確保する方針に切替: Sailコンテナ内で`npx playwright install chromium`を実行したところ実際にChromiumをダウンロード・インストールでき（`storage/app/pw-scratch/`に`npm install playwright`し、Node.jsスクリプトから実際にログイン・スクロール・スクリーンショット取得が可能になった。Playwright MCP接続不可の際の恒久的な代替手段として`.claude/skills/verify/SKILL.md`に手順を追記
-- **実ブラウザでの計測により判明した真因**: `getComputedStyle()`で確認すると、`overflow-y-clip`を指定していたにも関わらず実際の計算値は`"hidden"`だった。CSS仕様上「`overflow-x`/`overflow-y`の片方が`clip`でもう片方が`visible`でも`clip`でもない場合、`clip`側は`hidden`に補正される」という追加ルールがあり、`overflow-x: auto`と組み合わせた時点でこの補正が発動していた。**`overflow-x: auto`な要素は、`overflow-y`の値を`hidden`/`auto`/`clip`のどれにしても必ずそれ自体がスクロールコンテナになり、子孫の`sticky`の基準がページ本体ではなくこの要素になってしまう**——CSSの`overflow`プロパティだけでは「横スクロールは本物のスクロールコンテナ」かつ「縦方向はスクロールコンテナにしない」を同一要素上で両立できないという構造的な限界だった
-- **最終対処（構造変更）**: 1個の`<table>`に固執するのをやめ、**ヘッダー用（`<colgroup>`+`<thead>`のみ）と本文用（`<colgroup>`+`<tbody>`のみ）で`<table>`を2つに分割**。ヘッダー用`<table>`を包むdiv自身に`overflow-x-auto`と`sticky top-0`を両方付与（`sticky`は「このdivの祖先」を基準に解決されるため、div自身がスクロールコンテナであることとは無関係にページ本体への固定が効く）。本文用`<table>`は別の`overflow-x-auto`なdivに入れ`sticky`は付けない。2つのdivの横スクロール位置を同期する数行のJS（`resources/js/app.js`新規、`data-scroll-sync-with`属性で対象指定、`livewire:navigated`で初期化）を追加。ヘッダー側の重複する横スクロールバーは`[scrollbar-width:none]`等で視覚的に隠した
-- **この構造変更に伴い連鎖的に発覚・修正した2つの不具合**（実ブラウザでの計測で発見。静的HTML確認では検出不可能だった）:
-  1. `table-fixed`に付けていた`w-max`（`width: max-content`）が、折り返せない長いヘッダーラベル（`52週安値からの距離`等、`whitespace-nowrap`付き）を持つ列だけ`<colgroup>`指定幅を無視して広げてしまい、ヘッダー用・本文用の実際の描画幅が食い違っていた（例: 1446px vs 1350px）。テーブルの`width`を`<colgroup>`合計値と一致する具体的なpx値（`w-[1296px]`）に変更し、ヘッダー側の`whitespace-nowrap`も本文側と同じ`break-words`に統一して解消。修正後、両`<table>`の`scrollWidth`が1297pxで完全一致することを実測確認
-  2. `<x-badge>`（`inline-block`、共有コンポーネント）内の折り返せない1単語のシグナル種別名（`week52_high_pullback`等）が、親`<td>`の`break-words`だけでは折り返されずセル幅（130px）を超えて（151px）隣接要素と視覚的に重なっていた。`overflow-wrap`は継承されるが`inline-block`自身の「内容で幅が決まる」性質までは変えないため。`badge.blade.php`自体に`max-w-full break-words`を追加（他画面で使う短いテキストには無害）し解消。修正後117px（130px以内）に収まることを実測確認
-- 上記全てを実際にPlaywrightで`/signals`にログイン・スクロールしてスクリーンショットで最終確認（ページ最上部・買い増し候補ヘッダー固定中・利確検討ヘッダーへの引き継ぎ後の3枚、ユーザーにも送付）。`docs/ai-context/known-pitfalls.md`に3件の不具合（sticky構造上の限界／table-fixed+w-maxの幅食い違い／inline-blockの折り返し）、`docs/product/ui-guidelines.md`のCHG-0007該当箇所を最終構造に合わせて全面的に訂正、`verify`スキルにコンテナ内Playwrightのセットアップ手順を追記。検証用の`storage/app/pw-scratch/`（Chromiumバイナリ・node_modules）は削除済み。フルスイート422件Green再確認
-- 次: `/review` → コミット（push禁止）
 
 ## 今後の対応（未着手）（2026-08-27追記、Phase5の実ブラウザ確認時に発見）
 

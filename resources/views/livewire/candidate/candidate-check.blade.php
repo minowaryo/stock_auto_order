@@ -51,36 +51,40 @@
             <span class="text-text-secondary">{{ count($visibleRows) }}件表示</span>
         </div>
 
-        <div class="overflow-x-auto">
-            <table class="w-full text-[12px] border border-app-border [&_td]:border [&_td]:border-app-border [&_th]:border [&_th]:border-app-border [&_td]:px-2 [&_td]:py-1.5 [&_th]:px-2 [&_th]:py-1.5 [&_td]:align-top">
-                <thead class="bg-app-bg text-left">
-                    <tr>
-                        <th class="w-8">★</th>
-                        <th>銘柄</th>
-                        <th>市場</th>
-                        <th>フォルダ</th>
-                        <th class="text-right">現在値</th>
-                        <th class="text-right">52週内位置</th>
-                        <th class="text-right">同ｾｸﾀｰ保有比率</th>
-                        <th class="text-right">押し目</th>
-                        <th>財務健全性</th>
-                        <th class="text-right">RSI</th>
-                        <th class="text-right">PER</th>
-                        <th class="text-right">PBR</th>
-                        <th class="text-right">ROE</th>
-                        <th class="text-right">自己資本比率</th>
-                        <th class="text-right">営業利益率</th>
-                        <th class="w-[420px]">判定チェックリスト</th>
-                    </tr>
-                </thead>
-                <tbody>
+        @if (count($visibleRows) === 0)
+            <x-empty-state>該当する銘柄はありません</x-empty-state>
+        @else
+            {{--
+                ヘッダー用・本文用で<table>を分離し、ヘッダー側だけをsticky top-0にする
+                （経緯はdocs/ai-context/known-pitfalls.md「position: sticky と横スクロール
+                用テーブルの分割」参照）。横スクロール位置はresources/js/app.jsで本文側から
+                ヘッダー側へ同期する。RSI・ROE・自己資本比率・営業利益率の単独列と財務健全性の
+                内訳サマリ文は、判定チェックリストのチップ（実測値・基準・達成色を持つ上位互換の
+                表示）と完全に重複するため置かない（CHG-0016）。
+            --}}
+            <div id="watchlist-header-scroll" class="overflow-x-auto sticky top-0 z-20 bg-surface [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <table class="table-fixed w-[1594px] text-[11px] border border-app-border border-b-0 [&_th]:border [&_th]:border-app-border">
+                    <x-watchlist-table-colgroup
+                        :technical-count="count($visibleRows[0]['criteria']['technical'])"
+                        :fundamental-count="count($visibleRows[0]['criteria']['fundamental'])"
+                    />
+                    <x-watchlist-table-head :criteria="$visibleRows[0]['criteria']" />
+                </table>
+            </div>
+            <div class="overflow-x-auto" data-scroll-sync-with="watchlist-header-scroll">
+                <table class="table-fixed w-[1594px] text-[11px] border border-app-border [&_td]:border [&_td]:border-app-border [&_td]:align-top [&_td]:break-words">
+                    <x-watchlist-table-colgroup
+                        :technical-count="count($visibleRows[0]['criteria']['technical'])"
+                        :fundamental-count="count($visibleRows[0]['criteria']['fundamental'])"
+                    />
+                    <tbody>
                     @foreach ($visibleRows as $row)
-                        <tr wire:key="wl-{{ $row['watchlist_item_id'] }}">
-                            <td class="text-center">
+                        <tr wire:key="wl-{{ $row['watchlist_item_id'] }}" class="border-b border-app-border last:border-b-0">
+                            <td class="py-1.5 px-1.5 text-center sticky left-0 z-10 bg-surface">
                                 <button wire:click="toggleStar({{ $row['watchlist_item_id'] }})"
                                     class="text-base {{ $row['is_starred'] ? 'text-amber-500' : 'text-slate-300' }}">★</button>
                             </td>
-                            <td>
+                            <td class="py-1.5 px-1.5 sticky left-10 z-10 bg-surface">
                                 <button wire:click="toggleExpand('{{ $row['symbol_code'] }}')" class="text-left" data-symbol-code="{{ $row['symbol_code'] }}">
                                     <span class="font-medium">{{ $row['symbol_name'] }}</span>
                                     <span class="block text-[11px] text-text-secondary">{{ $row['symbol_code'] }}</span>
@@ -93,39 +97,28 @@
                                     <span class="mt-1 inline-block rounded bg-blue-50 px-1 text-[10px] text-primary">NISA推奨</span>
                                 @endif
                             </td>
-                            <td>{{ $row['market'] === 'jp' ? '日本株' : '米国株' }}</td>
-                            <td>{{ $row['folder_name'] }}</td>
-                            <td class="text-right tabular-nums">{{ $row['current_price'] !== null ? number_format($row['current_price'], 1) : '—' }}</td>
-                            <td class="text-right tabular-nums">{{ $row['week52_range_position'] !== null ? number_format($row['week52_range_position'] * 100, 0).'%' : '—' }}</td>
-                            <td class="text-right tabular-nums">{{ number_format($row['overlap_rate'], 1) }}%</td>
-                            <td class="text-right tabular-nums">{{ $row['rebound_buy_signal_count'] }}</td>
-                            <td>
+                            <td class="py-1.5 px-1.5">{{ $row['market'] === 'jp' ? '日本株' : '米国株' }}</td>
+                            <td class="py-1.5 px-1.5">{{ $row['folder_name'] }}</td>
+                            <td class="py-1.5 px-1.5 text-right tabular-nums">{{ $row['current_price'] !== null ? number_format($row['current_price'], 1) : '—' }}</td>
+                            <td class="py-1.5 px-1.5 text-right tabular-nums">{{ $row['week52_range_position'] !== null ? number_format($row['week52_range_position'] * 100, 0).'%' : '—' }}</td>
+                            <td class="py-1.5 px-1.5 text-right tabular-nums">{{ number_format($row['overlap_rate'], 1) }}%</td>
+                            <td class="py-1.5 px-1.5 text-right tabular-nums">{{ $row['rebound_buy_signal_count'] }}</td>
+                            <td class="py-1.5 px-1.5">
                                 @php
                                     $fs = $row['fundamental_status'];
                                     $fsVariant = $fs === 'passed' ? 'success' : ($fs === 'failed' ? 'danger' : 'neutral');
                                     $fsLabel = $fs === 'passed' ? '健全' : ($fs === 'failed' ? '基準割れ' : '取得不可');
                                 @endphp
                                 <x-badge :variant="$fsVariant">{{ $fsLabel }}</x-badge>
-                                <span class="block text-[11px] text-text-secondary">{{ $row['fundamental_summary'] }}</span>
                             </td>
-                            <td class="text-right tabular-nums">{{ $row['rsi'] !== null ? number_format((float) $row['rsi'], 1) : '—' }}</td>
-                            <td class="text-right tabular-nums">{{ $row['per'] !== null ? number_format((float) $row['per'], 1) : '—' }}</td>
-                            <td class="text-right tabular-nums">{{ $row['pbr'] !== null ? number_format((float) $row['pbr'], 2) : '—' }}</td>
-                            <td class="text-right tabular-nums">{{ $row['roe'] !== null ? number_format((float) $row['roe'], 1).'%' : '—' }}</td>
-                            <td class="text-right tabular-nums">{{ $row['equity_ratio'] !== null ? number_format((float) $row['equity_ratio'], 1).'%' : '—' }}</td>
-                            <td class="text-right tabular-nums">{{ $row['operating_margin'] !== null ? number_format((float) $row['operating_margin'], 1).'%' : '—' }}</td>
-                            <td>
-                                <div class="grid grid-cols-4 gap-1">
-                                    @foreach (array_merge($row['criteria']['technical'], $row['criteria']['fundamental']) as $item)
-                                        <x-criteria-chip :item="$item" />
-                                    @endforeach
-                                </div>
-                            </td>
+                            <td class="py-1.5 px-1.5 text-right tabular-nums">{{ $row['per'] !== null ? number_format((float) $row['per'], 1) : '—' }}</td>
+                            <td class="py-1.5 px-1.5 text-right tabular-nums">{{ $row['pbr'] !== null ? number_format((float) $row['pbr'], 2) : '—' }}</td>
+                            <x-signal-criteria-cells :criteria="$row['criteria']" />
                         </tr>
 
                         @if ($expandedSymbol === $row['symbol_code'] && $expandedDetail)
                             <tr wire:key="wl-detail-{{ $row['watchlist_item_id'] }}">
-                                <td colspan="16" class="bg-app-bg">
+                                <td colspan="{{ 11 + count($row['criteria']['technical']) + count($row['criteria']['fundamental']) }}" class="bg-app-bg">
                                     <div class="space-y-3 p-2">
                                         <p class="text-[13px]">{{ $expandedDetail['diversification_comment'] }}</p>
 
@@ -170,8 +163,9 @@
                             </tr>
                         @endif
                     @endforeach
-                </tbody>
-            </table>
-        </div>
+                    </tbody>
+                </table>
+            </div>
+        @endif
     @endif
 </div>

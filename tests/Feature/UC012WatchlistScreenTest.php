@@ -24,6 +24,7 @@ use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\MarketData\MarketIndexClientInterface;
 use App\Services\MarketData\UsStockPriceClientInterface;
 use Illuminate\Support\Facades\Bus;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Tests\Support\Fakes\FakeFinnhubClient;
 use Tests\Support\Fakes\FakeJpStockPriceClient;
@@ -354,4 +355,97 @@ test('ウォッチステータス・メモが両方空の記録は拒否され�
 
 test('未認証ユーザーは/candidate-checkでログインへリダイレクトされる', function () {
     $this->get('/candidate-check')->assertRedirect('/login');
+});
+
+/*
+|--------------------------------------------------------------------------
+| CHG-0016: テーブル固定ヘッダー化・重複列マージ・判定チェックリスト1項目=1列化
+|--------------------------------------------------------------------------
+|
+| 参照実装: resources/views/livewire/signal/signal-list.blade.php（CHG-0007）
+| 未実装: candidate-check.blade.php のテーブル2分割・
+|         x-watchlist-table-head / x-watchlist-table-colgroup（新規）
+| 下記テストは Red。
+|
+| sticky・z-index 等の固定表示自体はクラス名の存在では実際の挙動を保証しないため
+| （docs/ai-context/known-pitfalls.md「overflow-x-auto + sticky」参照）、
+| Feature Test では構造（ヘッダーの列構成・重複削除・0件ガード・colspan整合）のみを
+| 検証し、実際に固定される/スクロールが同期するかは verify スキルでの実ブラウザ確認に委ねる。
+*/
+
+function uc012TheadHtml(Testable $component): string
+{
+    preg_match('/<thead.*?<\/thead>/s', $component->html(), $matches);
+
+    return $matches[0] ?? '';
+}
+
+test('判定チェックリストの各項目がグループ見出し付きの個別列ヘッダーとして表示される（grid-cols-4の折返しをやめる）', function () {
+    uc012ScreenWatchlist('1010', ['name' => 'ヘッダー構造テスト']);
+
+    $component = Livewire::actingAs(uc012ScreenUser())->test(CandidateCheck::class);
+
+    $component->assertSee('判定チェックリスト（テクニカル）');
+    $component->assertSee('判定チェックリスト（財務）');
+
+    $thead = uc012TheadHtml($component);
+    foreach ([
+        'RSI', '52週安値からの距離', 'ボリンジャー下限乖離', 'MACD-シグナル線', 'MA20乖離率', 'PEGレシオ', '出来高倍率',
+        'ROE', '自己資本比率', '成長率', '営業利益率',
+    ] as $label) {
+        expect($thead)->toContain($label);
+    }
+
+    $component->assertDontSee('grid-cols-4', false);
+});
+
+test('RSI・ROE・自己資本比率・営業利益率の単独列は削除され、判定チェックリストのチップ側にのみ実測値が表示される（重複マージ）', function () {
+    uc012ScreenWatchlist('2020', [
+        'name' => '重複マージテスト',
+        'rsi' => 37.7,
+        'roe' => 17.3,
+        'equity_ratio' => 53.9,
+        'operating_margin' => 14.2,
+        'revenue_growth' => 8.0,
+    ]);
+
+    $component = Livewire::actingAs(uc012ScreenUser())->test(CandidateCheck::class);
+
+    // 旧・単独列ヘッダー（rowspan="2"の素の項目数）が15→11に減る
+    // （★,銘柄,市場,フォルダ,現在値,52週内位置,同ｾｸﾀｰ保有比率,押し目,財務健全性,PER,PBR）
+    $thead = uc012TheadHtml($component);
+    expect(substr_count($thead, 'rowspan="2"'))->toBe(11);
+
+    $html = $component->html();
+    // 実測値はチップ側1箇所にのみ出現し、旧・単独列との重複表示が無い
+    expect(substr_count($html, '37.7'))->toBe(1);
+    expect(substr_count($html, '17.3%'))->toBe(1);
+    expect(substr_count($html, '53.9%'))->toBe(1);
+    expect(substr_count($html, '14.2%'))->toBe(1);
+
+    // 財務健全性セルの内訳サマリ文（チップと完全重複）は表示しない
+    $component->assertDontSee('ROE17.3%・自己資本比率53.9%');
+    // 総合判定バッジは引き続き表示する
+    $component->assertSee('健全');
+});
+
+test('フォルダフィルタで0件になっても一覧は空状態を表示しエラーにならない（criteriaが空配列の添字エラー回帰防止）', function () {
+    uc012ScreenWatchlist('3030', ['name' => 'ゼロ件ガードテスト', 'folder' => 'テーマA']);
+
+    $component = Livewire::actingAs(uc012ScreenUser())->test(CandidateCheck::class)
+        ->set('folderFilter', '存在しないフォルダ');
+
+    $component->assertOk();
+    $component->assertSee('該当する銘柄はありません');
+    $component->assertDontSee('ゼロ件ガードテスト');
+});
+
+test('行を展開した詳細行のcolspanは実際の列数（固定11列+判定チェックリスト11列=22）と一致する', function () {
+    uc012ScreenWatchlist('4040', ['name' => 'colspan整合テスト']);
+
+    $component = Livewire::actingAs(uc012ScreenUser())->test(CandidateCheck::class)
+        ->call('toggleExpand', '4040');
+
+    $component->assertSee('colspan="22"', false);
+    $component->assertDontSee('colspan="16"', false);
 });
