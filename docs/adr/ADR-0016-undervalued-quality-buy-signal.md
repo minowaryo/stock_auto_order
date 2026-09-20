@@ -1,0 +1,109 @@
+# ADR-0016: 買い増しシグナル共通前提の緩和とPER単体シグナルの追加
+
+## Status
+Proposed（Phase 0 ドキュメント先行。Gate 3 レビュー待ち）
+
+## Date
+2026-09-19
+
+## Context
+
+利用者から「ROE・営業利益率・成長率・財務健全性が高水準で、かつPEGレシオ・RSI・PER・PBRが低い（＝市場評価が収益力に追いついていない）銘柄」が、買い増し候補（UC-010）に一切現れないという指摘があった。
+
+コード調査の結果、原因は2つ判明した。
+
+1. `BuySignalDeterminationService::determine()`（`app/Services/Analysis/BuySignalDeterminationService.php:75`）は、7種の個別シグナルを判定する**前に** `preconditionsSatisfied()`（:121-152）で共通前提2つをAND評価し、いずれか不成立なら空配列を返す。
+   - 前提A（:129-143）: 直近13週以内に終値が `week52_high × 0.85` 以上へ到達していること
+   - 前提B（:145-149）: `relative_strength_vs_market >= -5.0`
+   - 前提Aは押し目買い（buy-on-dip、ADR-0007 Addendum）を意図した設計であり、52週高値から大きく離れた水準に長く留まる「万年割安の高収益株」は構造的に通過できない。既存の `peg_undervalued`（:319-337）も前提Aの後段にあるため発火しない。
+2. PER・PBRは判定ロジックのどこにも使われていない。`FundamentalIndicatorMapper::calculatePer()/calculatePbr()` で算出されるが、銘柄詳細（UC-003）・ウォッチリスト（UC-012）等の**表示専用**に留まり、`SignalDeterminationService`／`BuySignalDeterminationService`／`FundamentalHealthEvaluator`／`SignalCriteriaEvaluator`のいずれにも `per`/`pbr` の参照はない。売買シグナル画面（`/signals`）にも列自体が存在しない。
+
+なお利確検討（UC-004）側で同種の銘柄が出てこないのは**仕様通り**である。`TakeProfitThresholdEvaluator`（:30-47）が「財務健全性`passed`かつシグナル0件」の銘柄の利確ラインを+150%へ引き上げて保護しているためで、これは本ADRの対象外とする。
+
+### 実装前に完了した実測検証（2026-09-19、Sailコンテナ上の保有219銘柄）
+
+当初、新シグナルの条件として「PER≤15 かつ PBR≤1.0」のAND条件を仮置きしたが、実データで検証した結果この閾値は**恒久的に0件**になることが判明した。
+
+| 検証項目 | 結果 |
+|---|---|
+| 会計恒等式の確認 | `PBR ≈ PER × ROE` が実データでも成立（例: ZM は ROE32.25% に対し PBR/PER=0.325 と一致、他銘柄も概ね±15%以内で整合） |
+| 財務健全性フィルタ合格（24銘柄）中、PER≤15 かつ PBR≤1.0 | **0件** |
+| 全保有銘柄（219銘柄）中、PER≤15 かつ PBR≤1.0 | 7件（トヨタ自動車・住友商事・住友電工・森永乳業・アイシン・横河ブリッジHD・DCM HD） |
+| 上記7件が財務健全性フィルタで `failed` になる理由 | 全て**営業利益率4.4〜9.4%**（自動車・商社・素材等の薄利ビジネス）で `FundamentalHealthEvaluator::MIN_OPERATING_MARGIN = 10.0` を満たさない |
+| 財務健全性フィルタ合格（24銘柄）中、PER≤15単体 | 4件（ZM: PER8.61 / 三谷セキサン: PER10.20 / 三井E&S: PER10.87 / ACN: PER14.45） |
+| 財務健全性passedだが現在買い増し候補に非表示の銘柄のうち、前提Aで弾かれていると見られるもの | 三井E&S（52週高値から-48.8%）・アクセンチュア（-35.7%）等、複数を確認 |
+
+会計恒等式 `PBR = PER × ROE`（ROEを小数として）はほぼ厳密に成り立つ。財務健全性フィルタが既に `ROE ≥ 10%` を要求しているため、そこに独立して `PBR ≤ 1.0` を課すと、算数的に極端に低いPER（ROE20%なら実質PER≤5相当）でなければ通過できない。これは「見過ごされた優良株」ではなく「市場が成長性を信用していない株」の水準であり、高ROE・高成長・高営業利益率を同時に要求する財務健全性フィルタとはほぼ両立しない。
+
+さらに利用者からのフィードバックとして、PER/PBRの適正水準は業種・銘柄分類によって大きく異なるため、セクター別・銘柄分類別の相対評価による判定は今回のスコープに含めず、まず「見える化」を優先する方針を確認した。
+
+## Decision
+
+### D1. 共通前提Aを「財務健全性`passed`」でOR免除する
+
+`preconditionsSatisfied()` の前提Aを、「直近13週以内に52週高値-15%以内へ到達」**または**「`FundamentalHealthEvaluator::evaluate()` が `passed`」のOR条件に緩和する。前提B（相対力 `>= -5.0`）は変更しない。
+
+悪材料で市場を大きく下回って下落中の銘柄（前提B不成立）は、財務が健全であっても引き続き除外する。前提Aの意図（長期低迷銘柄・個別要因下落銘柄の除外）は、財務健全性という別軸のフィルタで代替できるとみなす。
+
+### D2. 新シグナル `per_undervalued` を追加（PBRはAND条件に含めない）
+
+`PER ≤ 15.0` のみを条件とする単一指標シグナルを既存7種と同列のOR分岐として追加する（計8種）。閾値 `PER_UNDERVALUED_THRESHOLD = 15.0` は、他の初期パラメータ（PEG 1.0/2.0、ROE 10%等）と同じく data-model.md の「初期パラメータ値」扱いの叩き台とし、後日キャリブレーション対象とする。
+
+PBRは条件に含めない（D2実測検証セクション参照）。
+
+### D3. PERは判定チップ、PBRは基準なしの参考表示
+
+判定チェックリスト（`SignalCriteriaEvaluator::evaluateBuy()`）にPER・PBRの2項目を追加する（テクニカル7→9項目）。
+
+- PER: 通常の判定項目として基準値（≤15）・met/near/unmet色分けを表示する（新シグナルの判定根拠と一致させる）
+- PBR: 判定条件を持たないため、基準値・色分けなしの**単なる実測値表示**とする。`SignalCriteriaEvaluator::classify()` に基準なし方向 `'none'` を追加し、値があれば新設ステータス `'info'`（unavailableと視覚的に区別できる配色）を返す
+
+対象は買い増し候補セクション（UC-010）のみとし、利確検討（UC-004）・整理検討（UC-011）は対象外とする。
+
+### D2追記（`/review`指摘、2026-09-19）: PERにも下限ガードが必要
+
+D2策定時「PERは`FundamentalIndicatorMapper::calculatePer()`が既にeps<=0でnull化済み」と整理したが、これはJP側のみに当てはまる。US側`UsFundamentalIndicatorMapper`はFinnhubの`peTTM`をそのまま採用しており、赤字（トレーリング12ヶ月で実質赤字）企業では負値になりうる（ADR-0009参照。`peg_ratio`の`pegTTM`が負値を返しうるのと同じ構図で、ADR-0012 D4で修正済みのPEG下限ガードと同一クラスのバグ）。下限ガードなしでは`determinePerUndervalued()`が「PERが低い（実際は負値）＝割安」と誤判定し、赤字の米国株を`per_undervalued`として買い増し候補に表示してしまう。
+
+`BuySignalDeterminationService::determinePerUndervalued()`の条件を`$per > 0.0 && $per <= self::PER_UNDERVALUED_THRESHOLD`に修正し、`SignalCriteriaEvaluator::evaluateBuy()`のPER行の`direction`も`'lte'`から`'lte_positive'`（負値・ゼロを`met`/`near`と誤読させない、PEGチップと同じ扱い）に修正した。回帰テストを`BuySignalDeterminationServiceTest`・`SignalCriteriaEvaluatorTest`に追加。
+
+## Rationale
+
+### 却下案
+
+| 案 | 却下理由 |
+|---|---|
+| PER≤15 AND PBR≤1.0（当初案） | 実データで検証した結果0件（Context参照）。財務健全性フィルタのROE要件と会計恒等式上ほぼ両立しない |
+| PER≤15 AND PBR≤3.0（緩和AND案） | 実データでは当初案と同じ4件しか拾えず、AND条件を残す複雑さに見合う効果がない |
+| PER×PBR≤22.5（グレアム基準） | PBR=PER×ROEの恒等式下では実質的にPER単体条件（PER≤22.5/ROE）と等価になり、ROEが可変な集団に対して閾値の意味が不安定。画面上で「なぜ割安と判定されたか」も直感的に説明しにくい |
+| PBRをROEで正規化した相対指標を新設 | 理論的には最も精密だが、既存コードにない新概念の導入となり設計・テストコストが上がる。利用者からも「まずは見える化を優先したい」との意向を確認したため見送り |
+| 前提Aの数値だけを緩和（窓13→26週、閾値-15%→-30%等） | 52週高値から-35〜-48%も乖離した「万年割安株」（実データで確認済み）は数値緩和では拾いきれない。押し目買いの意図自体をOR条件で迂回する方が対象範囲が明確 |
+| 前提A・Bを両方とも財務健全性でスキップ | 前提B（相対力）は個別の悪材料による急落を検知する独立した目的を持ち、財務が健全でも成立しうる（決算前の期待剥落、不祥事等）。財務健全性で無条件に免除すると悪材料株も拾ってしまう |
+
+### セクター別相対評価をスコープ外とした理由
+
+`docs/original-docs/stock_auto_order_strategy_notes.md` はファンダメンタルズ層について「同業種内での相対評価（例：低PER/PBRで同等以上のROEを実現できているか）」を挙げており、絶対閾値より精密な設計思想を示している。ただし同メモは全体が「次のアクション（未着手）」の段階であり、絶対閾値は他の初期パラメータと同じ叩き台として着手できる。利用者確認の結果、今回は「見える化」を優先し、セクター別相対評価は `docs/product/accuracy-improvement-backlog.md` に後続候補として記録する。
+
+## Consequences
+
+### メリット
+
+- 財務健全で市場評価が追いついていない銘柄（実データで4銘柄が該当）が買い増し候補に現れるようになる
+- PER・PBRが売買シグナル画面から読み取れるようになり、割安性の判断材料が可視化される
+- ウォッチリスト（UC-012）も `BuySignalDeterminationService::determine()` を共有しているため、同じ改善が自動的に及ぶ
+
+### デメリット・リスク
+
+- `determine()` のシグネチャに財務指標（または `FundamentalHealthEvaluator::evaluate()` の結果）を渡す引数が増え、呼び出し元2箇所（`FetchExternalMarketDataAction`／`RefreshWatchlistMarketDataAction`）の改修が必須
+- `buy_signals`／`watchlist_buy_signals` の `signal_type` ENUM拡張は `.claude/rules/20-mysql.md` の「危険な操作（カラム型変更）」に該当する（MySQLの `ALTER TABLE ... MODIFY COLUMN` はテーブルロックを伴いうる）。個人利用規模（`buy_signals`は数十〜数百行程度）のため実害は軽微だが、既存 `signals` のADR-0004と同じ判断を踏襲し本ADRをもって変更理由の記録とする
+- PER単体判定は業種による水準差を考慮しないため、資本集約型の低PER業種（銀行・商社等で財務健全性フィルタを通過するもの）を過大評価する可能性がある。セクター相対評価は将来課題として残る
+- 前提A緩和により買い増し候補の件数が増える可能性がある。実データ確認で想定外に膨らむ場合は、閾値または前提の粒度を再調整する
+- **CHG-0016（`feat/chg0016-candidate-table-sticky-header`、本ADR作成時点で未マージ）との整合**: CHG-0016は新規投資候補（UC-012）画面の重複列削除にあたり「PER・PBRはチップに対応項目が無いため生の数値列として残す」と判断している（CHG-0016プラン記載）。本ADRで `SignalCriteriaEvaluator::evaluateBuy()` にPER・PBRのチップを追加すると、この前提が崩れ、UC-012側にも重複列（生の数値列とチップの二重表示）が再発する。マージ順序に関わらず、後からマージする側が UC-012 の候補チェック画面から生のPER/PBR列（`resources/views/livewire/candidate/candidate-check.blade.php`）を除去する追随対応が必要（本ADRのスコープはUC-010の売買シグナル画面のみで、UC-012画面自体の修正は含まない）
+
+## Related
+
+- ADR-0004（分析エンジン指標拡張、PEGレシオ等の追加）
+- ADR-0007（既存保有株の買い増しタイミングレコメンド、UC-010・前提条件の原設計）
+- ADR-0009（US株ファンダはFinnhub — `peg_ratio` の算出方法混在の先例）
+- ADR-0011（財務健全性フィルタへの営業利益率追加 — 財務健全性フィルタの現行4条件）
+- ADR-0012（成長率のFY同士比較、PEGレシオ負値除外 — `lte_positive` directionの先例）
+- CHG-0018（トレーサビリティ）

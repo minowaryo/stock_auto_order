@@ -155,6 +155,85 @@ function fmbCalmPriceHistory(): array
 }
 
 /**
+ * CHG-0018 / ADR-0016: the exact same "long decline prelude" (300 down to
+ * 160 over 36 weeks, then 136/137/138) + rsi_oversold_rebound tail
+ * ([134,130,...,90,95]) independently verified for
+ * BuySignalDeterminationServiceTest.php's OR-relaxation section (前提条件A
+ * が価格面では不成立でも財務健全性passedならOR成立するテスト). Re-verified
+ * here via the same Docker/Sail TechnicalIndicatorCalculator script:
+ * week52_high=300 (recent-13-week max=134 < 300*0.85=255 → precondition A
+ * unsatisfied on the price side), relative_strength_vs_market≈+3.84 with
+ * marketReturn13w=-35.0 (>= -5.0 → precondition B satisfied).
+ *
+ * @return array<int, array{date: string, close: float, volume: int}>
+ */
+function fmbLongDeclinePriceHistory(): array
+{
+    $prelude = [];
+
+    for ($i = 0; $i <= 35; $i++) {
+        $prelude[] = 300 - 4 * $i;
+    }
+
+    $prelude[] = 136;
+    $prelude[] = 137;
+    $prelude[] = 138;
+
+    $tail = [134, 130, 126, 122, 118, 114, 110, 106, 102, 98, 94, 90, 95];
+
+    return fmbPriceHistory(array_map(fn (int|float $v) => (float) $v, array_merge($prelude, $tail)));
+}
+
+/**
+ * J-Quants statements fixture (descending, latest-first) that satisfies
+ * FundamentalHealthEvaluator's 4 criteria (自己資本比率55%≥40%・ROE12.5%≥10%・
+ * revenue_growth+20%/operating_income_growth+25%>0%・営業利益率12.5%≥10%) and
+ * yields FundamentalIndicatorMapper::calculatePer() = current_price(950) /
+ * eps(120) ≈ 7.92 (≤15.0). Same shape as
+ * tests/Feature/FetchExternalMarketDataActionTest.php's femdStatements() but
+ * duplicated under a distinct name per this file's `fmb`-prefix convention
+ * (file-level docblock).
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function fmbHealthyUndervaluedStatements(): array
+{
+    $latest = [
+        'net_sales' => 120000.0,
+        'operating_profit' => 15000.0,
+        'profit' => 10000.0,
+        'eps' => 120.0,
+        'book_value_per_share' => 800.0,
+        'equity_to_asset_ratio' => 0.55,
+        'roe' => 0.125,
+        'dividend_per_share_annual' => 30.0,
+        'payout_ratio_annual' => 0.30,
+    ];
+
+    $quarters = ['FY', '3Q', '2Q', '1Q'];
+    $statements = [];
+
+    for ($i = 0; $i < 4; $i++) {
+        $statements[] = array_merge($latest, [
+            'disclosed_date' => "2026Q{$i}",
+            'period_type' => $quarters[$i],
+            'fiscal_year_end' => '2026-03-31',
+        ]);
+    }
+
+    $statements[4] = array_merge($latest, [
+        'disclosed_date' => '2025FY',
+        'period_type' => 'FY',
+        'fiscal_year_end' => '2025-03-31',
+        'net_sales' => 100000.0,
+        'operating_profit' => 12000.0,
+        'eps' => 100.0,
+    ]);
+
+    return $statements;
+}
+
+/**
  * 14-point nikkei225 fixture whose own 13-week return is exactly -35.0%
  * (first close 30000, last close 19500), matching the
  * `marketReturn13w: -35.0` argument verified for the rsi_oversold_rebound
@@ -366,5 +445,36 @@ describe('FetchExternalMarketDataAction: buy_signals永続化（UC-010）', func
         expect($okRows)->not->toBeEmpty();
         $signalTypes = array_map(fn ($row) => $row->signal_type, $okRows);
         expect($signalTypes)->toContain('rsi_oversold_rebound');
+    });
+
+    // -----------------------------------------------------------------------
+    // CHG-0018 / ADR-0016: per_undervaluedシグナルの永続化 + 前提条件AのOR緩和
+    // -----------------------------------------------------------------------
+    test('財務健全性がpassedで前提条件Aが価格面では不成立の銘柄でも、PERが15.0以下ならexecute()実行後にbuy_signalsへper_undervaluedレコードが作成される', function () {
+        [$batch, $snapshot] = fmbImportBatch();
+        $holding = fmbHolding(['symbol_code' => '7203', 'market' => 'jp', 'symbol_name' => 'トヨタ自動車']);
+        // current_price=950（eps=120のためPER=950/120≈7.92≤15.0）。
+        $holdingSnapshot = fmbHoldingSnapshot($snapshot, $holding, ['current_price' => 950, 'unrealized_gain_rate' => 10.0]);
+
+        $action = fmbAction(
+            new FakeJpStockPriceClient(['7203' => fmbLongDeclinePriceHistory()]),
+            new FakeUsStockPriceClient,
+            new FakeMarketIndexClient(['nikkei225' => fmbNikkeiHistory(), 'sp500' => fmbSp500History()]),
+            new FakeJQuantsClient(
+                sectorResponses: ['7203' => null],
+                statementsResponses: ['7203' => fmbHealthyUndervaluedStatements()],
+            ),
+        );
+
+        $action->execute($batch);
+
+        $rows = fmbBuySignalRows($holdingSnapshot->id);
+        expect($rows)->not->toBeEmpty();
+        $signalTypes = array_map(fn ($row) => $row->signal_type, $rows);
+        // fmbLongDeclinePriceHistory()は前提条件Aが価格面では不成立
+        // （week52_high=300の85%=255に対し直近13週最大134）だが、財務健全性が
+        // passedであるためOR緩和により前提条件が成立し、per_undervalued
+        // （PER≤15.0）が発生する（ADR-0016 D1・D2）。
+        expect($signalTypes)->toContain('per_undervalued');
     });
 });

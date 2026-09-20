@@ -411,10 +411,12 @@ test('RSI・ROE・自己資本比率・営業利益率の単独列は削除さ�
 
     $component = Livewire::actingAs(uc012ScreenUser())->test(CandidateCheck::class);
 
-    // 旧・単独列ヘッダー（rowspan="2"の素の項目数）が15→11に減る
-    // （★,銘柄,市場,フォルダ,現在値,52週内位置,同ｾｸﾀｰ保有比率,押し目,財務健全性,PER,PBR）
+    // 旧・単独列ヘッダー（rowspan="2"の素の項目数）が15→11→9に減る
+    // （★,銘柄,市場,フォルダ,現在値,52週内位置,同ｾｸﾀｰ保有比率,押し目,財務健全性）
+    // PER/PBRは2026-09-21マージ時にCHG-0018の判定チェックリストPER/PBRチップと
+    // 重複するため単独列から削除（11→9）
     $thead = uc012TheadHtml($component);
-    expect(substr_count($thead, 'rowspan="2"'))->toBe(11);
+    expect(substr_count($thead, 'rowspan="2"'))->toBe(9);
 
     $html = $component->html();
     // 実測値はチップ側1箇所にのみ出現し、旧・単独列との重複表示が無い
@@ -440,7 +442,7 @@ test('フォルダフィルタで0件になっても一覧は空状態を表示�
     $component->assertDontSee('ゼロ件ガードテスト');
 });
 
-test('行を展開した詳細行のcolspanは実際の列数（固定11列+判定チェックリスト11列=22）と一致する', function () {
+test('行を展開した詳細行のcolspanは実際の列数（固定9列+判定チェックリスト13列=22）と一致する', function () {
     uc012ScreenWatchlist('4040', ['name' => 'colspan整合テスト']);
 
     $component = Livewire::actingAs(uc012ScreenUser())->test(CandidateCheck::class)

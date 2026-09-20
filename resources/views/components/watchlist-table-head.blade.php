@@ -14,6 +14,8 @@
     RSI・ROE・自己資本比率・営業利益率の単独列は判定チェックリストのチップ
     （実測値・基準・達成色を持つ上位互換の表示）と完全に重複するため置かず、
     判定チェックリストの2段見出し（グループ見出し+項目名）にのみ出す（CHG-0016）。
+    PER・PBRも同様の理由で2026-09-21マージ時に単独列を削除した
+    （CHG-0018でPER/PBRチップが追加されたため）。
 --}}
 @props(['criteria'])
 @php
@@ -27,8 +29,6 @@
         ['label' => '同ｾｸﾀｰ保有比率', 'align' => 'text-right', 'sticky' => null],
         ['label' => '押し目', 'align' => 'text-right', 'sticky' => null],
         ['label' => '財務健全性', 'align' => 'text-left', 'sticky' => null],
-        ['label' => 'PER', 'align' => 'text-right', 'sticky' => null],
-        ['label' => 'PBR', 'align' => 'text-right', 'sticky' => null],
     ];
 @endphp
 <thead>

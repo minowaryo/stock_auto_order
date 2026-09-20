@@ -60,10 +60,11 @@
                 用テーブルの分割」参照）。横スクロール位置はresources/js/app.jsで本文側から
                 ヘッダー側へ同期する。RSI・ROE・自己資本比率・営業利益率の単独列と財務健全性の
                 内訳サマリ文は、判定チェックリストのチップ（実測値・基準・達成色を持つ上位互換の
-                表示）と完全に重複するため置かない（CHG-0016）。
+                表示）と完全に重複するため置かない（CHG-0016）。PER・PBRも同様に2026-09-21
+                マージ時（CHG-0018）に単独列を削除した。
             --}}
             <div id="watchlist-header-scroll" class="overflow-x-auto sticky top-0 z-20 bg-surface [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                <table class="table-fixed w-[1594px] text-[11px] border border-app-border border-b-0 [&_th]:border [&_th]:border-app-border">
+                <table class="table-fixed w-[1482px] text-[11px] border border-app-border border-b-0 [&_th]:border [&_th]:border-app-border">
                     <x-watchlist-table-colgroup
                         :technical-count="count($visibleRows[0]['criteria']['technical'])"
                         :fundamental-count="count($visibleRows[0]['criteria']['fundamental'])"
@@ -72,7 +73,7 @@
                 </table>
             </div>
             <div class="overflow-x-auto" data-scroll-sync-with="watchlist-header-scroll">
-                <table class="table-fixed w-[1594px] text-[11px] border border-app-border [&_td]:border [&_td]:border-app-border [&_td]:align-top [&_td]:break-words">
+                <table class="table-fixed w-[1482px] text-[11px] border border-app-border [&_td]:border [&_td]:border-app-border [&_td]:align-top [&_td]:break-words">
                     <x-watchlist-table-colgroup
                         :technical-count="count($visibleRows[0]['criteria']['technical'])"
                         :fundamental-count="count($visibleRows[0]['criteria']['fundamental'])"
@@ -111,14 +112,12 @@
                                 @endphp
                                 <x-badge :variant="$fsVariant">{{ $fsLabel }}</x-badge>
                             </td>
-                            <td class="py-1.5 px-1.5 text-right tabular-nums">{{ $row['per'] !== null ? number_format((float) $row['per'], 1) : '—' }}</td>
-                            <td class="py-1.5 px-1.5 text-right tabular-nums">{{ $row['pbr'] !== null ? number_format((float) $row['pbr'], 2) : '—' }}</td>
                             <x-signal-criteria-cells :criteria="$row['criteria']" />
                         </tr>
 
                         @if ($expandedSymbol === $row['symbol_code'] && $expandedDetail)
                             <tr wire:key="wl-detail-{{ $row['watchlist_item_id'] }}">
-                                <td colspan="{{ 11 + count($row['criteria']['technical']) + count($row['criteria']['fundamental']) }}" class="bg-app-bg">
+                                <td colspan="{{ 9 + count($row['criteria']['technical']) + count($row['criteria']['fundamental']) }}" class="bg-app-bg">
                                     <div class="space-y-3 p-2">
                                         <p class="text-[13px]">{{ $expandedDetail['diversification_comment'] }}</p>
 

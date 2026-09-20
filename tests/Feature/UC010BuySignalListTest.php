@@ -705,15 +705,16 @@ describe('UC-010: 既存保有株の買い増しタイミングレコメンド�
         });
     });
 
-    describe('判定チェックリスト（criteria、CHG-0007 / CHG-0012）', function () {
+    describe('判定チェックリスト（criteria、CHG-0007 / CHG-0012 / CHG-0018）', function () {
         // CHG-0012 / ADR-0011: 財務健全性チェックリストが 3→4 項目（営業利益率
         // を4項目目に追加）。表示レイヤーは criteria 配列駆動のため、
         // SignalCriteriaEvaluator::fundamentalRows() の1行追加で自動追従する。
-        // Red の出方: 現行実装は fundamental 3項目のため件数アサーションが
-        // 3 vs 4 で不一致（fatal ではない）。営業利益率を明示的にセットする
-        // ケースは、営業利益率を明示セットしても mass-assignment で捨てられる
-        // ため件数が 3 のままで、3 vs 4 のアサーション不一致になる。
-        test('各行に criteria（technical 7項目・fundamental 4項目・グループ別サマリ）が含まれ、財務に「営業利益率」列がある', function () {
+        // CHG-0018 / ADR-0016: テクニカルチェックリストが 7→9 項目（PER・PBR
+        // を追加）。PERは基準あり（≦15.0でmet）、PBRは基準なしの中立表示
+        // （'info'ステータス、met/nearには数えない）。
+        // Red の出方: 現行実装は technical 7項目・fundamental 3項目のため
+        // 件数アサーションが不一致（fatal ではない）。
+        test('各行に criteria（technical 9項目・fundamental 4項目・グループ別サマリ）が含まれ、財務に「営業利益率」列、テクニカルに「PER」「PBR」列がある', function () {
             [, $snapshot] = ucFrom010TestImportBatch();
             $holding = ucFrom010TestHolding(['symbol_code' => '7203', 'symbol_name' => 'トヨタ自動車']);
             $holdingSnapshot = ucFrom010TestHoldingSnapshot($snapshot, $holding, ['current_price' => 1000.00]);
@@ -724,32 +725,46 @@ describe('UC-010: 既存保有株の買い増しタイミングレコメンド�
             $row = ucFrom010TestFindRow(ucFrom010TestFetch($this), '7203');
 
             expect($row['criteria'])->toHaveKeys(['technical', 'fundamental', 'summary']);
-            expect($row['criteria']['technical'])->toHaveCount(7);
+            expect($row['criteria']['technical'])->toHaveCount(9);
             expect($row['criteria']['fundamental'])->toHaveCount(4);
-            expect($row['criteria']['summary']['technical']['total'])->toBe(7);
+            expect($row['criteria']['summary']['technical']['total'])->toBe(9);
             expect($row['criteria']['summary']['fundamental']['total'])->toBe(4);
 
             $fundamentalLabels = array_column($row['criteria']['fundamental'], 'label');
             expect($fundamentalLabels)->toContain('営業利益率');
 
+            $technicalLabels = array_column($row['criteria']['technical'], 'label');
+            expect($technicalLabels)->toContain('PER');
+            expect($technicalLabels)->toContain('PBR');
+
             foreach ($row['criteria']['technical'] as $item) {
                 expect($item)->toHaveKeys(['label', 'threshold_label', 'value_label', 'status']);
-                expect($item['status'])->toBeIn(['met', 'near', 'unmet', 'unavailable']);
+                // PBRは基準を持たない中立表示のため met/near/unmet/unavailable に加え
+                // 'info' も許容する（ADR-0016 D3）。
+                expect($item['status'])->toBeIn(['met', 'near', 'unmet', 'unavailable', 'info']);
             }
         });
 
-        test('全テクニカル基準・全財務基準を満たす銘柄は summary.technical.met が 7・summary.fundamental.met が 4 になる', function () {
+        test('全テクニカル基準・全財務基準を満たす銘柄は summary.technical.met が 8（PBRのinfoは含まない）・summary.fundamental.met が 4 になる', function () {
             [, $snapshot] = ucFrom010TestImportBatch();
             $holding = ucFrom010TestHolding(['symbol_code' => '6526', 'symbol_name' => 'ソシオネクスト']);
             $holdingSnapshot = ucFrom010TestHoldingSnapshot($snapshot, $holding, ['current_price' => 1000.00]);
             ucFrom010TestBuySignal($holdingSnapshot, ['signal_type' => 'rsi_oversold_rebound']);
+            // per はヘルパーのデフォルト値 15.0（PER_UNDERVALUED_THRESHOLDの境界=met）をそのまま使う。
             ucFrom010TestFundamentalIndicator($holding, ['equity_ratio' => 58.0, 'roe' => 15.2, 'peg_ratio' => 0.7, 'operating_margin' => 18.3]);
             ucFrom010TestTechnicalIndicator($holding);
 
             $row = ucFrom010TestFindRow(ucFrom010TestFetch($this), '6526');
 
-            expect($row['criteria']['summary']['technical']['met'])->toBe(7);
+            // technical 9項目中、PBRは 'info'（中立表示）のため met には数えられず、
+            // 残り8項目（既存7項目 + PER）が met になる。
+            expect($row['criteria']['summary']['technical']['met'])->toBe(8);
             expect($row['criteria']['summary']['fundamental']['met'])->toBe(4);
+
+            $perItem = collect($row['criteria']['technical'])->firstWhere('label', 'PER');
+            $pbrItem = collect($row['criteria']['technical'])->firstWhere('label', 'PBR');
+            expect($perItem['status'])->toBe('met');
+            expect($pbrItem['status'])->toBe('info');
         });
 
         test('ファンダメンタルズ指標が未取得（unavailable）の銘柄も criteria を返し、財務4項目（営業利益率含む）が unavailable になる', function () {
@@ -767,6 +782,51 @@ describe('UC-010: 既存保有株の買い増しタイミングレコメンド�
                 expect($item['value_label'])->toBe('—');
             }
             expect($row['criteria']['summary']['fundamental']['met'])->toBe(0);
+        });
+    });
+
+    describe('割安高収益銘柄の可視化（CHG-0018 / ADR-0016）', function () {
+        // ADR-0016 D1・D2: 前提条件Aの価格面（直近13週以内に52週高値-15%以内へ
+        // 到達）が不成立でも、財務健全性がpassedであればOR条件で買い増し候補に
+        // 現れるようになり、かつper_undervalued（PER≤15.0）シグナルが新設される。
+        // このFeature Testはリスト表示（ShowBuySignalListAction）のみを対象とし、
+        // BuySignalDeterminationServiceの判定ロジック自体（前提条件のOR成立・
+        // per_undervaluedの発火条件）はBuySignalDeterminationServiceTestの責務
+        // のため、buy_signalsレコードは直接作成する（本ファイル冒頭の方針と同じ）。
+        test('財務健全性がpassedで52週高値から大きく乖離した割安銘柄も一覧に含まれ、per_undervaluedシグナルと判定チェックリストのPER・PBR項目が表示される', function () {
+            [, $snapshot] = ucFrom010TestImportBatch();
+            $holding = ucFrom010TestHolding(['symbol_code' => '5401', 'symbol_name' => '日本製鉄']);
+            // 現在値1000円 = week52_high 2000円の50%（前提条件Aの価格面「直近13週
+            // 以内に52週高値-15%以内へ到達」を満たさない水準）。
+            $holdingSnapshot = ucFrom010TestHoldingSnapshot($snapshot, $holding, ['current_price' => 1000.00]);
+            ucFrom010TestBuySignal($holdingSnapshot, [
+                'signal_type' => 'per_undervalued',
+                'reason_summary' => 'PERが10.0と割安水準です',
+            ]);
+            // 財務健全性フィルタ（ROE≥10%・自己資本比率≥40%・成長率>0%・
+            // 営業利益率≥10%）をすべて満たし、かつPER≤15.0。
+            ucFrom010TestFundamentalIndicator($holding, [
+                'per' => 10.0,
+                'equity_ratio' => 58.0,
+                'roe' => 15.2,
+                'revenue_growth' => 8.0,
+                'operating_income_growth' => 12.3,
+                'operating_margin' => 18.3,
+            ]);
+            // relative_strength_vs_market=-1.0（前提条件B「>=-5pt」は成立）は
+            // ucFrom010TestTechnicalIndicator()のデフォルトのまま。week52_highのみ
+            // 現在値の2倍（2000円）に引き上げ、前提条件Aの価格面を不成立にする。
+            ucFrom010TestTechnicalIndicator($holding, ['week52_high' => 2000.0]);
+
+            $row = ucFrom010TestFindRow(ucFrom010TestFetch($this), '5401');
+
+            expect($row)->not->toBeNull();
+            expect($row['fundamental_status'])->toBe('passed');
+            expect($row['buy_signal_types'])->toContain('per_undervalued');
+
+            $technicalLabels = array_column($row['criteria']['technical'], 'label');
+            expect($technicalLabels)->toContain('PER');
+            expect($technicalLabels)->toContain('PBR');
         });
     });
 

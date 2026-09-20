@@ -215,6 +215,28 @@ final class SignalCriteriaEvaluator
                 'gte',
                 fn (float $v) => number_format($v, 2).'倍',
             ),
+            $this->row(
+                'PER',
+                sprintf('≤%s', number_format(BuySignalDeterminationService::PER_UNDERVALUED_THRESHOLD, 1)),
+                $metrics['per'] ?? null,
+                BuySignalDeterminationService::PER_UNDERVALUED_THRESHOLD,
+                // `/review`指摘: US株のFinnhub peTTMは赤字企業で負値になりうる
+                // （BuySignalDeterminationService::determinePerUndervalued()の
+                // 下限ガードと同じ理由、ADR-0012 D4のPEGチップと同じ扱い）。
+                // 負値・ゼロは met/near と誤読させないため lte_positive を使う。
+                'lte_positive',
+                fn (float $v) => number_format($v, 1),
+            ),
+            $this->row(
+                'PBR',
+                // ADR-0016 D3: PBRは判定基準を持たない参考表示のため
+                // threshold_labelは空にする。
+                '',
+                $metrics['pbr'] ?? null,
+                0.0,
+                'none',
+                fn (float $v) => number_format($v, 2),
+            ),
         ];
 
         $fundamental = $this->fundamentalRows($metrics);
@@ -430,6 +452,12 @@ final class SignalCriteriaEvaluator
     {
         if ($value === null) {
             return 'unavailable';
+        }
+
+        // none: 判定基準を持たない実測値表示（ADR-0016 D3、PBR）。
+        // met/near/unmetのいずれでもない中立ステータス'info'を返す。
+        if ($direction === 'none') {
+            return 'info';
         }
 
         $buffer = abs($threshold) * self::NEAR_BUFFER_RATE;

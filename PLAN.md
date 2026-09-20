@@ -1,7 +1,33 @@
 # PLAN.md
 
 > 2026-08-27（フロントエンド実装Phase5完了時点。UC-010 Gate4完了・コミット`ba239fe`分も含む）以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、Phase2 UC-008（Cycle1・Cycle2）完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査完了、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了、利確・リバランス閾値の動的分岐ロジック検討〔検討事項の記録のみ、実装はCHG-0006として2026-08-28〜29に別途完了〕、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、フロントエンド実装Phase4（UC-003銘柄詳細画面）完了、UC-010 Gate2/Gate3正式承認（買いシグナル7種の前提条件追加）完了、UC-010 Gate4完了・コミット（`ba239fe`）、フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了、およびフロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了〔2026-09-05、CHG-0011作業時に退避〕等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
-> **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。300行超過に伴い「数値表示フォーマット修正完了（2026-08-28）」「UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0012 Phase 0作業時）。約298行に達したため「利確検討ラインの動的分岐 CHG-0006（2026-08-28〜29）」「売買シグナル画面の可読性改善（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0013／ADR-0012作業時）。300行超過に伴い「取込後サマリーレポートのグローバルナビタブ化 CHG-0008（2026-09-05）」の1エントリを退避済み（2026-09-12、F-012・CHG-0012のステータス記述を実態〔mainマージ済み〕に修正した際に発生した増分に対応）。300行超過に伴い「売買シグナル画面 判定チェックリスト表示 CHG-0007（2026-08-29〜09-05）」の1エントリを退避済み（2026-09-12、CHG-0016〔新規投資候補テーブルの固定ヘッダー化〕作業時）。
+
+## 買い増しシグナル共通前提の緩和とPER単体シグナルの追加（F-010改修・UC-010・ADR-0016・CHG-0018）Phase 0 ドキュメント先行（2026-09-19〜）
+
+### Decision
+
+- 本人指摘: 「ROE・営業利益率・成長率・財務健全性が異常に高く、PEGレシオ・RSI・PER/PBRが低い銘柄（市場評価が収益力に追いついていない優良株）が利確検討・買い増し候補に正しく収集されていないように見える」。あわせて「PER・PBRが売買シグナル判定にどう使われているか」を確認したいとの依頼
+- 調査結果: 利確検討（UC-004）側は`TakeProfitThresholdEvaluator`が財務健全性`passed`かつシグナル0件の銘柄の利確ラインを+150%へ引き上げる設計で、これらの優良株を意図的に保護しており**仕様通り**（変更不要）。買い増し候補（UC-010）側に実際のギャップがあり、`BuySignalDeterminationService::determine()`の共通前提「直近13週以内に52週高値-15%以内へ到達」が押し目買い専用の設計で、52週高値から長期間乖離した財務健全な銘柄を構造的に除外していた。PER・PBRは判定ロジックのどこにも使われておらず（算出のみ、表示は銘柄詳細・ウォッチリスト等に限定）、売買シグナル画面にも列が存在しなかった
+- Planフェーズで方針提示・承認。プランファイル: `~/.claude/plans/bubbly-floating-cocoa.md`
+- **実データ検証で当初案を破棄**: 当初「PER≤15 かつ PBR≤1.0」のAND条件を検討したが、Sailコンテナで保有219銘柄を実測した結果、会計恒等式`PBR≈PER×ROE`により財務健全性フィルタ（ROE≥10%要件）とほぼ両立せず、財務健全性passed24銘柄中0件になることが判明（全保有銘柄で条件を満たす7銘柄はいずれも営業利益率4〜9%で財務健全性フィルタに弾かれる伝統的薄利業種）。ユーザーからのフィードバック「PER/PBRの適正水準は業種で変わるため、まずは見える化を優先。セクター相対評価は将来課題でよい」を踏まえ設計変更
+- 確定した設計（ADR-0016）:
+  - **D1 共通前提の緩和**: 前提A「52週高値-15%以内到達」を、**または**「財務健全性`passed`」のOR条件に緩和。前提B（相対力≥-5pt）は維持
+  - **D2 新シグナル`per_undervalued`**: `PER≤15.0`のみを条件とする単一指標シグナル（PBRはAND条件に含めない）。実データで財務健全性passed24銘柄中4銘柄（ZM/三谷セキサン/三井E&S/ACN）が該当することを確認
+  - **D3 表示**: 判定チェックリストにPER（基準あり、met/near/unmet色分け）・PBR（基準なし、実測値のみの中立表示`info`）を追加。買い増し候補セクションのみ
+- 番号: ADR-**0016**（0015は`feat/chg0017-value-cyclical-judgment`が独立に先取していたため、2026-09-21マージ時に本CRを0016へ採番し直し。Gate1〜4承認済みでブランチ本文に大量参照されている側〔CHG-0017〕を優先し、Proposed止まりだった本CR側を変更した。`.claude/rules/06-branch-coordination.md`参照）、CR=**CHG-0018**
+- **CHG-0016との整合対応（2026-09-21マージ時に実施）**: mainマージ済みの`feat/chg0016-candidate-table-sticky-header`は、UC-012候補チェック画面のPER/PBRについて「チップに対応項目が無いため生の数値列として残す」前提で重複列を削除していた。本CRでチップを追加しこの前提が崩れるため、マージ時にUC-012の生PER/PBR列を除去する追随対応を実施済み
+
+### Files touched
+
+**ドキュメント**: `docs/adr/ADR-0016-undervalued-quality-buy-signal.md`（新規、マージ時に0015→0016へリネーム）、`docs/product/use-cases.md`（UC-010業務ルール・出力表・UC-012の`criteria`項目数参照箇所）、`docs/architecture/data-model.md`（`buy_signals`/`watchlist_buy_signals`のenum定義・共通前提・初期パラメータ値・near バッファ・承認記録・変更履歴）、`docs/product/accuracy-improvement-backlog.md`（セクター別相対評価を後続候補として追記）、`docs/rcid/traceability-matrix.md`（F-010行・CHG-0018変更追跡行）、`PLAN.md`（本エントリ）
+
+**コード（Green、`feat/chg0018-undervalued-quality-buy-signal`ブランチ）**: `app/Services/Analysis/BuySignalDeterminationService.php`（前提Aの緩和、`per_undervalued`新設）、`app/Services/Analysis/SignalCriteriaEvaluator.php`（PER/PBRチップ追加）、`app/Actions/Analysis/FetchExternalMarketDataAction.php`／`app/Actions/Watchlist/RefreshWatchlistMarketDataAction.php`（配線）、`app/Actions/Signal/ShowBuySignalListAction.php`、migration2件（`buy_signals`/`watchlist_buy_signals`に`per_undervalued`追加）、`resources/views/components/criteria-chip.blade.php`／`resources/views/livewire/signal/signal-list.blade.php`。**`/review`修正**（HIGH、コミット`0c57ecd`）: `determinePerUndervalued()`に`per > 0.0`の下限ガード追加（赤字米国株の負PERを誤って割安判定するバグ、ADR-0012 D4のPEG下限バグと同一クラス）。テスト: `BuySignalDeterminationServiceTest`/`SignalCriteriaEvaluatorTest`/`UC010BuySignalListTest`/`FetchExternalMarketDataActionBuySignalTest`に追加
+
+**マージ時追随対応（2026-09-21、mainマージ担当セッション）**: UC-012候補チェック画面（`feat/chg0016-candidate-table-sticky-header`で作った生PER/PBR列）が新設のPER/PBRチップと重複するため、`resources/views/livewire/candidate/candidate-check.blade.php`／`watchlist-table-head.blade.php`／`watchlist-table-colgroup.blade.php`から生PER/PBR列を削除（固定列11→9、テーブル幅1594px→1482px、詳細行colspan基数11→9）。ADR番号0015→0016リネームは`.claude/rules/06-branch-coordination.md`の採番衝突ルールに基づく対応
+
+### Status
+
+**Green実装・`/review`修正完了、2026-09-21にmainへマージ**。マージ時にCHG-0016との重複列（UC-012の生PER/PBR列）を追随除去し、影響を受ける`tests/Feature/UC012WatchlistScreenTest.php`の固定列数アサーションを更新済み（詳細は下記CHG-0016エントリのマージ後追記を参照）。
 
 ## 新規投資候補テーブルの固定ヘッダー化・重複列マージ・判定チェックリスト1項目=1列化（CHG-0016）実装完了（2026-09-12）
 

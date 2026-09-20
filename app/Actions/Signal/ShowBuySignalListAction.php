@@ -190,6 +190,8 @@ class ShowBuySignalListAction
             'volume_ma20' => $technicalIndicator?->volume_ma20 !== null ? (float) $technicalIndicator->volume_ma20 : null,
             'relative_strength_vs_market' => $technicalIndicator?->relative_strength_vs_market !== null ? (float) $technicalIndicator->relative_strength_vs_market : null,
             'peg_ratio' => $fundamentalIndicator?->peg_ratio !== null ? (float) $fundamentalIndicator->peg_ratio : null,
+            'per' => $fundamentalIndicator?->per !== null ? (float) $fundamentalIndicator->per : null,
+            'pbr' => $fundamentalIndicator?->pbr !== null ? (float) $fundamentalIndicator->pbr : null,
             'roe' => $roe,
             'equity_ratio' => $equityRatio,
             'revenue_growth' => $revenueGrowth,
