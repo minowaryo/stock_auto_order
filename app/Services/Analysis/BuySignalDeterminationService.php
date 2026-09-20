@@ -59,8 +59,8 @@ final class BuySignalDeterminationService
     public const VOLUME_SPIKE_RATIO = 1.5;
 
     /**
-     * PER単体シグナル（CHG-0018 / ADR-0015 D2）の閾値。PBRはAND条件に含めない
-     * （ADR-0015 D2 実測検証セクション参照）。
+     * PER単体シグナル（CHG-0018 / ADR-0016 D2）の閾値。PBRはAND条件に含めない
+     * （ADR-0016 D2 実測検証セクション参照）。
      */
     public const PER_UNDERVALUED_THRESHOLD = 15.0;
 
@@ -147,7 +147,7 @@ final class BuySignalDeterminationService
      */
     private function preconditionsSatisfied(array $priceHistory, array $current, string $fundamentalStatus): bool
     {
-        // 前提条件A（ADR-0015 D1）: 価格面（直近13週以内に52週高値-15%以内へ
+        // 前提条件A（ADR-0016 D1）: 価格面（直近13週以内に52週高値-15%以内へ
         // 到達）または財務健全性passedのOR条件に緩和する。
         $recentlyStrong = $this->recentlyNearWeek52High($priceHistory, $current) || $fundamentalStatus === 'passed';
 
@@ -377,7 +377,7 @@ final class BuySignalDeterminationService
     }
 
     /**
-     * PER単体シグナル（CHG-0018 / ADR-0015 D2）。PBRはAND条件に含めない。
+     * PER単体シグナル（CHG-0018 / ADR-0016 D2）。PBRはAND条件に含めない。
      *
      * @return array{signal_type: string, reason_summary: string}|null
      */

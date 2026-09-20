@@ -207,7 +207,7 @@ describe('SignalCriteriaEvaluator: 判定チェックリスト（CHG-0007）', f
             }
         });
 
-        test('evaluateBuy はテクニカル9項目（CHG-0018/ADR-0015でPER・PBRを追加）・財務4項目とグループ別サマリを返す', function () {
+        test('evaluateBuy はテクニカル9項目（CHG-0018/ADR-0016でPER・PBRを追加）・財務4項目とグループ別サマリを返す', function () {
             $result = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet());
 
             expect($result['technical'])->toHaveCount(9);
@@ -376,7 +376,7 @@ describe('SignalCriteriaEvaluator: 判定チェックリスト（CHG-0007）', f
     });
 
     describe('買い増し候補（evaluateBuy）', function () {
-        test('全項目を満たす銘柄はテクニカル7/9・財務4/4が met になる（PER・PBRはbuyMetricsAllMet()未設定のためunavailable、CHG-0018/ADR-0015）', function () {
+        test('全項目を満たす銘柄はテクニカル7/9・財務4/4が met になる（PER・PBRはbuyMetricsAllMet()未設定のためunavailable、CHG-0018/ADR-0016）', function () {
             $result = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet());
 
             // buyMetricsAllMet()はper/pbrキーを持たないため、この2項目は
@@ -386,7 +386,7 @@ describe('SignalCriteriaEvaluator: 判定チェックリスト（CHG-0007）', f
         });
 
         // -------------------------------------------------------------
-        // CHG-0018 / ADR-0015 D3: PER・PBRチップ（テクニカル8・9項目目）
+        // CHG-0018 / ADR-0016 D3: PER・PBRチップ（テクニカル8・9項目目）
         // -------------------------------------------------------------
         test('evaluateBuy のテクニカル配列の末尾2項目はPER・PBRである', function () {
             $result = signalCriteriaEvaluator()->evaluateBuy(buyMetricsAllMet());

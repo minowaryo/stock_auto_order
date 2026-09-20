@@ -155,7 +155,7 @@ function fmbCalmPriceHistory(): array
 }
 
 /**
- * CHG-0018 / ADR-0015: the exact same "long decline prelude" (300 down to
+ * CHG-0018 / ADR-0016: the exact same "long decline prelude" (300 down to
  * 160 over 36 weeks, then 136/137/138) + rsi_oversold_rebound tail
  * ([134,130,...,90,95]) independently verified for
  * BuySignalDeterminationServiceTest.php's OR-relaxation section (前提条件A
@@ -448,7 +448,7 @@ describe('FetchExternalMarketDataAction: buy_signals永続化（UC-010）', func
     });
 
     // -----------------------------------------------------------------------
-    // CHG-0018 / ADR-0015: per_undervaluedシグナルの永続化 + 前提条件AのOR緩和
+    // CHG-0018 / ADR-0016: per_undervaluedシグナルの永続化 + 前提条件AのOR緩和
     // -----------------------------------------------------------------------
     test('財務健全性がpassedで前提条件Aが価格面では不成立の銘柄でも、PERが15.0以下ならexecute()実行後にbuy_signalsへper_undervaluedレコードが作成される', function () {
         [$batch, $snapshot] = fmbImportBatch();
@@ -474,7 +474,7 @@ describe('FetchExternalMarketDataAction: buy_signals永続化（UC-010）', func
         // fmbLongDeclinePriceHistory()は前提条件Aが価格面では不成立
         // （week52_high=300の85%=255に対し直近13週最大134）だが、財務健全性が
         // passedであるためOR緩和により前提条件が成立し、per_undervalued
-        // （PER≤15.0）が発生する（ADR-0015 D1・D2）。
+        // （PER≤15.0）が発生する（ADR-0016 D1・D2）。
         expect($signalTypes)->toContain('per_undervalued');
     });
 });

@@ -229,7 +229,7 @@ final class SignalCriteriaEvaluator
             ),
             $this->row(
                 'PBR',
-                // ADR-0015 D3: PBRは判定基準を持たない参考表示のため
+                // ADR-0016 D3: PBRは判定基準を持たない参考表示のため
                 // threshold_labelは空にする。
                 '',
                 $metrics['pbr'] ?? null,
@@ -454,7 +454,7 @@ final class SignalCriteriaEvaluator
             return 'unavailable';
         }
 
-        // none: 判定基準を持たない実測値表示（ADR-0015 D3、PBR）。
+        // none: 判定基準を持たない実測値表示（ADR-0016 D3、PBR）。
         // met/near/unmetのいずれでもない中立ステータス'info'を返す。
         if ($direction === 'none') {
             return 'info';

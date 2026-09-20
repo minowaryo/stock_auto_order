@@ -709,7 +709,7 @@ describe('UC-010: 既存保有株の買い増しタイミングレコメンド�
         // CHG-0012 / ADR-0011: 財務健全性チェックリストが 3→4 項目（営業利益率
         // を4項目目に追加）。表示レイヤーは criteria 配列駆動のため、
         // SignalCriteriaEvaluator::fundamentalRows() の1行追加で自動追従する。
-        // CHG-0018 / ADR-0015: テクニカルチェックリストが 7→9 項目（PER・PBR
+        // CHG-0018 / ADR-0016: テクニカルチェックリストが 7→9 項目（PER・PBR
         // を追加）。PERは基準あり（≦15.0でmet）、PBRは基準なしの中立表示
         // （'info'ステータス、met/nearには数えない）。
         // Red の出方: 現行実装は technical 7項目・fundamental 3項目のため
@@ -740,7 +740,7 @@ describe('UC-010: 既存保有株の買い増しタイミングレコメンド�
             foreach ($row['criteria']['technical'] as $item) {
                 expect($item)->toHaveKeys(['label', 'threshold_label', 'value_label', 'status']);
                 // PBRは基準を持たない中立表示のため met/near/unmet/unavailable に加え
-                // 'info' も許容する（ADR-0015 D3）。
+                // 'info' も許容する（ADR-0016 D3）。
                 expect($item['status'])->toBeIn(['met', 'near', 'unmet', 'unavailable', 'info']);
             }
         });
@@ -785,8 +785,8 @@ describe('UC-010: 既存保有株の買い増しタイミングレコメンド�
         });
     });
 
-    describe('割安高収益銘柄の可視化（CHG-0018 / ADR-0015）', function () {
-        // ADR-0015 D1・D2: 前提条件Aの価格面（直近13週以内に52週高値-15%以内へ
+    describe('割安高収益銘柄の可視化（CHG-0018 / ADR-0016）', function () {
+        // ADR-0016 D1・D2: 前提条件Aの価格面（直近13週以内に52週高値-15%以内へ
         // 到達）が不成立でも、財務健全性がpassedであればOR条件で買い増し候補に
         // 現れるようになり、かつper_undervalued（PER≤15.0）シグナルが新設される。
         // このFeature Testはリスト表示（ShowBuySignalListAction）のみを対象とし、

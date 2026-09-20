@@ -16,7 +16,7 @@
                 二重線にならないようにしている。
             --}}
             <div id="buy-signals-header-scroll" class="overflow-x-auto sticky top-0 z-20 bg-surface [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {{-- CHG-0018/ADR-0015: テクニカル7→9項目（PER・PBR追加）分、
+                {{-- CHG-0018/ADR-0016: テクニカル7→9項目（PER・PBR追加）分、
                      686px + 13項目×72px = 1622px に拡張。 --}}
                 <table class="table-fixed w-[1622px] text-[11px] border border-app-border border-b-0 [&_th]:border [&_th]:border-app-border">
                     <x-signal-table-colgroup
