@@ -708,6 +708,33 @@ describe('UC-013: ポートフォリオ分類ダッシュボード（ClassifyHol
             // 該当せずfalseになることで間接確認する。
             expect($row['hold_watch'])->toBeFalse();
         });
+
+        // -------------------------------------------------------------------
+        // Feature Test拡充（2026-09-21、/review 3回目対応・Cycle7）
+        // -------------------------------------------------------------------
+        // D1（ROE≧15%かつ自己資本比率≧50%の財務指標救済）単独のケース
+        // （単年度・3期平均とも成長率がプラスでない）が、UC-013画面
+        // （ClassifyHoldingsAction）で正しく救済されることを確認するテストが
+        // 存在しなかった（D2救済のテストはあるが、D1単独のケースが未検証）。
+        test('ROE17.9%/自己資本比率55.0%（D1のRESCUE閾値を満たす）で単年度・3期平均とも成長率がプラスでない銘柄は、D1救済によりhold_watchがfalseになる', function () {
+            [, $snapshot] = ucFrom013TestBatch();
+            $holding = ucFrom013TestHolding(['symbol_code' => '4006', 'symbol_name' => 'D1救済株']);
+            ucFrom013TestHoldingSnapshot($snapshot, $holding, [
+                'current_price' => 1050, 'unrealized_gain_amount' => 5000, 'unrealized_gain_rate' => 5.0,
+            ]);
+            ucFrom013TestTechnicalIndicator($holding);
+            ucFrom013TestFundamentalIndicator($holding, [
+                'equity_ratio' => 55.0, 'roe' => 17.9,
+                'revenue_growth' => -5.0, 'operating_income_growth' => -3.0,
+                'avg_revenue_growth' => -2.0, 'avg_operating_income_growth' => -1.0,
+            ]);
+
+            $result = ucFrom013TestExecute();
+            $row = ucFrom013TestFindHolding(ucFrom013TestFindBucket($result['buckets'], 'hold')['holdings'], '4006');
+
+            expect($row)->not->toBeNull();
+            expect($row['hold_watch'])->toBeFalse();
+        });
     });
 
     describe('バケツ内ソート順（ADR-0014 D10）', function () {

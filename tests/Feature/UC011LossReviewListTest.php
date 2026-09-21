@@ -753,6 +753,30 @@ describe('UC-011: 整理検討（含み損）候補一覧', function () {
             expect($row['fundamental_status'])->toBe('passed');
         });
 
+        // ---------------------------------------------------------------
+        // Feature Test拡充（2026-09-21、/review 3回目対応・Cycle7）
+        // ---------------------------------------------------------------
+        // D1（ROE≧15%かつ自己資本比率≧50%の財務指標救済）単独のケース
+        // （単年度・3期平均とも成長率がプラスでない）が、UC-011画面
+        // （ShowLossReviewListAction）で正しくfundamental_status=passedに
+        // なることを確認するFeature Testが存在しなかった（D2救済のテストは
+        // あるが、D1単独のケースが未検証）。
+        test('ROE17.9%/自己資本比率55.0%（D1のRESCUE閾値を満たす）で単年度・3期平均とも成長率がプラスでない銘柄は、D1救済によりfundamental_status=passedになる', function () {
+            [, $snapshot] = ucFrom011TestBatch();
+            $holding = ucFrom011TestHolding(['symbol_code' => '1606', 'symbol_name' => 'D1救済確認株']);
+            ucFrom011TestHoldingSnapshot($snapshot, $holding);
+            ucFrom011TestFundamentalIndicator($holding, [
+                'roe' => 17.9, 'equity_ratio' => 55.0,
+                'revenue_growth' => -5.0, 'operating_income_growth' => -3.0,
+                'avg_revenue_growth' => -2.0, 'avg_operating_income_growth' => -1.0,
+            ]);
+
+            $row = ucFrom011TestFindRow(ucFrom011TestExecute(), '1606');
+
+            expect($row)->not->toBeNull();
+            expect($row['fundamental_status'])->toBe('passed');
+        });
+
         test('財務 passed の銘柄に押し目シグナルがあれば also_on_buy_list は true（買い増しリストにも載る）', function () {
             [, $snapshot] = ucFrom011TestBatch();
             $holding = ucFrom011TestHolding(['symbol_code' => '4063', 'symbol_name' => '信越化学工業']);

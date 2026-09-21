@@ -470,6 +470,42 @@ describe('UC-008: 新規投資候補レコメンド（軽量版）候補一覧',
             expect(ucFrom008CandidateTestFindRow($response, '5680'))->not->toBeNull();
         });
 
+        // -----------------------------------------------------------
+        // Feature Test拡充（2026-09-21、/review 3回目対応・Cycle7）
+        // -----------------------------------------------------------
+        // D1（ROE≧15%かつ自己資本比率≧50%の財務指標救済）単独のケース
+        // （単年度・3期平均とも成長率がプラスでない）が、UC-008画面
+        // （NewCandidateFinder::passesHealthFilter()）で正しく候補一覧に
+        // 含まれることを確認するFeature Testが存在しなかった（D2救済の
+        // テストはあるが、D1単独のケースが未検証）。
+        test('自己資本比率・ROEがD1救済閾値（ROE≧15%かつ自己資本比率≧50%）を満たし、単年度・3期平均とも成長率がプラスでない銘柄は、D1救済により候補一覧に含まれる', function () {
+            WatchedTheme::create(['name' => 'AI半導体']);
+
+            [, $snapshot] = ucFrom008CandidateTestImportBatch();
+            $heldStock = ucFrom008CandidateTestHolding(['symbol_code' => '9999', 'symbol_name' => '既存保有株']);
+            ucFrom008CandidateTestHoldingSnapshot($snapshot, $heldStock, ['quantity' => 100, 'current_price' => 1000.00]);
+
+            $sector = ucFrom008CandidateTestSector('AI半導体');
+            $rescued = ucFrom008CandidateTestHolding([
+                'symbol_code' => '5681',
+                'symbol_name' => 'D1救済候補株',
+                'sector_classification_id' => $sector->id,
+            ]);
+            ucFrom008CandidateTestFundamental($rescued, [
+                'equity_ratio' => 55.0,
+                'roe' => 17.9,
+                'revenue_growth' => -5.0,
+                'operating_income_growth' => -3.0,
+                'avg_revenue_growth' => -2.0,
+                'avg_operating_income_growth' => -1.0,
+            ]);
+
+            $response = ucFrom008CandidateTestFetch($this);
+
+            $response->assertSuccessful();
+            expect(ucFrom008CandidateTestFindRow($response, '5681'))->not->toBeNull();
+        });
+
         test('自己資本比率・ROEは基準を満たすが、成長率データ（売上高・営業利益とも）が未取得（null）の銘柄は候補一覧から除外される', function () {
             // UC-008はUC-010と異なり「該当しないものは静かに除外する」設計
             // （unavailable相当の状態を表示する仕様は持たない）。
