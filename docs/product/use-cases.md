@@ -567,7 +567,7 @@
 | buy_signal_types | list | 発生している買い増しシグナル種別のリスト |
 | buy_signal_reason_summary | string | 判定根拠の一言サマリ（例: "RSIが28から34へ反発しました、終値がボリンジャーバンド下限を下回りました"） |
 | fundamental_status | string | `passed`（健全性フィルタを満たす）/ `unavailable`（ファンダメンタルズ指標が未取得のため判定不可）。フィルタを満たさない銘柄（`failed`相当）は一覧から除外されるため出力されない |
-| fundamental_summary | string | ファンダメンタルズ健全性の一言サマリ（例: "ROE15.2%・自己資本比率58.0%・営業利益成長率+12.3%・営業利益率18.3%"）。`fundamental_status=unavailable`の場合は取得不可である旨を表示する |
+| fundamental_summary | string | ファンダメンタルズ健全性の一言サマリ（例: "ROE15.2%・自己資本比率58.0%・営業利益成長率+12.3%・営業利益率18.3%"）。`fundamental_status=unavailable`の場合は取得不可である旨を表示する。**成長率表示の優先順位（2026-09-21改訂、ADR-0015 D1/D2、`/review`3回目の指摘）**: 単年度成長率（売上高・営業利益いずれか）がプラスならそれを表示、なければ直近3期平均成長率（D2救済の根拠）がプラスならそれを「3期平均◯◯成長率」として表示、それも無くROE・自己資本比率がD1救済閾値（ROE≧15%かつ自己資本比率≧50%）を満たす場合は成長率を表示せず「ROE◯%・自己資本比率◯%と財務健全性が高いため合格しています」と表示する（マイナスの単年度成長率をそのまま合格根拠として誤って見せない） |
 | nisa_recommended | boolean | 中長期保有前提のNISA枠での購入推奨可否 |
 | nisa_recommended_reason | string | NISA枠推奨理由の一言サマリ（`nisa_recommended=true`の場合のみ） |
 | suggested_amount | decimal | 追加投資額の目安（ポートフォリオ評価総額に対する小口の目安） |

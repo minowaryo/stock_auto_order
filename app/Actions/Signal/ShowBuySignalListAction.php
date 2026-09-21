@@ -133,7 +133,7 @@ class ShowBuySignalListAction
             'buy_signal_types' => $buySignals->pluck('signal_type')->values()->all(),
             'buy_signal_reason_summary' => $buySignals->pluck('reason_summary')->implode('、'),
             'fundamental_status' => $fundamentalStatus,
-            'fundamental_summary' => $this->fundamentalSummary($fundamentalStatus, $equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin),
+            'fundamental_summary' => $this->fundamentalSummary($fundamentalStatus, $equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin, $avgRevenueGrowth, $avgOperatingIncomeGrowth),
             'nisa_recommended' => $nisaRecommended,
             'nisa_recommended_reason' => $nisaRecommended
                 ? sprintf('自己資本比率%s%%・ROE%s%%と財務健全性が高くNISA口座での長期保有に適しています', $this->fmt($equityRatio), $this->fmt($roe))
@@ -195,8 +195,16 @@ class ShowBuySignalListAction
         ];
     }
 
-    private function fundamentalSummary(string $fundamentalStatus, ?float $equityRatio, ?float $roe, ?float $revenueGrowth, ?float $operatingIncomeGrowth, ?float $operatingMargin): string
-    {
+    private function fundamentalSummary(
+        string $fundamentalStatus,
+        ?float $equityRatio,
+        ?float $roe,
+        ?float $revenueGrowth,
+        ?float $operatingIncomeGrowth,
+        ?float $operatingMargin,
+        ?float $avgRevenueGrowth = null,
+        ?float $avgOperatingIncomeGrowth = null,
+    ): string {
         if ($fundamentalStatus === 'unavailable') {
             return 'ファンダメンタルズ指標が未取得のため判定できません';
         }
@@ -214,9 +222,33 @@ class ShowBuySignalListAction
         } elseif ($revenueGrowth !== null && $revenueGrowth > 0.0) {
             $growthLabel = '売上高成長率';
             $growthValue = $revenueGrowth;
+        } elseif ($avgOperatingIncomeGrowth !== null && $avgOperatingIncomeGrowth > 0.0) {
+            // ADR-0015 D2: 単年度がプラスでなくても直近3期平均がプラスなら
+            // それが合格根拠（レスキュー）のため、平均である旨を明示して表示
+            // する（/review 3回目の指摘: 単年度の値を無条件優先すると、D2で
+            // 救済された銘柄でマイナスの単年度成長率がそのまま表示され、
+            // あたかもそれが合格根拠であるかのように誤解を招いていた）。
+            $growthLabel = '3期平均営業利益成長率';
+            $growthValue = $avgOperatingIncomeGrowth;
+        } elseif ($avgRevenueGrowth !== null && $avgRevenueGrowth > 0.0) {
+            $growthLabel = '3期平均売上高成長率';
+            $growthValue = $avgRevenueGrowth;
+        } elseif ($roe !== null && $equityRatio !== null
+            && $roe >= FundamentalHealthEvaluator::RESCUE_MIN_ROE
+            && $equityRatio >= FundamentalHealthEvaluator::RESCUE_MIN_EQUITY_RATIO) {
+            // ADR-0015 D1: 成長率（単年度・3期平均とも）がいずれもプラスで
+            // なくても、ROE・自己資本比率が救済閾値を満たせば合格する。
+            // マイナスの成長率をそのまま表示すると合格根拠を誤解させるため、
+            // 実際の合格根拠（ROE・自己資本比率）のみで説明する。
+            return sprintf(
+                'ROE%s%%・自己資本比率%s%%と財務健全性が高いため合格しています（成長率は基準を満たしていません）',
+                $this->fmt($roe),
+                $this->fmt($equityRatio),
+            );
         } elseif ($operatingIncomeGrowth !== null) {
-            // フォールバック（fundamental_status='passed'である以上通常
-            // 発生しないはずだが、念のため既存の優先順位を維持する）。
+            // フォールバック（上記いずれにも該当しないケース。理論上
+            // fundamental_status='passed'では発生しないはずだが、念のため
+            // 既存の優先順位を維持する）。
             $growthLabel = '営業利益成長率';
             $growthValue = $operatingIncomeGrowth;
         } else {

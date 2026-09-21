@@ -322,6 +322,60 @@ test('単年度成長率はマイナスだが3期平均成長率がプラスの�
     expect($row['fundamental_status'])->toBe('passed');
 });
 
+// ---------------------------------------------------------------------
+// CR (2026-09-21, /review 3回目の指摘・Cycle6): fundamentalSummary()が
+// avg_revenue_growth/avg_operating_income_growth・D1レスキューを一切
+// 考慮せず、単年度revenue_growth/operating_income_growthのみを見て
+// （マイナスでも）そのまま表示していた（ShowBuySignalListActionと同じ
+// バグ、同じ修正パターン）。
+// ---------------------------------------------------------------------
+
+test('単年度成長率は両方マイナスだが3期平均成長率のみプラスでD2救済された銘柄は、fundamental_summaryにマイナスの単年度成長率ではなく3期平均成長率が表示される', function () {
+    uc012ScreenWatchlist('7778', [
+        'name' => 'D2救済サマリー確認',
+        'roe' => 12.0,
+        'equity_ratio' => 45.0,
+        'revenue_growth' => -3.0,
+        'operating_income_growth' => -1.0,
+        'avg_revenue_growth' => 2.0,
+    ]);
+
+    $component = Livewire::actingAs(uc012ScreenUser())->test(CandidateCheck::class);
+
+    $row = collect($component->viewData('rows'))->firstWhere('symbol_code', '7778');
+    expect($row)->not->toBeNull();
+    expect($row['fundamental_status'])->toBe('passed');
+    expect($row['fundamental_summary'])->toContain('3期平均売上高成長率');
+    expect($row['fundamental_summary'])->toContain('+2.0');
+    expect($row['fundamental_summary'])->not->toContain('-3.0');
+    expect($row['fundamental_summary'])->not->toContain('-1.0');
+});
+
+test('単年度・3期平均とも成長率がプラスでないがROE・自己資本比率のD1救済閾値を満たす銘柄は、fundamental_summaryにマイナスの成長率を表示せずROE・自己資本比率による合格根拠を示す', function () {
+    uc012ScreenWatchlist('7779', [
+        'name' => 'D1救済サマリー確認',
+        // D1のRESCUE閾値（ROE≧15%かつ自己資本比率≧50%）を満たす。
+        'roe' => 17.9,
+        'equity_ratio' => 55.0,
+        'revenue_growth' => -5.0,
+        'operating_income_growth' => -3.0,
+        'avg_revenue_growth' => -2.0,
+        'avg_operating_income_growth' => -1.0,
+    ]);
+
+    $component = Livewire::actingAs(uc012ScreenUser())->test(CandidateCheck::class);
+
+    $row = collect($component->viewData('rows'))->firstWhere('symbol_code', '7779');
+    expect($row)->not->toBeNull();
+    expect($row['fundamental_status'])->toBe('passed');
+    expect($row['fundamental_summary'])->toContain('ROE');
+    expect($row['fundamental_summary'])->toContain('財務健全性が高い');
+    expect($row['fundamental_summary'])->not->toContain('-5.0');
+    expect($row['fundamental_summary'])->not->toContain('-3.0');
+    expect($row['fundamental_summary'])->not->toContain('-2.0');
+    expect($row['fundamental_summary'])->not->toContain('-1.0');
+});
+
 test('刷新後の画面に「おすすめ候補」「銘柄コード手入力」セクションは無い', function () {
     uc012ScreenWatchlist('1357', ['name' => 'テスト銘柄']);
 

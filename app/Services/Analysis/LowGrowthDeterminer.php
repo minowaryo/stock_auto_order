@@ -22,18 +22,24 @@ final class LowGrowthDeterminer
     public const LOW_GROWTH_THRESHOLD = 5.0;
 
     /**
-     * Growth rate is the higher of revenueGrowth/operatingIncomeGrowth.
+     * Growth rate is the higher of revenueGrowth/operatingIncomeGrowth,
+     * reusing SignalCriteriaEvaluator::higherGrowthRate() (the same "higher
+     * of the two" computation the 判定チェックリスト already uses) instead
+     * of a second copy — this class's own docblock names CHG-0005-style
+     * threshold drift as exactly what duplicating this logic risks
+     * (/review 3回目の指摘、2026-09-21).
+     *
      * Returns false (not low) when both are null — the absence of growth
      * evidence is not itself evidence of low growth, so the existing
      * PEG-based judgment is left in place rather than assuming the worst.
      */
     public function isLowGrowth(?float $revenueGrowth, ?float $operatingIncomeGrowth): bool
     {
-        if ($revenueGrowth === null && $operatingIncomeGrowth === null) {
+        $growth = SignalCriteriaEvaluator::higherGrowthRate($revenueGrowth, $operatingIncomeGrowth);
+
+        if ($growth === null) {
             return false;
         }
-
-        $growth = max($revenueGrowth ?? -INF, $operatingIncomeGrowth ?? -INF);
 
         return $growth <= self::LOW_GROWTH_THRESHOLD;
     }
