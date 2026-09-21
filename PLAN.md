@@ -79,7 +79,8 @@
 - **Cycle5（D5: 週足MA75中期トレンド確認）Gate4承認・Green完了**。migration（`technical_indicators.ma75_trend_rising` boolean nullable、Gate3で計画済みのカラム定義どおり）、`TechnicalIndicatorCalculator::calculate()`に算出ロジック追加（直近MA75と13週前MA75の比較、既存`simpleMovingAverage()`を再利用、新規外部データ取得なし）、`BuySignalDeterminationService::preconditionsSatisfied()`に事前条件C配線。**null（データ不足）ではブロックしない設計を採用**（既存の事前条件A/Bはnullで即ブロックする設計だが、Cは88週分という高いデータ要件があり同方針だと直近上場銘柄等で押し目買いシグナルが一律に出なくなる回帰リスクがあったため、AskUserQuestionで本人確認のうえ「`false`〔明確な下向き〕の場合のみブロック」に決定）。Red（`TechnicalIndicatorCalculatorTest`5件＋`BuySignalDeterminationServiceTest`3件）→Green、フィクスチャはtinkerで実測値を検証してから使用。既存52週フィクスチャは全てnull扱いで後方互換を保つことを確認。フルスイート702 passed（0 failed）、pintクリーン
 - **`/review`3回目実施（code-reviewスキル、enhanced level、review-score=483）・Cycle6修正完了**: Step 0のreview-score.shがブランチ全体差分（72ファイル・7317行、migration3件がsensitive path該当）に対しenhanced判定。8角度・4検証パスで9件検出、全件CONFIRMED。**実害バグ3件を修正**: ①`ClassifyHoldingsAction::fundamentalStatus()`が`healthEvaluatorArgs()`の7要素中5要素しか使わずD2救済が無効化（3回目の独立検出。F-013由来だが既にこのブランチの履歴に含まれているため今回はスコープ外扱いを撤回し修正）、②同ファイルの`isHoldWatch()`/`healthLine()`がD4対セクターフォールバック未適用、③`ShowBuySignalListAction`/`ShowWatchlistAction`の`fundamentalSummary()`がD1/D2レスキュー時にマイナスの単年度成長率をそのまま合格根拠として表示（誤解を招く表示バグ）。**リファクタ1件**: `LowGrowthDeterminer::isLowGrowth()`が`SignalCriteriaEvaluator::higherGrowthRate()`と同じロジックを再実装していたため後者に委譲（CHG-0005型ドリフト防止という自身のdocblockの目的に反していた）。Red→Green、フルスイート702→708 passed（0 failed）、pintクリーン。**対象外・バックログ行き**: `SignalCriteriaEvaluator`の判定チェックリスト（成長率行・PEG行）がD1/D2/D3の分岐を一切反映していない件（表示のみの実害・設計判断が要る規模のため`accuracy-improvement-backlog.md`候補Lとして記録）、`ClassifyHoldingsAction::marketValue()`の3重実装・5倍のDB往復（F-013側で既知・ADR-0014で許容済みのトレードオフ、CHG-0017スコープ外）
 - **Cycle7（Feature Test拡充）完了**: D1（財務指標救済）は`FundamentalHealthEvaluatorTest`でUnit Testとして厚くカバーされているが、UC-004/UC-008/UC-011/UC-013の各画面でD1単独（単年度・3期平均とも成長率がプラスでない、ROE/自己資本比率のみで救済）を確認するFeature Testが存在しないことを`/review`後に監査で確認（D2救済のテストはCycle4c/4dで各画面に追加済みだったが、D1単独ケースが漏れていた）。4画面に1件ずつ追加（UC-004: 高水準モード到達、UC-008: 候補一覧への含有、UC-011: `fundamental_status=passed`、UC-013: `hold_watch=false`）。**プロダクションコードの変更なし**（全画面とも既存配線が正しく機能していることを確認するのみ、隠れたバグは見つからず）。フルスイート708→712 passed（0 failed）、pintクリーン
-- 次: コミット（push要再確認）。その後D7（`valuation_zone_badge`）
+- **Cycle D7（UC-004 `valuation_zone_badge`）Gate4承認・Green完了（別ブランチ`feat/chg0017-d7-valuation-badge`、2026-09-21マージ）**: `ShowSignalListAction`へ既存`LowGrowthDeterminer`をDIし、低成長かつ`PER > 0 && PER <= BuySignalDeterminationService::PER_UNDERVALUED_THRESHOLD`かつ`dividend_yield >= BuySignalDeterminationService::DIVIDEND_YIELD_UNDERVALUED_THRESHOLD`の場合だけ「絶対バリュエーション上は割安ゾーン」を返す表示専用項目を追加。UC-004 Bladeの銘柄セルにSuccess配色の補助バッジを表示。負PER・PER 0・各閾値外・成長率5%超の回帰テストを追加。UC-010は既存の`signals->isNotEmpty()`除外により同時掲載されないため無変更。D7はCycle5〜7と並行して別ブランチで進んでいたため、本マージで合流させた（コンフリクトはPLAN.md本エントリのみ、コードは無衝突）
+- 次: pintクリーン確認・フルスイート再確認（マージ後730 passed）→コミット（push要再確認）
 
 ### Files touched
 
@@ -89,7 +90,7 @@
 
 ### Status
 
-**Gate1〜4承認済み、Cycle1〜3b（D1/D2/D3判定ロジック本体）・配線Cycle4a〜4e・D4（別セッション実装）・Cycle5（D5）・Cycle6（3回目`/review`対応）・Cycle7（Feature Test拡充）Green完了**（フルスイート712 passed / 0 failed、pintクリーン）。D1・D2・D3・D4・D5すべてが`FetchExternalMarketDataAction`/`RefreshWatchlistMarketDataAction`（シグナル永続化）・`FundamentalHealthEvaluator::evaluate()`の全7呼び出し元（財務健全性判定、`ClassifyHoldingsAction`分も含め今回で全て統一）・`SignalCriteriaEvaluator`（判定チェックリスト表示）・`BuySignalDeterminationService`（押し目買い事前条件A/B/C）に配線され、watchlist専用銘柄・ポートフォリオ分類ダッシュボードも含めD2平均成長率レスキュー・D4対セクターフォールバック・D5中期トレンド確認が表示・判定の両面で一貫して機能する状態になった。D1単独レスキューの陽性ケースもUC-004/008/011/013の4画面全てでFeature Testレベルで確認済み。**本CRの主目的（伊藤忠等の低成長健全銘柄の救済）が実際に機能する状態**。次はコミット（push要再確認）、その後D7
+**Gate1〜4承認済み、Cycle1〜3b（D1/D2/D3判定ロジック本体）・配線Cycle4a〜4e・D4（別セッション実装）・Cycle5（D5）・Cycle6（3回目`/review`対応）・Cycle7（Feature Test拡充）・D7（UC-004補助バッジ、別ブランチ）すべてGreen完了、2026-09-21にmainへマージ**（マージ後フルスイート730 passed / 0 failed、pintクリーン）。D1・D2・D3・D4・D5すべてが`FetchExternalMarketDataAction`/`RefreshWatchlistMarketDataAction`（シグナル永続化）・`FundamentalHealthEvaluator::evaluate()`の全7呼び出し元（財務健全性判定、`ClassifyHoldingsAction`分も含め全て統一）・`SignalCriteriaEvaluator`（判定チェックリスト表示）・`BuySignalDeterminationService`（押し目買い事前条件A/B/C）に配線され、watchlist専用銘柄・ポートフォリオ分類ダッシュボードも含めD2平均成長率レスキュー・D4対セクターフォールバック・D5中期トレンド確認が表示・判定の両面で一貫して機能する状態になった。D1単独レスキューの陽性ケースもUC-004/008/011/013の4画面全てでFeature Testレベルで確認済み。D7では同じ低成長判定・絶対閾値をUC-004の表示へ再利用し、UC-010への同時掲載は行わない。**本CRの主目的（伊藤忠等の低成長健全銘柄の救済）が実際に機能する状態**。ADR-0015のD1〜D7全項目が実装完了
 
 ## 売買戦略の深化ロードマップ策定（2026-09-19）
 
@@ -286,5 +287,4 @@ UC-011 は閲覧系フローで `.claude/rules/31-e2e-testing.md` のクリテ�
 
 - **フロントエンドUI（Livewire画面化）**: UC-001〜UC-009はこれまで全てAPIのみで実装してきた（`app/Livewire/`・`resources/views/`配下のBladeビューは0件、`docs/product/mockups/`は静的HTMLモックのみで実際に動く画面ではない）。Phase2（F-005/F-006/F-007/F-008）がAPIレベルで全完了したため、**次はLivewireコンポーネント・Bladeビューの実装（実際にブラウザでCSV取込〜各画面確認ができる状態にする）に着手する**方針をユーザーと確認済み
 - **F-007（UC-007 市場全体指標表示）の3指標が未実装**: `GET /market-indicators`エンドポイント自体は実装完了したが、**米国10年債利回り・VIX指数・USD/JPY為替レートの3指標は取得ロジック自体が無く**（J-Quantsの範囲外のデータで、別途新規の外部APIクライアント選定〔ADR要〕が必要）、常に`null`のプレースホルダを返す。3指標の外部データ取得自体は別タスクとして先送り
-
 
