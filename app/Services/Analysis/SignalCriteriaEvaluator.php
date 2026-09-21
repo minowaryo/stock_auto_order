@@ -310,9 +310,9 @@ final class SignalCriteriaEvaluator
                 fn (float $v) => number_format($v, 2),
             ),
             $this->row(
-                '相対力(対市場)',
+                $this->relativeStrengthLabel($metrics),
                 '≤-5',
-                $metrics['relative_strength_vs_market'] ?? null,
+                $this->preferredRelativeStrength($metrics),
                 BuySignalDeterminationService::MIN_RELATIVE_STRENGTH,
                 'lte',
                 fn (float $v) => sprintf('%+.1f', $v),
@@ -571,6 +571,29 @@ final class SignalCriteriaEvaluator
         }
 
         return $numerator / $denominator;
+    }
+
+    /**
+     * 整理検討チェックリストの「相対力」行が見る値。
+     * BuySignalDeterminationService::preconditionsSatisfied()の事前条件Bと
+     * 同じ優先順位（対セクターが非nullならそちら、nullなら対市場、ADR-0015
+     * D4）で判定できるよう揃える。
+     *
+     * @param  array<string, float|null>  $metrics
+     */
+    private function preferredRelativeStrength(array $metrics): ?float
+    {
+        return $metrics['relative_strength_vs_sector'] ?? $metrics['relative_strength_vs_market'] ?? null;
+    }
+
+    /**
+     * @param  array<string, float|null>  $metrics
+     */
+    private function relativeStrengthLabel(array $metrics): string
+    {
+        return ($metrics['relative_strength_vs_sector'] ?? null) !== null
+            ? '相対力(対セクター)'
+            : '相対力(対市場)';
     }
 
     /**

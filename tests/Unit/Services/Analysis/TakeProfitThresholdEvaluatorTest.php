@@ -181,11 +181,24 @@ describe('TakeProfitThresholdEvaluator: 利確検討ラインの動的分岐判�
             expect($result['second_tier_price_multiplier'])->toEqualWithDelta(1.35, 0.001);
         });
 
-        test('シグナル0件だが自己資本比率・ROEが基準を満たし成長率のみfailed（両方マイナス）の場合、通常モードを返す', function () {
-            // FundamentalHealthEvaluatorが'failed'を返す境界（自己資本比率・
-            // ROEは基準を満たすが成長率が両方マイナス）でも高水準モードには
-            // ならないことを確認する。営業利益率は健全。
+        test('シグナル0件・自己資本比率58.0%/ROE15.2%（D1のRESCUE閾値も満たす）で成長率が両方マイナスの場合、D1救済により高水準モードを返す', function () {
+            // 2026-09-19改訂（CHG-0017／ADR-0015 D1）: 本テストは元々
+            // 「自己資本比率・ROEは基準を満たすが成長率が両方マイナスなら
+            // 高水準モードにならない」ことの確認だったが、これはまさに
+            // ADR-0015 D1（ROE≧15%かつ自己資本比率≧50%なら成長率を問わず
+            // 財務健全性を救済する）が対象とするシナリオそのもの。
+            // FundamentalHealthEvaluatorの挙動変更に伴い、期待値を
+            // 'high_water_mark' に更新する（意図した挙動変化であり回帰ではない）。
             $result = takeProfitThresholdEvaluator()->evaluate(0, 58.0, 15.2, -3.0, -1.0, 18.0);
+
+            expect($result['mode'])->toBe('high_water_mark');
+        });
+
+        test('シグナル0件・自己資本比率45.0%/ROE12.0%（基本条件は満たすがD1のRESCUE閾値は満たさない）で成長率が両方マイナスの場合、通常モードを返す', function () {
+            // D1救済が発動しない境界（RESCUE閾値50%/15%未満）でも、財務健全性
+            // 判定自体は成長率マイナスのためfailedのまま、通常モードを維持
+            // することを確認する（上記テストとの対比）。
+            $result = takeProfitThresholdEvaluator()->evaluate(0, 45.0, 12.0, -3.0, -1.0, 18.0);
 
             expect($result['mode'])->toBe('normal');
         });
@@ -219,8 +232,60 @@ describe('TakeProfitThresholdEvaluator: 利確検討ラインの動的分岐判�
             expect($result['second_tier_price_multiplier'])->toEqualWithDelta(1.35, 0.001);
         });
 
-        test('シグナル0件だが財務健全性がunavailable（自己資本比率・ROEは基準を満たすが成長率データが両方null）の場合、通常モードを返す', function () {
+        test('シグナル0件・自己資本比率58.0%/ROE15.2%（D1のRESCUE閾値も満たす）で成長率データが両方nullの場合、D1救済により高水準モードを返す', function () {
+            // 2026-09-19改訂（CHG-0017／ADR-0015 D1）: 上記と同じ理由で期待値を
+            // 'high_water_mark' に更新（D1は成長率が「マイナス」だけでなく
+            // 「未取得（null）」の場合も救済対象とする設計）。
             $result = takeProfitThresholdEvaluator()->evaluate(0, 58.0, 15.2, null, null, 18.0);
+
+            expect($result['mode'])->toBe('high_water_mark');
+        });
+
+        test('シグナル0件・自己資本比率45.0%/ROE12.0%（D1のRESCUE閾値は満たさない）で成長率データが両方nullの場合、通常モードを返す', function () {
+            $result = takeProfitThresholdEvaluator()->evaluate(0, 45.0, 12.0, null, null, 18.0);
+
+            expect($result['mode'])->toBe('normal');
+        });
+    });
+
+    // ---------------------------------------------------------------------
+    // CR (2026-09-20, CHG-0017 / ADR-0015 D2 配線 Cycle 4c)
+    // ---------------------------------------------------------------------
+    // FundamentalHealthEvaluator::evaluate() 自体は既にD2救済（直近3期平均
+    // 成長率>0%のOR救済）を実装済み（7引数、末尾2つが
+    // avgRevenueGrowth/avgOperatingIncomeGrowth）。本クラスの evaluate() は
+    // まだ内部で FundamentalHealthEvaluator::evaluate() に5引数しか渡して
+    // おらず、avg成長率を素通しできない。この describe は
+    // TakeProfitThresholdEvaluator::evaluate() 自身のシグネチャに
+    // avgRevenueGrowth/avgOperatingIncomeGrowthの2引数を追加する配線を
+    // 検証する（呼び出し元は ShowSignalListAction::takeProfitEvaluatorArgs()
+    // 相当、Gate4レビュー時に確認）。
+    //
+    // Red の出方（2026-09-20）: 現行の evaluate() は6引数
+    // （int + 5 float）のみを宣言しており、8引数呼び出しはPHP上legal
+    // （余剰引数は破棄、ADR-0011のCRコメント参照）だが、内部で
+    // FundamentalHealthEvaluator::evaluate() に avg成長率が渡らないため、
+    // 単年度成長率が両方マイナスの場合はD1のRESCUE閾値（ROE≧15%・自己資本
+    // 比率≧50%）を満たさない限り 'failed' のまま → 通常モードのままとなり、
+    // 'high_water_mark' を期待する以下のアサーションが不一致になる。
+    describe('D2救済（直近3期平均成長率、CHG-0017 / ADR-0015 D2）', function () {
+        test('シグナル0件・自己資本比率45.0%/ROE12.0%（D1のRESCUE閾値は満たさない）で単年度成長率は両方マイナスだが3期平均売上高成長率がプラスの場合、D2救済により高水準モードを返す', function () {
+            $result = takeProfitThresholdEvaluator()->evaluate(0, 45.0, 12.0, -3.0, -1.0, 18.0, 2.0, null);
+
+            expect($result['mode'])->toBe('high_water_mark');
+            expect($result['target_gain_rate_threshold'])->toEqualWithDelta(150.0, 0.001);
+            expect($result['first_tier_price_multiplier'])->toEqualWithDelta(2.00, 0.001);
+            expect($result['second_tier_price_multiplier'])->toEqualWithDelta(2.50, 0.001);
+        });
+
+        test('シグナル0件・自己資本比率45.0%/ROE12.0%（D1のRESCUE閾値は満たさない）で単年度成長率は両方マイナスだが3期平均営業利益成長率がプラスの場合、D2救済により高水準モードを返す', function () {
+            $result = takeProfitThresholdEvaluator()->evaluate(0, 45.0, 12.0, -3.0, -1.0, 18.0, null, 1.5);
+
+            expect($result['mode'])->toBe('high_water_mark');
+        });
+
+        test('シグナル0件・自己資本比率45.0%/ROE12.0%で単年度成長率・3期平均成長率がすべてマイナスの場合、D2救済は発動せず通常モードを返す', function () {
+            $result = takeProfitThresholdEvaluator()->evaluate(0, 45.0, 12.0, -3.0, -1.0, 18.0, -2.0, -1.0);
 
             expect($result['mode'])->toBe('normal');
         });

@@ -432,6 +432,44 @@ describe('UC-008: 新規投資候補レコメンド（軽量版）候補一覧',
             expect(ucFrom008CandidateTestFindRow($response, '5678'))->toBeNull();
         });
 
+        // -----------------------------------------------------------
+        // CR (2026-09-20, CHG-0017 / ADR-0015 D2 配線 Cycle 4c)
+        // -----------------------------------------------------------
+        // FundamentalHealthEvaluator自体はD2救済（直近3期平均成長率>0%の
+        // OR救済）を実装済みだが、NewCandidateFinder::passesHealthFilter()
+        // はまだ avg_revenue_growth/avg_operating_income_growth を
+        // evaluate() に渡していない。
+        // Red の出方（2026-09-20）: equity_ratio=45.0/roe=12.0（D1のRESCUE閾値
+        // ROE≧15%/自己資本比率≧50%は満たさない）・単年度成長率は両方マイナス
+        // のため、現行実装は 'failed' 判定のまま候補一覧から除外される →
+        // 以下の `not->toBeNull()` が失敗する。
+        test('自己資本比率・ROEは基準を満たし、単年度成長率は両方マイナスだが3期平均営業利益成長率がプラスの銘柄は、D2救済により候補一覧に含まれる', function () {
+            WatchedTheme::create(['name' => 'AI半導体']);
+
+            [, $snapshot] = ucFrom008CandidateTestImportBatch();
+            $heldStock = ucFrom008CandidateTestHolding(['symbol_code' => '9999', 'symbol_name' => '既存保有株']);
+            ucFrom008CandidateTestHoldingSnapshot($snapshot, $heldStock, ['quantity' => 100, 'current_price' => 1000.00]);
+
+            $sector = ucFrom008CandidateTestSector('AI半導体');
+            $rescued = ucFrom008CandidateTestHolding([
+                'symbol_code' => '5680',
+                'symbol_name' => 'D2救済候補株',
+                'sector_classification_id' => $sector->id,
+            ]);
+            ucFrom008CandidateTestFundamental($rescued, [
+                'equity_ratio' => 45.0,
+                'roe' => 12.0,
+                'revenue_growth' => -5.0,
+                'operating_income_growth' => -3.0,
+                'avg_operating_income_growth' => 1.0,
+            ]);
+
+            $response = ucFrom008CandidateTestFetch($this);
+
+            $response->assertSuccessful();
+            expect(ucFrom008CandidateTestFindRow($response, '5680'))->not->toBeNull();
+        });
+
         test('自己資本比率・ROEは基準を満たすが、成長率データ（売上高・営業利益とも）が未取得（null）の銘柄は候補一覧から除外される', function () {
             // UC-008はUC-010と異なり「該当しないものは静かに除外する」設計
             // （unavailable相当の状態を表示する仕様は持たない）。

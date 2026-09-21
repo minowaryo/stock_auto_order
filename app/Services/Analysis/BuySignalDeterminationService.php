@@ -12,8 +12,15 @@ namespace App\Services\Analysis;
  * Mirrors SignalDeterminationService's structure with the 7 signal
  * conditions reversed (押し目/反発方向), gated by the all-signals-common
  * preconditions added 2026-08-23 (ADR-0007 Addendum): none of the 7 signal
- * types may fire unless BOTH (A) the stock recently approached its 52-week
- * high and (B) it is not underperforming the market by more than -5pt.
+ * types may fire unless (A) the stock recently approached its 52-week high
+ * OR is fundamentally healthy (ADR-0016 D1, 2026-09-21 relaxation — a
+ * financially healthy stock that has simply been trading well off its
+ * highs for a long time is no longer structurally excluded), (B) it is not
+ * underperforming its sector (or the market when sector-relative strength
+ * is unavailable) by more than -5pt, and (C) its weekly MA75 medium-term
+ * trend is not confirmed falling (ADR-0015 D5, 2026-09-21 — unlike A/B, an
+ * unknown/insufficient-data trend does not block, only a confirmed `false`
+ * does).
  *
  * Pure calculation logic only — no DB/HTTP dependency.
  */
@@ -28,8 +35,8 @@ final class BuySignalDeterminationService
     private const RECENT_STRENGTH_THRESHOLD_RATE = 0.85;
 
     /**
-     * All-signals-common precondition B: relative_strength_vs_market must
-     * not be null and must be >= this value.
+     * All-signals-common precondition B: the preferred relative strength
+     * (sector first, then market) must not be null and must be >= this value.
      *
      * Promoted to `public` (2026-09-06, CHG-0010) so
      * App\Services\Analysis\SignalCriteriaEvaluator::evaluateLossReview()
@@ -64,9 +71,12 @@ final class BuySignalDeterminationService
      */
     public const PER_UNDERVALUED_THRESHOLD = 15.0;
 
+    public const DIVIDEND_YIELD_UNDERVALUED_THRESHOLD = 3.0;
+
     public function __construct(
         private readonly TechnicalIndicatorCalculator $calculator,
         private readonly FundamentalHealthEvaluator $healthEvaluator,
+        private readonly LowGrowthDeterminer $lowGrowthDeterminer = new LowGrowthDeterminer,
     ) {}
 
     /**
@@ -84,6 +94,7 @@ final class BuySignalDeterminationService
         ?float $revenueGrowth = null,
         ?float $operatingIncomeGrowth = null,
         ?float $operatingMargin = null,
+        ?float $dividendYield = null,
     ): array {
         $current = $this->calculator->calculate($priceHistory, $marketReturn13w, $sectorReturn13w);
 
@@ -130,7 +141,7 @@ final class BuySignalDeterminationService
             $signals[] = $signal;
         }
 
-        if (($signal = $this->determinePegUndervalued($pegRatio)) !== null) {
+        if (($signal = $this->determinePegUndervalued($pegRatio, $revenueGrowth, $operatingIncomeGrowth, $per, $dividendYield)) !== null) {
             $signals[] = $signal;
         }
 
@@ -143,7 +154,7 @@ final class BuySignalDeterminationService
 
     /**
      * @param  array<int, array{date: string, close: float, volume: int}>  $priceHistory
-     * @param  array<string, float|int|null>  $current
+     * @param  array<string, float|int|bool|null>  $current
      */
     private function preconditionsSatisfied(array $priceHistory, array $current, string $fundamentalStatus): bool
     {
@@ -155,9 +166,20 @@ final class BuySignalDeterminationService
             return false;
         }
 
-        $relativeStrength = $current['relative_strength_vs_market'];
+        $relativeStrength = $current['relative_strength_vs_sector']
+            ?? $current['relative_strength_vs_market'];
 
         if ($relativeStrength === null || $relativeStrength < self::MIN_RELATIVE_STRENGTH) {
+            return false;
+        }
+
+        // 前提条件C（ADR-0015 D5）: 週足MA75の中期トレンドが明確に下向きと
+        // 判定された場合のみブロックする。null（88週未満でデータ不足）は
+        // 不明扱いとしてブロックしない——事前条件A/Bと異なり、この判定には
+        // 88週分という高いデータ要件があるため、null=即ブロックにすると
+        // 直近上場銘柄等で押し目買いシグナルが一律に出なくなる（本人確認済み、
+        // 2026-09-21）。
+        if ($current['ma75_trend_rising'] === false) {
             return false;
         }
 
@@ -356,8 +378,37 @@ final class BuySignalDeterminationService
     /**
      * @return array{signal_type: string, reason_summary: string}|null
      */
-    private function determinePegUndervalued(?float $pegRatio): ?array
-    {
+    private function determinePegUndervalued(
+        ?float $pegRatio,
+        ?float $revenueGrowth,
+        ?float $operatingIncomeGrowth,
+        ?float $per,
+        ?float $dividendYield,
+    ): ?array {
+        if ($this->lowGrowthDeterminer->isLowGrowth($revenueGrowth, $operatingIncomeGrowth)) {
+            if ($per === null || $dividendYield === null) {
+                return null;
+            }
+
+            // Finnhub's peTTM passes negative values through as-is for
+            // loss-making companies (UsFundamentalIndicatorMapper), the same
+            // hazard ADR-0012 D4 already guards against for pegRatio below.
+            // Without a lower bound, a loss-making stock's negative PER would
+            // satisfy "<= 15.0" and be misread as cheap.
+            if ($per > 0.0 && $per <= self::PER_UNDERVALUED_THRESHOLD && $dividendYield >= self::DIVIDEND_YIELD_UNDERVALUED_THRESHOLD) {
+                return [
+                    'signal_type' => 'peg_undervalued',
+                    'reason_summary' => sprintf(
+                        'PERが%s倍・配当利回りが%s%%と低成長銘柄の割安水準です',
+                        $this->formatNumber($per, 1),
+                        $this->formatNumber($dividendYield, 1),
+                    ),
+                ];
+            }
+
+            return null;
+        }
+
         if ($pegRatio === null) {
             return null;
         }

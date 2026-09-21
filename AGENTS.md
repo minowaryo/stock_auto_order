@@ -9,7 +9,11 @@ Laravel + MySQL web application
 1. `docs/ai-context/project-summary.md`
 2. `docs/ai-context/glossary.md`
 3. `docs/ai-context/module-map.md`
-4. Relevant file(s) below depending on the task
+4. `.claude/rules/00-global.md`（共通ポリシーと品質ゲートの正本）
+5. `.claude/rules/40-security.md` と `docs/ai-context/do-not-touch.md`
+6. Relevant file(s) below depending on the task
+
+Codex は `.claude/rules/` を自動読込しないため、以下の表に従って必要なファイルを明示的に読む。
 
 ## Task-based reading
 
@@ -28,19 +32,32 @@ Laravel + MySQL web application
 | Security changes | `docs/security/secrets-handling.md` |
 | Release changes | `docs/operations/deployment.md` |
 | Change request | `docs/rcid/traceability-matrix.md` |
+| Laravel implementation / review | `.claude/rules/10-laravel.md` |
+| DB implementation / review | `.claude/rules/20-mysql.md` |
+| Tests / TDD | `.claude/rules/30-testing.md` |
+| E2E tests / browser verification | `.claude/rules/31-e2e-testing.md` |
+| Code review | `.claude/rules/50-review.md` |
+| Documentation / harness changes | `.claude/rules/60-docs.md` |
+| Requesting plan approval | `.claude/rules/05-plan-approval.md`（`ExitPlanMode` は Claude 固有。Codex は承認依頼前に変更範囲・完了条件を要約する） |
+| User-facing behavior / instructions | `docs/product/user-guide.md` |
+| UAT (optional, non-blocking) | `docs/product/uat-scenarios.md` + `docs/product/uat-results/` |
+| Library errors / troubleshooting | `docs/ai-context/known-pitfalls.md` |
+| Harness architecture | `meta/adr/README.md` + relevant `meta/adr/` decisions + `docs/development/harness-compatibility.md` |
 
 ## Quality gates
 
-| Gate | Condition | Unlocks |
-|---|---|---|
-| Gate 0 | `docs/ai-context/` filled in AND a frontend stack selection ADR exists (see `meta/adr/ADR-0005-frontend-stack.md`) | AI assistance starts |
-| Gate 1 | `docs/product/requirements.md` approved | use-cases.md drafting + mock generation |
-| Gate 2 ★ | `docs/product/use-cases.md` final approval | **Code generation** + data-model drafting |
-| Gate 3 | `docs/architecture/data-model.md` approved | DB implementation + migrations |
-| Gate 4 | Failing test case(s) reviewed and approved by a human (per-feature, repeats every cycle — unlike Gate 0-3 which pass once) | Implementation (Green phase) |
+Gate 条件・適用範囲の正本は `.claude/rules/00-global.md` の「品質ゲート詳細」とする。ここには重複する Gate 表を持たない。
 
 **Do not generate code before Gate 2 is passed.**
 **Do not write implementation code before Gate 4 is passed**: write a failing test first, stop, and wait for human approval before implementing. See `.claude/rules/30-testing.md`.
+
+## Codex workflows
+
+Codex用の入口は `.agents/skills/` に置く。`$tdd`、`$review`、`$verify`、`$adr`、`$generate-mock`、`$generate-e2e-test` を利用できる。選択した skill の `SKILL.md` と、そこから参照される共通手順を読んでから実行する。
+
+Claude の slash command と `.claude/agents/` は、Codexのコマンドや登録済みエージェントではない。実行時の読み替えは `docs/development/codex-adapter.md` に従う。読み替えはツール呼出しだけを適応し、品質ゲートを緩和しない。
+
+Playwright MCP は `.codex/config.toml` に設定する。Claude hook はCodexでは自動発火しないため、レビュー用スクリプトはワークフローから明示的に実行する。
 
 ## Rules
 

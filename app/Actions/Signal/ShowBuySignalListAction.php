@@ -108,13 +108,10 @@ class ShowBuySignalListAction
         $holding = $holdingSnapshot->holding;
         $fundamentalIndicator = $holding->fundamentalIndicator;
 
-        $equityRatio = $fundamentalIndicator?->equity_ratio !== null ? (float) $fundamentalIndicator->equity_ratio : null;
-        $roe = $fundamentalIndicator?->roe !== null ? (float) $fundamentalIndicator->roe : null;
-        $revenueGrowth = $fundamentalIndicator?->revenue_growth !== null ? (float) $fundamentalIndicator->revenue_growth : null;
-        $operatingIncomeGrowth = $fundamentalIndicator?->operating_income_growth !== null ? (float) $fundamentalIndicator->operating_income_growth : null;
-        $operatingMargin = $fundamentalIndicator?->operating_margin !== null ? (float) $fundamentalIndicator->operating_margin : null;
+        [$equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin, $avgRevenueGrowth, $avgOperatingIncomeGrowth] = $fundamentalIndicator?->healthEvaluatorArgs()
+            ?? [null, null, null, null, null, null, null];
 
-        $fundamentalStatus = $this->evaluator->evaluate($equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin);
+        $fundamentalStatus = $this->evaluator->evaluate($equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin, $avgRevenueGrowth, $avgOperatingIncomeGrowth);
 
         if ($fundamentalStatus === 'failed') {
             return null;

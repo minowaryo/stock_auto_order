@@ -722,6 +722,37 @@ describe('整理検討チェックリスト（evaluateLossReview、UC-011 / ADR-
         expect(criterionRow($unmet['technical'], '相対力(対市場)')['status'])->toBe('unmet');
     });
 
+    // ---------------------------------------------------------------
+    // CHG-0017 / ADR-0015 D4（2回目の/review指摘、Cycle4e）: 相対力行は
+    // BuySignalDeterminationService::preconditionsSatisfied()の事前条件Bと
+    // 同じ優先順位（対セクターが非nullならそちら、nullなら対市場）で判定する。
+    // ---------------------------------------------------------------
+
+    test('relative_strength_vs_sectorが非nullのとき、相対力行はその値・ラベル「相対力(対セクター)」で判定される', function () {
+        $result = signalCriteriaEvaluator()->evaluateLossReview(lossMetricsAllMet([
+            'relative_strength_vs_market' => -12.0, // ≤ -5（対市場のみなら met）
+            'relative_strength_vs_sector' => -3.0,  // > -5（対セクター優先なら unmet）
+        ]));
+
+        $row = criterionRow($result['technical'], '相対力(対セクター)');
+        expect($row['status'])->toBe('unmet');
+        expect($row['value_label'])->toBe('-3.0');
+    });
+
+    test('relative_strength_vs_sectorがnull（キー省略含む）のとき、対市場にフォールバックしラベルは「相対力(対市場)」のまま', function () {
+        $withoutKey = signalCriteriaEvaluator()->evaluateLossReview(lossMetricsAllMet(['relative_strength_vs_market' => -12.0]));
+        $withNullSector = signalCriteriaEvaluator()->evaluateLossReview(lossMetricsAllMet([
+            'relative_strength_vs_market' => -12.0,
+            'relative_strength_vs_sector' => null,
+        ]));
+
+        foreach ([$withoutKey, $withNullSector] as $result) {
+            $row = criterionRow($result['technical'], '相対力(対市場)');
+            expect($row['status'])->toBe('met');
+            expect($row['value_label'])->toBe('-12.0');
+        }
+    });
+
     test('MACD-シグナル線は「<0」で判定し、差がちょうど0なら unmet（基準値0のため near は発生しない）', function () {
         $unmet = signalCriteriaEvaluator()->evaluateLossReview(lossMetricsAllMet([
             'macd' => 1.0, 'macd_signal' => 1.0, // 差 = 0.0

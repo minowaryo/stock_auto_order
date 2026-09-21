@@ -320,6 +320,161 @@ test('PEGレシオが2.0未満の場合、peg_overvaluedシグナルは発生し
 });
 
 // -----------------------------------------------------------------------
+// 5b. 成長率が低い銘柄でのPEG除外（CHG-0017／ADR-0015 D3、Cycle 3a・売り側のみ）
+//
+// determine() に新規引数 $revenueGrowth / $operatingIncomeGrowth（デフォルト
+// null、既存4引数の後ろに追加）が渡された場合、両者の「高い方」（片方nullなら
+// 他方の値を採用）が5.0%以下（暫定閾値）であれば determinePegOvervalued() を
+// 評価対象から除外し、peg_overvalued シグナルを一切発生させない仕様。
+// 両方nullの場合は「成長率は低いと判定しない」（従来通りPEGを評価する）。
+// すべて「穏やかな価格推移」フィクスチャ（range(100,179)、80週、他のいかなる
+// シグナルも発生しないことを確認済み）を再利用し、peg_overvaluedの発火有無
+// のみに着目する。
+// -----------------------------------------------------------------------
+
+test('成長率が5.0%を超える場合、PEGレシオが2.0以上ならpeg_overvaluedシグナルが発生する（回帰確認）', function () {
+    // Arrange: revenueGrowth=8.0, operatingIncomeGrowth=6.0（高い方=8.0 > 5.0、除外されない）
+    $closes = range(100, 179);
+    $priceHistory = sdPriceHistory($closes);
+
+    // Act
+    $result = sdService()->determine(
+        $priceHistory,
+        pegRatio: 2.0,
+        revenueGrowth: 8.0,
+        operatingIncomeGrowth: 6.0,
+    );
+
+    // Assert
+    expect($result)->toHaveCount(1);
+    expect($result[0]['signal_type'])->toBe('peg_overvalued');
+});
+
+test('成長率がちょうど5.0%の場合、PEGレシオが2.0以上でもpeg_overvaluedシグナルは発生しない（境界値）', function () {
+    // Arrange: revenueGrowth=5.0のみ（operatingIncomeGrowthはnull -> 高い方は5.0、5.0%以下のため除外）
+    $closes = range(100, 179);
+    $priceHistory = sdPriceHistory($closes);
+
+    // Act
+    $result = sdService()->determine(
+        $priceHistory,
+        pegRatio: 2.0,
+        revenueGrowth: 5.0,
+        operatingIncomeGrowth: null,
+    );
+
+    // Assert
+    expect($result)->toBe([]);
+});
+
+test('成長率が5.01%の場合、PEGレシオが2.0以上ならpeg_overvaluedシグナルが発生する（境界値）', function () {
+    // Arrange: revenueGrowth=5.01のみ（高い方=5.01 > 5.0、除外されない）
+    $closes = range(100, 179);
+    $priceHistory = sdPriceHistory($closes);
+
+    // Act
+    $result = sdService()->determine(
+        $priceHistory,
+        pegRatio: 2.0,
+        revenueGrowth: 5.01,
+        operatingIncomeGrowth: null,
+    );
+
+    // Assert
+    expect($result)->toHaveCount(1);
+    expect($result[0]['signal_type'])->toBe('peg_overvalued');
+});
+
+test('成長率がマイナスの場合、PEGレシオが2.0以上でもpeg_overvaluedシグナルは発生しない', function () {
+    // Arrange: revenueGrowth=-3.0のみ（operatingIncomeGrowthはnull -> 高い方は-3.0、5.0%以下のため除外）
+    $closes = range(100, 179);
+    $priceHistory = sdPriceHistory($closes);
+
+    // Act
+    $result = sdService()->determine(
+        $priceHistory,
+        pegRatio: 2.0,
+        revenueGrowth: -3.0,
+        operatingIncomeGrowth: null,
+    );
+
+    // Assert
+    expect($result)->toBe([]);
+});
+
+test('revenueGrowthが低くoperatingIncomeGrowthが高い場合、高い方を採用しpeg_overvaluedシグナルが発生する', function () {
+    // Arrange: revenueGrowth=2.0（低い）, operatingIncomeGrowth=10.0（高い）
+    // -> 「高い方」の定義に従い10.0が採用され、5.0%を超えるため除外されない
+    $closes = range(100, 179);
+    $priceHistory = sdPriceHistory($closes);
+
+    // Act
+    $result = sdService()->determine(
+        $priceHistory,
+        pegRatio: 2.0,
+        revenueGrowth: 2.0,
+        operatingIncomeGrowth: 10.0,
+    );
+
+    // Assert
+    expect($result)->toHaveCount(1);
+    expect($result[0]['signal_type'])->toBe('peg_overvalued');
+});
+
+test('revenueGrowthとoperatingIncomeGrowthが両方nullの場合、成長率は低いと判定されず従来通りPEGが評価される', function () {
+    // Arrange: 両方明示的にnull -> 「低いと判定しない」ため除外されず、
+    // PEGレシオ2.0以上なら従来通りpeg_overvaluedシグナルが発生する
+    $closes = range(100, 179);
+    $priceHistory = sdPriceHistory($closes);
+
+    // Act
+    $result = sdService()->determine(
+        $priceHistory,
+        pegRatio: 2.0,
+        revenueGrowth: null,
+        operatingIncomeGrowth: null,
+    );
+
+    // Assert
+    expect($result)->toHaveCount(1);
+    expect($result[0]['signal_type'])->toBe('peg_overvalued');
+});
+
+test('成長率が低くPEGシグナルが除外されていても、他のシグナル（RSI反落）は引き続き検出される', function () {
+    // Arrange: 「1. rsi_reversal」の発火確認済みフィクスチャ（previous rsi=100, current rsi≈92.857）
+    // を再利用し、PEGレシオ2.0以上・成長率3.0%（低成長、除外対象）を同時に渡す。
+    // rsi_reversalはPEG除外の影響を受けず引き続き検出され、peg_overvaluedのみが除外される想定
+    $closes = array_merge(range(100, 114), [113]);
+    $priceHistory = sdPriceHistory($closes);
+
+    // Act
+    $result = sdService()->determine(
+        $priceHistory,
+        pegRatio: 2.0,
+        revenueGrowth: 3.0,
+        operatingIncomeGrowth: 3.0,
+    );
+
+    // Assert
+    expect(sdSignalTypes($result))->toContain('rsi_reversal');
+    expect(sdSignalTypes($result))->not->toContain('peg_overvalued');
+});
+
+test('新規引数（revenueGrowth/operatingIncomeGrowth）を省略した既存呼び出しは影響を受けない（後方互換）', function () {
+    // Arrange: 新規引数を一切渡さない既存互換の呼び出し。既存の「PEGレシオが2.0以上」テスト
+    // （5.節）と同一のアサーションを、CHG-0017実装後の回帰確認として明示的に再掲する
+    $closes = range(100, 179);
+    $priceHistory = sdPriceHistory($closes);
+
+    // Act
+    $result = sdService()->determine($priceHistory, pegRatio: 2.0);
+
+    // Assert
+    expect($result)->toHaveCount(1);
+    expect($result[0]['signal_type'])->toBe('peg_overvalued');
+});
+
+// -----------------------------------------------------------------------
 // 6. relative_strength_weakening（相対力の低下）
 // -----------------------------------------------------------------------
 

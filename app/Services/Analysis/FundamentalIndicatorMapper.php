@@ -147,6 +147,70 @@ final class FundamentalIndicatorMapper
      */
     public function annualGrowth(array $statements, string $field): ?float
     {
+        $annual = $this->annualStatementsDescending($statements);
+
+        if (! isset($annual[0], $annual[1])) {
+            return null;
+        }
+
+        $latestValue = $annual[0][$field] ?? null;
+        $pastValue = $annual[1][$field] ?? null;
+
+        if ($latestValue === null || $pastValue === null || $pastValue == 0.0) {
+            return null;
+        }
+
+        return ($latestValue - $pastValue) / $pastValue * 100;
+    }
+
+    /**
+     * Simple average of the most recent `$periods` consecutive YoY growth
+     * rates (%) for the given field, using the same FY-only filter +
+     * fiscal_year_end dedup + descending sort as annualGrowth()
+     * (docs/adr/ADR-0015-value-cyclical-stock-judgment-branching.md D2).
+     *
+     * Requires at least `$periods` + 1 FY rows (to form `$periods`
+     * consecutive comparisons); otherwise null. If any of the `$periods`
+     * comparisons is unavailable (either side null, or the past side 0),
+     * the whole method returns null (all-or-nothing, same fail-safe
+     * pattern as annualGrowth()).
+     *
+     * @param  array<int, array<string, mixed>>  $statements
+     */
+    public function averageAnnualGrowth(array $statements, string $field, int $periods = 3): ?float
+    {
+        $annual = $this->annualStatementsDescending($statements);
+
+        if (count($annual) < $periods + 1) {
+            return null;
+        }
+
+        $growthRates = [];
+
+        for ($i = 0; $i < $periods; $i++) {
+            $latestValue = $annual[$i][$field] ?? null;
+            $pastValue = $annual[$i + 1][$field] ?? null;
+
+            if ($latestValue === null || $pastValue === null || $pastValue == 0.0) {
+                return null;
+            }
+
+            $growthRates[] = ($latestValue - $pastValue) / $pastValue * 100;
+        }
+
+        return array_sum($growthRates) / count($growthRates);
+    }
+
+    /**
+     * FY決算のみを抽出し、fiscal_year_endで重複排除した上で新しい順に
+     * 並べ替える（annualGrowth() / averageAnnualGrowth() 共通処理、
+     * 2回目の/review・Cycle4dで重複を統合）。
+     *
+     * @param  array<int, array<string, mixed>>  $statements
+     * @return array<int, array<string, mixed>>
+     */
+    private function annualStatementsDescending(array $statements): array
+    {
         $annualByFiscalYear = [];
 
         foreach ($statements as $statement) {
@@ -164,20 +228,8 @@ final class FundamentalIndicatorMapper
         }
 
         krsort($annualByFiscalYear); // most recent fiscal year first
-        $annual = array_values($annualByFiscalYear);
 
-        if (! isset($annual[0], $annual[1])) {
-            return null;
-        }
-
-        $latestValue = $annual[0][$field] ?? null;
-        $pastValue = $annual[1][$field] ?? null;
-
-        if ($latestValue === null || $pastValue === null || $pastValue == 0.0) {
-            return null;
-        }
-
-        return ($latestValue - $pastValue) / $pastValue * 100;
+        return array_values($annualByFiscalYear);
     }
 
     private function toPercent(?float $ratio): ?float

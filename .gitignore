@@ -24,7 +24,8 @@ docs/original-docs/*
 .env.production
 .phpactor.json
 .phpunit.result.cache
-/.codex
+/.codex/*
+!/.codex/config.toml
 /.cursor/
 /.idea
 /.nova

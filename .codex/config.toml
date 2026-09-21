@@ -1,0 +1,5 @@
+# Project-scoped MCP. Use the existing Laravel container so host Node.js is not required.
+[mcp_servers.playwright]
+command = "docker"
+args = ["compose", "exec", "-T", "laravel.test", "npx", "-y", "@playwright/mcp@latest", "--headless"]
+startup_timeout_sec = 60

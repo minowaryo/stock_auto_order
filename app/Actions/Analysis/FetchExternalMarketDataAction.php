@@ -196,7 +196,15 @@ class FetchExternalMarketDataAction
 
                         FundamentalIndicator::updateOrCreate(
                             ['holding_id' => $holding->id],
-                            [...$fundamental, 'fetched_at' => now()],
+                            [
+                                ...$fundamental,
+                                // ADR-0015 D2 (Cycle4a): 直近3期平均のYoY成長率
+                                // （単年度のrevenue_growth/operating_income_growthとは
+                                // 別カラムに保存する）。
+                                'avg_revenue_growth' => $this->fundamentalIndicatorMapper->averageAnnualGrowth($statements, 'net_sales'),
+                                'avg_operating_income_growth' => $this->fundamentalIndicatorMapper->averageAnnualGrowth($statements, 'operating_profit'),
+                                'fetched_at' => now(),
+                            ],
                         );
 
                         $pegRatio = $fundamental['peg_ratio'];
@@ -212,6 +220,8 @@ class FetchExternalMarketDataAction
                             FinancialStatement::updateOrCreate(
                                 ['holding_id' => $holding->id, 'fiscal_period' => $statement['disclosed_date']],
                                 [
+                                    'period_type' => $statement['period_type'],
+                                    'fiscal_year_end' => $statement['fiscal_year_end'],
                                     'revenue' => $statement['net_sales'],
                                     'operating_income' => $statement['operating_profit'],
                                     'eps' => $statement['eps'],
@@ -246,6 +256,8 @@ class FetchExternalMarketDataAction
                             $marketReturn13w,
                             $sectorReturn13w,
                             $pegRatio,
+                            $fundamental['revenue_growth'] ?? null,
+                            $fundamental['operating_income_growth'] ?? null,
                         );
 
                         // Re-determination: drop stale signal rows from a previous
@@ -279,6 +291,7 @@ class FetchExternalMarketDataAction
                         revenueGrowth: $fundamental['revenue_growth'] ?? null,
                         operatingIncomeGrowth: $fundamental['operating_income_growth'] ?? null,
                         operatingMargin: $fundamental['operating_margin'] ?? null,
+                        dividendYield: $fundamental['dividend_yield'] ?? null,
                     );
 
                     // Re-determination: same drop-then-recreate pattern as the

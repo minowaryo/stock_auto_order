@@ -111,6 +111,7 @@ const TIC_ALL_KEYS = [
     'rsi', 'macd', 'macd_signal', 'ma20', 'ma75', 'bb_upper', 'bb_lower',
     'volume', 'volume_ma20', 'week52_high', 'week52_low',
     'relative_strength_vs_market', 'relative_strength_vs_sector',
+    'ma75_trend_rising',
 ];
 
 // -----------------------------------------------------------------------
@@ -215,6 +216,56 @@ test('MA75はデータが74件だとnull、75件だと算出される', function
     expect($insufficient['ma75'])->toBeNull();
     // 75 consecutive closes 100..174, mean = 137.0
     expect($sufficient['ma75'])->toBe(137.0);
+});
+
+// -----------------------------------------------------------------------
+// ma75_trend_rising（CHG-0017 / ADR-0015 D5）: 直近のMA75が13週前時点の
+// MA75より上向きかどうか。13週前時点のMA75を算出するには、直近のMA75用の
+// 75件に加えてさらに13件（=88件）の週足終値が必要。
+// -----------------------------------------------------------------------
+
+test('ma75_trend_risingはデータが87件だとnull、88件だと算出される', function () {
+    $insufficient = (new TechnicalIndicatorCalculator)->calculate(ticArithmeticPriceHistory(87));
+    $sufficient = (new TechnicalIndicatorCalculator)->calculate(ticArithmeticPriceHistory(88));
+
+    expect($insufficient['ma75_trend_rising'])->toBeNull();
+    expect($sufficient['ma75_trend_rising'])->not->toBeNull();
+});
+
+test('等差数列で株価が上昇し続けている場合、ma75_trend_risingはtrueになる', function () {
+    // 88 consecutive closes 100..187 (close = 100 + i, i=0..87)。
+    // 直近のMA75 = 直近75件（closes[13..87] = 113..187）の平均 = 150.0
+    // 13週前時点のMA75 = closes[0..74] = 100..174 の平均 = 137.0
+    // 150.0 > 137.0 のため上向き。
+    $result = (new TechnicalIndicatorCalculator)->calculate(ticArithmeticPriceHistory(88));
+
+    expect($result['ma75_trend_rising'])->toBeTrue();
+});
+
+test('等差数列で株価が下落し続けている場合、ma75_trend_risingはfalseになる', function () {
+    // 88 consecutive closes 300..213 (close = 300 - i, i=0..87)。
+    // 直近のMA75の方が13週前時点のMA75より低いため下向き。
+    $priceHistory = ticArithmeticPriceHistory(88);
+
+    foreach ($priceHistory as $i => $row) {
+        $priceHistory[$i]['close'] = 300.0 - $i;
+    }
+
+    $result = (new TechnicalIndicatorCalculator)->calculate($priceHistory);
+
+    expect($result['ma75_trend_rising'])->toBeFalse();
+});
+
+test('MA75が変化しない横ばいの場合、ma75_trend_risingはfalseになる（trueは厳密な上向きのみ）', function () {
+    $priceHistory = ticArithmeticPriceHistory(88);
+
+    foreach ($priceHistory as $i => $row) {
+        $priceHistory[$i]['close'] = 100.0;
+    }
+
+    $result = (new TechnicalIndicatorCalculator)->calculate($priceHistory);
+
+    expect($result['ma75_trend_rising'])->toBeFalse();
 });
 
 test('ボリンジャーバンドはデータが19件だとnull、20件だと算出される', function () {

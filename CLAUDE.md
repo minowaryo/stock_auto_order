@@ -129,6 +129,7 @@ Red → [Gate 4: テストケース承認 ★実装(Green)着手禁止] → Gree
 
 - `.claude/rules/00-global.md` - 全体方針・開発フロー・品質ゲート
 - `.claude/rules/05-plan-approval.md` - Plan承認時のルール（承認前の要約出力）
+- `.claude/rules/06-branch-coordination.md` - 並行featureブランチのADR/CR採番衝突・PLAN.md等追記型ドキュメントのマージ・未マージブランチ棚卸しルール
 - `.claude/rules/10-laravel.md` - Laravel固有ルール
 - `.claude/rules/15-frontend.md` - フロントエンド固有ルール（内容は `meta/adr/ADR-0005-frontend-stack.md` の選定結果に応じてプロジェクトごとに書き換わる。デフォルト内容は Vue.js + Inertia.js）
 - `.claude/rules/20-mysql.md` - MySQL固有ルール

@@ -691,6 +691,50 @@ describe('UC-004: 利確シグナル一覧', function () {
             expect((float) $firstTier['price'])->toEqualWithDelta(1200.0, 0.01);
         });
 
+        // -----------------------------------------------------------
+        // CR (2026-09-20, CHG-0017 / ADR-0015 D2 配線 Cycle 4c)
+        // -----------------------------------------------------------
+        // FundamentalHealthEvaluator自体はD2救済（直近3期平均成長率>0%の
+        // OR救済）を実装済みだが、ShowSignalListAction→
+        // TakeProfitThresholdEvaluator の呼び出し経路がまだ
+        // avg_revenue_growth/avg_operating_income_growthを渡していない。
+        // Red の出方（2026-09-20）: 単年度成長率が両方マイナスのため
+        // （D1のRESCUE閾値ROE≧15%/自己資本比率≧50%も満たさない）現行実装は
+        // 'failed' のまま通常モード（+20%/+35%地点）を返す → 高水準モード
+        // （+100%/+150%地点、average_cost*2.00）を期待する以下のアサーション
+        // が不一致になる。
+        test('含み益+160%・シグナル0件・単年度成長率は両方マイナスだが3期平均売上高成長率がプラスの銘柄は、D2救済により高水準モード（分割指値+100%/+150%地点）が適用される', function () {
+            [, $snapshot] = ucFrom004TestImportBatch();
+            $holding = ucFrom004TestHolding(['symbol_code' => '4906', 'market' => 'jp', 'symbol_name' => 'D2救済銘柄']);
+            ucFrom004TestHealthyFundamentalIndicator($holding, [
+                'equity_ratio' => 45.0,
+                'roe' => 12.0,
+                'revenue_growth' => -3.0,
+                'operating_income_growth' => -1.0,
+                'avg_revenue_growth' => 2.0,
+            ]);
+            ucFrom004TestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 300,
+                'average_cost' => 1000.00,
+                'current_price' => 2600.00,
+                'unrealized_gain_rate' => 160.0,
+            ]);
+            // Deliberately no Signal row created (シグナル0件).
+
+            $response = ucFrom004TestFetch($this);
+
+            $response->assertSuccessful();
+
+            $row = ucFrom004TestFindRow($response, '4906');
+            expect($row)->not->toBeNull();
+
+            $suggestion = $row['split_limit_suggestion'];
+            $firstTier = $suggestion[0];
+            // 高水準モードなら average_cost(1000) * 2.00 = 2000
+            // （現行実装のまま=通常モードだと 1000 * 1.20 = 1200 になる）。
+            expect((float) $firstTier['price'])->toEqualWithDelta(2000.0, 0.01);
+        });
+
         test('含み益+120%・シグナル0件・ファンダメンタルズ指標未設定（unavailable）の銘柄は、通常モードのまま一覧に含まれる', function () {
             [, $snapshot] = ucFrom004TestImportBatch();
             $holding = ucFrom004TestHolding(['symbol_code' => '4905', 'market' => 'jp', 'symbol_name' => '指標未取得銘柄']);
@@ -804,6 +848,64 @@ describe('UC-004: 利確シグナル一覧', function () {
             expect($rsiRow['value_label'])->toBe('—');
             // 含み益率だけは holding_snapshot 由来なので met のまま
             expect($row['criteria']['summary']['technical']['met'])->toBe(1);
+        });
+    });
+
+    describe('ソート順（ADR-0014 D10-1、F-013 Cycle 2 追加）', function () {
+        // ADR-0014 D10-1: ShowSignalListAction（UC-004本体）に並び順ロジックを
+        // 新規追加する（きょうだいのShowBuySignalListAction::compareRows()/
+        // ShowLossReviewListAction::compareRows()と同じ思想）。①シグナル数
+        // （多い順）②判定チェックリストのテクニカル達成数（多い順）③含み益率
+        // （高い順）。全ホールディングにシグナルを1件以上持たせ、CHG-0006の
+        // 動的閾値分岐（シグナル0件・財務健全性passedで高水準モードに切り替わる
+        // 挙動）の影響を受けないようにする。
+        test('①シグナル数(多い順)②テクニカル達成数(多い順)③含み益率(高い順)に並ぶ', function () {
+            [, $snapshot] = ucFrom004TestImportBatch();
+
+            // A: シグナル2件・テクニカル7/7達成・含み益+190%（Bとシグナル数・
+            //    テクニカル達成数が同点のため、含み益率の高さで先頭に来る）
+            $holdingA = ucFrom004TestHolding(['symbol_code' => '9911', 'market' => 'jp', 'symbol_name' => 'テストA']);
+            $snapshotA = ucFrom004TestHoldingSnapshot($snapshot, $holdingA, ['unrealized_gain_rate' => 190.0]);
+            ucFrom004TestSignal($snapshotA, ['signal_type' => 'rsi_reversal']);
+            ucFrom004TestSignal($snapshotA, ['signal_type' => 'macd_dead_cross', 'reason_summary' => 'MACDがデッドクロスしました']);
+            ucFrom004TestTechnicalIndicator($holdingA);
+            ucFrom004TestHealthyFundamentalIndicator($holdingA, ['peg_ratio' => 2.6]);
+
+            // B: シグナル2件・テクニカル7/7達成・含み益+25%（Aと同点条件だが
+            //    含み益率が低いため2番目）
+            $holdingB = ucFrom004TestHolding(['symbol_code' => '9912', 'market' => 'jp', 'symbol_name' => 'テストB']);
+            $snapshotB = ucFrom004TestHoldingSnapshot($snapshot, $holdingB, ['unrealized_gain_rate' => 25.0]);
+            ucFrom004TestSignal($snapshotB, ['signal_type' => 'rsi_reversal']);
+            ucFrom004TestSignal($snapshotB, ['signal_type' => 'macd_dead_cross', 'reason_summary' => 'MACDがデッドクロスしました']);
+            ucFrom004TestTechnicalIndicator($holdingB);
+            ucFrom004TestHealthyFundamentalIndicator($holdingB, ['peg_ratio' => 2.6]);
+
+            // C: シグナル2件・テクニカル1/7達成のみ（TechnicalIndicator/
+            //    FundamentalIndicator未作成→含み益率項目のみmet）・含み益率は
+            //    極端に高いが、テクニカル達成数で劣るためA/Bより後ろ
+            $holdingC = ucFrom004TestHolding(['symbol_code' => '9913', 'market' => 'jp', 'symbol_name' => 'テストC']);
+            $snapshotC = ucFrom004TestHoldingSnapshot($snapshot, $holdingC, ['unrealized_gain_rate' => 999.0]);
+            ucFrom004TestSignal($snapshotC, ['signal_type' => 'rsi_reversal']);
+            ucFrom004TestSignal($snapshotC, ['signal_type' => 'macd_dead_cross', 'reason_summary' => 'MACDがデッドクロスしました']);
+
+            // D: シグナル1件のみ（テクニカル7/7達成・含み益+200%と最も好条件
+            //    だが、シグナル数が最優先キーのためA/B/Cより後ろ）
+            $holdingD = ucFrom004TestHolding(['symbol_code' => '9914', 'market' => 'jp', 'symbol_name' => 'テストD']);
+            $snapshotD = ucFrom004TestHoldingSnapshot($snapshot, $holdingD, ['unrealized_gain_rate' => 200.0]);
+            ucFrom004TestSignal($snapshotD, ['signal_type' => 'rsi_reversal']);
+            ucFrom004TestTechnicalIndicator($holdingD);
+            ucFrom004TestHealthyFundamentalIndicator($holdingD, ['peg_ratio' => 2.6]);
+
+            $response = ucFrom004TestFetch($this);
+
+            $response->assertSuccessful();
+            $rows = $response->json('data');
+            $order = array_values(array_intersect(
+                array_column($rows, 'symbol_code'),
+                ['9911', '9912', '9913', '9914']
+            ));
+
+            expect($order)->toBe(['9911', '9912', '9913', '9914']);
         });
     });
 

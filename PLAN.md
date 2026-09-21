@@ -1,6 +1,7 @@
 # PLAN.md
 
 > 2026-08-27（フロントエンド実装Phase5完了時点。UC-010 Gate4完了・コミット`ba239fe`分も含む）以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、Phase2 UC-008（Cycle1・Cycle2）完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査完了、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了、利確・リバランス閾値の動的分岐ロジック検討〔検討事項の記録のみ、実装はCHG-0006として2026-08-28〜29に別途完了〕、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、フロントエンド実装Phase4（UC-003銘柄詳細画面）完了、UC-010 Gate2/Gate3正式承認（買いシグナル7種の前提条件追加）完了、UC-010 Gate4完了・コミット（`ba239fe`）、フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了、およびフロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了〔2026-09-05、CHG-0011作業時に退避〕等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
+> **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。300行超過に伴い「数値表示フォーマット修正完了（2026-08-28）」「UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0012 Phase 0作業時）。約298行に達したため「利確検討ラインの動的分岐 CHG-0006（2026-08-28〜29）」「売買シグナル画面の可読性改善（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0013／ADR-0012作業時）。300行超過に伴い「取込後サマリーレポートのグローバルナビタブ化 CHG-0008（2026-09-05）」の1エントリを退避済み（2026-09-12、F-012・CHG-0012のステータス記述を実態〔mainマージ済み〕に修正した際に発生した増分に対応）。300行超過に伴い「売買シグナル画面 判定チェックリスト表示 CHG-0007（2026-08-29〜09-05）」の1エントリを退避済み（2026-09-12、CHG-0016〔新規投資候補テーブルの固定ヘッダー化〕作業時）。
 
 ## 買い増しシグナル共通前提の緩和とPER単体シグナルの追加（F-010改修・UC-010・ADR-0016・CHG-0018）Phase 0 ドキュメント先行（2026-09-19〜）
 
@@ -59,7 +60,56 @@
 - 次: コミット（push禁止）
 - **本CRのスコープ外（CHG-0017として後続）**: 「財務健全性が大半`passed`になり選びきれない」課題への対応として、対市場13週相対リターン（`relative_strength_vs_market`、既に算出・保存済みで未表示）・基準からの余裕度スコア・判定チェックリスト達成数・ユニバース内パーセンタイル順位の4軸を序列づけに追加し、列ヘッダークリックでのソート切替、フォルダ別グループ表示を行う方針で本人と合意済み（2026-09-12）。今回のレイアウトはこれらと前方互換（2段ヘッダー・列定義とも拡張余地を残す設計）
 
-## ポートフォリオ分類ダッシュボード（F-013・UC-013・ADR-0014・CHG-0015）Phase 0 ドキュメント先行（2026-09-08〜）
+## バリュー/景気敏感銘柄向け判定ロジック分岐（CHG-0017・ADR-0015）Gate1〜4承認・Cycle1 Green完了（2026-09-19）
+
+### Decision
+
+- 「売買戦略の深化ロードマップ」（下記エントリ）で特定した「次の1手」の着手。整合性レビュー（コヒーレンスチェック）で、財務健全性の成長率救済とPEG除外が独立オプションではなく同一設計単位であること（成長率救済だけでは`peg_overvalued`シグナルが`signalCount`を非ゼロに保ち高水準モードに到達できない）を発見し、ADR設計に反映
+- `/adr`スキルでADR-0015を起票。AskUserQuestionで資料2末尾の5つの確認事項のうち4点を本人確認（実測期数はDB直接確認）: 判定軸は含み益率ベース継続／UC-004側に補助バッジ追加（UC-010への同時掲載はしない）／PER≦15かつ配当利回り≧3%を暫定採用して実測／資料3⑤（PEG合否基準明文化）は本CRのスコープに含めない
+- 中期トレンド確認の実装方式は週足MA75の傾き判定に決定（新規MA30より低コスト、`technical_indicators`への軽量migrationが必要）
+- 本人から市場全体タイミングを買いトリガーに組み込みたい要望・利確をチャート形状（山→押し目）とセットで判定したい要望あり。前者は候補F（マクロ文脈層）を「次の1手の直後の第2弾」に格上げ、後者は候補B（出口戦略）に明記。ロードマップ文書に反映済み
+- **Gate1（requirements.md）・Gate2（use-cases.md）・Gate3（data-model.md）を本人が承認（2026-09-19）**。`technical_indicators`に`ma75_trend_rising` boolean nullableを1列追加（CHG-0012以来のスキーマ変更、追加のみの低リスク変更として承認）
+- **Gate4 Cycle1でD1・D3を2回改訂**: 当初のセクター分類ベース設計（`StockStyleClassifier`）は実データで`sector_classification_id`がJP保有146銘柄中7銘柄しか埋まっておらず実効性がないと判明し撤回、財務指標ベース（ROE≧15%・自己資本比率≧50%）に変更。続けて配当利回り条件も本人指摘（米国株の無配当高ROE企業を除外してしまう）で削除し最終確定（`RESCUE_MIN_EQUITY_RATIO`/`RESCUE_MIN_ROE`、新規パラメータ不要）。詳細経緯は本ファイルのgit履歴およびADR-0015本文参照
+- **Cycle1〜3b Gate4承認・Green完了**: Cycle1（D1財務指標救済）／Cycle2（`financial_statements`に`period_type`/`fiscal_year_end`永続化の欠落を発見・追加、`FundamentalIndicatorMapper::averageAnnualGrowth()`新設）／Cycle2b（D2を`FundamentalHealthEvaluator`へ配線、4値OR）／Cycle3a（`SignalDeterminationService`の低成長PEG除外、`LOW_GROWTH_THRESHOLD=5.0`）／Cycle3b（`BuySignalDeterminationService`の低成長PEG除外＋PER≦15かつ配当利回り≧3.0%への置き換え）。各CycleともRed→Gate4承認→Green、フルスイート634→673 passed（0 failed）まで段階的に増加
+- **`/review`実施**: ブランチが`feat/f013-portfolio-buckets`（他セッションが並行push中）の上に乗っていたため`feat/chg0017-value-cyclical-judgment`に分離。10件の指摘中2件（`ClassifyHoldingsAction`関連）はF-013側でスコープ外。**実害バグ1件を修正**（買い側PER代替判定に`per > 0.0`の下限ガードが無く赤字企業の負PERを誤って割安判定）、**リファクタ1件**（`isLowGrowth()`の`SignalDeterminationService`/`BuySignalDeterminationService`間の重複を`LowGrowthDeterminer`に集約、CHG-0005型ドリフト防止）。フルスイート673 passed、pintクリーン
+- **配線Cycle 4a〜4c Gate4承認・Green完了**: 4a: `fundamental_indicators`に`avg_revenue_growth`/`avg_operating_income_growth`を追加するmigration＋`FetchExternalMarketDataAction`のJP分岐で`averageAnnualGrowth()`を呼び保存（US非対象）。4b: `FetchExternalMarketDataAction`の売り側/買い側`determine()`・`RefreshWatchlistMarketDataAction`の買い側`determine()`、計3箇所に`$fundamental`配列から`revenue_growth`/`operating_income_growth`/`per`/`dividend_yield`を配線（Green中、`UC012WatchlistRefreshTest`の新規テスト1件がフィクスチャ不備〔`preconditionsSatisfied()`未充足〕でRed化していたのをtdd-implementerが発見、株価系列を修正）。4c: `FundamentalIndicator::healthEvaluatorArgs()`を5→7要素に拡張し、`FundamentalHealthEvaluator::evaluate()`の全6呼び出し元（`TakeProfitThresholdEvaluator`〔シグネチャも8引数化〕・`ShowSignalListAction`・`ShowBuySignalListAction`・`ShowLossReviewListAction`・`NewCandidateFinder`・`ShowWatchlistAction`）をヘルパー経由に統一しD2の平均成長率を配線（F-013の`ClassifyHoldingsAction`〔他ブランチ未マージ〕はスコープ外のまま）。フルスイート678→686 passed（0 failed）、pintクリーン
+- **`/review`2回目実施（7角度）・Cycle4d修正完了**: 収束した実害バグ1件を修正——`RefreshWatchlistMarketDataAction::refreshHolding()`（未保有ウォッチリスト銘柄パイプライン）が`avg_revenue_growth`/`avg_operating_income_growth`を一切計算・保存しておらず、watchlist専用銘柄（一度も保有したことがない銘柄）ではD2の平均成長率レスキューが発火しない不整合だった（cross-file tracer／altitude／line-by-lineの3角度が独立発見）。Red（`UC012WatchlistRefreshTest`に新規テスト追加）→Gate4→Green（`FetchExternalMarketDataAction`のCycle4aと同じ`averageAnnualGrowth()`呼び出しを追加）で修正。あわせて`FundamentalIndicatorMapper::annualGrowth()`/`averageAnnualGrowth()`間で重複していたFY絞り込み・重複排除・ソートの18行を`annualStatementsDescending()`に共通化（reuse／simplification角度、挙動は不変）。`docs/architecture/data-model.md`に`avg_revenue_growth`/`avg_operating_income_growth`カラム説明・承認記録・変更履歴を追記（conventions角度が「PLAN.md側は追記済みと主張しているが実際は未追記」という整合性ギャップを発見、今回で解消）。フルスイート686→687 passed（0 failed）。対象外・記録のみ: `ClassifyHoldingsAction`5→7引数ギャップ（F-013由来・他ブランチ継承ファイルのためスコープ外、既知事項のまま）、`SignalCriteriaEvaluator`の判定チェックリストがD1/D2レスキュー閾値を認識せずバッジと矛盾しうるUX不整合（新規発見、次項ロードマップの候補Kまわりに記録要）、Show*ListAction間の7引数展開の共通化・`determinePegUndervalued()`の分割（simplification角度、不具合ではなく任意整理のため見送り）
+- **D4（対セクター相対力フォールバック）は別セッションで実装・マージ済み**（`feat/chg0017-d4-sector-relative-fallback`ブランチ、コミット`be0f00c`→`418172b`マージでこのブランチに統合、本人が実施・プッシュ済み）。`BuySignalDeterminationService::preconditionsSatisfied()`の事前条件Bを`relative_strength_vs_sector ?? relative_strength_vs_market`に変更、テスト5件追加。本人の依頼でレビューを実施し、実装自体はADR-0015 D4設計と一致・テストカバレッジ十分・フルスイート692 passed（0 failed）・pintクリーンを確認
+- **Cycle4e（D4レビューで発見した表示層ギャップの修正）**: `SignalCriteriaEvaluator::evaluateLossReview()`（UC-011整理検討チェックリストの「相対力」行）がD4改訂後も`relative_strength_vs_market`のみを見ており、対セクター相対力を考慮していなかった（対セクターでは基準以上でも対市場のみ見ると誤って「基準割れ」表示になりうる不整合）。Red（`UC011LossReviewListTest`に新規テスト追加）→Green（`ShowLossReviewListAction`が`relative_strength_vs_sector`を`$metrics`に追加、`SignalCriteriaEvaluator`に`preferredRelativeStrength()`/`relativeStrengthLabel()`ヘルパーを追加し対セクター優先判定＋ラベル動的切替`相対力(対セクター)`/`相対力(対市場)`に対応）で修正、Unit Test 2件を追加補強。`docs/architecture/data-model.md`「全シグナル共通の前提条件」注記と平仄が取れた
+- **Cycle5（D5: 週足MA75中期トレンド確認）Gate4承認・Green完了**。migration（`technical_indicators.ma75_trend_rising` boolean nullable、Gate3で計画済みのカラム定義どおり）、`TechnicalIndicatorCalculator::calculate()`に算出ロジック追加（直近MA75と13週前MA75の比較、既存`simpleMovingAverage()`を再利用、新規外部データ取得なし）、`BuySignalDeterminationService::preconditionsSatisfied()`に事前条件C配線。**null（データ不足）ではブロックしない設計を採用**（既存の事前条件A/Bはnullで即ブロックする設計だが、Cは88週分という高いデータ要件があり同方針だと直近上場銘柄等で押し目買いシグナルが一律に出なくなる回帰リスクがあったため、AskUserQuestionで本人確認のうえ「`false`〔明確な下向き〕の場合のみブロック」に決定）。Red（`TechnicalIndicatorCalculatorTest`5件＋`BuySignalDeterminationServiceTest`3件）→Green、フィクスチャはtinkerで実測値を検証してから使用。既存52週フィクスチャは全てnull扱いで後方互換を保つことを確認。フルスイート702 passed（0 failed）、pintクリーン
+- 次: コミット（push要再確認）。その後D7（`valuation_zone_badge`）・Feature Test拡充
+
+### Files touched
+
+**ドキュメント（本セッション）**: `docs/adr/ADR-0015-value-cyclical-stock-judgment-branching.md`（新規→D1/D3改訂→D1配当条件再改訂→D2データ基盤の追記、Status: Accepted〔Gate1/2/3〕）、`docs/product/requirements.md`、`docs/product/use-cases.md`（承認記録3行。D5の業務ルール文言〔全シグナル共通の前提条件③〕はGate2時点で既に記載済みだったため今回変更なし）、`docs/architecture/data-model.md`（`technical_indicators.ma75_trend_rising`・`financial_statements.period_type`/`fiscal_year_end`の2migrationはCycle2〜3b時点で追記済み。`fundamental_indicators.avg_*`のカラム説明・承認記録・変更履歴は配線Cycle4a時点では追記漏れだったものを2回目の`/review`〔conventions角度〕指摘を受けCycle4dで追記。D5実装に伴い「全シグナル共通の前提条件」注記を3条件に更新・変更履歴追記）、`docs/rcid/traceability-matrix.md`、`docs/product/accuracy-improvement-backlog.md`（候補K追加）、`PLAN.md`（本エントリ）。**削除**: `tests/Unit/Services/Analysis/StockStyleClassifierTest.php`
+
+**コード（Green）**: Cycle1〜3b: `FundamentalHealthEvaluator.php`（D1救済）、`database/migrations/2026_09_19_000000_...php`（新規）、`FinancialStatement.php`、`FundamentalIndicatorMapper.php`（`averageAnnualGrowth()`）、`SignalDeterminationService.php`／`BuySignalDeterminationService.php`（PEG除外・PER/配当代替）、`LowGrowthDeterminer.php`（新規、`/review`対応）。配線Cycle4a〜4c: `database/migrations/2026_09_19_000001_...php`（新規）、`FundamentalIndicator.php`（`$fillable`/`casts`+2・`healthEvaluatorArgs()`7要素化）、`FetchExternalMarketDataAction.php`（avg_*保存＋determine()×2配線）、`RefreshWatchlistMarketDataAction.php`（determine()配線）、`TakeProfitThresholdEvaluator.php`（8引数化）、`ShowSignalListAction.php`／`ShowBuySignalListAction.php`／`ShowLossReviewListAction.php`／`NewCandidateFinder.php`／`ShowWatchlistAction.php`（ヘルパー経由に統一）。Cycle4d（2回目`/review`対応）: `RefreshWatchlistMarketDataAction.php`（`averageAnnualGrowth()`呼び出し追加）、`FundamentalIndicatorMapper.php`（`annualStatementsDescending()`共通化）。D4（別セッション、`be0f00c`）: `BuySignalDeterminationService.php`（対セクター優先フォールバック）。Cycle4e: `ShowLossReviewListAction.php`（`relative_strength_vs_sector`追加）、`SignalCriteriaEvaluator.php`（`preferredRelativeStrength()`/`relativeStrengthLabel()`新設）。Cycle5: `database/migrations/2026_09_21_000000_...php`（新規）、`TechnicalIndicatorCalculator.php`（`calculateMa75TrendRising()`新設）、`TechnicalIndicator.php`（`$fillable`/`casts`+1）、`BuySignalDeterminationService.php`（事前条件C）。テスト: 14ファイルに追加・調整（詳細はコミット差分参照）
+
+### Status
+
+**Gate1〜4承認済み、Cycle1〜3b（D1/D2/D3判定ロジック本体）・配線Cycle4a〜4e・D4（別セッション実装）・Cycle5（D5）Green完了**（フルスイート702 passed / 0 failed、pintクリーン）。D1・D2・D3・D4・D5すべてが`FetchExternalMarketDataAction`/`RefreshWatchlistMarketDataAction`（シグナル永続化）・`FundamentalHealthEvaluator::evaluate()`の全6呼び出し元（財務健全性判定、F-013除く）・`SignalCriteriaEvaluator`（判定チェックリスト表示）・`BuySignalDeterminationService`（押し目買い事前条件A/B/C）に配線され、watchlist専用銘柄も含めD2平均成長率レスキュー・D4対セクターフォールバック・D5中期トレンド確認が表示・判定の両面で一貫して機能する状態になった。**本CRの主目的（伊藤忠等の低成長健全銘柄の救済）が実際に機能する状態**。次はコミット（push要再確認）、その後D7・Feature Test拡充
+
+## 売買戦略の深化ロードマップ策定（2026-09-19）
+
+### Decision
+
+- 本人要望: `docs/original-docs/`に一次資料2件（`stock_auto_order_strategy_notes.md`／`売買戦略2.txt`）を追加したので参照し、売買戦略をさらに進化させる方向性をプランニングしてほしい。加えて、会話で共有された別セッション「戦略の調査とレコメンド」（著名手法とのベンチマーク）の内容も含めて検討してほしい
+- Planフェーズで承認。プランファイル: `~/.claude/plans/stock_auto_order-strategy-roadmap-phase.md`
+- 3資料（資料1=スコアリング層拡張案、資料2=現行コードの実装レビュー、資料3=O'Neil/Minervini SEPA/Peter Lynch GARP/Weinstein/Bogleheads/Piotroski等とのベンチマーク）を現行実装と突き合わせ。**資料2と資料3の一部項目（②押し目買いの中期トレンド確認・③相対力RSの活用・⑤PEG基準の明文化）が独立した切り口から同一のコード箇所（`FundamentalHealthEvaluator`の成長率救済・PEG基準、`BuySignalDeterminationService`の相対力フォールバック）を指摘**しており、これを「次の1手」として抽出
+- 本人フィードバック（重要）: 3資料を単純に足し合わせると15項目超のロードマップになり「機能追加が複雑になる」懸念が示された。**本プロジェクト既存の「実測検証→効果を数値確認→次に進む」パターン（CHG-0012の閾値比較等）に倣い、「次の1手のみ詳細設計、残り9項目（候補A〜J）は前提コスト・効果見込みのみの軸情報」という記録粒度で合意**（AskUserQuestion）
+- 実装は行わない（ドキュメント記録のみ）。F-013（Gate1/2承認済み・実装未着手）と作業ツリーが衝突しないよう配慮
+
+### Files touched
+
+**ドキュメント（本セッション）**: `docs/product/accuracy-improvement-backlog.md`（新節「売買戦略の深化ロードマップ（2026-09-19、一次資料2件＋別セッションのベンチマークより）」追加。3資料の突き合わせ表・次の1手の詳細設計・候補リストA〜J・既存backlog行との相互参照・関連ドキュメント節への出典追加）、`docs/history/plan-archive.md`（CHG-0007エントリを退避・冒頭注記更新）、`PLAN.md`（本エントリ、300行超過に伴いCHG-0007エントリを退避）
+
+**触っていないファイル**（意図的）: `docs/original-docs/`（参照のみ・編集禁止）、`requirements.md`／`use-cases.md`／`data-model.md`（Gate1/2/3は動かしていない）、`docs/rcid/traceability-matrix.md`（CR番号未発行）、アプリケーションコード一式
+
+### Status
+
+**完了**。`accuracy-improvement-backlog.md`への記録完了。次のアクション: 「次の1手」（`FundamentalHealthEvaluator`の成長率救済・PEG基準是正、`BuySignalDeterminationService`の相対力フォールバック、押し目買いの中期トレンド条件、スタイルタグ導入）を独立CRとして起票する場合は、ドキュメント先行・別ブランチで進める（本プロジェクトの標準方式）。候補A〜J（ファンダ履歴蓄積／ATR出口戦略／信用需給／ウォッチリスト棚卸し／検証基盤等）は次の1手の実測結果が出るまで着手判断を保留。
+
+## ポートフォリオ分類ダッシュボード（F-013・UC-013・ADR-0014・CHG-0015）Gate1/2最終確定・実装着手待ち（2026-09-08〜09-17）
 
 ### Decision
 
@@ -73,21 +123,25 @@
   - **D4 リバランスは個別銘柄のバケツを動かさない**: セクター偏りは per-stock ではなくセクター単位の警告バッジ＋サマリで表示（UC-005 の設計に合わせる）。偏り警告セクター全銘柄を「減らす」に落とすと直感と齟齬
   - **D6 構成比は `market_value` ベース**（CHG-0011 の算出流用）。「保つ」は積立コア/キープの内訳を明示（ガチホ核比率の可視化）。`new_entry` は分母・分子に含めない
   - **D8 段階リリース**: 第1段階＝表示レイヤー完結（`ClassifyHoldingsAction` 相当の純ロジック＋Blade、DBスキーマ変更なし・永続化なし、CHG-0006/CHG-0010 と同方式）。第2段階＝`portfolio_classifications`（`holding_snapshot_id` FK・`bucket`・`reason`）を取込時に書き遷移表示＋トレードジャーナル（別CR、Gate3実質承認要）
-  - **D9 画面**: サマリーレポート（UC-009）タブ最上部に「分類俯瞰」セクションを追加。新タブなし（`ui-guidelines.md` タブ数6個維持）。UC-009 の非開示 top-10/20 は当面併存
-- **★本人レビューで確定が必要な判断（Gate2）**: (1) 排他の優先順位、(2) `loss_review`×`add_on` 競合をどちらに置くか、(3) リバランスをバッジに留めるか `rebalance` サブバケツを立てるか、(4) キープの「要観察（`hold_watch`）」を第1段階から出すか、(5) UC-009 top-10/20 を分類俯瞰に置き換えるか併存か
+  - **D9 画面**: サマリーレポート（UC-009）タブ最上部に「分類俯瞰」セクションを追加。新タブなし（`ui-guidelines.md` タブ数6個維持）
+- **Gate2最終確定（2026-09-17）**: 5つの判断ポイントをすべて確定。(1) 排他優先順位は叩き台通り採用、(2) `loss_review`×`add_on`競合は`loss_review`採用＋「買い増し候補にも掲載」注記、(3) リバランスはバッジ＋セクターサマリ止まり（`rebalance`サブバケツは作らない）、(4) `hold_watch`（要観察）は第1段階から表示、(5) **UC-009のtop-10/20は分類俯瞰に完全に置き換え**（併存しない）
+- **(5)の実装確認で判明した追加論点（すべてGate2で確定）**: UC-009（`ShowImportSummaryReportAction`）が既存UCを再利用せず独自に3種の候補選定ロジック（`buildTakeProfitCandidates`/`buildRebalanceCandidates`/`buildNewCandidateItems`）・非開示合成スコア（`composite_score`、ADR-0003）を重複実装していたことが判明。置き換えにあわせて退役させる（ADR-0014 D9-1）。永続化（`import_summary_reports`/`import_summary_report_items`）は書き込み専用・読み返し機能なしと判明したため廃止（`ImportCsvAction`のプレースホルダー行作成も削除、D9-2）。`portfolio_headline`はバケツ件数の集計文に変更（D9-3）。各行の一言評価（`bucket_reason`）は独自文章生成をやめ`SignalCriteriaEvaluator`の達成度データから機械生成（シンプル・理由明快限定、D9-4）。バケツ内ソート順を新規に全確定（D10）: `add_on`/`loss_review`/`new_entry`は供給元Actionの既存流用、`take_profit`は新規設計しUC-004本体`ShowSignalListAction`に実装（D10-1、本CR唯一の既存UC改修）、`hold`は`hold_watch`優先→含み損益率順、`core_accumulation`は評価額順、セクター偏りサマリは超過幅順。ADR-0003はSuperseded（D11）。`WatchedTheme`ベースの新規候補ロジックは退役（実データ確認済み・登録0件のため実質影響なし、モデル自体はF-005用に残置）
+- **本CRのスコープ外として`accuracy-improvement-backlog.md`へ記録**: `hold`内の「好調キープ強調」（判定基準が既存UCに無く新規閾値の発明になるため見送り）、20%アクティブ枠の予算トラッキング（D7、余力の別入力手段が必要）
 - 追加観点として本人に提示済み（別途 backlog 化候補）: インカム貢献度／単一銘柄集中度／買付余力・現金比率（20%枠トラッキングの分母、要別入力）／為替エクスポージャー／口座配置最適化／投資テーゼの陳腐化検知
 
 ### Files touched
 
-**ドキュメント（Phase 0、本セッション、`feat/f012-favorites-watchlist` ブランチ上で作業）**: `docs/adr/ADR-0014-portfolio-bucket-classification.md`（新規、Status: Proposed）、`docs/product/use-cases.md`（UC一覧に UC-013・UC-013 節新設・承認記録行）、`docs/product/requirements.md`（2章 IN・4章 F-013 行・7章フェーズ表＋段落）、`docs/rcid/traceability-matrix.md`（F-013 マトリクス行・CHG-0015 変更追跡行）、`docs/ai-context/glossary.md`（バケツ分類／分類俯瞰セクション／積立・インデックスコア／分類遷移）、`docs/ai-context/module-map.md`（`app/Actions/Portfolio/`）、`docs/product/ui-guidelines.md`（サマリーレポートタブの分類俯瞰セクション）、`PLAN.md`（本エントリ）
+**ドキュメント（Phase 0、`feat/f012-favorites-watchlist` ブランチ上で作業、2026-09-08）**: `docs/adr/ADR-0014-portfolio-bucket-classification.md`（新規、Status: Proposed）、`docs/product/use-cases.md`（UC一覧に UC-013・UC-013 節新設・承認記録行）、`docs/product/requirements.md`（2章 IN・4章 F-013 行・7章フェーズ表＋段落）、`docs/rcid/traceability-matrix.md`（F-013 マトリクス行・CHG-0015 変更追跡行）
 
-**コード**: 未着手（F-012 マージ後）。実装ステップ（第1段階: Cycle 1 `ClassifyHoldingsAction` の純ロジック → Cycle 2 サマリーレポートタブへのセクション追加、各 Red→Gate4→Green→Refactor）はプラン確定時に詳細化
+**ドキュメント（Gate2最終確定、`feat/f013-portfolio-buckets` ブランチ、2026-09-17）**: `docs/adr/ADR-0014-portfolio-bucket-classification.md`（Status: Accepted、D3〜D5・D9の★判断ポイントを確定内容で置換、D9-1〜D9-4・D10・D10-1・D11を新設）、`docs/adr/ADR-0003-f009-scoring-transparency-relaxation.md`（Status: Superseded by ADR-0014）、`docs/product/use-cases.md`（UC-013業務ルール全面改訂・承認記録2行追加、UC-009業務ルール全面改訂〔top-10/20廃止・分類俯瞰への委譲〕、UC-004に並び順ルール追加）、`docs/product/requirements.md`（F-013説明改訂、UC-004改修・UC-009ロジック退役を明記）、`docs/architecture/data-model.md`（`import_summary_reports`/`import_summary_report_items`に書き込み廃止の注記、初期パラメータ値表にバケツ内ソート順5行追加・UC-009の件数区分/合成スコア重み付け2行を廃止、承認記録・変更履歴各1行）、`docs/rcid/traceability-matrix.md`（F-013行・CHG-0015行を確定内容に更新）、`docs/product/accuracy-improvement-backlog.md`（`hold`好調キープ強調・20%アクティブ枠トラッキングの2行追加）、`PLAN.md`（本エントリ）
+
+**コード**: 未着手（F-012 マージ後、マージ済み）。実装ステップ（第1段階: Cycle 1 `ClassifyHoldingsAction` の純ロジック → Cycle 2 サマリーレポートタブへのセクション追加・UC-009旧ロジック削除 → Cycle 3 `ShowSignalListAction`への`take_profit`並び順追加、各 Red→Gate4→Green→Refactor）はプラン確定時に詳細化
 
 ### Status
 
-Phase 0（ドキュメント先行）完了。**Gate 1（requirements.md）／Gate 2（use-cases.md UC-013）は本人レビュー待ち**。第1段階は DB スキーマ変更を伴わないため Gate 3 は影響範囲確認のみ（第2段階の `portfolio_classifications` は別CRで Gate 3 実質承認）。実装は F-012 マージ後、`feat/f013-portfolio-buckets` 等の新ブランチで。
+**Gate1（requirements.md）／Gate2（use-cases.md UC-013）を2026-09-17に本人が最終承認**。第1段階は DB スキーマ変更を伴わないため Gate 3 は影響範囲確認のみ（2026-09-17確認済み。第2段階の `portfolio_classifications` は別CRで Gate 3 実質承認）。実装は F-012 マージ後（マージ済み）、ブランチ `feat/f013-portfolio-buckets` で。次はTDDサイクル（Cycle 1: `ClassifyHoldingsAction`のRed）から。
 
-> **ブランチ状況の注意（2026-09-08）**: 本 Phase 0 作業は `feat/f012-favorites-watchlist` ブランチ上で行ったが、同ブランチでは並行して別セッションが F-012 実装（Cycle 2 まで）と CHG-0013 成長率修正の未コミット作業を進めており、作業中に `git reset`／ブランチ往復が複数回発生した（glossary.md への追記が一度巻き戻され再適用）。本エントリのドキュメント変更はコミット前で、別セッションのコミット・リセットで再度巻き戻るリスクがある。ADR-0014（未追跡ファイル）は影響を受けない。コミット単位の切り分けは本人判断待ち。
+> **ブランチ状況の補足**: Phase 0（2026-09-08）は当時の`feat/f012-favorites-watchlist`ブランチ上で行われ、F-012マージ（`444ee65`）でmainに統合済み。Gate2最終確定分（2026-09-17）はmain（`4d6071e`）から新規に切った`feat/f013-portfolio-buckets`ブランチ上で作業（他の未マージ機能ブランチ〔`feat/chg0016-candidate-table-sticky-header`〕とは独立）。
 
 ## お気に入り未保有銘柄ウォッチリスト／新規投資候補画面の刷新（F-012・UC-012・ADR-0013・CHG-0014）実装完了・mainマージ済み（2026-09-06〜09-12）
 
@@ -218,60 +272,6 @@ UC-011 は閲覧系フローで `.claude/rules/31-e2e-testing.md` のクリテ�
 - `b3d1793` は既に `origin/feat/f011-loss-review-list` に push 済み（`c98165b` まで）。`traceability-matrix.md` の F-011 行を「完了」に更新（コミット済みだが `b3d1793` 時点では2行しか反映されず「リワーク中」表記が残っていた）→ CHG-0011 コミットに同梱。
 - **今後の対応（低優先・先送り）**: `ShowLossReviewListAction::also_on_buy_list` は `$reboundPresent && fundamental_status !== 'failed'` で判定しており、`ShowBuySignalListAction::isEligible()` の「利確シグナル（`signals`）同時成立銘柄を除外」条件（`signals->isNotEmpty()`）を再現していない。含み損-20%超の銘柄が利確シグナル（通常 +20%超が条件）を持つのは異常/古いデータのケースのみで到達性は低い。修正するには `ShowLossReviewListAction` の eager load に `signals` 追加（N+1回避）が必要。次に F-011 に手を入れる際に解消する。
 - **今後の対応（軽微・cosmetic）**: 整理検討テーブルのヘッダー用/本文用 `<table>` の `scrollWidth` が 1441 vs 1452（12px差）。`getBoundingClientRect().width` は両方 1441 で実描画・列整列は一致しており視認上の崩れはない（`known-pitfalls.md`「table-fixed + 折返し不可ラベル」と同種の軽微な内容オーバーフロー）。実害が出たら本文側の長いラベル/バッジの `break-words` を見直す。
-
-## 売買シグナル画面「評価額」列追加（CHG-0011）＋米国株ファンダのDB補完（2026-09-05〜）
-
-### Decision
-
-- ユーザー要望2点:
-  1. 売買シグナル画面（利確検討 UC-004 / 買い増し候補 UC-010）の左の方に、各行の「実際の評価額」（保有数量 × 現在値、CSV由来の円換算値）を表示したい
-  2. ADR-0009（CHG-0009、Finnhub）で米国株ファンダ取得コードは実装済みだが、既存の最新スナップショット（batch 135）の米国株44銘柄は `fundamental_indicators` が0件で画面上「取得不可」のまま。Finnhubから実取得してDB補完し画面に実数を出したい
-- ユーザー確認済みの決定:
-  - 評価額列の位置 = 銘柄の右隣（2列目）。銘柄セルの `sticky left-0` は据え置き、評価額は通常列
-  - 米国株補完 = `FetchExternalMarketDataAction` 本体は変更せず、米国株ファンダのみ再取得する軽量 artisan コマンドを新設（US分岐ロジックの一部重複は許容）
-- CR番号: CHG-0011（評価額列。CHG-0010 は ADR-0010 で使用済み）。US補完コマンドは ADR-0009 の運用化のため新規CR/ADR不要
-- 評価額 = `quantity * current_price`（シグナル画面は stock のみ対象なので投信の ÷10000 補正は不要）。US株は取込時に円換算済みのため円建て
-
-### Files touched（予定）
-
-- ドキュメント（先行）: `docs/product/use-cases.md`（UC-004/UC-010 出力表 + 変更履歴 CHG-0011）, `docs/rcid/traceability-matrix.md`, `docs/ai-context/common-commands.md`
-- Part A（CHG-0011・表示のみ）: `app/Actions/Signal/ShowSignalListAction.php`, `app/Actions/Signal/ShowBuySignalListAction.php`, `resources/views/components/signal-table-colgroup.blade.php`, `resources/views/livewire/signal/signal-list.blade.php`, テスト（`tests/Feature/UC004SignalListTest.php` / `tests/Feature/UC010BuySignalListTest.php` / `tests/Feature/SignalListTest.php`）
-- Part B: `app/Console/Commands/RefetchUsFundamentalsCommand.php`（新規）, `tests/Feature/RefetchUsFundamentalsCommandTest.php`（新規）
-- スコープ外: `FetchExternalMarketDataAction` 本体, UC-003 銘柄詳細, `financial_statements` への米国株保存, JP株の再取得, DBマイグレーション
-
-### Status
-
-- ドキュメントCR反映（Gate2）: 完了（2026-09-05）
-- Part A（評価額列）: Red → Gate4承認 → Green 完了。`ShowSignalListAction`/`ShowBuySignalListAction` に `market_value` 追加、`signal-table-colgroup` に列追加、`signal-list.blade.php` に「評価額」列（銘柄の右隣・`number_format(...)円`・幅 w-[1406px]）追加。テスト5件追加、フルスイート465件 Green
-- Part B（`market-data:refetch-us-fundamentals`）: Red → Gate4承認 → Green 完了。`app/Console/Commands/RefetchUsFundamentalsCommand.php` 新規。テスト5件追加
-- 実データ実行: `docker compose exec -T laravel.test php artisan market-data:refetch-us-fundamentals` → 44件更新 / 0件失敗。売買シグナル画面の米国株が実数のファンダ表示に切り替わったことを `ShowSignalListAction` 実データ出力で確認（利確検討US13件が「—」から ROE%/自己資本比率%/成長% 表示へ。ARM/ASML/GOOG/TSM 等は `financials-reported` に us-gaap Assets/Equity が無く自己資本比率のみ「—」＝ADR-0009 のフォールバック通り）
-- `/review`（2026-09-06、別セッションが引き取り、medium レベル）: **CHG-0011 自体は指摘なし**（`market_value` の投信 ÷10000 補正欠落＝両リスト stock 絞り込み済みで誤検知、colgroup/ラベル列数一致、等いずれも verify で refute）。PLAUSIBLE 1件は CHG-0011 ではなくコミット済み F-011 の `ShowLossReviewListAction::also_on_buy_list` が「利確シグナル同時成立銘柄」の除外を再現しない点（到達性低・下記「今後の対応」に記録し先送り）
-- `npm run build` 済み（`app-Ck2oRFta.css`）。実データ実ブラウザ再確認（保有135）: 買い増し候補・利確検討テーブルの2列目に評価額（`13,740円` 等・右寄せ）が正しく表示、レイアウト崩れなし
-- コミット（2026-09-06、本セッション）: Part A + Part B + 付随ドキュメント（`use-cases.md` の `market_value` 行・承認記録、`traceability-matrix.md` の CHG-0011 追跡行＋F-004/F-010/F-011 行更新、`common-commands.md`）＋ PLAN.md 300行超過対応（Phase7 の2エントリを `plan-archive.md` へ退避）をまとめてコミット
-- プランファイル: `~/.claude/plans/stock_auto_order-signal-market-value-and-us-fundamentals-implementation-phase.md`
-
-## 米国株ファンダメンタルズ指標データソースとしてFinnhub採用（CHG-0009）実装完了・mainマージ済み（2026-09-05〜）
-
-### Decision
-
-- ユーザー要望: 米国株のファンダメンタルズ指標が取得困難（J-Quantsは日本株専用のため、ADR-0004/ADR-0007以来ずっと`unavailable`固定）な状態を解消し、日本株と対等に比較できるようにしたい
-- 候補データソース（Alpha Vantage/Financial Modeling Prep/Finnhub/Twelve Data）を調査し、Finnhubを最有力候補として提案。実際にAPIキーを発行してもらい（`.env`の`FINNHUB_API_KEY`、`.gitignore`対象・確認済み）、`docker compose exec laravel.test php artisan tinker`から実HTTPで疎通確認した:
-  - `stock/metric`（`metric=all`）でAAPLを実際に取得し、PER(`peTTM`)・PBR(`pbAnnual`)・ROE(`roeTTM`)・売上高成長率(`revenueGrowthTTMYoy`)・EPS成長率(`epsGrowthTTMYoy`)・配当利回り(`dividendYieldIndicatedAnnual`)・配当性向(`payoutRatioTTM`)・PEGレシオ(`pegTTM`)が無料枠（60リクエスト/分）で取得できることを確認
-  - 自己資本比率は当初`totalDebt/totalEquity`からの近似（`1/(1+D/E)`）を検討したが、AAPL/ACN/AMD/AMZN/ACHRの5銘柄で実測値と比較したところ最大約2倍の過大評価（AAPL: 実測20.52% vs 近似42.47%）が判明し不採用。代わりに`stock/financials-reported`（10-KのXBRL実データ、無料枠でアクセス可）から総資産・自己資本の実額を取得し実測計算する方式に変更。AAPLの実測値はSEC提出10-Kの公表値（Web検索で確認）と完全一致し、貸借対照表の内部整合性（資産＝負債＋資本）も一致することを確認済み
-  - 営業利益成長率もFinnhubの`metric`に直接のYoYフィールドが無いため、同じく`financials-reported`の`ic`セクション（`us-gaap_OperatingIncomeLoss`）を直近期・前期で比較して算出する方式とした（16期分のデータが取得できることを確認済み）
-- ユーザー承認: 対象8指標（PER・PBR・ROE・売上高/営業利益成長率・自己資本比率・配当利回り/性向・EPS成長率・PEGレシオ）を段階導入ではなく一括で実数値化する
-- `docs/adr/ADR-0009-us-stock-fundamentals-finnhub.md`を新規作成（`/adr`スキル使用、Status: Accepted）。JP用`FundamentalIndicatorMapper`とは入力形状が根本的に異なるため、新規`UsFundamentalIndicatorMapper`（仮称）を別クラスとして並立させる設計方針とし、既存のJP側実装・テストは無改修とする方針を明記
-- Gate2（`use-cases.md` UC-001フロー7・UC-003/UC-004/UC-010のファンダメンタルズ記述、CHG-0009承認記録）・Gate3（`data-model.md` `fundamental_indicators`節、自己資本比率/営業利益成長率の算出方法を「実装完了」注記として追記）・`traceability-matrix.md`（CHG-0009）・`docs/ai-context/do-not-touch.md`「外部連携」節（Finnhub APIキーの扱い）を更新・承認済み。`fundamental_indicators`テーブルは市場非依存の既存スキーマのままでDBマイグレーション不要（Gate3は影響範囲確認のみ）
-
-### Files touched
-
-**ドキュメント（Gate2/3承認）**: `.env.example`（`FINNHUB_API_KEY`プレースホルダ追加）、`docs/adr/ADR-0009-us-stock-fundamentals-finnhub.md`（新規）、`docs/product/use-cases.md`（UC-001/UC-003/UC-004/UC-010の記述改訂・承認記録追加）、`docs/architecture/data-model.md`（`fundamental_indicators`節・承認記録追加）、`docs/rcid/traceability-matrix.md`（CHG-0009）、`docs/ai-context/do-not-touch.md`（Finnhub APIキー追記）
-
-**コード（Green、`fb894b1`）**: `app/Services/MarketData/FinnhubClient.php`＋`FinnhubClientInterface.php`（新規）、`app/Services/Analysis/UsFundamentalIndicatorMapper.php`（新規）、`app/Actions/Analysis/FetchExternalMarketDataAction.php`（US分岐の組み込み）、`app/Providers/AppServiceProvider.php`／`config/services.php`（バインディング・設定追加）。テスト: `tests/Feature/FetchExternalMarketDataActionTest.php`（拡張）、`tests/Unit/Services/MarketData/FinnhubClientTest.php`（新規）、`tests/Unit/Services/Analysis/UsFundamentalIndicatorMapperTest.php`（新規）、`tests/Support/Fakes/FakeFinnhubClient.php`（新規）
-
-### Status
-
-**Green実装・`/review`修正完了、mainマージ済み**（コミット`fb894b1`）。`/review`で2件修正: (1) `FinnhubClient`のリトライ例外メッセージにAPIキー（クエリパラメータ渡しのためJ-Quantsのヘッダー方式と異なり露出しやすい）が漏れないようサニタイズ、(2) XBRL概念値が`present-but-null`の場合に無言で`0.0`扱いされ自己資本比率が「0%」と誤判定される不具合を修正（unavailable扱いに）。両修正とも回帰テスト追加。実DB確認: `app/Services/Analysis/UsFundamentalIndicatorMapper.php`が存在し稼働中（CHG-0011の米国株ファンダ補完・F-012のウォッチリスト画面が実際にこの経路で米国株の指標を取得していることを確認済み）。
 
 ## 今後の対応（未着手）（2026-08-27追記、Phase5の実ブラウザ確認時に発見）
 

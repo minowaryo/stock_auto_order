@@ -27,6 +27,139 @@ use App\Services\Analysis\FundamentalHealthEvaluator;
 |   - docs/adr/ADR-0007-existing-holding-add-on-buy-recommendation.md D4
 |
 | -------------------------------------------------------------------------
+| CR (2026-09-19, CHG-0017 / ADR-0015 D2, Gate4 Cycle2b): 直近3期平均成長率の
+| OR救済経路（D1とは別の追加救済）
+| -------------------------------------------------------------------------
+| ADR-0015 D2の決定に基づく。Cycle2で新設した
+| `FundamentalIndicatorMapper::averageAnnualGrowth()`（直近3期のYoY成長率の
+| 単純平均を算出する純粋計算メソッド、実装済み）を、本Cycle（2b）で
+| `FundamentalHealthEvaluator::evaluate()` に配線する。
+|
+| `evaluate()` に `?float $avgRevenueGrowth = null` と
+| `?float $avgOperatingIncomeGrowth = null` を、既存5引数の後に**新規引数として
+| 追加**する（デフォルトnullのため既存呼び出し元との後方互換を維持する）。D1が
+| 既存の `$equityRatio`/`$roe` 引数の閾値変更のみで表現できたのとは異なり、
+| D2は平均成長率という別データソースの値のため新規引数が必須（本ファイル冒頭の
+| D1コメント「新規パラメータは不要」とは対照的）。
+|
+| 成長率条件（単年度 `revenue_growth` OR `operating_income_growth` がプラス）
+| を、`単年度revenue OR 単年度operatingIncome OR 平均revenue OR 平均
+| operatingIncome` の4値ORに拡張する。4値すべてがnullのときのみ
+| `unavailable`（1つでも値があれば`unavailable`にはしない）。4値のいずれかが
+| 厳密にプラスなら`passed`、そうでなければ`failed`。
+|
+| 判定順序（ADR-0015 D2。既存の優先順位は一切変更しない。D2はD1と同じく
+| あくまで「成長率条件」のOR救済であり、equity/roe/営業利益率の基準割れ・
+| null判定、D1救済を一切バイパスしない）:
+|   equityRatio === null || roe === null                              → 'unavailable'
+|   equityRatio < MIN_EQUITY_RATIO || roe < MIN_ROE                   → 'failed'   ← D2で救済されない
+|   operatingMargin !== null && operatingMargin < MIN_OPERATING_MARGIN → 'failed'   ← D2で救済されない
+|   operatingMargin === null                                          → 'unavailable'
+|   roe >= RESCUE_MIN_ROE && equityRatio >= RESCUE_MIN_EQUITY_RATIO   → 'passed'（D1救済。D2を問わず優先）
+|   4値（単年度revenue/operatingIncome、平均revenue/operatingIncome）
+|     すべてがnull                                                    → 'unavailable'
+|   4値のいずれかが厳密にプラス                                        → 'passed'（D2救済含む）
+|   それ以外                                                           → 'failed'
+|
+| Expected Red/Green state（2026-09-19、Cycle2b）:
+|   - 「単年度成長率は両方マイナス＋平均売上高成長率がプラス」→ passed 期待
+|       — 現行実装（5引数、6/7番目の引数は黙って無視される）は単年度マイナスの
+|         みで 'failed' を返す。Red（アサーション不一致）
+|   - 「単年度成長率は両方マイナス＋平均営業利益成長率がプラス」→ passed 期待
+|       — 同上の理由でRed
+|   - 「単年度revenue/operatingIncome成長率が両方null＋平均revenue成長率
+|     のみプラス」→ passed 期待（unavailableにならないこと）
+|       — 現行実装は単年度成長率が両方nullの時点で 'unavailable' を返す。Red
+|   - 「単年度・平均とも全てマイナス」→ failed 期待
+|       — 現行実装も単年度マイナスのみで 'failed'。GREEN のまま（回帰確認）
+|   - 「単年度・平均とも全てnull」→ unavailable 期待（4引数すべてnullでも
+|     動作すること）
+|       — 現行実装も 'unavailable'。GREEN のまま（回帰確認・後方互換確認）
+|   - equity/roeの基準割れが平均成長率のプラス値より優先される（境界値）→
+|     failed 期待
+|       — 現行実装も基準割れが先に評価され 'failed'。GREEN のまま
+|   - 営業利益率の基準割れが平均成長率のプラス値より優先される → failed 期待
+|       — 現行実装も同様に 'failed'。GREEN のまま
+|   - D1のみ成立（D2は不成立）でも passed（D1救済がD2の状態に関わらず機能
+|     すること）
+|       — 現行実装も 'passed'（D1既存ロジック）。GREEN のまま（回帰確認）
+|   - 既存の単年度成長率のみの判定（新規引数省略、または明示的null）が
+|     影響を受けない
+|       — 現行実装も 'passed'（5引数版と同じ結果）。GREEN のまま（後方互換
+|         確認）
+| 上記のうち実際に Red になるのは 3 件（平均売上高成長率救済／平均営業利益
+| 成長率救済／単年度null＋平均revenueのみ救済）。これが本 CR（Cycle 2b）の
+| 意図した Red 状態である。
+|
+| -------------------------------------------------------------------------
+| CR (2026-09-19, CHG-0017 / ADR-0015 D1, Gate4 Cycle1 — 再改訂版): 財務指標
+| ベースの成長率救済経路（D1）の追加
+| -------------------------------------------------------------------------
+| ADR-0015 D1（2026-09-19、Gate4レビュー時に再改訂）の決定に基づく。当初は
+| `evaluate()` に `?float $dividendYield` を6引数目として追加し「ROE≧15%
+| かつ配当利回り≧3%かつ自己資本比率≧50%」を救済条件とする設計だったが、
+| 「米国株には無配当で自社株買い中心の高ROE企業も多く、配当を必須にすると
+| 機械的に除外してしまう」との指摘（本人）を受け、実測比較（保有218銘柄中、
+| 成長率のみでfailed/unavailableになる候補2件のうち、配当必須なら救済0件・
+| 配当不問なら2件救済）のうえ配当利回り条件を撤回した。
+|
+| **結果として `evaluate()` のシグネチャは変更しない**（既存の5引数のまま）。
+| D1は既存の `$equityRatio`・`$roe` 引数に対して、既存の基本閾値（
+| MIN_EQUITY_RATIO=40.0%・MIN_ROE=10.0%）より高い専用閾値（RESCUE_MIN_ROE=
+| 15.0%・RESCUE_MIN_EQUITY_RATIO=50.0%）を適用するだけで表現できる。新規
+| パラメータは不要。配当利回りは判定には使わず、呼び出し元（Action層）が
+| 理由サマリ等の参考表示にのみ用いる想定（本ファイルのスコープ外）。
+|
+| D1（救済経路）: 成長率条件（単年度 `revenue_growth` OR `operating_income_
+| growth` がプラス）を満たさない場合でも、`roe >= 15.0 && equityRatio >= 50.0`
+| を満たせば成長率の値（マイナスでもnullでも）を問わず成長率条件を満たした
+| ものとして扱う（data-model.md「財務指標ベースの成長率救済経路」行、閾値は
+| 叩き台）。
+|
+| 判定順序（ADR-0015 D1。既存の優先順位「equity/roe基準割れ → 営業利益率
+| 基準割れ → 営業利益率null → 成長率」は一切変更しない。D1はあくまで
+| 「成長率条件」のOR救済であり、equity/roe/営業利益率の基準割れ・null判定を
+| 一切バイパスしない）:
+|   equityRatio === null || roe === null                              → 'unavailable'
+|   equityRatio < MIN_EQUITY_RATIO || roe < MIN_ROE                   → 'failed'   ← D1で救済されない
+|   operatingMargin !== null && operatingMargin < MIN_OPERATING_MARGIN → 'failed'   ← D1で救済されない
+|   operatingMargin === null                                          → 'unavailable'
+|   roe >= RESCUE_MIN_ROE && equityRatio >= RESCUE_MIN_EQUITY_RATIO   → 'passed'（D1救済。成長率を問わない）
+|   revenueGrowth === null && operatingIncomeGrowth === null          → 'unavailable'
+|   （成長率 OR 判定。従来通り）
+|
+| **RESCUE_MIN_ROE（15.0%）・RESCUE_MIN_EQUITY_RATIO（50.0%）は常に
+| MIN_ROE（10.0%）・MIN_EQUITY_RATIO（40.0%）より高いため、equity/roeの
+| 基本条件を割った時点でD1救済も数値上必ず不成立になる（閾値が入れ子の
+| 関係にあるため）。したがって「equity/roeの基準割れがD1救済より優先される」
+| ことを示す専用の境界値テストは不要——基本条件の境界値テスト（既存、
+| 39.99%/9.99%）がそのままD1に対しても優先されることの証明を兼ねる。
+| 一方、営業利益率はD1の救済条件に含まれないため、「営業利益率の基準割れが
+| D1救済より優先される」ことは別途テストが必要。
+|
+| Expected Red/Green state（2026-09-19 再改訂）:
+|   - 「成長率マイナス＋ROE16.0%・自己資本比率55.0%（D1条件）」→ passed 期待
+|       — 現行実装は成長率マイナスのみで 'failed' を返す。Red（アサーション不一致）
+|   - 「成長率null（両方）＋ROE16.0%・自己資本比率55.0%（D1条件）」→ passed 期待
+|       — 現行実装は growth null を先に評価し 'unavailable' を返す。
+|         Red（アサーション不一致）
+|   - 「ROEが14.99%（D1閾値未満、基本条件10%は満たす）＋成長率マイナス」→ failed 期待
+|       — 現行実装も成長率マイナスのみで 'failed'。GREEN のまま
+|         （D1の境界を跨がないことの回帰確認）
+|   - 「自己資本比率が49.99%（D1閾値未満、基本条件40%は満たす）＋成長率マイナス」
+|     → failed 期待
+|       — 現行実装も 'failed'。GREEN のまま
+|   - 「営業利益率が5.0%（基準割れ）＋ROE16.0%・自己資本比率55.0%（D1条件は
+|     数値上満たす）＋成長率マイナス」→ failed 期待（営業利益率チェックが
+|     D1救済より先に評価される）
+|       — 現行実装も営業利益率チェックが先に評価されるため 'failed'。GREEN のまま
+|   - 「成長率null（両方）＋ROE16.0%・自己資本比率45.0%（D1の自己資本比率
+|     条件のみ未達、基本条件40%は満たす）」→ unavailable 期待
+|       — 現行実装も 'unavailable'。GREEN のまま（フォールバック回帰確認）
+| 上記のうち実際に Red になるのは 2 件（成長率マイナス救済 / 成長率null救済）。
+| これが本 CR（Cycle 1）の意図した Red 状態である。
+|
+| -------------------------------------------------------------------------
 | CR (2026-09-06, CHG-0012 / ADR-0011): 営業利益率条件の追加（4条件目）
 | -------------------------------------------------------------------------
 | ADR-0011 の決定に基づき、`FundamentalHealthEvaluator::evaluate()` のシグ
@@ -36,7 +169,7 @@ use App\Services\Analysis\FundamentalHealthEvaluator;
 | 本ファイルは新シグネチャ
 | `evaluate(?float $equityRatio, ?float $roe, ?float $revenueGrowth,
 | ?float $operatingIncomeGrowth, ?float $operatingMargin): string`（5引数）
-| を前提に全テストを実行する。
+| を前提に全テストを実行する。**D1（上記）もこの5引数のまま実装される**。
 |
 | 定数 `MIN_OPERATING_MARGIN = 10.0`（%）を新設する。ROE の 10% と数字を
 | 揃え、8%案との実測比較の末に採用された値（ADR-0011 D2。実測影響: 財務
@@ -95,9 +228,10 @@ use App\Services\Analysis\FundamentalHealthEvaluator;
 |   ときのみ failed、null は unavailable（ADR-0011 D6）。
 |
 |   'failed' は残余ケース。equity/roe が基準を満たし、営業利益率が実測されて
-|   おり（not null）10%以上、成長率データがあり（両方 null ではない）、いずれ
-|   かの成長率が厳密に正 — でない場合。">=" が passed（equity/roe/margin）、
-|   成長率のみ ">"（ちょうど0%は「横ばい」で「成長」ではない）。
+|   おり（not null）10%以上、D1救済（roe>=15かつequityRatio>=50）も不成立で、
+|   成長率データがあり（両方 null ではない）、いずれかの成長率が厳密に正 —
+|   でない場合。">=" が passed（equity/roe/margin/D1）、成長率のみ ">"（ちょうど
+|   0%は「横ばい」で「成長」ではない）。
 |
 | -------------------------------------------------------------------------
 | Original rationale (pre-CR, retained for historical context):
@@ -162,6 +296,71 @@ describe('FundamentalHealthEvaluator: 財務健全性フィルタ判定', functi
 
             expect($result)->toBe('passed');
         });
+
+        // -------------------------------------------------------------
+        // CR (2026-09-19, CHG-0017 / ADR-0015 D1 再改訂): 財務指標ベースの
+        // 成長率救済経路（ROE≧15%・自己資本比率≧50%、配当利回りは不問）
+        // -------------------------------------------------------------
+        test('売上高・営業利益成長率が両方ともマイナスでも、ROE16.0%・自己資本比率55.0%（D1のRESCUE閾値、いずれもROE15%以上・自己資本比率50%以上）を満たす場合、passedを返す', function () {
+            // Red期待: 現行実装は成長率マイナスのみで 'failed' を返すため、
+            // 本ケースはアサーション不一致でRedになる（ADR-0015 D1）。
+            $result = fheEvaluator()->evaluate(55.0, 16.0, -3.0, -1.0, 12.0);
+
+            expect($result)->toBe('passed');
+        });
+
+        test('売上高・営業利益成長率が両方ともnull（未取得）でも、ROE16.0%・自己資本比率55.0%（D1条件）を満たす場合、unavailableではなくpassedを返す', function () {
+            // Red期待: 現行実装は成長率が両方nullの時点で 'unavailable' を
+            // 返すため、本ケースはアサーション不一致でRedになる
+            // （ADR-0015 D1。D1救済は成長率が「マイナス」だけでなく「未取得」
+            // の場合も対象）。
+            $result = fheEvaluator()->evaluate(55.0, 16.0, null, null, 12.0);
+
+            expect($result)->toBe('passed');
+        });
+
+        // -------------------------------------------------------------
+        // CR (2026-09-19, CHG-0017 / ADR-0015 D2, Cycle2b): 直近3期平均成長率
+        // のOR救済経路（D1とは別の追加救済。D1は不成立・D2のみ成立のケース）
+        // -------------------------------------------------------------
+        test('単年度の売上高・営業利益成長率が両方ともマイナスでも、直近3期平均売上高成長率がプラスの場合、passedを返す（D1は不成立・D2〔平均売上高成長率〕のみで救済）', function () {
+            // Red期待: equityRatio=45.0/roe=12.0はD1のRESCUE閾値（roe>=15.0
+            // かつequityRatio>=50.0）を満たさない（基本条件40%/10%は満たす）
+            // ためD1は不成立。現行実装は6/7番目の引数（平均成長率）を
+            // 黙って無視し、単年度成長率マイナスのみで'failed'を返すため、
+            // 本ケースはアサーション不一致でRedになる（ADR-0015 D2）。
+            $result = fheEvaluator()->evaluate(45.0, 12.0, -3.0, -1.0, 12.0, 5.0, null);
+
+            expect($result)->toBe('passed');
+        });
+
+        test('単年度の売上高・営業利益成長率が両方ともマイナスでも、直近3期平均営業利益成長率がプラスの場合、passedを返す（D1は不成立・D2〔平均営業利益成長率〕のみで救済）', function () {
+            // Red期待: 上記と同じ理由（equityRatio=45.0/roe=12.0はD1不成立）。
+            // 現行実装は平均営業利益成長率の引数を無視し'failed'を返す。
+            $result = fheEvaluator()->evaluate(45.0, 12.0, -3.0, -1.0, 12.0, null, 4.0);
+
+            expect($result)->toBe('passed');
+        });
+
+        test('単年度の売上高・営業利益成長率が両方ともnull（未取得）でも、直近3期平均売上高成長率のみ利用可能でプラスの場合、unavailableではなくpassedを返す', function () {
+            // Red期待: 現行実装は単年度成長率が両方nullの時点で'unavailable'
+            // を返す（4値ORではなく単年度2値のみの判定のため）。ADR-0015 D2は
+            // 「4値すべてがnullのときのみunavailable」なので、平均revenue
+            // 成長率が利用可能であればunavailableにはならずpassedになる。
+            $result = fheEvaluator()->evaluate(45.0, 12.0, null, null, 12.0, 3.0, null);
+
+            expect($result)->toBe('passed');
+        });
+
+        test('D1条件（ROE16.0%・自己資本比率55.0%）を満たす場合、直近3期平均成長率が両方ともマイナスでもD1救済によりpassedを返す（D1のみ成立・D2は不成立でも救済される）', function () {
+            // Green期待（回帰確認）: D1救済は成長率OR判定（単年度・平均問わず）
+            // より先に評価されるため、平均成長率が両方マイナスでも結果に
+            // 影響しない。現行実装も6/7番目の引数を無視し既存D1ロジックで
+            // 'passed'を返すため一致する。
+            $result = fheEvaluator()->evaluate(55.0, 16.0, -3.0, -1.0, 12.0, -5.0, -2.0);
+
+            expect($result)->toBe('passed');
+        });
     });
 
     describe('健全性を満たさない場合（failed）', function () {
@@ -184,7 +383,13 @@ describe('FundamentalHealthEvaluator: 財務健全性フィルタ判定', functi
         });
 
         test('自己資本比率・ROEは基準を満たすが、売上高成長率・営業利益成長率が両方ともマイナスの場合、営業利益率が健全でもfailedを返す', function () {
-            $result = fheEvaluator()->evaluate(58.0, 15.2, -3.0, -1.0, 15.0);
+            // 2026-09-19修正（Gate4 Green着手時にtdd-implementerが発見）:
+            // 当初 equityRatio=58.0/roe=15.2 だったが、これはD1のRESCUE閾値
+            // （roe>=15.0 && equityRatio>=50.0）と偶然一致し'passed'に反転
+            // してしまうため、基本条件（40%/10%）は満たすがRESCUE閾値
+            // （50%/15%）は満たさない値（45.0/12.0）に変更した。テストの
+            // 意図（成長率がマイナスならfailed）自体は変更していない。
+            $result = fheEvaluator()->evaluate(45.0, 12.0, -3.0, -1.0, 15.0);
 
             expect($result)->toBe('failed');
         });
@@ -193,7 +398,8 @@ describe('FundamentalHealthEvaluator: 財務健全性フィルタ判定', functi
             // 成長率条件は自己資本比率/ROE/営業利益率と異なり「>0」(以上では
             // なく超過)。0%は「横ばい」であり「成長」ではないため、ちょうど
             // 0%は failed 側の境界値となる。
-            $result = fheEvaluator()->evaluate(58.0, 15.2, 0.0, -1.0, 15.0);
+            // 2026-09-19修正: 上記と同じ理由でD1のRESCUE閾値と衝突しない値に変更。
+            $result = fheEvaluator()->evaluate(45.0, 12.0, 0.0, -1.0, 15.0);
 
             expect($result)->toBe('failed');
         });
@@ -251,6 +457,66 @@ describe('FundamentalHealthEvaluator: 財務健全性フィルタ判定', functi
 
             expect($result)->toBe('failed');
         });
+
+        // -------------------------------------------------------------
+        // CR (2026-09-19, CHG-0017 / ADR-0015 D1 再改訂): D1救済が発動しない
+        // ケース（境界値・優先順位）
+        // -------------------------------------------------------------
+        test('ROEが14.99%（D1のRESCUE閾値15.0%未満、基本条件10%は満たす境界値）の場合、自己資本比率がD1条件を満たしていても救済されずfailedを返す', function () {
+            // Green期待（境界確認）。D1専用の閾値15.0%は既存の基本条件
+            // MIN_ROE=10.0%より高いため、基本条件は通過しD1のみ未達となる。
+            $result = fheEvaluator()->evaluate(55.0, 14.99, -3.0, -1.0, 12.0);
+
+            expect($result)->toBe('failed');
+        });
+
+        test('自己資本比率が49.99%（D1のRESCUE閾値50.0%未満、基本条件40%は満たす境界値）の場合、ROEがD1条件を満たしていても救済されずfailedを返す', function () {
+            // Green期待（境界確認）。D1専用の閾値50.0%は既存の基本条件
+            // MIN_EQUITY_RATIO=40.0%より高いため、基本条件は通過しD1のみ
+            // 未達となる。
+            $result = fheEvaluator()->evaluate(49.99, 16.0, -3.0, -1.0, 12.0);
+
+            expect($result)->toBe('failed');
+        });
+
+        test('営業利益率が5.0%（基準未満）の場合、ROE16.0%・自己資本比率55.0%がD1条件を数値上満たしていてもfailedを返す（営業利益率の基準割れがD1救済より優先）', function () {
+            // Green期待: 営業利益率の基準割れ判定はD1（成長率条件のみの
+            // OR救済）より先に評価される。現行実装もopチェックが先に評価
+            // されるため一致する。
+            $result = fheEvaluator()->evaluate(55.0, 16.0, -3.0, -1.0, 5.0);
+
+            expect($result)->toBe('failed');
+        });
+
+        // -------------------------------------------------------------
+        // CR (2026-09-19, CHG-0017 / ADR-0015 D2, Cycle2b): D2救済が発動
+        // しないケース（境界値・優先順位・回帰確認）
+        // -------------------------------------------------------------
+        test('単年度・平均とも売上高・営業利益成長率がすべてマイナスの場合、failedを返す（回帰確認）', function () {
+            // Green期待: 4値すべてマイナスのため、D2を追加してもpassedになる
+            // 条件を満たさない。現行実装も6/7番目の引数を無視し単年度
+            // マイナスのみで'failed'を返すため一致する。
+            $result = fheEvaluator()->evaluate(45.0, 12.0, -3.0, -1.0, 12.0, -2.0, -1.5);
+
+            expect($result)->toBe('failed');
+        });
+
+        test('自己資本比率が39.99%（基準未満）の場合、直近3期平均成長率が両方ともプラスでも救済されずfailedを返す（equity/roeの基準割れがD2救済より優先）', function () {
+            // Green期待（境界確認）: equity/roeの基準割れチェックは成長率
+            // OR判定（D2を含む）より先に評価される。現行実装も6/7番目の
+            // 引数を評価する前に'failed'を返すため一致する。
+            $result = fheEvaluator()->evaluate(39.99, 12.0, -3.0, -1.0, 12.0, 5.0, 4.0);
+
+            expect($result)->toBe('failed');
+        });
+
+        test('営業利益率が5.0%（基準未満）の場合、直近3期平均成長率が両方ともプラスでも救済されずfailedを返す（営業利益率の基準割れがD2救済より優先）', function () {
+            // Green期待（境界確認）: 営業利益率チェックはD2救済より先に評価
+            // される。現行実装も同様に'failed'を返すため一致する。
+            $result = fheEvaluator()->evaluate(45.0, 12.0, -3.0, -1.0, 5.0, 5.0, 4.0);
+
+            expect($result)->toBe('failed');
+        });
     });
 
     describe('指標が未取得の場合（unavailable）', function () {
@@ -273,7 +539,9 @@ describe('FundamentalHealthEvaluator: 財務健全性フィルタ判定', functi
         });
 
         test('自己資本比率・ROEは基準を満たすが、成長率（売上高・営業利益とも）が両方ともnull（未取得）の場合、営業利益率が健全でもunavailableを返す', function () {
-            $result = fheEvaluator()->evaluate(58.0, 15.2, null, null, 15.0);
+            // 2026-09-19修正: D1のRESCUE閾値（roe>=15.0 && equityRatio>=50.0）
+            // と衝突しない値（45.0/12.0）に変更（上記2件と同じ理由）。
+            $result = fheEvaluator()->evaluate(45.0, 12.0, null, null, 15.0);
 
             expect($result)->toBe('unavailable');
         });
@@ -295,6 +563,61 @@ describe('FundamentalHealthEvaluator: 財務健全性フィルタ判定', functi
             $result = fheEvaluator()->evaluate(55.0, 14.0, 20.0, 25.0, null);
 
             expect($result)->toBe('unavailable');
+        });
+
+        // -------------------------------------------------------------
+        // CR (2026-09-19, CHG-0017 / ADR-0015 D1 再改訂): 成長率null＋D1未達
+        // のフォールバック挙動確認
+        // -------------------------------------------------------------
+        test('売上高・営業利益成長率が両方ともnull（未取得）で、自己資本比率がD1のRESCUE閾値未満（45.0%、基本条件40%は満たす）の場合、救済されずunavailableを返す', function () {
+            // Green期待: D1条件（ROE≧15%かつ自己資本比率≧50%）を満たさない
+            // ため、既存の「成長率が両方nullならunavailable」挙動に
+            // フォールバックする。現行実装も同じ結果（フォールバック仕様の
+            // 回帰確認）。
+            $result = fheEvaluator()->evaluate(45.0, 16.0, null, null, 12.0);
+
+            expect($result)->toBe('unavailable');
+        });
+
+        // -------------------------------------------------------------
+        // CR (2026-09-19, CHG-0017 / ADR-0015 D2, Cycle2b): 単年度・平均
+        // 成長率が全てnullの場合のフォールバック（4引数すべてnullでも
+        // 動作すること）
+        // -------------------------------------------------------------
+        test('単年度・平均とも売上高・営業利益成長率がすべてnull（未取得）の場合、unavailableを返す（4引数すべてnullでも動作すること）', function () {
+            // Green期待（回帰確認・後方互換確認）: 成長率関連4値（単年度
+            // revenue/operatingIncome、平均revenue/operatingIncome）すべてが
+            // nullのときのみunavailableというADR-0015 D2の仕様どおり。
+            // 現行実装は6/7番目の引数を無視し、単年度2値がともにnullの
+            // 時点で'unavailable'を返すため一致する。
+            $result = fheEvaluator()->evaluate(45.0, 12.0, null, null, 12.0, null, null);
+
+            expect($result)->toBe('unavailable');
+        });
+    });
+
+    describe('既存の単年度成長率判定は影響を受けない（回帰確認）', function () {
+        test('売上高成長率がプラス（単年度）でD1条件を満たさない場合、従来通りpassedを返す', function () {
+            // Green期待: D1追加前から成り立つ主経路。D1がROE/自己資本比率の
+            // 既存引数を再利用する設計に変更してもこの経路の判定結果に
+            // 影響がないことを確認する。
+            $result = fheEvaluator()->evaluate(40.0, 12.0, 5.0, null, 12.0);
+
+            expect($result)->toBe('passed');
+        });
+
+        // -------------------------------------------------------------
+        // CR (2026-09-19, CHG-0017 / ADR-0015 D2, Cycle2b): 新規引数
+        // （平均成長率）を明示的にnullで渡しても既存の単年度判定が影響を
+        // 受けないこと
+        // -------------------------------------------------------------
+        test('売上高成長率がプラス（単年度）で、直近3期平均成長率の引数に明示的にnullを渡した場合も、従来通りpassedを返す', function () {
+            // Green期待（後方互換確認）: avgRevenueGrowth/avgOperatingIncome
+            // Growthを明示的にnullで渡しても、5引数のみの呼び出しと結果が
+            // 変わらないことを確認する（デフォルト値nullとの等価性）。
+            $result = fheEvaluator()->evaluate(40.0, 12.0, 5.0, null, 12.0, null, null);
+
+            expect($result)->toBe('passed');
         });
     });
 });

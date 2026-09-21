@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed（Gate 1: requirements.md / Gate 2: use-cases.md UC-013 の承認をもって Accepted とする。第1段階は DB スキーマ変更を伴わないため Gate 3 は影響範囲確認のみ）
+Accepted（2026-09-17、Gate 1: requirements.md／Gate 2: use-cases.md UC-013 を本人が最終承認。第1段階は DB スキーマ変更を伴わないため Gate 3 は影響範囲確認のみ）。D3〜D5・D9 の★判断ポイント、および Gate 2 レビュー中に新たに判明した論点（バケツ内ソート・永続化廃止・`portfolio_headline`改訂・一言評価の生成方法・ADR-0003 の扱い・`WatchedTheme`ロジック退役）はすべて「Gate 2 で確定した追加決定」節で確定済み
 
 ## Date
 
@@ -54,7 +54,9 @@ Proposed（Gate 1: requirements.md / Gate 2: use-cases.md UC-013 の承認をも
 
 ### D3. 各保有銘柄はちょうど1つのバケツに入る。優先順位（開示された全順序）で排他解決する
 
-叩き台の全順序（上が優先）:
+**確定（2026-09-17）**: 以下の全順序をそのまま採用する。
+
+全順序（上が優先）:
 
 1. `core_accumulation`（`instrument_type` / 口座区分で最初に確定。以降の判定対象外）
 2. `loss_review`
@@ -66,7 +68,7 @@ Proposed（Gate 1: requirements.md / Gate 2: use-cases.md UC-013 の承認をも
 
 | 競合 | 発生条件 | 叩き台の解決 |
 |---|---|---|
-| `loss_review` × `add_on` | 含み益率 ≤ -20% かつ 押し目買いシグナルあり（財務健全な急落銘柄） | `loss_review` を採用し、行に「押し目買いシグナル発生中・買い増し候補にも掲載」注記（UC-011 の既存挙動と同一）。**★本人判断ポイント**: コア/アクティブの銘柄タグ導入後は銘柄の役割で分岐させる余地 |
+| `loss_review` × `add_on` | 含み益率 ≤ -20% かつ 押し目買いシグナルあり（財務健全な急落銘柄） | **確定（2026-09-17）**: `loss_review` を採用し、行に「押し目買いシグナル発生中・買い増し候補にも掲載」注記（UC-011 の既存挙動と同一）。コア/アクティブの銘柄タグ導入後に役割で分岐させる案は今回見送り |
 | `take_profit` × `add_on` | — | 発生しない。ADR-0007 で「利確シグナル成立時は買い増し対象外」として既に排他 |
 | `take_profit` × `loss_review` | — | 発生しない。含み益と含み損は同時に成立しない |
 
@@ -76,14 +78,13 @@ Proposed（Gate 1: requirements.md / Gate 2: use-cases.md UC-013 の承認をも
 
 - UC-005 は元々セクター単位の設計で、個別銘柄に per-stock で「売る／売らない」を割り当てる仕組みを持たない（売却額目安もセクター単位）
 - 偏り警告セクターの全銘柄を「減らす」に落とすと、例えば AI 関連8銘柄が偏り警告→8銘柄すべて「減らす」となり、直感とも UC-005 の売却額目安（セクター単位）とも整合しない
-- 叩き台: 偏り警告セクターに属する `hold` / `take_profit` 銘柄の行に「偏り警告セクター」バッジを付す。ダッシュボード上部に UC-005 の `allocation_status` を要約したセクター偏りサマリを併置する
-- **★本人判断ポイント**: 当初要望の「利確・リバランス検討を1つの塊で見たい」との折り合い。バッジ＋セクターサマリで足りるか、「減らす」の中に `rebalance` サブバケツを立てるか
+- **確定（2026-09-17）**: バッジ＋セクターサマリに留める。`rebalance` サブバケツは作らない。偏り警告セクターに属する `hold` / `take_profit` 銘柄の行に「偏り警告セクター」バッジを付す。ダッシュボード上部に UC-005 の `allocation_status` を要約したセクター偏りサマリを併置する。サマリ内の各セクター行は配分率の超過幅（`allocation_rate` − 70%）が大きい順に並べる（`SectorAllocationCalculator` の既存算出値のみを使用、新しい閾値は設けない）
 
-### D5. 「キープ」は残余だが、簡易ヘルスラインを必ず表示する。「要観察」サブフラグは第2段階
+### D5. 「キープ」は残余だが、簡易ヘルスラインを必ず表示する。「要観察」サブフラグは第1段階から出す
 
 - `hold` = 減らす／増やす／積立コアのいずれにも非該当。ただし空バケツ扱いにせず、各行に簡易ヘルスライン（含み益率・RSI 帯・財務 passed/failed・相対力〔対市場〕の符号）を表示する
-- 第2段階で `hold_watch`（要観察）: 財務 failed／相対力が継続マイナス／含み益率が整理検討ライン手前まで悪化、等で `hold` から昇格。整理検討に落ちる前の早期警戒層
-- **★本人判断ポイント**: 要観察を第1段階から出すか、第2段階に回すか
+- **確定（2026-09-17）**: `hold_watch`（要観察）は**第1段階から出す**（財務 failed／相対力が継続マイナス／含み益率が整理検討ライン手前まで悪化、等で通常の `hold` から区別。整理検討に落ちる前の早期警戒層）。判定はいずれも既存の評価値（`FundamentalHealthEvaluator`／相対力／`LossReviewThresholds`）の組み合わせで、新しい閾値は作らない
+- **`hold` 内の並び順**: ① `hold_watch` フラグが立っている銘柄を先頭に ② 残りは含み損益率が低い順（悪化銘柄が目立つ）。「好調で優先的に強調したいキープ銘柄」という発想も検討したが、それを判定する基準（相対力・RSI健全域等の組み合わせ）は現時点でどの既存UCにも存在せず、新規に閾値を発明することになるため**本CRでは見送り**、`docs/product/accuracy-improvement-backlog.md` に将来検討事項として記録する（Files touched参照）
 
 ### D6. 3分類の構成比は評価額（`market_value`）ベースで算出する
 
@@ -97,7 +98,7 @@ Proposed（Gate 1: requirements.md / Gate 2: use-cases.md UC-013 の承認をも
 - 「積立コア70〜80% / 残り20%でアクティブ売買」を数値で支えるには、アクティブ枠の目標額・投下済み額・余力の3値が要る
 - 投下済み額は保有側の `market_value` から定義できるが、余力の分母（預り金・買付余力）は楽天証券の保有 CSV に含まれず別入力が必要（requirements.md 2章 OUT「預り金等の取込」に抵触するため、やるなら別CR）
 - 第1段階は「保つ」の内訳表示（積立コア vs キープ）に留め、枠の残量計算は入れない
-- **★本人判断ポイント**: アクティブ枠トラッキングを別CRで追うか
+- 本CRのGate2確定範囲には含めない。第2段階（別CR、預り金入力の要否とあわせて検討）に送る
 
 ### D8. 段階リリース。第1段階は表示のみ（永続化なし）、第2段階で週次分類の永続化＋遷移表示
 
@@ -105,13 +106,66 @@ Proposed（Gate 1: requirements.md / Gate 2: use-cases.md UC-013 の承認をも
 - **第2段階（別CR、F-013 の運用実績を見てから）**: `portfolio_classifications`（`holding_snapshot_id` FK、`bucket`、`reason`、`decided_at`）を取込時（UC-001 のフロー）に書き込み、「先週→今週の異動（どの銘柄がどのバケツへ動いたか）」の遷移表示と、シグナル→その後の値動きを突き合わせるトレードジャーナルを追加する
 - 理由: Context「段階を分ける理由」の通り
 
-### D9. 画面はサマリーレポートタブ（UC-009）に「分類俯瞰」セクションを追加する形で提供する。新タブは作らない
+### D9. 画面はサマリーレポートタブ（UC-009）に「分類俯瞰」セクションを追加する形で提供する。新タブは作らない。UC-009の上位10〜20件レコメンドは分類俯瞰に置き換える（併存させない）
 
 - `ui-guidelines.md` のタブ数上限（6個、現在6個）
 - サマリーレポートタブは既に「最新取込に基づく・いつでも見られる・開くたび再計算」という性質を持ち、分類俯瞰と土台が同じ（CHG-0008）
-- 配置: タブ最上部（既存の `portfolio_headline` の直上または直下）に「分類俯瞰」セクション。3分類の構成比バー／「保つ」の内訳／セクター偏りサマリ／各バケツの銘柄リストで構成する
-- UC-009 の非開示合成スコアによる上位10〜20件リストは当面併存させる
-- **★本人判断ポイント**: 第1段階から UC-009 の top-10/20 リストを分類俯瞰に置き換えるか、併存させるか
+- 配置: タブ最上部に「分類俯瞰」セクション。3分類の構成比バー／「保つ」の内訳／セクター偏りサマリ／各バケツの銘柄リストで構成する
+- **確定（2026-09-17）**: UC-009 の非開示合成スコアによる上位10〜20件リストは**分類俯瞰に完全に置き換える**（併存させない）。バケツは件数上限を設けず該当銘柄を全件表示する（D10 のバケツ内ソートにより優先度の高い銘柄が各バケツの上位に来るため、ダイジェスト性は「上限カット」ではなく「並び順」で担保する）
+
+#### D9-1. 置き換えに伴い退役するロジック
+
+`ShowImportSummaryReportAction` は UC-004/UC-005/UC-012 を再利用せず、**自前で3種類の候補選定ロジックを重複実装していた**（D2 の「再投影に徹する」に反する既存の負債）。分類俯瞰への置き換えにあわせて、以下を削除する:
+
+- `buildTakeProfitCandidates()`（独自の `含み益率 + RSI + シグナル数×15` 採点式と理由文生成。UC-004 の対象抽出条件を重複実装していただけ）
+- `buildRebalanceCandidates()`（独自のセクター別集計＋70%閾値判定。UC-005 `SectorAllocationCalculator` と重複。閾値は偶然一致していたが別々に保守されていた）
+- `buildNewCandidateItems()`（`WatchedTheme`〔注目テーマ〕ベースの新規候補判定。実データ確認済み: `WatchedTheme` の登録件数は現在0件のため、退役による実質的な検出結果への影響はない。`WatchedTheme` モデル自体はF-005が別途使うため残置し、このマッチングロジックのみ削除する）
+- `buildCandidates()`（上記3つを束ねる入れ物）／`composite_score` によるソート（ADR-0003 の非開示合成スコア方式そのもの）／`buildHeadline()`（単一候補ハイライト文、D9-3で置き換え）／`toResponseItem()`（「1レコメンド1行」の出力形。分類俯瞰は「1銘柄1バケツ」の形のため不要）
+- `FundamentalHealthEvaluator`／`TakeProfitThresholdEvaluator` 自体（共有評価器）は削除しない。UC-009 が直接呼んでいた分が無くなるだけで、UC-004/005/008/010/011 側の呼び出しとして存続する
+
+#### D9-2. 永続化を廃止する（`import_summary_reports` / `import_summary_report_items`）
+
+- 実装調査の結果、これら2テーブルは**書き込み専用**（`ShowImportSummaryReportAction::execute()` は毎回DBから独立に再計算して画面に返し、`persist()` はログとしての副作用書き込みのみ）で、**現在どの画面もこの永続化データを読み返していない**（過去レポート閲覧機能はCHG-0008で明示的にスコープ外とした）ことが判明した
+- **確定（2026-09-17）**: `persist()` を削除し、書き込みを完全に停止する。あわせて `ImportCsvAction` が取込完了時に作成しているプレースホルダー行（定型文 `portfolio_headline` のみの `ImportSummaryReport::create()`）も削除する
+- ADR-0014 D8 の「第1段階は永続化なし」という前提を UC-009 側の残存インフラにも一致させる。第2段階の遷移表示は D8 の通り `portfolio_classifications` という**別の新規テーブル**（`holding_snapshot_id` 1:1 の粒度）で構築する計画であり、`import_summary_reports`/`import_summary_report_items`（1レコメンド1行の粒度）を残しても第2段階の役には立たない
+- 2テーブルのスキーマ定義自体は本CRでは削除しない（別途整理）
+
+#### D9-3. `portfolio_headline` はバケツ件数の集計文に変更する
+
+- 旧: 「5件の候補を検出しました。最優先候補: 7203 トヨタ自動車（含み益+45%・RSI72が中心的根拠）」という単一候補ハイライト文（`composite_score` 最上位1件を強調）
+- **確定（2026-09-17）**: 「整理検討3件・利確検討5件・買い増し候補2件、積立コア比率72%」のようなバケツ件数・構成比の集計文に変更する
+
+#### D9-4. バケツ各行の一言評価（`bucket_reason`）は `SignalCriteriaEvaluator` の達成度データから機械生成する
+
+- 旧: `reason_summary`/`action_suggestion` は独自の文章生成ロジック（削除対象、D9-1参照）
+- **確定（2026-09-17）**: 一言評価は残すが、シンプルかつ理由が明快なものに限定する。CHG-0007で導入済みの判定チェックリスト（`SignalCriteriaEvaluator`）が既に持つ「基準値・実測値・達成状態（met/near/unmet）」データから機械的に生成する（例: 「技術3/7達成・RSI72が基準70を超過」）。複数要素を独自の重みで合成する文章生成は行わない（非開示スコアの再導入を避けるため）
+
+### D10. バケツ内の並び順（Gate 2レビューで新規確定。既存流用を優先し、無い場合のみ最小限の新規設計）
+
+供給元Actionが既に透明マルチキーソート（`usort`ベースの`compareRows()`）を持つバケツはそのまま流用する。持たないバケツ（`take_profit`・`hold`・`core_accumulation`）とバッジ表示（セクター偏りサマリ）のみ、新規に設計する。いずれも既存の算出値のみを用い、新しい閾値・重み付けは作らない。
+
+| バケツ／表示 | 並び順 | 実装場所 |
+|---|---|---|
+| `add_on`（買い増し） | 既存流用: ①財務健全性（`passed`優先）②買いシグナル数（多い順）③含み益率（低い順） | `ShowBuySignalListAction::compareRows()`（無改修） |
+| `loss_review`（整理検討） | 既存流用: ①押し目買いシグナル有無（無→優先）②財務ランク（failed優先）③テクニカル達成数（多い順）④含み損率（深い順） | `ShowLossReviewListAction::compareRows()`（無改修） |
+| `new_entry`（新規候補） | 既存流用: ①押し目買いシグナル数（多い順）②財務健全性③同セクター保有比率④52週レンジ内位置 | `ShowWatchlistAction`（無改修） |
+| `take_profit`（利確検討） | **新規設計**: ①シグナル数（多い順）②判定チェックリストのテクニカル達成数（多い順）③含み益率（高い順）。`add_on`/`loss_review`と同じ思想（シグナル性→チェックリスト達成度→含み損益率）で揃えた | `ShowSignalListAction`（**新規追加**。D10-1参照） |
+| `hold`（キープ） | **新規設計**: ① `hold_watch`（要観察）フラグが立っている銘柄を先頭に ② 残りは含み損益率が低い順 | `ClassifyHoldingsAction`内（分類俯瞰専用） |
+| `core_accumulation`（積立コア） | **新規設計**: 評価額（`market_value`）が大きい順 | `ClassifyHoldingsAction`内（分類俯瞰専用） |
+| セクター偏りサマリ（バッジ） | **新規設計**: 配分率の超過幅（`allocation_rate` − 70%）が大きい順 | `ClassifyHoldingsAction`内（分類俯瞰専用） |
+
+#### D10-1. `take_profit`のソートはUC-004本体（`ShowSignalListAction`）に実装する
+
+`ShowSignalListAction`（UC-004・利確検討）はきょうだいの`ShowBuySignalListAction`/`ShowLossReviewListAction`と異なり、これまで優先順位ソートを一切持っていなかった（DB取得順のまま）。この既存の穴を今回埋める。
+
+- **確定（2026-09-17）**: `ShowSignalListAction`自体に`compareRows()`相当を追加し、UC-004画面自体も優先順位付きで表示されるようにする
+- 分類俯瞰専用（`ClassifyHoldingsAction`内）に留める代替案は不採用。同一データがUC-004画面と分類俯瞰画面で異なる順序になる一貫性の欠如を避けるため
+- この決定により、「本CRでは既にGreenのUC-001〜UC-012・`signals`／`buy_signals`／`FetchExternalMarketDataAction`は不変」という当初の前提（Context節）を**UC-004（`ShowSignalListAction`）に限り修正する**。並び順のみの変更でありシグナル判定・`signals`テーブルへの永続化条件には影響しない
+
+### D11. ADR-0003（非開示合成スコアの部分的透明化）はSupersededとする。`WatchedTheme`ベースの新規候補ロジックは退役する
+
+- ADR-0003が非開示スコアリングの対象と定めていたのはUC-009（取込後サマリーレポート）の上位10〜20件レコメンドのみ。D9の置き換えによりこの用途自体が無くなるため、ADR-0003は「Superseded by ADR-0014」と明記する
+- `WatchedTheme`（注目テーマ）ベースの新規候補判定ロジック（`ShowImportSummaryReportAction::buildNewCandidateItems()`）は退役する。実データ確認済み: 2026-09-17時点で`WatchedTheme`の登録件数は0件であり、退役による実質的な検出結果への影響はない。`WatchedTheme`モデル自体・そのテーブルはF-005（将来機能）が別途使う想定のため残置する
 
 ## Rationale
 
@@ -136,15 +190,15 @@ Proposed（Gate 1: requirements.md / Gate 2: use-cases.md UC-013 の承認をも
 
 - ポートフォリオ全体を1画面で俯瞰でき、「今どこに何%あるか」「今週動くべき銘柄はどれか」が銘柄起点で読める
 - 既存の抽出 Action（`ShowSignalListAction` / `ShowBuySignalListAction` / `ShowLossReviewListAction` / `SectorAllocationCalculator`）をロジック新規実装ゼロで流用する
-- 表示レイヤー完結（DB スキーマ変更なし）のため、既に Green・マージ済みの UC-001〜UC-012 のロジックへの改修が発生しない（`ClassifyHoldingsAction` と サマリーレポートタブの Blade/Livewire 追加のみ）
+- 表示レイヤー完結（DB スキーマ変更なし）のため、既に Green・マージ済みの UC-001〜UC-012 のロジックへの改修はD10-1（`ShowSignalListAction`への並び順追加）を除き発生しない（`ClassifyHoldingsAction` と サマリーレポートタブの Blade/Livewire 追加が主）
 - 段階リリースにより、永続化という不可逆な工事の前に「分類ダッシュボードは実際に役立つか」を数回の週次取込で検証できる
+- UC-009が長年抱えていた重複ロジック（`ShowImportSummaryReportAction`独自の候補選定・非開示合成スコア）を、本CRの置き換えを機に解消できる（D9-1）
 
 ### デメリット・リスク
 
-- 優先順位（D3）・キープの線引き（D5）・リバランスの扱い（D4）・UC-009 top-10/20 との関係（D9）に、本人の投資哲学に依存する判断が複数残る。Gate 2（use-cases.md）レビューで確定する
 - 第2段階の遷移表示は `portfolio_classifications` テーブル追加＋ UC-001 の取込フロー改修が必要（別CR、Gate 3 の実質承認が要る）
-- リバランスをバッジに留めたことで、当初要望「利確・リバランス検討を1つの塊で見たい」とズレる可能性（Gate 2 で調整）
-- UC-009 の非開示 top-10/20 リストと分類俯瞰が同じタブに併存し、情報が一部重複する。将来的に分類俯瞰が top リストを置き換える方向は ADR-0003 の透明化方針とも整合するが、本CRでは踏み込まない
+- `hold`バケツの「好調キープ強調」（D5）・20%アクティブ枠の予算トラッキング（D7）は本CRのスコープ外とし、いずれも将来検討事項として`accuracy-improvement-backlog.md`に記録する
+- `import_summary_reports`/`import_summary_report_items`のテーブル定義は本CRでは削除せず、書き込みだけを停止するため、スキーマ上は未使用のテーブルが残る（D9-2）
 - `ClassifyHoldingsAction` が4つの既存 Action を呼ぶため、サマリーレポートタブの1回のレンダリングで実行されるクエリ本数が増える（個人利用・週次運用のためパフォーマンス影響は許容範囲。UC-009 が既に同種の集計をしている）
 
 ## Related
@@ -155,7 +209,8 @@ Proposed（Gate 1: requirements.md / Gate 2: use-cases.md UC-013 の承認をも
 - `docs/product/ui-guidelines.md`（サマリーレポートタブに「分類俯瞰」セクションを追加。タブ数は6個のまま）
 - `docs/ai-context/module-map.md` / `docs/ai-context/glossary.md`（`ClassifyHoldingsAction`・バケツ分類の用語）
 - `docs/rcid/traceability-matrix.md`（F-013 行・CHG-0015）
-- `docs/adr/ADR-0003-f009-scoring-transparency-relaxation.md`（合成スコアの部分的透明化。本ADRは「分類は透明な優先順位で」とする対比）
+- `docs/adr/ADR-0003-f009-scoring-transparency-relaxation.md`（合成スコアの部分的透明化。**D11により本ADRでSupersededとする**。用途だったUC-009上位10〜20件が分類俯瞰に置き換わり非開示スコア自体が無くなるため）
+- `docs/product/accuracy-improvement-backlog.md`（`hold`の「好調キープ強調」・20%アクティブ枠の予算トラッキング〔D7〕を将来検討事項として記録）
 - `docs/adr/ADR-0007-existing-holding-add-on-buy-recommendation.md`（透明マルチキーソートの先例、利確×買い増しの排他ルール）
 - `docs/adr/ADR-0010-loss-review-candidate-list.md`（シグナルで絞り込まず全件を並べる先例、表示レイヤー完結で試す先例、UC-004 の鏡像機能を同一タブに足す先例）
 - `docs/adr/ADR-0013-favorites-watchlist.md`（`new_entry` バケツの供給元 UC-012）

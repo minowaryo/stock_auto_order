@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Portfolio\ClassifyHoldingsAction;
+use App\Models\BuySignal;
 use App\Models\FundamentalIndicator;
 use App\Models\Holding;
 use App\Models\HoldingSnapshot;
@@ -11,165 +13,69 @@ use App\Models\Signal;
 use App\Models\Snapshot;
 use App\Models\TechnicalIndicator;
 use App\Models\User;
-use App\Models\WatchedTheme;
+use App\Services\MarketData\JpStockPriceClientInterface;
+use App\Services\MarketData\JQuantsClientInterface;
+use App\Services\MarketData\MarketIndexClientInterface;
+use App\Services\MarketData\UsStockPriceClientInterface;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Testing\TestResponse;
+use Tests\Support\Fakes\FakeJpStockPriceClient;
+use Tests\Support\Fakes\FakeJQuantsClient;
+use Tests\Support\Fakes\FakeMarketIndexClient;
+use Tests\Support\Fakes\FakeUsStockPriceClient;
 use Tests\TestCase;
 
 /*
 |--------------------------------------------------------------------------
-| UC-009: Import summary report — Red phase Feature Test
+| UC-009: 取込後サマリーレポート — Red phase Feature Test (F-013 Cycle 2)
 |--------------------------------------------------------------------------
 |
 | Source of truth:
-|   - docs/product/use-cases.md (UC-009)
-|   - docs/product/requirements.md (F-009, 6章, 7章)
-|   - docs/architecture/data-model.md (import_summary_reports /
-|     import_summary_report_items, "保留・確定が必要な初期パラメータ値")
-|   - docs/adr/ADR-0002-nisa-account-type-tracking.md
-|   - docs/adr/ADR-0003-f009-scoring-transparency-relaxation.md
-|
-| Nothing under app/ implements the report *generation* logic yet.
-| `ImportCsvAction` only creates a stub `import_summary_reports` row with a
-| fixed headline (`sprintf('%d件の保有銘柄を取り込みました。', ...)`); it never
-| creates `import_summary_report_items` rows, and there is no
-| App\Models\ImportSummaryReportItem class, no `import_summary_report_items`
-| migration, no read endpoint/controller, and no route registered for it in
-| routes/web.php. Every test below is therefore expected to fail — either
-| with a 404 (route not found) or with an assertion mismatch against the
-| stub headline — which is the intended Red state, not a typo.
-|
-| In addition, App\Models\WatchedTheme and the `watched_themes` table do not
-| exist yet at all (no migration). The one test that exercises the
-| "新規投資候補" recommendation type is therefore expected to fatal-error
-| with a "class not found" error during Arrange, rather than during
-| Act/Assert — same intentional-Red convention as UC002HoldingListTest.php /
-| UC003HoldingDetailTest.php did for tables that didn't exist yet at the
-| time those tests were written.
-|
-| Assumptions made while writing these tests (not yet confirmed by an
-| implementation — flag during Gate 4 review if a different contract is
-| preferred). See also the completion report's "実装未確定事項" list for
-| points that were deliberately left *out* of these tests rather than
-| encoded as an assumption here.
-|
-|   - Endpoint: GET /api/import-batches/{importBatch}/summary-report, route
-|     model binding on import_batches.id, `auth` middleware (same "web"
-|     session guard convention as UC-001/002/003). The alternative of
-|     folding the report into UC-001's own POST /csv-import response body
-|     was considered but a dedicated GET endpoint was chosen so the report
-|     can also be re-fetched later without re-uploading CSVs. Flag at Gate 4
-|     if UC-001's response should embed this instead (or in addition).
-|   - Report *semantics*: because these tests never invoke the real
-|     ImportCsvAction/CSV parsing pipeline (arranging fake CSV bytes for a
-|     scoring-only test would over-couple this file to UC-001's parser),
-|     each test seeds the underlying tables directly (import_batches /
-|     snapshots / holdings / holding_snapshots / sector_classifications /
-|     technical_indicators / fundamental_indicators) exactly like
-|     UC002HoldingListTest.php / UC003HoldingDetailTest.php do, and then
-|     calls the GET endpoint. This assumes the endpoint (re)computes the
-|     report from the *current* state of the batch's snapshot at request
-|     time (or that generation is triggered as a side effect of import and
-|     always reflects the latest underlying data for that batch) rather
-|     than strictly replaying a frozen row that could only ever have been
-|     written once by a prior real ImportCsvAction run. Flag at Gate 4 if
-|     the intended design is "write-once at import time only, unreadable /
-|     stale otherwise".
-|   - Success response body shape: `{"data": {portfolio_headline,
-|     generated_at, top_recommendations: [...],
-|     supplementary_recommendations: [...]}}`, matching use-cases.md's
-|     output table field names verbatim (not the DB column names — e.g.
-|     `target` per use-cases.md, not `target_label` per data-model.md).
-|     Each recommendation item is assumed to be
-|     `{rank, recommendation_type, target, action_suggestion,
-|     reason_summary, link_to}`, with supplementary items additionally
-|     carrying `is_supplementary: true`. Top items are not asserted to
-|     either include or omit `is_supplementary` (data-model.md only
-|     requires it on the supplementary side).
-|   - `link_to` values: `'UC-003'` for `利確検討` items (only one candidate
-|     screen is named in use-cases.md's basic flow step 6) and `'UC-005'`
-|     for `リバランス` items (ditto). For `新規投資候補` items, use-cases.md
-|     names two possible screens (`UC-006`/`UC-008`, which share one
-|     physical screen per UC-006 業務ルール), so this test only asserts
-|     `link_to` is one of `['UC-006', 'UC-008']` rather than a single exact
-|     value.
-|   - `新規投資候補` matching mechanism: UC-008/UC-009 leave "how a holding
-|     is matched against a registered watched theme" unspecified beyond
-|     "登録済みテーマへの銘柄の機械的な合致判定". This test assumes the
-|     simplest interpretation — a candidate holding's
-|     `sector_classifications.name` equals a `watched_themes.name` exactly
-|     — combined with the financial-health draft filter from
-|     data-model.md's "保留・確定が必要な初期パラメータ値" table
-|     (equity_ratio >= 40, roe >= 10). **This is the single biggest open
-|     question in this file** — please confirm or correct the matching rule
-|     at Gate 4 (same weight of caution as UC003's signal_result/
-|     signal_reason wording assumption).
-|   - Priority ordering (which candidate ranks higher) is only asserted in
-|     the loosest possible way: given two clearly-more-vs-less-extreme
-|     candidates of the *same* recommendation type, the more extreme one is
-|     assumed to receive a numerically smaller `rank`. The composite score
-|     formula/weights themselves (data-model.md: "初期パラメータ値", not yet
-|     finalized) are never asserted.
-|   - Item count region (10 top / 20 total) uses data-model.md's draft
-|     values directly. If Gate 4 changes these numbers, this file's
-|     count-based tests need updating accordingly.
-|   - NISA account-type exclusion (ADR-0002) is *not* tested in this file at
-|     all — `holding_snapshot_accounts` has no migration/model yet, and
-|     UC-009's own business rules don't explicitly restate the NISA
-|     exclusion the way UC-004/UC-005 do. See the completion report's
-|     "実装未確定事項" list.
-|   - ADR-0004 signal reflection (new, added after this file's initial Green
-|     merge): `buildTakeProfitCandidates()` currently only reads
-|     `unrealized_gain_rate` and `holding->technicalIndicator->rsi` — it
-|     never queries the `signals` table populated by
-|     App\Services\Analysis\SignalDeterminationService /
-|     App\Actions\Analysis\FetchExternalMarketDataAction (UC-004's 7 signal
-|     types, docs/architecture/data-model.md#signals). The one new test
-|     below assumes (a) `reason_summary` for a 利確検討 candidate must
-|     include wording drawn from that candidate's saved
-|     `signals.reason_summary` rows when any exist, and (b) having more
-|     saved signals raises a candidate's rank relative to an
-|     otherwise-comparable candidate with none — but does *not* assert the
-|     exact scoring formula/weight (same black-box relaxation as ADR-0003).
-|     Confirm both the exact reason_summary-composition rule and the
-|     signal-count-to-score weighting at Gate 4.
+|   - docs/product/use-cases.md UC-009（2026-09-17改訂: F-013/ADR-0014 D9で
+|     旧・上位10〜20件レコメンドが分類俯瞰〔UC-013〕に完全に置き換わった版）
+|   - docs/product/use-cases.md UC-013（分類俯瞰の出力表・業務ルール）
+|   - docs/adr/ADR-0014-portfolio-bucket-classification.md D9〜D9-4（置き換え・
+|     永続化廃止・portfolio_headline改訂・退役ロジック）
 |
 | -------------------------------------------------------------------------
-| CR (2026-08-29, CHG-0006): 利確検討ラインの動的分岐
+| このファイルの位置づけ（Cycle 2、既存テストの書き換え）
 | -------------------------------------------------------------------------
-| docs/product/use-cases.md UC-004業務ルール「利確検討ラインの動的分岐」/
-| docs/architecture/data-model.md「利確検討ラインの動的分岐（高水準モード）」
-| 行は、UC-009業務ルールからも同一の分岐ロジックを参照する
-| （ShowImportSummaryReportAction::buildTakeProfitCandidates()の対象抽出
-| 閾値`TAKE_PROFIT_GAIN_RATE_THRESHOLD`も、シグナル0件かつ財務健全性'passed'
-| のホールディングについては+150%超に切り替わる想定）。動的分岐そのものの
-| 判定ロジック検証はtests/Unit/Services/Analysis/
-| TakeProfitThresholdEvaluatorTest.php側で行うため、本ファイルでは
-| buildTakeProfitCandidates()の対象抽出閾値への反映のみを検証する
-| （`composite_score`の算出式自体は変更対象外のため新規テスト不要 — 対象に
-| 含まれるかどうかの閾値のみが変更点）。
+| 旧版のこのファイルは ShowImportSummaryReportAction 独自の候補選定ロジック
+| （buildTakeProfitCandidates/buildRebalanceCandidates/buildNewCandidateItems/
+| composite_score、ADR-0003）を前提にしたテストで埋まっていたが、ADR-0014 D9
+| によりそれらは退役対象と確定した。本ファイルはUC-009の新しい契約（
+| ClassifyHoldingsAction〔UC-013〕の出力をそのまま`classification`に埋め込む・
+| `portfolio_headline`はバケツ件数の集計文・永続化廃止）に全面的に書き換える。
 |
-| 既存テストへの影響確認（全件を目視確認済み・実行して確認済み）: 本ファイルの
-| 利確検討関連の既存フィクスチャ（ucFrom009TestHoldingSnapshot経由で
-| unrealized_gain_rateが+20%を超えるもの: 30.0/38.0/21.0〜45.0/50.0/21.0）は
-| いずれもFundamentalIndicatorレコードを作成していない
-| （ucFrom009TestFundamentalIndicator()は「新規投資候補」セクションの
-| candidateHolding専用に呼ばれており、いずれもholding_snapshotsの行を持たない
-| ＝unrealized_gain_rateの評価対象にならない未保有銘柄である）。したがって
-| 利確検討側のholdingは常に財務健全性'unavailable'となり、高水準モードの条件
-| （シグナル0件 かつ 財務健全性'passed'）を満たし得ず、既存の全テストケースは
-| 全て「通常モードのまま」判定される（実行して確認済み — 既存15件はいずれも
-| PASSのまま）。
+| App\Actions\ImportSummaryReport\ShowImportSummaryReportAction /
+| App\Http\Controllers\ImportSummaryReportController / ルート
+| （GET /api/import-batches/{importBatch}/summary-report）はいずれも実装済み
+| だが、中身は旧・候補選定ロジックのまま（D9-1〜D9-4未着手）。そのため
+| 以下のテストは「クラスが無くて fatal error になる」Redではなく、
+| 「`classification`キーが無い／`top_recommendations`が残っている／
+| `portfolio_headline`が旧フォーマットのまま／DBに書き込みが発生する」等の
+| **アサーション不一致によるRed**になる想定（意図した失敗であり、セットアップ
+| ミスではない）。ClassifyHoldingsAction 自体（F-013 Cycle 1）は既にGreenで
+| マージ済みのため、本ファイルは同Actionの分類ロジック自体（バケツ判定・
+| hold_watch判定・ソート順等）を再検証しない（tests/Unit/Actions/Portfolio/
+| ClassifyHoldingsActionTest.php の責務。重複させない）。
 |
-| 本CR追加分2件のRed実行結果（実行して確認済み）:
-|   - 「含み益+120%...レポートに含まれない」は、現状の固定+20%閾値のままでは
-|     +120%が対象に含まれてしまうため、意図通りFAIL（アサーション不一致:
-|     期待値null、実際は'4901 富士フイルム'の利確検討アイテムが返る）する。
-|   - 「含み益+160%...レポートに含まれる」は、現状の固定+20%閾値でも+160%は
-|     既に対象に含まれるため偶然PASSする。これは動的分岐導入後も成立し続ける
-|     べき正常系（高水準モードの対象抽出+150%超を満たす）の回帰防止テストとして
-|     機能するものであり、テストが誤っているわけではない
-|     （tests/Feature/UC004SignalListTest.phpの同種CHG-0006ブロックと同じ
-|     パターン）。
+| Assumptions made while writing these tests (Gate 4で異なる契約が良ければ
+| 指摘してください):
+|   - ShowImportSummaryReportAction::execute(ImportBatch $importBatch): array
+|     のシグネチャ自体は変更しない（既存のController/Livewireからの呼び出し
+|     と揃える）。ただし分類俯瞰データ自体はClassifyHoldingsAction同様
+|     「直近スナップショット」を対象に算出される想定であり、$importBatch
+|     引数は主に画面のURL・表示用（取込日時ラベル等）に使われるのみと仮定
+|     する。本ファイルの全テストは1バッチ・1スナップショットのみのシナリオ
+|     で構成しているため、この仮定の違いによる曖昧さは生じない。
+|   - `classification`はClassifyHoldingsAction::execute()の戻り値
+|     （classified_at/group_summary/hold_breakdown/buckets/
+|     sector_overweight_summary/new_entry_reference）をキー名そのままで
+|     埋め込む。
+|   - `portfolio_headline`の具体的な文言フォーマットは実装時に確定するため、
+|     本ファイルでは「旧来の単一候補ハイライト文（'最優先候補:'等）ではない
+|     こと」「空文字でないこと」のみを検証し、厳密な文言はアサートしない。
 |
 */
 
@@ -245,6 +151,18 @@ function ucFrom009TestSignal(HoldingSnapshot $holdingSnapshot, array $attributes
     ], $attributes));
 }
 
+/**
+ * @param  array<string, mixed>  $attributes
+ */
+function ucFrom009TestBuySignal(HoldingSnapshot $holdingSnapshot, array $attributes = []): BuySignal
+{
+    return BuySignal::create(array_merge([
+        'holding_snapshot_id' => $holdingSnapshot->id,
+        'signal_type' => 'rsi_oversold_rebound',
+        'reason_summary' => 'RSIが28から34へ反発しました',
+    ], $attributes));
+}
+
 function ucFrom009TestSectorClassification(string $name, ?string $code = null): SectorClassification
 {
     return SectorClassification::create([
@@ -260,13 +178,14 @@ function ucFrom009TestTechnicalIndicator(Holding $holding, array $attributes = [
 {
     return TechnicalIndicator::create(array_merge([
         'holding_id' => $holding->id,
-        'rsi' => 70.0,
+        'rsi' => 50.0,
         'macd' => null,
         'macd_signal' => null,
         'ma20' => null,
         'ma75' => null,
         'bb_upper' => null,
         'bb_lower' => null,
+        'relative_strength_vs_market' => 6.0,
         'computed_at' => now(),
     ], $attributes));
 }
@@ -280,31 +199,15 @@ function ucFrom009TestFundamentalIndicator(Holding $holding, array $attributes =
         'holding_id' => $holding->id,
         'per' => 15.0,
         'pbr' => 1.5,
-        'roe' => 8.0,
-        'revenue_growth' => 5.0,
-        'operating_income_growth' => 4.0,
-        'equity_ratio' => 35.0,
+        'roe' => 15.2,
+        'revenue_growth' => 8.0,
+        'operating_income_growth' => 12.3,
+        'equity_ratio' => 58.0,
         'dividend_yield' => 2.0,
         'dividend_payout_ratio' => 30.0,
-        // CHG-0012 / ADR-0011: 営業利益率10%以上（健全）をデフォルトに。
-        // 動的分岐テストが equity/roe/成長率を健全側に override する際、
-        // 営業利益率も健全であることで FundamentalHealthEvaluator が
-        // 'passed' を返し高水準モード判定が維持される。
-        'operating_margin' => 18.0,
+        'operating_margin' => 18.3,
         'fetched_at' => now(),
     ], $attributes));
-}
-
-/**
- * `watched_themes` has no migration and App\Models\WatchedTheme does not
- * exist yet (docs/architecture/data-model.md, UC-008). Calling this helper
- * is expected to fatal-error with a "class not found" error until Gate 4
- * Green work adds the model/migration — that is the intended Red state for
- * the one test that uses it.
- */
-function ucFrom009TestWatchedTheme(string $name): object
-{
-    return WatchedTheme::create(['name' => $name]);
 }
 
 /**
@@ -319,52 +222,111 @@ function ucFrom009TestFetchReport(TestCase $test, int|ImportBatch $importBatch, 
 }
 
 /**
- * Seed `$count` individually-qualifying UC-004-style 利確検討 candidates
- * (含み益+20%超), each in its own sector so no single sector crosses the
- * UC-005 70%偏り警告 threshold and pollutes the ranking pool with an
- * unwanted リバランス item. Gain rate and RSI are varied per candidate so
- * composite scores are very unlikely to tie.
+ * Seeds one holding per bucket (core_accumulation/loss_review/take_profit/
+ * add_on/hold) under the same snapshot, mirroring the fixture style already
+ * proven in tests/Unit/Actions/Portfolio/ClassifyHoldingsActionTest.php.
+ *
+ * @return array<string, string> symbol_code keyed by bucket name
  */
-function ucFrom009TestSeedManyTakeProfitCandidates(Snapshot $snapshot, int $count): void
+function ucFrom009TestSeedAllBuckets(Snapshot $snapshot): array
 {
-    for ($i = 0; $i < $count; $i++) {
-        $sector = ucFrom009TestSectorClassification("テストセクター{$i}", sprintf('%03d', $i));
-        $holding = ucFrom009TestHolding([
-            'symbol_code' => sprintf('90%02d', $i),
-            'market' => 'jp',
-            'symbol_name' => "テスト銘柄{$i}",
-            'sector_classification_id' => $sector->id,
-        ]);
+    $etf = ucFrom009TestHolding([
+        'symbol_code' => 'VTI', 'market' => 'us', 'instrument_type' => 'etf',
+        'symbol_name' => 'Vanguard Total Stock Market ETF',
+    ]);
+    ucFrom009TestHoldingSnapshot($snapshot, $etf, ['quantity' => 50, 'current_price' => 300]);
 
-        $gainRate = 21.0 + $i; // 21%〜(21+count-1)%, all comfortably over the 20% threshold
-        $averageCost = 1000.0;
-        $currentPrice = $averageCost * (1 + $gainRate / 100);
-        $quantity = 10;
+    $lossReview = ucFrom009TestHolding(['symbol_code' => 'LR01', 'symbol_name' => '整理検討テスト']);
+    ucFrom009TestHoldingSnapshot($snapshot, $lossReview, [
+        'current_price' => 750, 'unrealized_gain_amount' => -25000, 'unrealized_gain_rate' => -25.0,
+    ]);
+    ucFrom009TestTechnicalIndicator($lossReview);
+    ucFrom009TestFundamentalIndicator($lossReview);
 
-        ucFrom009TestHoldingSnapshot($snapshot, $holding, [
-            'quantity' => $quantity,
-            'average_cost' => $averageCost,
-            'current_price' => $currentPrice,
-            'unrealized_gain_amount' => ($currentPrice - $averageCost) * $quantity,
-            'unrealized_gain_rate' => $gainRate,
-        ]);
+    $takeProfit = ucFrom009TestHolding(['symbol_code' => 'TP01', 'symbol_name' => '利確検討テスト']);
+    $takeProfitSnapshot = ucFrom009TestHoldingSnapshot($snapshot, $takeProfit, [
+        'current_price' => 1250, 'unrealized_gain_amount' => 25000, 'unrealized_gain_rate' => 25.0,
+    ]);
+    ucFrom009TestSignal($takeProfitSnapshot);
+    ucFrom009TestTechnicalIndicator($takeProfit);
+    ucFrom009TestFundamentalIndicator($takeProfit);
 
-        ucFrom009TestTechnicalIndicator($holding, ['rsi' => 60.0 + $i]);
-    }
+    $addOn = ucFrom009TestHolding(['symbol_code' => 'AO01', 'symbol_name' => '買い増し検討テスト']);
+    $addOnSnapshot = ucFrom009TestHoldingSnapshot($snapshot, $addOn);
+    ucFrom009TestBuySignal($addOnSnapshot);
+    ucFrom009TestTechnicalIndicator($addOn);
+    ucFrom009TestFundamentalIndicator($addOn);
+
+    $hold = ucFrom009TestHolding(['symbol_code' => 'HD01', 'symbol_name' => 'キープテスト']);
+    ucFrom009TestHoldingSnapshot($snapshot, $hold, [
+        'current_price' => 1050, 'unrealized_gain_amount' => 5000, 'unrealized_gain_rate' => 5.0,
+    ]);
+    ucFrom009TestTechnicalIndicator($hold);
+    ucFrom009TestFundamentalIndicator($hold);
+
+    return [
+        'core_accumulation' => 'VTI',
+        'loss_review' => 'LR01',
+        'take_profit' => 'TP01',
+        'add_on' => 'AO01',
+        'hold' => 'HD01',
+    ];
 }
 
-describe('UC-009: 取込後サマリーレポート', function () {
-    describe('正常系（レポート生成・基本構造）', function () {
-        test('取込後サマリーレポートを取得できる（全体感サマリー・生成日時・主要/補足レコメンドが返る）', function () {
+/**
+ * Minimal 楽天証券 JP stock CSV (1 row), trimmed down from
+ * tests/Feature/UC001CsvImportTest.php's ucFrom001TestJpStockCsv() — only
+ * used here to exercise the real ImportCsvAction pipeline for the
+ * "永続化廃止（D9-2）" placeholder-removal test.
+ */
+function ucFrom009TestMinimalJpStockCsv(): string
+{
+    $lines = [
+        '■現在の評価額合計［円］,,"0"',
+        '■評価損益合計,前日比［円］,"0"',
+        ',前月比［円］,"0"',
+        ',評価損益［円］,"0"',
+        '',
+        '■特定口座',
+        '',
+        '銘柄コード,銘柄名,保有数量［株］,執行中［株］,(内訳　通常数量[株]),(内訳　積立数量[株]),平均取得価額［円］,取得総額［円］,現在値［円］,現在値（前日比）［円］,時価評価額［円］,評価損益［円］',
+        '"7203","トヨタ自動車","10","0","10","0","2,000.00","0","2,500.0","0.0","0","0"',
+        ',,,,,,特定口座合計,"0",,,"0","0"',
+    ];
+
+    return implode("\r\n", $lines)."\r\n";
+}
+
+/**
+ * Minimal 楽天証券 US stock CSV (1 row), trimmed down from
+ * tests/Feature/UC001CsvImportTest.php's ucFrom001TestUsStockCsv().
+ */
+function ucFrom009TestMinimalUsStockCsv(): string
+{
+    $lines = [
+        '■時価評価額合計［USドル］,"0",■前日比合計［USドル］,"0",■評価損益額合計［USドル］,"0",,時間外株価を含まない',
+        '■円換算時価評価額合計,"0",■円換算前日比合計,"0",■円換算評価損益額合計,"0",,"参考為替レート(米ドル)","159.32","円/USD","08/15 06:00"',
+        '',
+        '■特定口座',
+        '',
+        'ティッカー,銘柄名,取引所,保有数量［株］,執行中数量［株］,(内訳　通常数量[株]),(内訳　積立数量[株]),表示通貨,平均取得価額［USドル］,取得総額［USドル］,現在値［USドル］,前日比［USドル］,時価評価額［USドル］,評価損益［USドル］',
+        '"AAPL","アップル","米国市場","5","-","-","-","USドル","100.00","0","150.00","0.00","0","0"',
+        ',,,,,,,,特定口座合計,"0",,,"0","0"',
+    ];
+
+    return implode("\r\n", $lines)."\r\n";
+}
+
+function ucFrom009TestFakeCsvFile(string $filename, string $shiftJisContent): UploadedFile
+{
+    return UploadedFile::fake()->createWithContent($filename, mb_convert_encoding($shiftJisContent, 'SJIS-win', 'UTF-8'));
+}
+
+describe('UC-009: 取込後サマリーレポート（分類俯瞰への置き換え、ADR-0014 D9）', function () {
+    describe('正常系（レポート基本構造）', function () {
+        test('取込後サマリーレポートを取得できる（portfolio_headline・generated_at・classificationが返る）', function () {
             [$batch, $snapshot] = ucFrom009TestImportBatch();
-            $holding = ucFrom009TestHolding(['symbol_code' => '7203', 'market' => 'jp', 'symbol_name' => 'トヨタ自動車']);
-            ucFrom009TestHoldingSnapshot($snapshot, $holding, [
-                'average_cost' => 1000.0,
-                'current_price' => 1300.0,
-                'unrealized_gain_amount' => 3000.0,
-                'unrealized_gain_rate' => 30.0,
-            ]);
-            ucFrom009TestTechnicalIndicator($holding, ['rsi' => 75.0]);
+            ucFrom009TestSeedAllBuckets($snapshot);
 
             $response = ucFrom009TestFetchReport($this, $batch);
 
@@ -374,559 +336,132 @@ describe('UC-009: 取込後サマリーレポート', function () {
             expect($data['portfolio_headline'])->toBeString();
             expect(trim((string) $data['portfolio_headline']))->not->toBe('');
             expect($data['generated_at'])->not->toBeNull();
-            expect($data['top_recommendations'])->toBeArray();
-            expect($data['supplementary_recommendations'])->toBeArray();
+
+            expect($data)->toHaveKey('classification');
+            expect($data['classification'])->toHaveKeys([
+                'group_summary', 'hold_breakdown', 'buckets', 'sector_overweight_summary', 'new_entry_reference',
+            ]);
         });
 
-        test('主要レコメンド項目がrank/recommendation_type/target/action_suggestion/reason_summary/link_toを持つ', function () {
+        test('portfolio_headlineはバケツ件数の集計文であり、旧・単一候補ハイライト文（最優先候補:）ではない', function () {
             [$batch, $snapshot] = ucFrom009TestImportBatch();
-            $holding = ucFrom009TestHolding(['symbol_code' => '7203', 'market' => 'jp', 'symbol_name' => 'トヨタ自動車']);
-            ucFrom009TestHoldingSnapshot($snapshot, $holding, [
-                'average_cost' => 1000.0,
-                'current_price' => 1300.0,
-                'unrealized_gain_amount' => 3000.0,
-                'unrealized_gain_rate' => 30.0,
-            ]);
-            ucFrom009TestTechnicalIndicator($holding, ['rsi' => 75.0]);
+            ucFrom009TestSeedAllBuckets($snapshot);
 
             $response = ucFrom009TestFetchReport($this, $batch);
 
             $response->assertSuccessful();
 
-            $top = $response->json('data.top_recommendations');
-            expect($top)->toHaveCount(1);
-
-            $item = $top[0];
-            expect((int) $item['rank'])->toBe(1);
-            expect($item['recommendation_type'])->toBe('利確検討');
-            expect($item['target'])->toContain('7203');
-            expect(trim((string) $item['action_suggestion']))->not->toBe('');
-            expect(trim((string) $item['reason_summary']))->not->toBe('');
-            // Placeholder contract — see file-level docblock. Confirm at Gate 4.
-            expect($item['link_to'])->toBe('UC-003');
+            $headline = (string) $response->json('data.portfolio_headline');
+            expect($headline)->not->toContain('最優先候補');
+            expect($headline)->not->toContain('件の候補を検出しました');
+            // ADR-0014 D9-3: バケツ件数・構成比の集計文（具体的フォーマットは
+            // Green実装時に確定するため、数値を含むことのみを検証する）。
+            expect(preg_match('/\d/', $headline))->toBe(1);
         });
 
-        test('reason_summary・portfolio_headlineに判定の主要因となった代表指標が具体的な値とともに含まれる（ADR-0003）', function () {
+        test('旧フィールド（top_recommendations/supplementary_recommendations）はレスポンスに含まれない', function () {
             [$batch, $snapshot] = ucFrom009TestImportBatch();
-            $holding = ucFrom009TestHolding(['symbol_code' => '7203', 'market' => 'jp', 'symbol_name' => 'トヨタ自動車']);
-            ucFrom009TestHoldingSnapshot($snapshot, $holding, [
-                'average_cost' => 1000.0,
-                'current_price' => 1380.0,
-                'unrealized_gain_amount' => 3800.0,
-                'unrealized_gain_rate' => 38.0,
-            ]);
-            ucFrom009TestTechnicalIndicator($holding, ['rsi' => 71.0]);
+            ucFrom009TestSeedAllBuckets($snapshot);
 
             $response = ucFrom009TestFetchReport($this, $batch);
 
             $response->assertSuccessful();
-
-            $data = $response->json('data');
-            $reasonSummary = (string) $data['top_recommendations'][0]['reason_summary'];
-
-            // ADR-0003: the composite score's weighting stays undisclosed, but
-            // the *result* must not be a black box — reason_summary/
-            // portfolio_headline must reference at least one concrete,
-            // numeric representative indicator value (e.g. "含み益+38%",
-            // "RSI71"), not just a generic sentence with no figures.
-            expect(preg_match('/\d/', $reasonSummary))->toBe(1);
-            expect(preg_match('/\d/', (string) $data['portfolio_headline']))->toBe(1);
+            $response->assertJsonMissingPath('data.top_recommendations');
+            $response->assertJsonMissingPath('data.supplementary_recommendations');
         });
     });
 
-    describe('正常系（優先順位付け・件数区分）', function () {
-        test('候補が21件以上ある場合、主要レコメンドは10件・補足レコメンドは11〜20件目の10件に制限される', function () {
+    describe('正常系（分類俯瞰の埋め込み、UC-013との整合性）', function () {
+        test('classificationはClassifyHoldingsActionの分類結果（各バケツの銘柄）をそのまま反映する', function () {
             [$batch, $snapshot] = ucFrom009TestImportBatch();
-            ucFrom009TestSeedManyTakeProfitCandidates($snapshot, 25);
+            $symbolsByBucket = ucFrom009TestSeedAllBuckets($snapshot);
+
+            $expected = app(ClassifyHoldingsAction::class)->execute();
 
             $response = ucFrom009TestFetchReport($this, $batch);
-
             $response->assertSuccessful();
 
-            $data = $response->json('data');
-            expect($data['top_recommendations'])->toHaveCount(10);
-            expect($data['supplementary_recommendations'])->toHaveCount(10);
+            $buckets = collect($response->json('data.classification.buckets'));
 
-            $topRanks = collect($data['top_recommendations'])->pluck('rank')->map(fn ($r) => (int) $r)->sort()->values()->all();
-            expect($topRanks)->toBe(range(1, 10));
+            foreach ($symbolsByBucket as $bucket => $symbolCode) {
+                $actualSymbols = $buckets->firstWhere('bucket', $bucket)['holdings'] ?? [];
+                $expectedSymbols = collect($expected['buckets'])->firstWhere('bucket', $bucket)['holdings'] ?? [];
 
-            $supplementaryRanks = collect($data['supplementary_recommendations'])->pluck('rank')->map(fn ($r) => (int) $r)->sort()->values()->all();
-            expect($supplementaryRanks)->toBe(range(11, 20));
-
-            foreach ($data['supplementary_recommendations'] as $item) {
-                expect($item['is_supplementary'])->toBeTrue();
+                expect(collect($actualSymbols)->pluck('symbol_code')->all())
+                    ->toBe(collect($expectedSymbols)->pluck('symbol_code')->all());
+                expect(collect($actualSymbols)->pluck('symbol_code')->all())->toContain($symbolCode);
             }
 
-            $topTargets = collect($data['top_recommendations'])->pluck('target')->all();
-            $supplementaryTargets = collect($data['supplementary_recommendations'])->pluck('target')->all();
-            expect(array_intersect($topTargets, $supplementaryTargets))->toBe([]);
+            expect($response->json('data.classification.group_summary'))
+                ->toEqual(json_decode(json_encode($expected['group_summary']), true));
+            expect($response->json('data.classification.hold_breakdown'))
+                ->toEqual(json_decode(json_encode($expected['hold_breakdown']), true));
         });
 
-        test('候補が11〜20件の場合、主要10件・補足はその残り件数のみになる', function () {
-            [$batch, $snapshot] = ucFrom009TestImportBatch();
-            ucFrom009TestSeedManyTakeProfitCandidates($snapshot, 15);
-
-            $response = ucFrom009TestFetchReport($this, $batch);
-
-            $response->assertSuccessful();
-
-            $data = $response->json('data');
-            expect($data['top_recommendations'])->toHaveCount(10);
-            expect($data['supplementary_recommendations'])->toHaveCount(5);
-        });
-
-        test('候補が10件未満の場合、存在する件数のみ主要レコメンドとして表示し補足レコメンドは空になる', function () {
-            [$batch, $snapshot] = ucFrom009TestImportBatch();
-            ucFrom009TestSeedManyTakeProfitCandidates($snapshot, 4);
-
-            $response = ucFrom009TestFetchReport($this, $batch);
-
-            $response->assertSuccessful();
-
-            $data = $response->json('data');
-            expect($data['top_recommendations'])->toHaveCount(4);
-            expect($data['supplementary_recommendations'])->toBe([]);
-        });
-
-        test('より極端な指標（含み益率・RSI）を持つ候補ほどrankが小さくなる', function () {
-            // Placeholder contract for relative ordering only — the exact
-            // composite score formula/weights are intentionally not
-            // asserted (data-model.md: 初期パラメータ値、未確定). Confirm the
-            // ordering contract itself at Gate 4.
+        test('セクター偏りサマリがレスポンスに含まれ、偏り警告セクターの銘柄行にoverweight_sectorが立つ', function () {
             [$batch, $snapshot] = ucFrom009TestImportBatch();
 
-            $sectorA = ucFrom009TestSectorClassification('セクターA', 'A01');
-            $sectorB = ucFrom009TestSectorClassification('セクターB', 'B01');
+            $semiconductor = ucFrom009TestSectorClassification('半導体');
+            $automobile = ucFrom009TestSectorClassification('自動車');
 
-            $extremeHolding = ucFrom009TestHolding([
-                'symbol_code' => '1111', 'market' => 'jp', 'symbol_name' => '極端銘柄',
-                'sector_classification_id' => $sectorA->id,
-            ]);
-            ucFrom009TestHoldingSnapshot($snapshot, $extremeHolding, [
-                'average_cost' => 1000.0,
-                'current_price' => 1500.0,
-                'unrealized_gain_amount' => 5000.0,
-                'unrealized_gain_rate' => 50.0,
-            ]);
-            ucFrom009TestTechnicalIndicator($extremeHolding, ['rsi' => 85.0]);
+            $overweight = ucFrom009TestHolding(['symbol_code' => 'SEC1', 'symbol_name' => '半導体株', 'sector_classification_id' => $semiconductor->id]);
+            ucFrom009TestHoldingSnapshot($snapshot, $overweight, ['current_price' => 800, 'unrealized_gain_rate' => 0.0]);
+            ucFrom009TestTechnicalIndicator($overweight);
+            ucFrom009TestFundamentalIndicator($overweight);
 
-            $borderlineHolding = ucFrom009TestHolding([
-                'symbol_code' => '2222', 'market' => 'jp', 'symbol_name' => '境界銘柄',
-                'sector_classification_id' => $sectorB->id,
-            ]);
-            ucFrom009TestHoldingSnapshot($snapshot, $borderlineHolding, [
-                'average_cost' => 1000.0,
-                'current_price' => 1210.0,
-                'unrealized_gain_amount' => 2100.0,
-                'unrealized_gain_rate' => 21.0,
-            ]);
-            ucFrom009TestTechnicalIndicator($borderlineHolding, ['rsi' => 55.0]);
+            $healthy = ucFrom009TestHolding(['symbol_code' => 'AUTO1', 'symbol_name' => '自動車株', 'sector_classification_id' => $automobile->id]);
+            ucFrom009TestHoldingSnapshot($snapshot, $healthy, ['current_price' => 200, 'unrealized_gain_rate' => 0.0]);
+            ucFrom009TestTechnicalIndicator($healthy);
+            ucFrom009TestFundamentalIndicator($healthy);
 
             $response = ucFrom009TestFetchReport($this, $batch);
-
             $response->assertSuccessful();
 
-            $top = collect($response->json('data.top_recommendations'));
-            $extremeItem = $top->first(fn ($item) => str_contains((string) $item['target'], '1111'));
-            $borderlineItem = $top->first(fn ($item) => str_contains((string) $item['target'], '2222'));
+            $sectorSummary = collect($response->json('data.classification.sector_overweight_summary'));
+            expect($sectorSummary->pluck('sector_name')->all())->toContain('半導体');
 
-            expect($extremeItem)->not->toBeNull();
-            expect($borderlineItem)->not->toBeNull();
-
-            $extremeRank = (int) $extremeItem['rank'];
-            $borderlineRank = (int) $borderlineItem['rank'];
-
-            expect($extremeRank)->toBeLessThan($borderlineRank);
-        });
-
-        test('signalsテーブルに保存されたシグナルが利確検討のreason_summary・優先順位に反映される（ADR-0004）', function () {
-            // Placeholder contract for signal reflection only — the exact
-            // signal-count-to-score weighting is intentionally not asserted
-            // (same black-box relaxation as ADR-0003, see the file-level
-            // docblock's ADR-0004 note). Confirm at Gate 4.
-            [$batch, $snapshot] = ucFrom009TestImportBatch();
-
-            $signalSector = ucFrom009TestSectorClassification('セクターC', 'C01');
-            $noSignalSector = ucFrom009TestSectorClassification('セクターD', 'D01');
-
-            // Holding with 2 saved signals. Gain rate/RSI are kept slightly
-            // *below* the no-signal holding's, so that the current
-            // gain-rate-plus-RSI-only composite score would rank it *lower*
-            // than the no-signal holding — the signals must be what tips the
-            // ranking the other way once reflected.
-            $signalHolding = ucFrom009TestHolding([
-                'symbol_code' => '3333', 'market' => 'jp', 'symbol_name' => 'シグナル銘柄',
-                'sector_classification_id' => $signalSector->id,
-            ]);
-            $signalHoldingSnapshot = ucFrom009TestHoldingSnapshot($snapshot, $signalHolding, [
-                'average_cost' => 1000.0,
-                'current_price' => 1300.0,
-                'unrealized_gain_amount' => 3000.0,
-                'unrealized_gain_rate' => 30.0,
-            ]);
-            ucFrom009TestTechnicalIndicator($signalHolding, ['rsi' => 70.0]);
-            ucFrom009TestSignal($signalHoldingSnapshot, [
-                'signal_type' => 'week52_high_pullback',
-                'reason_summary' => '週52週高値から-15%まで反落',
-            ]);
-            ucFrom009TestSignal($signalHoldingSnapshot, [
-                'signal_type' => 'peg_overvalued',
-                'reason_summary' => 'PEGレシオが2.3で割高水準',
-            ]);
-
-            // Holding with no saved signals, gain rate/RSI set slightly
-            // *higher* than the signal holding's.
-            $noSignalHolding = ucFrom009TestHolding([
-                'symbol_code' => '4444', 'market' => 'jp', 'symbol_name' => '無シグナル銘柄',
-                'sector_classification_id' => $noSignalSector->id,
-            ]);
-            ucFrom009TestHoldingSnapshot($snapshot, $noSignalHolding, [
-                'average_cost' => 1000.0,
-                'current_price' => 1320.0,
-                'unrealized_gain_amount' => 3200.0,
-                'unrealized_gain_rate' => 32.0,
-            ]);
-            ucFrom009TestTechnicalIndicator($noSignalHolding, ['rsi' => 72.0]);
-
-            $response = ucFrom009TestFetchReport($this, $batch);
-
-            $response->assertSuccessful();
-
-            $top = collect($response->json('data.top_recommendations'));
-            $signalItem = $top->first(fn ($item) => str_contains((string) $item['target'], '3333'));
-            $noSignalItem = $top->first(fn ($item) => str_contains((string) $item['target'], '4444'));
-
-            expect($signalItem)->not->toBeNull();
-            expect($noSignalItem)->not->toBeNull();
-
-            // reason_summary must reflect the saved signals' content (ADR-0004),
-            // not just gain rate/RSI — following this file's existing
-            // convention of only checking for the presence of the driving
-            // indicator's wording, not the full generated sentence.
-            $signalReasonSummary = (string) $signalItem['reason_summary'];
-            expect(
-                str_contains($signalReasonSummary, '週52週高値')
-                || str_contains($signalReasonSummary, 'PEG')
-            )->toBeTrue();
-
-            // Priority ordering only (composite_score's absolute value/weights
-            // are not asserted, per this file's existing convention): the
-            // signal-bearing holding must outrank the signal-less holding even
-            // though its raw gain rate/RSI are slightly lower.
-            $signalRank = (int) $signalItem['rank'];
-            $noSignalRank = (int) $noSignalItem['rank'];
-
-            expect($signalRank)->toBeLessThan($noSignalRank);
+            $holdBucket = collect($response->json('data.classification.buckets'))->firstWhere('bucket', 'hold');
+            $overweightRow = collect($holdBucket['holdings'])->firstWhere('symbol_code', 'SEC1');
+            expect($overweightRow['overweight_sector'])->toBeTrue();
         });
     });
 
-    describe('正常系（利確検討以外のレコメンド種別）', function () {
-        test('セクター配分が70%以上に偏っている場合はリバランス提案が候補に含まれる', function () {
+    describe('永続化廃止（ADR-0014 D9-2）', function () {
+        test('レポート取得後もimport_summary_reports/import_summary_report_itemsへの書き込みは発生しない', function () {
             [$batch, $snapshot] = ucFrom009TestImportBatch();
+            ucFrom009TestSeedAllBuckets($snapshot);
 
-            $overweightSector = ucFrom009TestSectorClassification('電気機器', '3650');
-            $otherSector = ucFrom009TestSectorClassification('輸送用機器', '3750');
+            ucFrom009TestFetchReport($this, $batch)->assertSuccessful();
+            ucFrom009TestFetchReport($this, $batch)->assertSuccessful();
 
-            foreach (['9001', '9002', '9003'] as $code) {
-                $holding = ucFrom009TestHolding([
-                    'symbol_code' => $code, 'market' => 'jp', 'symbol_name' => "偏りテスト銘柄{$code}",
-                    'sector_classification_id' => $overweightSector->id,
-                ]);
-                // Gain kept well under the 20% 利確検討 threshold so this
-                // scenario isolates the リバランス path.
-                ucFrom009TestHoldingSnapshot($snapshot, $holding, [
-                    'quantity' => 1000,
-                    'average_cost' => 2910.0,
-                    'current_price' => 3000.0,
-                    'unrealized_gain_amount' => 90000.0,
-                    'unrealized_gain_rate' => 3.0,
-                ]);
-            }
-
-            $balancingHolding = ucFrom009TestHolding([
-                'symbol_code' => '7203', 'market' => 'jp', 'symbol_name' => 'トヨタ自動車',
-                'sector_classification_id' => $otherSector->id,
-            ]);
-            ucFrom009TestHoldingSnapshot($snapshot, $balancingHolding, [
-                'quantity' => 1000,
-                'average_cost' => 970.0,
-                'current_price' => 1000.0,
-                'unrealized_gain_amount' => 30000.0,
-                'unrealized_gain_rate' => 3.0,
-            ]);
-
-            // Total portfolio value = 9,000,000 (電気機器) + 1,000,000
-            // (輸送用機器) = 10,000,000 → 電気機器 allocation = 90% > 70%
-            // (data-model.mdの偏り警告閾値、叩き台).
-            $response = ucFrom009TestFetchReport($this, $batch);
-
-            $response->assertSuccessful();
-
-            $allItems = collect($response->json('data.top_recommendations'))
-                ->merge($response->json('data.supplementary_recommendations'));
-
-            $rebalanceItem = $allItems->firstWhere('recommendation_type', 'リバランス');
-            expect($rebalanceItem)->not->toBeNull();
-            expect($rebalanceItem['target'])->toContain('電気機器');
-            expect(preg_match('/\d/', (string) $rebalanceItem['reason_summary']))->toBe(1);
-            // Placeholder contract — see file-level docblock. Confirm at Gate 4.
-            expect($rebalanceItem['link_to'])->toBe('UC-005');
+            $this->assertDatabaseCount('import_summary_reports', 0);
+            $this->assertDatabaseCount('import_summary_report_items', 0);
         });
 
-        test('注目テーマに合致し財務健全性の高い未保有銘柄は新規投資候補として提案に含まれる', function () {
-            [$batch, $snapshot] = ucFrom009TestImportBatch();
+        test('ImportCsvAction実行後もImportSummaryReportのプレースホルダー行は作られない', function () {
+            app()->instance(JpStockPriceClientInterface::class, new FakeJpStockPriceClient);
+            app()->instance(UsStockPriceClientInterface::class, new FakeUsStockPriceClient);
+            app()->instance(MarketIndexClientInterface::class, new FakeMarketIndexClient);
+            app()->instance(JQuantsClientInterface::class, new FakeJQuantsClient);
 
-            // A baseline currently-held position so the portfolio isn't
-            // empty (UC-009's precondition: "保有銘柄全体を対象に...").
-            $heldSector = ucFrom009TestSectorClassification('情報・通信業', '5250');
-            $heldHolding = ucFrom009TestHolding([
-                'symbol_code' => '9432', 'market' => 'jp', 'symbol_name' => 'NTT',
-                'sector_classification_id' => $heldSector->id,
-            ]);
-            ucFrom009TestHoldingSnapshot($snapshot, $heldHolding, [
-                'unrealized_gain_amount' => 500.0,
-                'unrealized_gain_rate' => 5.0,
-            ]);
+            $user = User::factory()->create();
 
-            // Placeholder matching rule — see file-level docblock: a
-            // watched_themes.name equal to the candidate's sector name.
-            ucFrom009TestWatchedTheme('AI半導体');
-            $themeSector = ucFrom009TestSectorClassification('AI半導体', '9999');
-
-            $candidateHolding = ucFrom009TestHolding([
-                'symbol_code' => '6920', 'market' => 'jp', 'symbol_name' => 'レーザーテック',
-                'sector_classification_id' => $themeSector->id,
-            ]);
-            // Deliberately no holding_snapshots row for the candidate under
-            // the latest snapshot: it is a known-but-not-currently-held
-            // symbol (docs/architecture/data-model.md's holdings-as-a-
-            // symbol-master note), matching F-008's "新規" framing.
-            ucFrom009TestFundamentalIndicator($candidateHolding, [
-                'equity_ratio' => 60.0, // draft filter: equity_ratio >= 40
-                'roe' => 15.0,          // draft filter: roe >= 10
-            ]);
-
-            $response = ucFrom009TestFetchReport($this, $batch);
+            $response = $this->actingAs($user)->post('/api/csv-import', [
+                'jp_stock_file' => ucFrom009TestFakeCsvFile('jp_stock.csv', ucFrom009TestMinimalJpStockCsv()),
+                'us_stock_file' => ucFrom009TestFakeCsvFile('us_stock.csv', ucFrom009TestMinimalUsStockCsv()),
+            ], ['Accept' => 'application/json']);
 
             $response->assertSuccessful();
+            $this->assertDatabaseCount('import_batches', 1);
 
-            $allItems = collect($response->json('data.top_recommendations'))
-                ->merge($response->json('data.supplementary_recommendations'));
-
-            $candidateItem = $allItems->firstWhere('recommendation_type', '新規投資候補');
-            expect($candidateItem)->not->toBeNull();
-            expect($candidateItem['target'])->toContain('6920');
-            expect(preg_match('/\d/', (string) $candidateItem['reason_summary']))->toBe(1);
-            // Placeholder contract — see file-level docblock. Confirm at Gate 4.
-            expect($candidateItem['link_to'])->toBeIn(['UC-006', 'UC-008']);
-        });
-    });
-
-    describe('新規投資候補の財務健全性フィルタ（CHG-0005: 成長率条件の統一）', function () {
-        // CR (2026-08-27, CHG-0005): use-cases.md UC-008業務ルール改訂・
-        // data-model.md「財務健全性フィルタ」行により、
-        // ShowImportSummaryReportAction::buildNewCandidateItems()の新規投資
-        // 候補抽出条件にも、自己資本比率・ROEに加えて成長率（売上高または
-        // 営業利益成長率のいずれかがプラス）が要求されるようになる。現状の
-        // buildNewCandidateItems()はDBクエリで自己資本比率・ROEの2条件のみを
-        // チェックしており成長率を一切見ないため、以下は現状の実装に対して
-        // 失敗する（Red）。
-        test('自己資本比率・ROEは基準を満たすが売上高成長率・営業利益成長率が両方ともマイナスの新規投資候補銘柄は、レポートの新規投資候補セクションから除外される', function () {
-            [$batch, $snapshot] = ucFrom009TestImportBatch();
-
-            $heldSector = ucFrom009TestSectorClassification('情報・通信業', '5250');
-            $heldHolding = ucFrom009TestHolding([
-                'symbol_code' => '9432', 'market' => 'jp', 'symbol_name' => 'NTT',
-                'sector_classification_id' => $heldSector->id,
-            ]);
-            ucFrom009TestHoldingSnapshot($snapshot, $heldHolding, [
-                'unrealized_gain_amount' => 500.0,
-                'unrealized_gain_rate' => 5.0,
-            ]);
-
-            ucFrom009TestWatchedTheme('AI半導体');
-            $themeSector = ucFrom009TestSectorClassification('AI半導体', '9999');
-
-            $candidateHolding = ucFrom009TestHolding([
-                'symbol_code' => '6920', 'market' => 'jp', 'symbol_name' => 'レーザーテック',
-                'sector_classification_id' => $themeSector->id,
-            ]);
-            // Deliberately no holding_snapshots row for the candidate (未保有).
-            ucFrom009TestFundamentalIndicator($candidateHolding, [
-                'equity_ratio' => 60.0, // filter: equity_ratio >= 40 を満たす
-                'roe' => 15.0,          // filter: roe >= 10 を満たす
-                'revenue_growth' => -5.0,
-                'operating_income_growth' => -3.0,
-            ]);
-
-            $response = ucFrom009TestFetchReport($this, $batch);
-
-            $response->assertSuccessful();
-
-            $allItems = collect($response->json('data.top_recommendations'))
-                ->merge($response->json('data.supplementary_recommendations'));
-
-            $candidateItem = $allItems->first(fn ($item) => str_contains((string) ($item['target'] ?? ''), '6920'));
-            expect($candidateItem)->toBeNull();
-        });
-
-        // CR (2026-09-06, CHG-0012 / ADR-0011): 営業利益率を4条件目に追加。
-        // ShowImportSummaryReportAction::buildNewCandidateItems() /
-        // buildTakeProfitCandidates() が FundamentalHealthEvaluator::evaluate()
-        // に operating_margin を渡すようになり、営業利益率10%未満の未保有銘柄は
-        // 新規投資候補セクションから除外される（買い増し候補件数も連動して減る）。
-        //
-        // Red の出方: `operating_margin` は現時点で FundamentalIndicator の
-        // $fillable / マイグレーション未整備。フィクスチャで渡した
-        // operating_margin は mass-assignment で黙って捨てられるため、現行の
-        // ShowImportSummaryReportAction は営業利益率を見ず、equity/roe/成長率
-        // が健全な候補をそのまま新規投資候補に含める → `expect(...)->toBeNull()`
-        // がアサーション不一致で失敗する（fatal ではない）。
-        test('自己資本比率・ROE・成長率は基準を満たすが営業利益率が7.0%（基準割れ）の未保有銘柄は、レポートの新規投資候補セクションから除外される', function () {
-            [$batch, $snapshot] = ucFrom009TestImportBatch();
-
-            $heldSector = ucFrom009TestSectorClassification('情報・通信業', '5250');
-            $heldHolding = ucFrom009TestHolding([
-                'symbol_code' => '9432', 'market' => 'jp', 'symbol_name' => 'NTT',
-                'sector_classification_id' => $heldSector->id,
-            ]);
-            ucFrom009TestHoldingSnapshot($snapshot, $heldHolding, [
-                'unrealized_gain_amount' => 500.0,
-                'unrealized_gain_rate' => 5.0,
-            ]);
-
-            ucFrom009TestWatchedTheme('AI半導体');
-            $themeSector = ucFrom009TestSectorClassification('AI半導体', '9999');
-
-            $candidateHolding = ucFrom009TestHolding([
-                'symbol_code' => '6920', 'market' => 'jp', 'symbol_name' => 'レーザーテック',
-                'sector_classification_id' => $themeSector->id,
-            ]);
-            ucFrom009TestFundamentalIndicator($candidateHolding, [
-                'equity_ratio' => 60.0,
-                'roe' => 15.0,
-                'revenue_growth' => 8.0,
-                'operating_income_growth' => 6.0,
-                'operating_margin' => 7.0, // < 10% → 除外
-            ]);
-
-            $response = ucFrom009TestFetchReport($this, $batch);
-
-            $response->assertSuccessful();
-
-            $allItems = collect($response->json('data.top_recommendations'))
-                ->merge($response->json('data.supplementary_recommendations'));
-
-            $candidateItem = $allItems->first(fn ($item) => str_contains((string) ($item['target'] ?? ''), '6920'));
-            expect($candidateItem)->toBeNull();
-        });
-
-        test('営業利益率が18.0%（健全）の未保有銘柄は、レポートの新規投資候補セクションに含まれる', function () {
-            [$batch, $snapshot] = ucFrom009TestImportBatch();
-
-            $heldSector = ucFrom009TestSectorClassification('情報・通信業', '5250');
-            $heldHolding = ucFrom009TestHolding([
-                'symbol_code' => '9432', 'market' => 'jp', 'symbol_name' => 'NTT',
-                'sector_classification_id' => $heldSector->id,
-            ]);
-            ucFrom009TestHoldingSnapshot($snapshot, $heldHolding, [
-                'unrealized_gain_amount' => 500.0,
-                'unrealized_gain_rate' => 5.0,
-            ]);
-
-            ucFrom009TestWatchedTheme('AI半導体');
-            $themeSector = ucFrom009TestSectorClassification('AI半導体', '9999');
-
-            $candidateHolding = ucFrom009TestHolding([
-                'symbol_code' => '6920', 'market' => 'jp', 'symbol_name' => 'レーザーテック',
-                'sector_classification_id' => $themeSector->id,
-            ]);
-            ucFrom009TestFundamentalIndicator($candidateHolding, [
-                'equity_ratio' => 60.0,
-                'roe' => 15.0,
-                'revenue_growth' => 8.0,
-                'operating_income_growth' => 6.0,
-                'operating_margin' => 18.0,
-            ]);
-
-            $response = ucFrom009TestFetchReport($this, $batch);
-
-            $response->assertSuccessful();
-
-            $allItems = collect($response->json('data.top_recommendations'))
-                ->merge($response->json('data.supplementary_recommendations'));
-
-            $candidateItem = $allItems->firstWhere('recommendation_type', '新規投資候補');
-            expect($candidateItem)->not->toBeNull();
-            expect($candidateItem['target'])->toContain('6920');
-        });
-    });
-
-    describe('利確検討ラインの動的分岐（CHG-0006）', function () {
-        test('含み益+120%・シグナル0件・財務健全性passedの銘柄は、高水準モード適用（+150%未満）のため利確検討候補としてレポートに含まれない', function () {
-            [$batch, $snapshot] = ucFrom009TestImportBatch();
-
-            $holding = ucFrom009TestHolding(['symbol_code' => '4901', 'market' => 'jp', 'symbol_name' => '富士フイルム']);
-            // FundamentalHealthEvaluatorが'passed'を返す値
-            // （equity_ratio=58.0, roe=15.2, 成長率とも正値）。
-            ucFrom009TestFundamentalIndicator($holding, [
-                'equity_ratio' => 58.0,
-                'roe' => 15.2,
-                'revenue_growth' => 8.0,
-                'operating_income_growth' => 12.3,
-            ]);
-            ucFrom009TestHoldingSnapshot($snapshot, $holding, [
-                'average_cost' => 1000.0,
-                'current_price' => 2200.0,
-                'unrealized_gain_amount' => 12000.0,
-                'unrealized_gain_rate' => 120.0,
-            ]);
-            // Deliberately no Signal row created (シグナル0件).
-
-            $response = ucFrom009TestFetchReport($this, $batch);
-
-            $response->assertSuccessful();
-
-            $allItems = collect($response->json('data.top_recommendations'))
-                ->merge($response->json('data.supplementary_recommendations'));
-
-            $candidateItem = $allItems->first(fn ($item) => str_contains((string) ($item['target'] ?? ''), '4901'));
-            expect($candidateItem)->toBeNull();
-        });
-
-        test('含み益+160%・シグナル0件・財務健全性passedの銘柄は、利確検討候補としてレポートに含まれる', function () {
-            [$batch, $snapshot] = ucFrom009TestImportBatch();
-
-            $holding = ucFrom009TestHolding(['symbol_code' => '4902', 'market' => 'jp', 'symbol_name' => '高水準銘柄']);
-            ucFrom009TestFundamentalIndicator($holding, [
-                'equity_ratio' => 58.0,
-                'roe' => 15.2,
-                'revenue_growth' => 8.0,
-                'operating_income_growth' => 12.3,
-            ]);
-            ucFrom009TestHoldingSnapshot($snapshot, $holding, [
-                'average_cost' => 1000.0,
-                'current_price' => 2600.0,
-                'unrealized_gain_amount' => 16000.0,
-                'unrealized_gain_rate' => 160.0,
-            ]);
-            // Deliberately no Signal row created (シグナル0件).
-
-            $response = ucFrom009TestFetchReport($this, $batch);
-
-            $response->assertSuccessful();
-
-            $allItems = collect($response->json('data.top_recommendations'))
-                ->merge($response->json('data.supplementary_recommendations'));
-
-            $candidateItem = $allItems->first(fn ($item) => str_contains((string) ($item['target'] ?? ''), '4902')
-                && $item['recommendation_type'] === '利確検討');
-            expect($candidateItem)->not->toBeNull();
+            // ADR-0014 D9-2: ImportCsvAction が取込完了時に作成していた
+            // ImportSummaryReport::create() のプレースホルダー行を廃止する。
+            $this->assertDatabaseCount('import_summary_reports', 0);
         });
     });
 
     describe('異常系・境界値', function () {
-        test('対象となる保有銘柄が存在しない場合は空状態のレポートになる', function () {
+        test('対象となる保有銘柄が存在しない場合は分類対象なしの空状態レポートになる', function () {
             [$batch] = ucFrom009TestImportBatch();
             // Deliberately no Holding/HoldingSnapshot rows created at all.
 
@@ -935,43 +470,13 @@ describe('UC-009: 取込後サマリーレポート', function () {
             $response->assertSuccessful();
 
             $data = $response->json('data');
-            expect($data['top_recommendations'])->toBe([]);
-            expect($data['supplementary_recommendations'])->toBe([]);
-            expect($data['portfolio_headline'])->toBe('現時点でおすすめできる項目はありません');
-        });
-
-        test('投資信託は取込銘柄として存在してもレコメンド対象外になる', function () {
-            [$batch, $snapshot] = ucFrom009TestImportBatch();
-
-            $mutualFund = ucFrom009TestHolding([
-                'symbol_code' => '楽天・全米株式インデックス・ファンド(楽天・VTI)',
-                'market' => 'mutual_fund',
-                'instrument_type' => 'mutual_fund',
-                'symbol_name' => '楽天・全米株式インデックス・ファンド(楽天・VTI)',
-                'sector_classification_id' => null,
-            ]);
-            // Extreme gain that would obviously qualify for 利確検討 if this
-            // were an individual stock (UC-002/UC-004/UC-009業務ルール:
-            // 投資信託・ETFは対象外).
-            ucFrom009TestHoldingSnapshot($snapshot, $mutualFund, [
-                'quantity' => 100,
-                'average_cost' => 10000.0,
-                'current_price' => 15000.0,
-                'unrealized_gain_amount' => 500000.0,
-                'unrealized_gain_rate' => 50.0,
-            ]);
-
-            $response = ucFrom009TestFetchReport($this, $batch);
-
-            $response->assertSuccessful();
-
-            $allTargets = collect($response->json('data.top_recommendations'))
-                ->merge($response->json('data.supplementary_recommendations'))
-                ->pluck('target')
-                ->all();
-
-            foreach ($allTargets as $target) {
-                expect($target)->not->toContain('楽天・全米株式インデックス・ファンド');
+            expect($data)->toHaveKey('classification');
+            foreach ($data['classification']['group_summary'] as $group) {
+                expect((float) $group['market_value_total'])->toEqualWithDelta(0.0, 0.01);
+                expect($group['holding_count'])->toBe(0);
+            }
+            foreach ($data['classification']['buckets'] as $bucket) {
+                expect($bucket['holdings'])->toBe([]);
             }
         });
 

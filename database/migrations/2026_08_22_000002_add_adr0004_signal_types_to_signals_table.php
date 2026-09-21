@@ -26,7 +26,7 @@ return new class extends Migration
     public function up(): void
     {
         DB::statement(
-            "ALTER TABLE signals MODIFY signal_type ENUM("
+            'ALTER TABLE signals MODIFY signal_type ENUM('
             ."'rsi_reversal',"
             ."'macd_dead_cross',"
             ."'bollinger_overheat',"
@@ -34,7 +34,7 @@ return new class extends Migration
             ."'peg_overvalued',"
             ."'relative_strength_weakening',"
             ."'volume_spike_decline'"
-            .") NOT NULL"
+            .') NOT NULL'
         );
     }
 
@@ -44,11 +44,11 @@ return new class extends Migration
     public function down(): void
     {
         DB::statement(
-            "ALTER TABLE signals MODIFY signal_type ENUM("
+            'ALTER TABLE signals MODIFY signal_type ENUM('
             ."'rsi_reversal',"
             ."'macd_dead_cross',"
             ."'bollinger_overheat'"
-            .") NOT NULL"
+            .') NOT NULL'
         );
     }
 };

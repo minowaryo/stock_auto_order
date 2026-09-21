@@ -637,7 +637,15 @@ describe('UC-001: CSV取込', function () {
             expect($responseNewlyDetected)->not->toContain('AAPL:us');
         });
 
-        test('取込完了と同時に取込後サマリーレポート（UC-009）が自動生成される', function () {
+        test('取込完了しても import_summary_reports のプレースホルダー行は作られない（2026-09-17改訂、ADR-0014 D9-2）', function () {
+            // 旧仕様（取込完了と同時に import_summary_reports へプレースホルダー
+            // 行を自動生成）は、F-013（分類俯瞰）が UC-009 の旧・上位10〜20件
+            // レコメンドを置き換えたことに伴い廃止された。分類俯瞰は
+            // ShowImportSummaryReportAction が毎回その場で再計算する表示専用
+            // 機能であり、永続化を行わない（同等の検証は
+            // tests/Feature/UC009ImportSummaryReportTest.php
+            // 「ImportCsvAction実行後もImportSummaryReportのプレースホルダー行は
+            // 作られない」に引き継いでいる）。
             $jpCsv = ucFrom001TestJpStockCsv([
                 ['code' => '7203', 'name' => 'トヨタ自動車', 'quantity' => '10', 'avg_cost' => '2,000.00', 'current_price' => '2,500.0'],
             ]);
@@ -652,15 +660,7 @@ describe('UC-001: CSV取込', function () {
 
             $response->assertSuccessful();
 
-            $batch = DB::table('import_batches')->first();
-
-            $this->assertDatabaseCount('import_summary_reports', 1);
-            $this->assertDatabaseHas('import_summary_reports', ['import_batch_id' => $batch->id]);
-
-            $report = DB::table('import_summary_reports')->where('import_batch_id', $batch->id)->first();
-            expect($report->portfolio_headline)->not->toBeNull();
-            expect(trim((string) $report->portfolio_headline))->not->toBe('');
-            expect($report->generated_at)->not->toBeNull();
+            $this->assertDatabaseCount('import_summary_reports', 0);
         });
 
         test('CSV取込完了後、外部データ取得（テクニカル指標計算）が自動的に実行される', function () {

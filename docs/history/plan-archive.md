@@ -1,6 +1,60 @@
-# PLAN.md アーカイブ（〜2026-09-12 CHG-0007完了時点）
+# PLAN.md アーカイブ（〜2026-09-21 CHG-0011完了時点）
 
-PLAN.md から退避した完了済みエントリ。売買シグナル画面 判定チェックリスト表示（CHG-0007、2026-08-29〜09-05）完了の記録を追加（2026-09-12、CHG-0016作業でPLAN.mdが300行を超えたため退避。本エントリは末尾の「次: `/review` → コミット」を残したまま退避しているが、その後のCHG-0009〜CHG-0016で`signal-list.blade.php`のヘッダー用/本文用2分割構造が繰り返し前提として参照・拡張されており、`/review`・コミットとも完了済みであることが確認できるため退避対象とした）。取込後サマリーレポートのグローバルナビタブ化（CHG-0008、2026-09-05）完了の記録を追加（2026-09-12、F-012・CHG-0012のステータス記述修正に伴いPLAN.mdが300行を超えたため退避）。利確検討ラインの動的分岐（CHG-0006、2026-08-28〜29）・売買シグナル画面の可読性改善（2026-08-28）の記録を追加（2026-09-06、CHG-0013／ADR-0012作業時に約298行に達したため退避）。数値表示フォーマット修正完了（2026-08-28）・UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）の記録を追加（2026-09-06、CHG-0012 Phase 0作業時に300行超過に伴い退避）。フロントエンド実装Phase7（UC-006/UC-008統合「新規投資候補」画面）完了・その`/review`指摘（MEDIUM 3件）修正完了の記録を追加（2026-09-06、CHG-0011コミット時に300行超過に伴い退避）。フロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了の記録を追加（2026-09-05、CHG-0011作業時に300行超過に伴い退避）。フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了までの記録を追加。UC-010（既存保有株の買い増しタイミングレコメンド）Gate4完了・コミット（`ba239fe`）までの記録を追加。Gate0セットアップ〜Phase1（UC-001/002/003/009）Gate4サイクル完了・ADR-0002 NISA区分CR・投資方針背景整理・ADR-0004（分析エンジンの指標セット拡張、設計確定〜TechnicalIndicatorCalculator〜MarketData層〜JQuantsClient〜SignalDeterminationService〜FundamentalIndicatorMapperの各TDDサイクル、UC-001への配線・UC-004画面実装・UC-003/UC-009への新指標反映を含む）完了、関連する`/review`指摘修正2件・UC-009サンプルレポート生成・per-holding非アトミック性修正、F-010（UC-010）のGate1〜3ドキュメント叩き台整備（ADR-0007新規作成、requirements.md/use-cases.md/data-model.md改訂）、NISA区分（口座区分）内訳の書き込み経路・UC-004消費側の実装完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、およびフロントエンド実装Phase4（UC-003銘柄詳細画面）完了までの記録。現在進行中のタスクとは直接関係しないため参照頻度は低いが、経緯確認が必要な場合はここを見る。
+PLAN.md から退避した完了済みエントリ。売買シグナル画面「評価額」列追加（CHG-0011）＋米国株ファンダのDB補完（2026-09-05〜09-06）完了・米国株ファンダメンタルズ指標データソースとしてFinnhub採用（CHG-0009、2026-09-05〜）完了の記録を追加（2026-09-21、CHG-0017／CHG-0018マージ時にPLAN.mdが300行を超えたため退避）。売買シグナル画面 判定チェックリスト表示（CHG-0007、2026-08-29〜09-05）完了の記録を追加（2026-09-12、CHG-0016作業でPLAN.mdが300行を超えたため退避。本エントリは末尾の「次: `/review` → コミット」を残したまま退避しているが、その後のCHG-0009〜CHG-0016で`signal-list.blade.php`のヘッダー用/本文用2分割構造が繰り返し前提として参照・拡張されており、`/review`・コミットとも完了済みであることが確認できるため退避対象とした）。取込後サマリーレポートのグローバルナビタブ化（CHG-0008、2026-09-05）完了の記録を追加（2026-09-12、F-012・CHG-0012のステータス記述修正に伴いPLAN.mdが300行を超えたため退避）。利確検討ラインの動的分岐（CHG-0006、2026-08-28〜29）・売買シグナル画面の可読性改善（2026-08-28）の記録を追加（2026-09-06、CHG-0013／ADR-0012作業時に約298行に達したため退避）。数値表示フォーマット修正完了（2026-08-28）・UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）の記録を追加（2026-09-06、CHG-0012 Phase 0作業時に300行超過に伴い退避）。フロントエンド実装Phase7（UC-006/UC-008統合「新規投資候補」画面）完了・その`/review`指摘（MEDIUM 3件）修正完了の記録を追加（2026-09-06、CHG-0011コミット時に300行超過に伴い退避）。フロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了の記録を追加（2026-09-05、CHG-0011作業時に300行超過に伴い退避）。フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了までの記録を追加。UC-010（既存保有株の買い増しタイミングレコメンド）Gate4完了・コミット（`ba239fe`）までの記録を追加。Gate0セットアップ〜Phase1（UC-001/002/003/009）Gate4サイクル完了・ADR-0002 NISA区分CR・投資方針背景整理・ADR-0004（分析エンジンの指標セット拡張、設計確定〜TechnicalIndicatorCalculator〜MarketData層〜JQuantsClient〜SignalDeterminationService〜FundamentalIndicatorMapperの各TDDサイクル、UC-001への配線・UC-004画面実装・UC-003/UC-009への新指標反映を含む）完了、関連する`/review`指摘修正2件・UC-009サンプルレポート生成・per-holding非アトミック性修正、F-010（UC-010）のGate1〜3ドキュメント叩き台整備（ADR-0007新規作成、requirements.md/use-cases.md/data-model.md改訂）、NISA区分（口座区分）内訳の書き込み経路・UC-004消費側の実装完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、およびフロントエンド実装Phase4（UC-003銘柄詳細画面）完了までの記録。現在進行中のタスクとは直接関係しないため参照頻度は低いが、経緯確認が必要な場合はここを見る。
+
+## 売買シグナル画面「評価額」列追加（CHG-0011）＋米国株ファンダのDB補完（2026-09-05〜）
+
+### Decision
+
+- ユーザー要望2点:
+  1. 売買シグナル画面（利確検討 UC-004 / 買い増し候補 UC-010）の左の方に、各行の「実際の評価額」（保有数量 × 現在値、CSV由来の円換算値）を表示したい
+  2. ADR-0009（CHG-0009、Finnhub）で米国株ファンダ取得コードは実装済みだが、既存の最新スナップショット（batch 135）の米国株44銘柄は `fundamental_indicators` が0件で画面上「取得不可」のまま。Finnhubから実取得してDB補完し画面に実数を出したい
+- ユーザー確認済みの決定:
+  - 評価額列の位置 = 銘柄の右隣（2列目）。銘柄セルの `sticky left-0` は据え置き、評価額は通常列
+  - 米国株補完 = `FetchExternalMarketDataAction` 本体は変更せず、米国株ファンダのみ再取得する軽量 artisan コマンドを新設（US分岐ロジックの一部重複は許容）
+- CR番号: CHG-0011（評価額列。CHG-0010 は ADR-0010 で使用済み）。US補完コマンドは ADR-0009 の運用化のため新規CR/ADR不要
+- 評価額 = `quantity * current_price`（シグナル画面は stock のみ対象なので投信の ÷10000 補正は不要）。US株は取込時に円換算済みのため円建て
+
+### Files touched（予定）
+
+- ドキュメント（先行）: `docs/product/use-cases.md`（UC-004/UC-010 出力表 + 変更履歴 CHG-0011）, `docs/rcid/traceability-matrix.md`, `docs/ai-context/common-commands.md`
+- Part A（CHG-0011・表示のみ）: `app/Actions/Signal/ShowSignalListAction.php`, `app/Actions/Signal/ShowBuySignalListAction.php`, `resources/views/components/signal-table-colgroup.blade.php`, `resources/views/livewire/signal/signal-list.blade.php`, テスト（`tests/Feature/UC004SignalListTest.php` / `tests/Feature/UC010BuySignalListTest.php` / `tests/Feature/SignalListTest.php`）
+- Part B: `app/Console/Commands/RefetchUsFundamentalsCommand.php`（新規）, `tests/Feature/RefetchUsFundamentalsCommandTest.php`（新規）
+- スコープ外: `FetchExternalMarketDataAction` 本体, UC-003 銘柄詳細, `financial_statements` への米国株保存, JP株の再取得, DBマイグレーション
+
+### Status
+
+- ドキュメントCR反映（Gate2）: 完了（2026-09-05）
+- Part A（評価額列）: Red → Gate4承認 → Green 完了。`ShowSignalListAction`/`ShowBuySignalListAction` に `market_value` 追加、`signal-table-colgroup` に列追加、`signal-list.blade.php` に「評価額」列（銘柄の右隣・`number_format(...)円`・幅 w-[1406px]）追加。テスト5件追加、フルスイート465件 Green
+- Part B（`market-data:refetch-us-fundamentals`）: Red → Gate4承認 → Green 完了。`app/Console/Commands/RefetchUsFundamentalsCommand.php` 新規。テスト5件追加
+- 実データ実行: `docker compose exec -T laravel.test php artisan market-data:refetch-us-fundamentals` → 44件更新 / 0件失敗。売買シグナル画面の米国株が実数のファンダ表示に切り替わったことを `ShowSignalListAction` 実データ出力で確認（利確検討US13件が「—」から ROE%/自己資本比率%/成長% 表示へ。ARM/ASML/GOOG/TSM 等は `financials-reported` に us-gaap Assets/Equity が無く自己資本比率のみ「—」＝ADR-0009 のフォールバック通り）
+- `/review`（2026-09-06、別セッションが引き取り、medium レベル）: **CHG-0011 自体は指摘なし**（`market_value` の投信 ÷10000 補正欠落＝両リスト stock 絞り込み済みで誤検知、colgroup/ラベル列数一致、等いずれも verify で refute）。PLAUSIBLE 1件は CHG-0011 ではなくコミット済み F-011 の `ShowLossReviewListAction::also_on_buy_list` が「利確シグナル同時成立銘柄」の除外を再現しない点（到達性低・下記「今後の対応」に記録し先送り）
+- `npm run build` 済み（`app-Ck2oRFta.css`）。実データ実ブラウザ再確認（保有135）: 買い増し候補・利確検討テーブルの2列目に評価額（`13,740円` 等・右寄せ）が正しく表示、レイアウト崩れなし
+- コミット（2026-09-06、本セッション）: Part A + Part B + 付随ドキュメント（`use-cases.md` の `market_value` 行・承認記録、`traceability-matrix.md` の CHG-0011 追跡行＋F-004/F-010/F-011 行更新、`common-commands.md`）＋ PLAN.md 300行超過対応（Phase7 の2エントリを `plan-archive.md` へ退避）をまとめてコミット
+- プランファイル: `~/.claude/plans/stock_auto_order-signal-market-value-and-us-fundamentals-implementation-phase.md`
+
+## 米国株ファンダメンタルズ指標データソースとしてFinnhub採用（CHG-0009）実装完了・mainマージ済み（2026-09-05〜）
+
+### Decision
+
+- ユーザー要望: 米国株のファンダメンタルズ指標が取得困難（J-Quantsは日本株専用のため、ADR-0004/ADR-0007以来ずっと`unavailable`固定）な状態を解消し、日本株と対等に比較できるようにしたい
+- 候補データソース（Alpha Vantage/Financial Modeling Prep/Finnhub/Twelve Data）を調査し、Finnhubを最有力候補として提案。実際にAPIキーを発行してもらい（`.env`の`FINNHUB_API_KEY`、`.gitignore`対象・確認済み）、`docker compose exec laravel.test php artisan tinker`から実HTTPで疎通確認した:
+  - `stock/metric`（`metric=all`）でAAPLを実際に取得し、PER(`peTTM`)・PBR(`pbAnnual`)・ROE(`roeTTM`)・売上高成長率(`revenueGrowthTTMYoy`)・EPS成長率(`epsGrowthTTMYoy`)・配当利回り(`dividendYieldIndicatedAnnual`)・配当性向(`payoutRatioTTM`)・PEGレシオ(`pegTTM`)が無料枠（60リクエスト/分）で取得できることを確認
+  - 自己資本比率は当初`totalDebt/totalEquity`からの近似（`1/(1+D/E)`）を検討したが、AAPL/ACN/AMD/AMZN/ACHRの5銘柄で実測値と比較したところ最大約2倍の過大評価（AAPL: 実測20.52% vs 近似42.47%）が判明し不採用。代わりに`stock/financials-reported`（10-KのXBRL実データ、無料枠でアクセス可）から総資産・自己資本の実額を取得し実測計算する方式に変更。AAPLの実測値はSEC提出10-Kの公表値（Web検索で確認）と完全一致し、貸借対照表の内部整合性（資産＝負債＋資本）も一致することを確認済み
+  - 営業利益成長率もFinnhubの`metric`に直接のYoYフィールドが無いため、同じく`financials-reported`の`ic`セクション（`us-gaap_OperatingIncomeLoss`）を直近期・前期で比較して算出する方式とした（16期分のデータが取得できることを確認済み）
+- ユーザー承認: 対象8指標（PER・PBR・ROE・売上高/営業利益成長率・自己資本比率・配当利回り/性向・EPS成長率・PEGレシオ）を段階導入ではなく一括で実数値化する
+- `docs/adr/ADR-0009-us-stock-fundamentals-finnhub.md`を新規作成（`/adr`スキル使用、Status: Accepted）。JP用`FundamentalIndicatorMapper`とは入力形状が根本的に異なるため、新規`UsFundamentalIndicatorMapper`（仮称）を別クラスとして並立させる設計方針とし、既存のJP側実装・テストは無改修とする方針を明記
+- Gate2（`use-cases.md` UC-001フロー7・UC-003/UC-004/UC-010のファンダメンタルズ記述、CHG-0009承認記録）・Gate3（`data-model.md` `fundamental_indicators`節、自己資本比率/営業利益成長率の算出方法を「実装完了」注記として追記）・`traceability-matrix.md`（CHG-0009）・`docs/ai-context/do-not-touch.md`「外部連携」節（Finnhub APIキーの扱い）を更新・承認済み。`fundamental_indicators`テーブルは市場非依存の既存スキーマのままでDBマイグレーション不要（Gate3は影響範囲確認のみ）
+
+### Files touched
+
+**ドキュメント（Gate2/3承認）**: `.env.example`（`FINNHUB_API_KEY`プレースホルダ追加）、`docs/adr/ADR-0009-us-stock-fundamentals-finnhub.md`（新規）、`docs/product/use-cases.md`（UC-001/UC-003/UC-004/UC-010の記述改訂・承認記録追加）、`docs/architecture/data-model.md`（`fundamental_indicators`節・承認記録追加）、`docs/rcid/traceability-matrix.md`（CHG-0009）、`docs/ai-context/do-not-touch.md`（Finnhub APIキー追記）
+
+**コード（Green、`fb894b1`）**: `app/Services/MarketData/FinnhubClient.php`＋`FinnhubClientInterface.php`（新規）、`app/Services/Analysis/UsFundamentalIndicatorMapper.php`（新規）、`app/Actions/Analysis/FetchExternalMarketDataAction.php`（US分岐の組み込み）、`app/Providers/AppServiceProvider.php`／`config/services.php`（バインディング・設定追加）。テスト: `tests/Feature/FetchExternalMarketDataActionTest.php`（拡張）、`tests/Unit/Services/MarketData/FinnhubClientTest.php`（新規）、`tests/Unit/Services/Analysis/UsFundamentalIndicatorMapperTest.php`（新規）、`tests/Support/Fakes/FakeFinnhubClient.php`（新規）
+
+### Status
+
+**Green実装・`/review`修正完了、mainマージ済み**（コミット`fb894b1`）。`/review`で2件修正: (1) `FinnhubClient`のリトライ例外メッセージにAPIキー（クエリパラメータ渡しのためJ-Quantsのヘッダー方式と異なり露出しやすい）が漏れないようサニタイズ、(2) XBRL概念値が`present-but-null`の場合に無言で`0.0`扱いされ自己資本比率が「0%」と誤判定される不具合を修正（unavailable扱いに）。両修正とも回帰テスト追加。実DB確認: `app/Services/Analysis/UsFundamentalIndicatorMapper.php`が存在し稼働中（CHG-0011の米国株ファンダ補完・F-012のウォッチリスト画面が実際にこの経路で米国株の指標を取得していることを確認済み）。
 
 ## 売買シグナル画面 判定チェックリスト表示（CHG-0007）（2026-08-29〜）
 

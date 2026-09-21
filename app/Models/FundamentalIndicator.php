@@ -13,6 +13,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'roe',
     'revenue_growth',
     'operating_income_growth',
+    'avg_revenue_growth',
+    'avg_operating_income_growth',
     'equity_ratio',
     'operating_margin',
     'dividend_yield',
@@ -42,6 +44,8 @@ class FundamentalIndicator extends Model
             'roe' => 'decimal:4',
             'revenue_growth' => 'decimal:4',
             'operating_income_growth' => 'decimal:4',
+            'avg_revenue_growth' => 'decimal:4',
+            'avg_operating_income_growth' => 'decimal:4',
             'equity_ratio' => 'decimal:4',
             'operating_margin' => 'decimal:4',
             'dividend_yield' => 'decimal:4',
@@ -58,15 +62,17 @@ class FundamentalIndicator extends Model
     }
 
     /**
-     * equity_ratio/roe/revenue_growth/operating_income_growth/operating_margin
-     * as plain nullable floats, in the parameter order
-     * FundamentalHealthEvaluator::evaluate() and
-     * TakeProfitThresholdEvaluator::evaluate() expect. Centralizes the
+     * equity_ratio/roe/revenue_growth/operating_income_growth/operating_margin/
+     * avg_revenue_growth/avg_operating_income_growth as plain nullable
+     * floats, in the parameter order FundamentalHealthEvaluator::evaluate()
+     * and TakeProfitThresholdEvaluator::evaluate() expect. Centralizes the
      * decimal-cast-string-to-float/null-safe extraction that every caller of
      * those two evaluators otherwise has to repeat. `operating_margin` is the
-     * 5th element (CHG-0012 / ADR-0011).
+     * 5th element (CHG-0012 / ADR-0011). `avg_revenue_growth`/
+     * `avg_operating_income_growth` are the 6th/7th elements, added for the
+     * D2 OR-rescue path (CHG-0017 / ADR-0015 D2).
      *
-     * @return array{0: ?float, 1: ?float, 2: ?float, 3: ?float, 4: ?float}
+     * @return array{0: ?float, 1: ?float, 2: ?float, 3: ?float, 4: ?float, 5: ?float, 6: ?float}
      */
     public function healthEvaluatorArgs(): array
     {
@@ -76,6 +82,8 @@ class FundamentalIndicator extends Model
             $this->revenue_growth !== null ? (float) $this->revenue_growth : null,
             $this->operating_income_growth !== null ? (float) $this->operating_income_growth : null,
             $this->operating_margin !== null ? (float) $this->operating_margin : null,
+            $this->avg_revenue_growth !== null ? (float) $this->avg_revenue_growth : null,
+            $this->avg_operating_income_growth !== null ? (float) $this->avg_operating_income_growth : null,
         ];
     }
 }

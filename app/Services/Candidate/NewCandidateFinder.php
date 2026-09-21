@@ -98,17 +98,14 @@ class NewCandidateFinder
     {
         $fundamentalIndicator = $holding->fundamentalIndicator;
 
-        $equityRatio = $fundamentalIndicator?->equity_ratio !== null ? (float) $fundamentalIndicator->equity_ratio : null;
-        $roe = $fundamentalIndicator?->roe !== null ? (float) $fundamentalIndicator->roe : null;
-        $revenueGrowth = $fundamentalIndicator?->revenue_growth !== null ? (float) $fundamentalIndicator->revenue_growth : null;
-        $operatingIncomeGrowth = $fundamentalIndicator?->operating_income_growth !== null ? (float) $fundamentalIndicator->operating_income_growth : null;
         // CHG-0012 / ADR-0011: 営業利益率10%以上を4条件目として評価する。
         // 事前の SQL 絞り込み（query()->where('equity_ratio' ...)）には
         // operating_margin 条件を足さない。NULL 行が SQL レベルで落ち、
         // evaluator の「null は unavailable」判定に到達しなくなるため。
-        $operatingMargin = $fundamentalIndicator?->operating_margin !== null ? (float) $fundamentalIndicator->operating_margin : null;
+        [$equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin, $avgRevenueGrowth, $avgOperatingIncomeGrowth] = $fundamentalIndicator?->healthEvaluatorArgs()
+            ?? [null, null, null, null, null, null, null];
 
-        return $this->evaluator->evaluate($equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin) === 'passed';
+        return $this->evaluator->evaluate($equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin, $avgRevenueGrowth, $avgOperatingIncomeGrowth) === 'passed';
     }
 
     /**

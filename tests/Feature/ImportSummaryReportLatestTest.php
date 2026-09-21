@@ -3,12 +3,14 @@
 namespace Tests\Feature;
 
 use App\Actions\ImportSummaryReport\ShowImportSummaryReportAction;
+use App\Actions\Portfolio\ClassifyHoldingsAction;
 use App\Livewire\ImportSummaryReport\Latest;
 use App\Models\FundamentalIndicator;
 use App\Models\Holding;
 use App\Models\HoldingSnapshot;
 use App\Models\ImportBatch;
 use App\Models\SectorClassification;
+use App\Models\Signal;
 use App\Models\Snapshot;
 use App\Models\TechnicalIndicator;
 use App\Models\User;
@@ -16,60 +18,36 @@ use Livewire\Livewire;
 
 /*
 |--------------------------------------------------------------------------
-| CHG-0008: 最新サマリーレポートのタブ化（UC-009 フロー7） — Red phase Feature Test
+| CHG-0008: 最新サマリーレポートのタブ化（UC-009 フロー7） — Red phase Feature
+| Test (F-013 Cycle 2 書き換え)
 |--------------------------------------------------------------------------
 |
 | Source of truth:
-|   - docs/product/use-cases.md (UC-009 基本フロー7・業務ルール「タブからの
-|     再表示」・エラーケース「スナップショットを持つ取込バッチが1件も
-|     存在しない」)
-|   - stock_auto_order-latest-summary-report-tab-implementation-phase.md
-|     （プランファイル）
+|   - docs/product/use-cases.md UC-009（2026-09-17改訂、基本フロー5・
+|     業務ルール「タブからの再表示」）・UC-013
+|   - docs/adr/ADR-0014-portfolio-bucket-classification.md D9〜D9-4
 |
-| None of the following exist yet at Red time:
-|   - App\Livewire\ImportSummaryReport\Latest（クラス自体が無い）
-|   - GET /summary-report ルート（routes/web.php未追加）
-|   - resources/views/livewire/import-summary-report/latest.blade.php
-|   - ナビゲーション($navItems)への 'summary-report' エントリ
+| -------------------------------------------------------------------------
+| このファイルの位置づけ（Cycle 2、既存テストの書き換え）
+| -------------------------------------------------------------------------
+| App\Livewire\ImportSummaryReport\Latest は実装済み（クラス・ルート
+| （GET /summary-report）・Blade view いずれも存在する）だが、中身は
+| ShowImportSummaryReportAction 経由で旧・候補選定ロジックの結果
+| （top_recommendations 等）をそのまま表示している。そのため以下のテストは
+| 「クラスが無くて fatal error になる」Redではなく、「$report に
+| classification キーが無い」「旧フィールドが残っている」等の**アサーション
+| 不一致によるRed**になる想定（意図した失敗であり、セットアップミスではない）。
 |
-| Expected Red failure modes:
-|   - Tests that call Livewire::test(Latest::class) directly (test 1, 2, 3,
-|     5) fail with a "class not found" style fatal error when the `use
-|     App\Livewire\ImportSummaryReport\Latest;` statement above is resolved
-|     at first reference (PHP does not error on an unresolved `use` import
-|     by itself — only when the class name is actually referenced, which
-|     happens the moment Livewire::test(Latest::class) or `Latest::class`
-|     is evaluated).
-|   - Tests that hit GET /summary-report over plain HTTP (test 4, 6) fail
-|     because the route does not exist at all yet: today this returns
-|     Laravel's default "no matching route" 404 response, NOT a 200 with
-|     the empty-state markup (test 4) and NOT a redirect produced by the
-|     `auth` middleware (test 6 — it coincidentally 404s today for the
-|     WRONG reason, same caveat pattern as
-|     ImportSummaryReportShowTest.php's 存在しない取込バッチID test). Both
-|     must be re-verified once Green work adds the route, to confirm they
-|     then fail/pass for the intended reason (empty-state markup missing /
-|     auth middleware redirect), not because the route is entirely absent.
-|
-| Seed helper functions below (importSummaryReportLatestTest*) are a
-| structural duplicate of tests/Feature/ImportSummaryReportShowTest.php's
-| importSummaryReportShowTest* helpers (unique prefix to avoid cross-file
-| redeclaration errors), reused here to build multiple ImportBatch/Snapshot
-| combinations for "which batch is 'latest'" scenarios rather than the
-| single-batch scenarios that file covers.
-|
-| Assumptions made while writing these tests (flag at Gate 4 if a different
-| contract is preferred):
-|   - Latest::mount() takes no route parameter (unlike Show::mount(ImportBatch
-|     $importBatch)) — it resolves "the latest import batch with a snapshot"
-|     itself, per the plan file's
-|     `ImportBatch::query()->whereHas('snapshot')->orderByDesc('imported_at')
-|     ->orderByDesc('id')->first()` spec. Tests 1/2/3/5 therefore call
-|     Livewire::test(Latest::class) with no constructor arguments.
-|   - The empty-state message key text is exactly "まだCSVの取込がありません"
-|     (from use-cases.md's UC-009 エラーケース表, verbatim) with a link to
-|     /csv-import (mirrors the existing holding-list.blade.php empty-state
-|     link pattern: `<a href="/csv-import" wire:navigate>...`).
+| 「どのバッチが最新か」を判定するロジック自体（CHG-0008、成功バッチの
+| スキップ等）は旧版で既にGreenだったはずの実装がそのまま残っている想定の
+| ため、本ファイルはその判定ロジックの再検証（正常系・境界値の2ブロック）を
+| 引き続き維持しつつ、レポート本文の中身をtop_recommendations前提から
+| classification前提のアサーションに置き換える。ClassifyHoldingsAction自体の
+| 分類ロジックはtests/Unit/Actions/Portfolio/ClassifyHoldingsActionTest.php
+| （F-013 Cycle 1）の責務であり、本ファイル・tests/Feature/
+| ImportSummaryReportShowTest.php（Cycle 2）で再検証済みのため、本ファイルは
+| 「最新バッチ選択ロジックが分類俯瞰にも正しく波及すること」の最小限の確認に
+| 留める。
 |
 */
 
@@ -146,6 +124,7 @@ function importSummaryReportLatestTestTechnicalIndicator(Holding $holding, array
     return TechnicalIndicator::create(array_merge([
         'holding_id' => $holding->id,
         'rsi' => 70.0,
+        'relative_strength_vs_market' => 6.0,
         'computed_at' => now(),
     ], $attributes));
 }
@@ -159,10 +138,11 @@ function importSummaryReportLatestTestFundamentalIndicator(Holding $holding, arr
         'holding_id' => $holding->id,
         'per' => 15.0,
         'pbr' => 1.5,
-        'roe' => 8.0,
-        'revenue_growth' => 5.0,
-        'operating_income_growth' => 4.0,
-        'equity_ratio' => 35.0,
+        'roe' => 15.2,
+        'revenue_growth' => 8.0,
+        'operating_income_growth' => 12.3,
+        'equity_ratio' => 58.0,
+        'operating_margin' => 18.3,
         'dividend_yield' => 2.0,
         'dividend_payout_ratio' => 30.0,
         'fetched_at' => now(),
@@ -170,11 +150,10 @@ function importSummaryReportLatestTestFundamentalIndicator(Holding $holding, arr
 }
 
 /**
- * Seeds a "利確検討" qualifying holding (含み益+30%・RSI72, no signals ->
- * normal-mode +20%超 gate, mirrors ImportSummaryReportShowTest.php's
- * take-profit fixture) in its own Snapshot, so the resulting report's
- * headline/top_recommendations contain an unambiguous marker
- * (symbol_code/symbol_name) identifying which batch's data was rendered.
+ * Seeds a "take_profit" qualifying holding (含み益+30%・RSI72, ADR-0014 D2
+ * 通常モード+20%超) in its own Snapshot, so the resulting classification's
+ * take_profit bucket contains an unambiguous marker (symbol_code/
+ * symbol_name) identifying which batch's data was rendered.
  *
  * @return array{batch: ImportBatch, symbol_code: string, symbol_name: string}
  */
@@ -192,20 +171,29 @@ function importSummaryReportLatestTestSeedTakeProfitBatch(string $label, array $
         'symbol_name' => $symbolName,
         'sector_classification_id' => $sector->id,
     ]);
-    importSummaryReportLatestTestHoldingSnapshot($snapshot, $holding, [
+    $holdingSnapshot = importSummaryReportLatestTestHoldingSnapshot($snapshot, $holding, [
         'average_cost' => 1000.0,
         'current_price' => 1300.0,
         'unrealized_gain_amount' => 3000.0,
         'unrealized_gain_rate' => 30.0,
     ]);
     importSummaryReportLatestTestTechnicalIndicator($holding, ['rsi' => 72.0]);
+    importSummaryReportLatestTestFundamentalIndicator($holding);
+    // シグナル1件を発生させ、CHG-0006の動的分岐（シグナル0件かつ財務健全性
+    // passedだと高水準モード+150%超が適用される）を回避し、通常モード
+    // （+20%超）で take_profit 対象になるようにする（含み益+30%）。
+    Signal::create([
+        'holding_snapshot_id' => $holdingSnapshot->id,
+        'signal_type' => 'rsi_reversal',
+        'reason_summary' => 'RSIが72まで上昇し利確ラインを超過しました',
+    ]);
 
     return ['batch' => $batch, 'symbol_code' => $symbolCode, 'symbol_name' => $symbolName];
 }
 
-describe('CHG-0008: 最新サマリーレポートのタブ化（UC-009 フロー7）', function () {
+describe('CHG-0008: 最新サマリーレポートのタブ化（UC-009 フロー7）— 分類俯瞰（ADR-0014 D9）', function () {
     describe('正常系', function () {
-        test('取込バッチが複数ある場合、最新バッチのレポート（headline・上位10件）が表示される', function () {
+        test('取込バッチが複数ある場合、最新バッチの分類俯瞰（take_profitバケツ）が表示される', function () {
             $user = User::factory()->create();
 
             importSummaryReportLatestTestSeedTakeProfitBatch('OLD', [
@@ -219,6 +207,10 @@ describe('CHG-0008: 最新サマリーレポートのタブ化（UC-009 フロ�
 
             $component->assertSee($newest['symbol_code']);
             $component->assertSee($newest['symbol_name']);
+
+            expect($component->get('report'))->toHaveKey('classification');
+            $takeProfitBucket = collect($component->get('report')['classification']['buckets'])->firstWhere('bucket', 'take_profit');
+            expect(collect($takeProfitBucket['holdings'])->pluck('symbol_code')->all())->toContain($newest['symbol_code']);
         });
 
         test('古い取込バッチにしか存在しない銘柄は表示されない（最新バッチのみを見ていることの確認）', function () {
@@ -260,6 +252,19 @@ describe('CHG-0008: 最新サマリーレポートのタブ化（UC-009 フロ�
         });
     });
 
+    describe('旧フィールドの廃止（ADR-0014 D9-1）', function () {
+        test('$report に旧フィールド（top_recommendations/supplementary_recommendations）が含まれない', function () {
+            $user = User::factory()->create();
+            importSummaryReportLatestTestSeedTakeProfitBatch('NEW');
+
+            $component = Livewire::actingAs($user)->test(Latest::class);
+
+            expect($component->get('report'))->not->toHaveKey('top_recommendations');
+            expect($component->get('report'))->not->toHaveKey('supplementary_recommendations');
+            expect($component->get('report'))->toHaveKey('classification');
+        });
+    });
+
     describe('空状態', function () {
         test('取込バッチが1件も存在しない場合「まだCSVの取込がありません」とCSV取込画面への導線が表示され、Actionは呼ばれない', function () {
             $user = User::factory()->create();
@@ -276,17 +281,20 @@ describe('CHG-0008: 最新サマリーレポートのタブ化（UC-009 フロ�
         });
     });
 
-    describe('副作用（GETで再集計・書き込みが走るAction）', function () {
+    describe('副作用（GETで再集計が走るAction）', function () {
         test('ShowImportSummaryReportActionはmount時に1回だけ呼び出される', function () {
             $user = User::factory()->create();
             $batch = importSummaryReportLatestTestImportBatch();
             importSummaryReportLatestTestSnapshot($batch);
 
+            // 有効な（キーが揃った）空のclassification構造を、実際の
+            // ClassifyHoldingsAction（保有銘柄0件）から得て使う（Show側の
+            // 同種テストと同じ意図）。
+            $classification = app(ClassifyHoldingsAction::class)->execute();
             $fakeResult = [
                 'portfolio_headline' => 'テスト用ヘッドライン（Latest）',
                 'generated_at' => now(),
-                'top_recommendations' => [],
-                'supplementary_recommendations' => [],
+                'classification' => $classification,
             ];
 
             $this->mock(ShowImportSummaryReportAction::class, function ($mock) use ($fakeResult) {
@@ -296,11 +304,7 @@ describe('CHG-0008: 最新サマリーレポートのタブ化（UC-009 フロ�
             Livewire::actingAs($user)->test(Latest::class)
                 ->assertSee('テスト用ヘッドライン（Latest）');
 
-            // Mockery::once()の検証（未実装クラスのためこの行に到達する前に
-            // 「class not found」でRedになる想定 — Latest作成後も、mount()
-            // 以外（render()等）でexecute()を再度呼んでいれば
-            // "should be called exactly 1 times but called 2 times"で
-            // Redのままになる）。
+            // Mockery::once()の検証はこのテスト関数を抜ける際に行われる。
         });
     });
 
@@ -309,11 +313,19 @@ describe('CHG-0008: 最新サマリーレポートのタブ化（UC-009 フロ�
             $batch = importSummaryReportLatestTestImportBatch();
             importSummaryReportLatestTestSnapshot($batch);
 
-            // NOTE: coincidentally already 404s today because the route
-            // itself does not exist yet (see file-level docblock caveat).
-            // Re-verify once the route is added, to confirm the redirect
-            // then comes from the `auth` middleware, not route absence.
             $this->get('/summary-report')->assertRedirect('/login');
+        });
+    });
+
+    describe('永続化なし（ADR-0014 D9-2）', function () {
+        test('画面表示後もimport_summary_reports/import_summary_report_itemsへの書き込みは発生しない', function () {
+            $user = User::factory()->create();
+            importSummaryReportLatestTestSeedTakeProfitBatch('NEW');
+
+            Livewire::actingAs($user)->test(Latest::class);
+
+            $this->assertDatabaseCount('import_summary_reports', 0);
+            $this->assertDatabaseCount('import_summary_report_items', 0);
         });
     });
 });

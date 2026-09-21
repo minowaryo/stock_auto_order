@@ -560,6 +560,42 @@ describe('UC-011: 整理検討（含み損）候補一覧', function () {
         });
 
         // ---------------------------------------------------------------
+        // CHG-0017 / ADR-0015 D4（別セッションでbe0f00c/418172bとして実装・
+        // マージ済み）のレビュー指摘: BuySignalDeterminationService::
+        // preconditionsSatisfied()の事前条件Bは対セクター相対力を優先し
+        // 対市場相対力へフォールバックするよう変更されたが、この判定チェック
+        // リスト（相対力(対市場)行）は改訂前のまま`relative_strength_vs_market`
+        // のみを見ており、対セクター相対力を一切考慮していなかった。
+        //
+        // Expected Red cause: 対市場では基準未満（-12.0 <= -5.0）だが対セクター
+        // では基準以上（0.0 > -5.0）の銘柄で、実際の押し目買い事前条件Bは
+        // セクター優先により満たされる（弱くない）はずなのに、本チェックリスト
+        // 行は対市場のみを見て「met」（整理検討テーブルの反転極性で「基準割れ
+        // ＝投資根拠毀損」を意味する赤チップ）を返してしまう。配線後は対セクター
+        // が優先され「unmet」になる想定。
+        // ---------------------------------------------------------------
+        test('対セクター相対力が対市場より優れる銘柄は、判定チェックリストの相対力行が対セクターの値で判定される', function () {
+            [, $snapshot] = ucFrom011TestBatch();
+            $holding = ucFrom011TestHolding(['symbol_code' => '9001', 'symbol_name' => '相対力優先テスト']);
+            ucFrom011TestHoldingSnapshot($snapshot, $holding);
+            ucFrom011TestTechnicalIndicator($holding, [
+                'relative_strength_vs_market' => -12.0, // 基準(-5.0)未満、対市場のみ見ると met（弱い）
+                'relative_strength_vs_sector' => 0.0, // 基準以上、対セクター優先なら unmet（弱くない）
+            ]);
+            ucFrom011TestFundamentalIndicator($holding);
+
+            $row = ucFrom011TestFindRow(ucFrom011TestExecute(), '9001');
+
+            // 相対力行は technical 配列の6番目（0-indexed 5）に固定位置で存在する
+            // （含み損率／52週高値下落率／52週安値距離／MA75乖離率／MACD-シグナル線／
+            // 相対力／押し目買いシグナル件数の順、本ファイル上部のヘルパーdocblock参照）。
+            $relativeStrengthItem = $row['criteria']['technical'][5];
+            expect($relativeStrengthItem['label'])->toContain('相対力');
+            expect($relativeStrengthItem['status'])->toBe('unmet');
+            expect($relativeStrengthItem['value_label'])->toBe('+0.0');
+        });
+
+        // ---------------------------------------------------------------
         // CR (2026-09-06, CHG-0012 / ADR-0011): 営業利益率の反転チップ
         // ---------------------------------------------------------------
         test('含み損-40%かつ営業利益率5.0%（基準割れ）の銘柄は、判定チェックリストの営業利益率チップが met（反転）・fundamental_status=failed・サマリの投資根拠の毀損に数えられる', function () {
@@ -672,9 +708,15 @@ describe('UC-011: 整理検討（含み損）候補一覧', function () {
             [, $snapshot] = ucFrom011TestBatch();
             $holding = ucFrom011TestHolding(['symbol_code' => '3407', 'symbol_name' => '旭化成']);
             ucFrom011TestHoldingSnapshot($snapshot, $holding);
-            // ROE・自己資本比率は健全、成長率のみちょうど 0.0（FundamentalHealthEvaluator は >0 で健全判定のため failed になる）
+            // ROE・自己資本比率は健全、成長率のみちょうど 0.0（FundamentalHealthEvaluator は >0 で健全判定のため failed になる）。
+            // 2026-09-19修正（CHG-0017／ADR-0015 D1）: roe/equity_ratio は元々
+            // 15.2/58.0 だったが、これはD1のRESCUE閾値（roe>=15.0 &&
+            // equityRatio>=50.0）と衝突し 'passed' に反転してしまうため、基本
+            // 条件（10%/40%）は満たすがRESCUE閾値（15%/50%）は満たさない値
+            // （12.0/45.0）に変更した。本テストの意図（成長率0%の文言表記）は
+            // 変更していない。
             ucFrom011TestFundamentalIndicator($holding, [
-                'roe' => 15.2, 'equity_ratio' => 58.0, 'revenue_growth' => 0.0, 'operating_income_growth' => -2.0,
+                'roe' => 12.0, 'equity_ratio' => 45.0, 'revenue_growth' => 0.0, 'operating_income_growth' => -2.0,
             ]);
 
             $row = ucFrom011TestFindRow(ucFrom011TestExecute(), '3407');
@@ -682,6 +724,33 @@ describe('UC-011: 整理検討（含み損）候補一覧', function () {
             expect($row['fundamental_status'])->toBe('failed');
             expect($row['fundamental_summary'])->not->toContain('成長率マイナス');
             expect($row['fundamental_summary'])->toContain('0%以下');
+        });
+
+        // ---------------------------------------------------------------
+        // CR (2026-09-20, CHG-0017 / ADR-0015 D2 配線 Cycle 4c)
+        // ---------------------------------------------------------------
+        // FundamentalHealthEvaluator自体はD2救済（直近3期平均成長率>0%の
+        // OR救済）を実装済みだが、ShowLossReviewListAction はまだ
+        // avg_revenue_growth/avg_operating_income_growth を evaluate() に
+        // 渡していない。
+        // Red の出方（2026-09-20）: roe=12.0/equity_ratio=45.0（D1のRESCUE閾値
+        // ROE≧15%/自己資本比率≧50%は満たさない）・単年度成長率は両方マイナス
+        // のため、現行実装は fundamental_status='failed' のままとなり、
+        // 'passed' を期待する以下のアサーションが不一致になる。
+        test('自己資本比率45.0%/ROE12.0%（D1のRESCUE閾値は満たさない）で単年度成長率が両方マイナスだが3期平均営業利益成長率がプラスの銘柄は、D2救済によりfundamental_status=passedになる', function () {
+            [, $snapshot] = ucFrom011TestBatch();
+            $holding = ucFrom011TestHolding(['symbol_code' => '1605', 'symbol_name' => 'INPEX']);
+            ucFrom011TestHoldingSnapshot($snapshot, $holding);
+            ucFrom011TestFundamentalIndicator($holding, [
+                'roe' => 12.0, 'equity_ratio' => 45.0,
+                'revenue_growth' => -3.0, 'operating_income_growth' => -1.0,
+                'avg_operating_income_growth' => 1.5,
+            ]);
+
+            $row = ucFrom011TestFindRow(ucFrom011TestExecute(), '1605');
+
+            expect($row)->not->toBeNull();
+            expect($row['fundamental_status'])->toBe('passed');
         });
 
         test('財務 passed の銘柄に押し目シグナルがあれば also_on_buy_list は true（買い増しリストにも載る）', function () {
