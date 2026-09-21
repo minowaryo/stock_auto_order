@@ -1,6 +1,64 @@
-# PLAN.md アーカイブ（〜2026-09-21 CHG-0011完了時点）
+# PLAN.md アーカイブ（〜2026-09-21 F-011完了時点）
 
-PLAN.md から退避した完了済みエントリ。売買シグナル画面「評価額」列追加（CHG-0011）＋米国株ファンダのDB補完（2026-09-05〜09-06）完了・米国株ファンダメンタルズ指標データソースとしてFinnhub採用（CHG-0009、2026-09-05〜）完了の記録を追加（2026-09-21、CHG-0017／CHG-0018マージ時にPLAN.mdが300行を超えたため退避）。売買シグナル画面 判定チェックリスト表示（CHG-0007、2026-08-29〜09-05）完了の記録を追加（2026-09-12、CHG-0016作業でPLAN.mdが300行を超えたため退避。本エントリは末尾の「次: `/review` → コミット」を残したまま退避しているが、その後のCHG-0009〜CHG-0016で`signal-list.blade.php`のヘッダー用/本文用2分割構造が繰り返し前提として参照・拡張されており、`/review`・コミットとも完了済みであることが確認できるため退避対象とした）。取込後サマリーレポートのグローバルナビタブ化（CHG-0008、2026-09-05）完了の記録を追加（2026-09-12、F-012・CHG-0012のステータス記述修正に伴いPLAN.mdが300行を超えたため退避）。利確検討ラインの動的分岐（CHG-0006、2026-08-28〜29）・売買シグナル画面の可読性改善（2026-08-28）の記録を追加（2026-09-06、CHG-0013／ADR-0012作業時に約298行に達したため退避）。数値表示フォーマット修正完了（2026-08-28）・UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）の記録を追加（2026-09-06、CHG-0012 Phase 0作業時に300行超過に伴い退避）。フロントエンド実装Phase7（UC-006/UC-008統合「新規投資候補」画面）完了・その`/review`指摘（MEDIUM 3件）修正完了の記録を追加（2026-09-06、CHG-0011コミット時に300行超過に伴い退避）。フロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了の記録を追加（2026-09-05、CHG-0011作業時に300行超過に伴い退避）。フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了までの記録を追加。UC-010（既存保有株の買い増しタイミングレコメンド）Gate4完了・コミット（`ba239fe`）までの記録を追加。Gate0セットアップ〜Phase1（UC-001/002/003/009）Gate4サイクル完了・ADR-0002 NISA区分CR・投資方針背景整理・ADR-0004（分析エンジンの指標セット拡張、設計確定〜TechnicalIndicatorCalculator〜MarketData層〜JQuantsClient〜SignalDeterminationService〜FundamentalIndicatorMapperの各TDDサイクル、UC-001への配線・UC-004画面実装・UC-003/UC-009への新指標反映を含む）完了、関連する`/review`指摘修正2件・UC-009サンプルレポート生成・per-holding非アトミック性修正、F-010（UC-010）のGate1〜3ドキュメント叩き台整備（ADR-0007新規作成、requirements.md/use-cases.md/data-model.md改訂）、NISA区分（口座区分）内訳の書き込み経路・UC-004消費側の実装完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、およびフロントエンド実装Phase4（UC-003銘柄詳細画面）完了までの記録。現在進行中のタスクとは直接関係しないため参照頻度は低いが、経緯確認が必要な場合はここを見る。
+PLAN.md から退避した完了済みエントリ。整理検討（含み損）候補一覧の新設（F-011・UC-011・ADR-0010・CHG-0010、2026-09-05〜06）完了の記録を追加（2026-09-21、最終`/review`・コミット・push前のPLAN.md整理でCHG-0017/CHG-0018マージ後300行に近づいたため退避。mainマージ済み・`origin/feat/f011-loss-review-list`にpush済みであることを確認済み）。売買シグナル画面「評価額」列追加（CHG-0011）＋米国株ファンダのDB補完（2026-09-05〜09-06）完了・米国株ファンダメンタルズ指標データソースとしてFinnhub採用（CHG-0009、2026-09-05〜）完了の記録を追加（2026-09-21、CHG-0017／CHG-0018マージ時にPLAN.mdが300行を超えたため退避）。売買シグナル画面 判定チェックリスト表示（CHG-0007、2026-08-29〜09-05）完了の記録を追加（2026-09-12、CHG-0016作業でPLAN.mdが300行を超えたため退避。本エントリは末尾の「次: `/review` → コミット」を残したまま退避しているが、その後のCHG-0009〜CHG-0016で`signal-list.blade.php`のヘッダー用/本文用2分割構造が繰り返し前提として参照・拡張されており、`/review`・コミットとも完了済みであることが確認できるため退避対象とした）。取込後サマリーレポートのグローバルナビタブ化（CHG-0008、2026-09-05）完了の記録を追加（2026-09-12、F-012・CHG-0012のステータス記述修正に伴いPLAN.mdが300行を超えたため退避）。利確検討ラインの動的分岐（CHG-0006、2026-08-28〜29）・売買シグナル画面の可読性改善（2026-08-28）の記録を追加（2026-09-06、CHG-0013／ADR-0012作業時に約298行に達したため退避）。数値表示フォーマット修正完了（2026-08-28）・UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）の記録を追加（2026-09-06、CHG-0012 Phase 0作業時に300行超過に伴い退避）。フロントエンド実装Phase7（UC-006/UC-008統合「新規投資候補」画面）完了・その`/review`指摘（MEDIUM 3件）修正完了の記録を追加（2026-09-06、CHG-0011コミット時に300行超過に伴い退避）。フロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了の記録を追加（2026-09-05、CHG-0011作業時に300行超過に伴い退避）。フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了までの記録を追加。UC-010（既存保有株の買い増しタイミングレコメンド）Gate4完了・コミット（`ba239fe`）までの記録を追加。Gate0セットアップ〜Phase1（UC-001/002/003/009）Gate4サイクル完了・ADR-0002 NISA区分CR・投資方針背景整理・ADR-0004（分析エンジンの指標セット拡張、設計確定〜TechnicalIndicatorCalculator〜MarketData層〜JQuantsClient〜SignalDeterminationService〜FundamentalIndicatorMapperの各TDDサイクル、UC-001への配線・UC-004画面実装・UC-003/UC-009への新指標反映を含む）完了、関連する`/review`指摘修正2件・UC-009サンプルレポート生成・per-holding非アトミック性修正、F-010（UC-010）のGate1〜3ドキュメント叩き台整備（ADR-0007新規作成、requirements.md/use-cases.md/data-model.md改訂）、NISA区分（口座区分）内訳の書き込み経路・UC-004消費側の実装完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、およびフロントエンド実装Phase4（UC-003銘柄詳細画面）完了までの記録。現在進行中のタスクとは直接関係しないため参照頻度は低いが、経緯確認が必要な場合はここを見る。
+
+## 整理検討（含み損）候補一覧の新設（F-011・UC-011・ADR-0010・CHG-0010）（2026-09-05〜）
+
+### Decision
+
+- 本人要望: 「めちゃくちゃ損益が出ている銘柄を早く足切りしたい。足切りの踏ん切りをつけたい。そのための情報が分かる状況を作りたい。売買シグナル画面に第3テーブルを追加して」。`accuracy-improvement-backlog.md` の持ち越し項目「整理対象（損切り）候補一覧」（F-010完成後に着手判断、2026-09-05本人指示）そのもの
+- Planフェーズ承認済み。プランファイル: `~/.claude/plans/stock_auto_order-loss-review-implementation-phase.md`
+- 本人合意のスコープ（AskUserQuestionで確認）: (1) 一覧＋判断材料の提示のみ（分割売却の指値提案なし）、(2) UC-009サマリーレポート統合なし・DB変更なし（表示レイヤー完結、CHG-0006方式）、(3) 推定保有期間は観測以来の連続保有週数のみ（`holdings.acquired_on` 追加はしない）
+- `requirements.md` 2章OUT「含み損銘柄の売却判断支援」を部分改訂（F-010がADR-0007で押し目買いに限りOUTを覆したのと同じ構図）。ADR-0010新規作成（Status: Accepted）
+- 設計要点: `/signals` 最下部に第3セクション「整理検討（含み損）」。対象＝直近スナップショットの個別株で含み益率 ≤ -20%（叩き台）。ファンダ `failed` も押し目シグナル発生銘柄も**除外せず**透明マルチキーソートで順序制御（①押し目なし→あり ②`failed`→`unavailable`→`passed` ③整理該当数 ④含み損の深い順）。新規閾値3件のみ（-20% / 52週高値-30% / 押し目0件）、残りは既存閾値の可視化。新設 `ShowLossReviewListAction` / `LossReviewThresholds` / `ContinuousHoldingWeeksCalculator`、`SignalCriteriaEvaluator::evaluateLossReview()` 追加。既存 `ShowSignalListAction`/`ShowBuySignalListAction`/`signals`/`buy_signals`/`FetchExternalMarketDataAction` は不変
+- Gate1（requirements.md 2章OUT改訂・F-011追加・7章）・Gate2（use-cases.md UC-011＋承認記録）・Gate3（data-model.md 初期パラメータ6行＋算出式4件＋承認記録、DBスキーマ変更なしのため影響範囲確認のみ）を本人が順に承認（2026-09-05）
+- **並行作業との衝突（要調整）**: 別セッションが CHG-0011（`/signals` に評価額列を銘柄の右隣＝2列目に追加）を進行中。CHG-0011のドキュメント変更が同一作業ツリー・同一ブランチ（`feat/f011-loss-review-list`）に未コミットで混在している。CHG-0011は `signal-table-colgroup.blade.php`（ラベル列5→6）・両Action・共通テーブル部品を変更するため、F-011のBlade/Action実装はCHG-0011の確定後にその上に乗せる必要がある。両者とも「ドキュメント完了・コード未着手」段階
+
+### Files touched
+
+**ドキュメント**: `docs/adr/ADR-0010-loss-review-candidate-list.md`（新規）、`docs/product/requirements.md`（2章IN/OUT・4章F-011・7章）、`docs/product/use-cases.md`（UC一覧・UC-011節・承認記録）、`docs/architecture/data-model.md`（初期パラメータ表6行・分析ロジック計算仕様4件＋通貨単位注記・承認記録・変更履歴）、`docs/rcid/traceability-matrix.md`（F-011行・CHG-0010・F-004/F-010行に横断修正注記）、`docs/product/ui-guidelines.md`（3セクション構成・dangerバッジ配色）、`docs/product/accuracy-improvement-backlog.md`（持ち越し項目→着手）、`PLAN.md`（300行超過に伴い旧2エントリを `docs/history/plan-archive.md` へ退避）
+
+**コード（新規）**: `app/Actions/Signal/ShowLossReviewListAction.php`、`app/Services/Analysis/LossReviewThresholds.php`、`app/Services/Portfolio/ContinuousHoldingWeeksCalculator.php`、`resources/views/components/loss-review-table-colgroup.blade.php`、`tests/Feature/UC011LossReviewListTest.php`（19件）、`tests/Feature/CriteriaChecklistUnitConsistencyTest.php`（9件・横断バグ再発防止）、`tests/Unit/Services/Portfolio/ContinuousHoldingWeeksCalculatorTest.php`（6件）
+
+**コード（変更）**: `app/Services/Analysis/SignalCriteriaEvaluator.php`（`evaluateLossReview()`＋`indicatorComparablePrice()`追加、`fundamentalRows()` に反転フラグ追加〔2026-09-06 D6改訂〕、`evaluateTakeProfit()`/`evaluateBuy()` は無改修）、`resources/views/components/criteria-chip.blade.php`（`tone` prop 追加、整理テーブルは danger パレット）、`app/Services/Analysis/BuySignalDeterminationService.php`（`MIN_RELATIVE_STRENGTH` を public const 化）、`app/Actions/Signal/ShowSignalListAction.php`＋`app/Actions/Signal/ShowBuySignalListAction.php`（判定チェックリスト用 `current_price` をUSD割り戻し。**CHG-0011 と同ファイルだが別メソッド**）、`app/Livewire/Signal/SignalList.php`（`lossReviews` 1行追加）、`resources/views/livewire/signal/signal-list.blade.php`（末尾に第3セクション追記）、`tests/Unit/Services/Analysis/SignalCriteriaEvaluatorTest.php`＋`tests/Feature/SignalListTest.php`（追記）
+
+### Status
+
+Gate1/2/3/4 承認完了（2026-09-05）。**Green 完了**。
+- F-011 本体: 新規 `ShowLossReviewListAction` ＋ 3 サービスクラス、`/signals` 最下部に第3セクション「整理検討（含み損）」。専用 colgroup で CHG-0011（評価額列）と切り分け。共有は `signal-list.blade.php`（末尾追記のみ）＋`SignalList.php`（1行）
+- 横断バグ修正（本人承認済み案「A」）: F-011 実データ確認で、判定チェックリストの価格乖離チップが米国株で桁違い（円建て `current_price` vs USD建て `technical_indicators`）になる既存バグ（CHG-0007由来・CHG-0009で顕在化）を発見。`SignalCriteriaEvaluator::indicatorComparablePrice()` を新設し UC-004/UC-010/UC-011 横断で修正（判定チェックリスト用 `current_price` のみ `÷ fx_rate_used`）。`market_value`・分割指値・`recovery_required_rate` 等の円建て値は不変
+- フルスイート **517 passed / 13 deprecated（既存・無関係）/ 0 failed**。pint クリーン
+- `npm run build` 済み。実データ（保有134銘柄・含み損-20%超19件）で実ブラウザ確認: 第3セクション描画・sticky追従・met/near/unmet/unavailable の4状態・並び順（含み損の深い順）・注記表示・**米国株の乖離チップが修正後 -63.1% 等の正常値**を確認
+- 既知の残課題（本タスク非スコープ）: `fundamental_summary` の成長率が near-zero base で `+69860.4%` 等の極端値になる（UC-004/UC-010/UC-008 共通のデータ品質問題、`accuracy-improvement-backlog.md` の EPS成長率と同種）
+
+**設計リワーク（2026-09-06、ADR-0010 D6 改訂）**: 上記 Green 完了分は**旧契約**（判定チェックリストの財務3項目＝健全→`met`＝緑チップ、テクニカルと同じ緑）で実装されている。設計レビューで「1テーブル内にテクニカルの緑〔＝売り後押し〕と財務の緑〔＝保留材料〕が同居し、同じ色が正反対を意味する。サマリバッジが『合計◯/10＝売り確定』と誤読される」懸念が判明。本人合意のうえ **D6 を「赤の単一極性」に改訂**:
+- 整理検討テーブルの criteria チップは達成＝赤系（`bg-red-100`）／あと一歩＝淡い赤／未達・データなし＝グレー。**緑は出さない**
+- 財務健全性3項目は判定の向きを反転し「基準割れ（＝投資根拠の毀損）」を `met`（赤）とする。閾値の値（ROE 10%／自己資本比率 40%／成長率 0%）は既存流用のまま
+- サマリ文言は「整理シグナル ◯/7」「投資根拠の毀損 ◯/3」（分子を合算しない）
+- UC-004（利確検討）・UC-010（買い増し候補）テーブルの配色・`fundamentalRows()` 既定挙動は不変（反転はフラグ指定時のみ）
+
+**ドキュメント CR 完了（2026-09-06）**: `docs/adr/ADR-0010-loss-review-candidate-list.md`（D5/D6/Rationale/採用しなかった代替案/Consequences）、`docs/architecture/data-model.md`（「整理検討の財務健全性3項目」行・承認記録・変更履歴）、`docs/product/use-cases.md`（UC-011 業務ルール「判定チェックリスト」節・承認記録）、`docs/product/ui-guidelines.md`（チップ配色規約・サマリバッジ）、`docs/rcid/traceability-matrix.md`（F-011行・CHG-0010行）を改訂。
+
+**リワーク実装完了（2026-09-06、Gate4承認済み）**:
+- Red: `test-writer` が `SignalCriteriaEvaluatorTest`（evaluateLossReview 節・`lossMetricsAllMet()`・コメント）と `SignalListTest`（UC-011 Livewire 節）を新契約に書き換え、13件 Red（アサーション不一致）。既存テストは無改変で Green 維持。Gate4 承認
+- Green: `tdd-implementer` が実装。`SignalCriteriaEvaluator::fundamentalRows()` に `bool $forLossReview = false` 追加（true で ROE/自己資本比率 `lt`・成長率 `lte`・threshold_label 反転、閾値の値は `FundamentalHealthEvaluator` 流用）。`evaluateLossReview()` は `fundamentalRows($metrics, true)` 呼び出しに変更。`criteria-chip.blade.php` に `tone`（success 既定／danger）、`signal-criteria-cells.blade.php` に `tone` 転送、`signal-criteria-summary-badges.blade.php` に `variant="lossReview"`（文言「整理シグナル ◯/7」「投資根拠の毀損 ◯/3」・全該当色 `text-red-700`）。`signal-list.blade.php` 第3セクションのみ `tone="danger"` / `variant="lossReview"` 付与。`evaluateTakeProfit()`/`evaluateBuy()`・買い増し/利確セクションは不変
+- フルスイート **531 passed / 13 deprecated（既存・無関係）**。pint クリーン。`npm run build` 済み（`app-Ck2oRFta.css`、赤系クラス生成確認）
+- 実データ実ブラウザ確認（コンテナ内 Playwright、保有135・整理検討19件）: 第3セクションのチェックリストチップは **met＝赤98個・緑0個**、unmet＝グレー。財務3項目の反転を確認（JOBY: ROE -58.3%→赤 met／自己資本比率 78.5%→グレー unmet／成長率→グレー、サマリ「投資根拠の毀損 1/3」。SOFI 2/3、WIT 0/3）。サマリバッジ「整理シグナル N/7」「投資根拠の毀損 N/3」表示。3セクション共存で買い増し=緑・整理=赤が区別可能
+
+**`/review` 実施（2026-09-06、normal レベル）**: MEDIUM 1件・LOW 3件・NIT 1件。
+- **MEDIUM 修正済み**: 整理検討テーブルの `x-signal-table-head` 列グループ見出しが「判定チェックリスト（テクニカル）／（財務）」のままでサマリバッジ「整理シグナル／投資根拠の毀損」と語彙がずれていた。`signal-table-head.blade.php` に `variant` prop（既定 `signal`／`lossReview`）を追加し、整理検討テーブルは「判定チェックリスト（整理シグナル）／（投資根拠の毀損）」に。`SignalListTest` に見出しアサーション1件追加（Red→Green）。`ui-guidelines.md` 追記。フルスイート **532 passed**、pint・build クリーン、実データ確認済み
+- **LOW 対応済み**: (2) `fundamentalSummary()` の `growthNote` を成長率ちょうど0%でも正しい「（成長率0%以下）」表記に修正（`UC011LossReviewListTest` に回帰テスト1件追加）。フルスイート **533 passed**
+- **LOW 見送り**: (1) eager load 最適化はパフォーマンス影響小のため任意（別タスク候補）。(3) `docs/product/user-guide.md` はプロジェクト全体で未記入のテンプレート（UC-001〜UC-010 も全て未記載）のため、F-011 単独で節を足すと不整合。プロジェクト横断の別対応とする
+- NIT: `evaluateLossReview()` docブロックの旧記述 → 修正済み
+
+**コミット完了（2026-09-06、`b3d1793`、未push）**: ①**CHG-0010（F-011本体＋赤単一極性リワーク＋通貨単位横断バグ修正）**分のみを `git add -p` で選択ステージしてコミット（27ファイル）。作業ツリーに残る②**CHG-0011（評価額列 market_value）**・③**CHG-0009運用化（`market-data:refetch-us-fundamentals` コマンド）**は別セッションの未完了作業（②は `/review` 前）のため本セッションではコミットしない。混在ファイル（`ShowSignalListAction`/`ShowBuySignalListAction`/`signal-list.blade.php`/`SignalListTest.php`/`use-cases.md`/`traceability-matrix.md`/`PLAN.md`）は①分ハンクのみをコミット済み、②分ハンクは未ステージのまま残置。
+
+UC-011 は閲覧系フローで `.claude/rules/31-e2e-testing.md` のクリティカルフロー対象外のため Playwright E2E は追加しない（UC-004/UC-009/CHG-0007 と同じ判断）。
+
+**b3d1793 後の追加確認（2026-09-06、CHG-0011 引き取りセッション）**:
+- `b3d1793` は既に `origin/feat/f011-loss-review-list` に push 済み（`c98165b` まで）。`traceability-matrix.md` の F-011 行を「完了」に更新（コミット済みだが `b3d1793` 時点では2行しか反映されず「リワーク中」表記が残っていた）→ CHG-0011 コミットに同梱。
+- **今後の対応（低優先・先送り）**: `ShowLossReviewListAction::also_on_buy_list` は `$reboundPresent && fundamental_status !== 'failed'` で判定しており、`ShowBuySignalListAction::isEligible()` の「利確シグナル（`signals`）同時成立銘柄を除外」条件（`signals->isNotEmpty()`）を再現していない。含み損-20%超の銘柄が利確シグナル（通常 +20%超が条件）を持つのは異常/古いデータのケースのみで到達性は低い。修正するには `ShowLossReviewListAction` の eager load に `signals` 追加（N+1回避）が必要。次に F-011 に手を入れる際に解消する。
+- **今後の対応（軽微・cosmetic）**: 整理検討テーブルのヘッダー用/本文用 `<table>` の `scrollWidth` が 1441 vs 1452（12px差）。`getBoundingClientRect().width` は両方 1441 で実描画・列整列は一致しており視認上の崩れはない（`known-pitfalls.md`「table-fixed + 折返し不可ラベル」と同種の軽微な内容オーバーフロー）。実害が出たら本文側の長いラベル/バッジの `break-words` を見直す。
 
 ## 売買シグナル画面「評価額」列追加（CHG-0011）＋米国株ファンダのDB補完（2026-09-05〜）
 

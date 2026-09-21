@@ -292,6 +292,8 @@ class FetchExternalMarketDataAction
                         operatingIncomeGrowth: $fundamental['operating_income_growth'] ?? null,
                         operatingMargin: $fundamental['operating_margin'] ?? null,
                         dividendYield: $fundamental['dividend_yield'] ?? null,
+                        avgRevenueGrowth: $fundamental['avg_revenue_growth'] ?? null,
+                        avgOperatingIncomeGrowth: $fundamental['avg_operating_income_growth'] ?? null,
                     );
 
                     // Re-determination: same drop-then-recreate pattern as the

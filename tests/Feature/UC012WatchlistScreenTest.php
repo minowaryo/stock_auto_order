@@ -296,6 +296,25 @@ test('各行に同セクター保有比率・財務健全性・小口購入額�
     expect($row['criteria'])->toHaveKey('fundamental');
 });
 
+test('判定チェックリストのPER・PBRチップは実測値を表示する（`/review`回帰テスト: 生列削除後に唯一の表示経路になったため）', function () {
+    // ShowWatchlistAction::toRow()がSignalCriteriaEvaluator::evaluateBuy()に
+    // 渡すmetrics配列に'per'/'pbr'キーが欠けており、常にunavailable表示に
+    // なっていた（CHG-0016で生のPER/PBR列を削除しチップのみの表示に一本化した
+    // ため、この欠落によりPER/PBRがウォッチリスト画面から実質的に消えていた）。
+    uc012ScreenWatchlist('3690', ['name' => 'PERPBR確認銘柄', 'per' => 8.5]);
+
+    $component = Livewire::actingAs(uc012ScreenUser())->test(CandidateCheck::class);
+
+    $row = collect($component->viewData('rows'))->firstWhere('symbol_code', '3690');
+    $perRow = collect($row['criteria']['technical'])->firstWhere('label', 'PER');
+    $pbrRow = collect($row['criteria']['technical'])->firstWhere('label', 'PBR');
+
+    expect($perRow['status'])->not->toBe('unavailable');
+    expect($perRow['value_label'])->toBe('8.5');
+    expect($pbrRow['status'])->not->toBe('unavailable');
+    expect($pbrRow['value_label'])->toBe('1.50');
+});
+
 // ---------------------------------------------------------------------
 // CR (2026-09-20, CHG-0017 / ADR-0015 D2 配線 Cycle 4c)
 // ---------------------------------------------------------------------

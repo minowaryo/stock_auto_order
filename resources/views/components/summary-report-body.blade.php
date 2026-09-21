@@ -133,30 +133,38 @@
             </x-card>
         @endif
     @endforeach
+@endif
 
-    @php($newEntryHoldings = $bucketsByKey->get('new_entry')['holdings'] ?? [])
-    @if (! empty($newEntryHoldings))
-        <x-card>
-            <h2 class="text-base font-semibold mb-4">
-                <a href="/watchlist" wire:navigate class="hover:underline">新規購入検討（ウォッチリスト）</a>
-                （{{ count($newEntryHoldings) }}件・評価額構成比には非算入）
-            </h2>
-            <table class="w-full text-[13px]">
-                <thead>
-                    <tr class="text-left text-text-secondary border-b border-app-border">
-                        <th class="py-2 pr-4">銘柄</th>
-                        <th class="py-2 pr-4">理由</th>
+{{--
+    保有銘柄が0件でも、ウォッチリスト（未保有）候補は
+    ClassifyHoldingsAction::emptyResult() が引き続きnew_entryバケツへ
+    詰めて返す設計（保有0件とウォッチリスト0件は独立の状態のため）。
+    上の @if ($totalHeldCount === 0) の外に置き、保有0件でも表示されるようにする
+    （`/review`指摘: 以前はこのブロックが上のelse内にネストされており、
+    保有0件のときウォッチリスト候補があっても一切表示されなかった）。
+--}}
+@php($newEntryHoldings = $bucketsByKey->get('new_entry')['holdings'] ?? [])
+@if (! empty($newEntryHoldings))
+    <x-card>
+        <h2 class="text-base font-semibold mb-4">
+            <a href="/watchlist" wire:navigate class="hover:underline">新規購入検討（ウォッチリスト）</a>
+            （{{ count($newEntryHoldings) }}件・評価額構成比には非算入）
+        </h2>
+        <table class="w-full text-[13px]">
+            <thead>
+                <tr class="text-left text-text-secondary border-b border-app-border">
+                    <th class="py-2 pr-4">銘柄</th>
+                    <th class="py-2 pr-4">理由</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach ($newEntryHoldings as $holding)
+                    <tr class="border-b border-app-border last:border-b-0">
+                        <td class="py-2 pr-4">{{ $holding['symbol_code'] }} {{ $holding['symbol_name'] }}</td>
+                        <td class="py-2 pr-4">{{ $holding['bucket_reason'] }}</td>
                     </tr>
-                </thead>
-                <tbody>
-                    @foreach ($newEntryHoldings as $holding)
-                        <tr class="border-b border-app-border last:border-b-0">
-                            <td class="py-2 pr-4">{{ $holding['symbol_code'] }} {{ $holding['symbol_name'] }}</td>
-                            <td class="py-2 pr-4">{{ $holding['bucket_reason'] }}</td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </x-card>
-    @endif
+                @endforeach
+            </tbody>
+        </table>
+    </x-card>
 @endif

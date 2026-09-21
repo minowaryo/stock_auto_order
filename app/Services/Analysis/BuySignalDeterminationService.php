@@ -95,6 +95,8 @@ final class BuySignalDeterminationService
         ?float $operatingIncomeGrowth = null,
         ?float $operatingMargin = null,
         ?float $dividendYield = null,
+        ?float $avgRevenueGrowth = null,
+        ?float $avgOperatingIncomeGrowth = null,
     ): array {
         $current = $this->calculator->calculate($priceHistory, $marketReturn13w, $sectorReturn13w);
 
@@ -104,6 +106,8 @@ final class BuySignalDeterminationService
             $revenueGrowth,
             $operatingIncomeGrowth,
             $operatingMargin,
+            $avgRevenueGrowth,
+            $avgOperatingIncomeGrowth,
         );
 
         if (! $this->preconditionsSatisfied($priceHistory, $current, $fundamentalStatus)) {

@@ -15,6 +15,7 @@ use App\Models\Signal;
 use App\Models\Snapshot;
 use App\Models\TechnicalIndicator;
 use App\Models\User;
+use App\Models\WatchlistItem;
 use Livewire\Livewire;
 
 /*
@@ -334,6 +335,39 @@ describe('UC-009: 取込後サマリーレポート画面（Livewire）— 分�
 
             Livewire::actingAs($user)->test(Show::class, ['importBatch' => $batch])
                 ->assertSee('分類対象の保有銘柄がありません');
+        });
+
+        test('保有銘柄が0件でもウォッチリスト候補があれば新規購入検討セクションは表示される', function () {
+            // Regression test (`/review`指摘、2026-09-21): new_entryセクションが
+            // 誤って`@if ($totalHeldCount === 0)`の@else側にネストされており、
+            // 保有0件のときClassifyHoldingsAction::emptyResult()がnew_entryバケツに
+            // ウォッチリスト候補を詰めて返していても画面に一切表示されなかった。
+            $user = User::factory()->create();
+            [$batch] = importSummaryReportShowTestImportBatch();
+            // Deliberately no Holding/HoldingSnapshot rows — only a watchlist item.
+            $watchlistHolding = Holding::create([
+                'symbol_code' => '9999',
+                'market' => 'jp',
+                'instrument_type' => 'stock',
+                'symbol_name' => 'ウォッチ専用銘柄',
+                'first_detected_at' => now(),
+            ]);
+            WatchlistItem::create([
+                'holding_id' => $watchlistHolding->id,
+                'folder_name' => 'テーマA',
+                'exchange_label' => '東Ｐ',
+                'source' => 'rakuten_favorites_csv',
+                'is_starred' => false,
+                'last_close' => 1500.0,
+                'last_seen_in_csv_at' => now(),
+                'registered_at' => now(),
+            ]);
+
+            $component = Livewire::actingAs($user)->test(Show::class, ['importBatch' => $batch]);
+
+            $component->assertSee('分類対象の保有銘柄がありません');
+            $component->assertSee('新規購入検討（ウォッチリスト）');
+            $component->assertSee('ウォッチ専用銘柄');
         });
     });
 

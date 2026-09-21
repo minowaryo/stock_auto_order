@@ -147,6 +147,8 @@ class ShowWatchlistAction
                 'volume_ma20' => $technical?->volume_ma20 !== null ? (float) $technical->volume_ma20 : null,
                 'relative_strength_vs_market' => $technical?->relative_strength_vs_market !== null ? (float) $technical->relative_strength_vs_market : null,
                 'peg_ratio' => $fundamental?->peg_ratio !== null ? (float) $fundamental->peg_ratio : null,
+                'per' => $fundamental?->per !== null ? (float) $fundamental->per : null,
+                'pbr' => $fundamental?->pbr !== null ? (float) $fundamental->pbr : null,
                 'roe' => $roe,
                 'equity_ratio' => $equityRatio,
                 'revenue_growth' => $revenueGrowth,

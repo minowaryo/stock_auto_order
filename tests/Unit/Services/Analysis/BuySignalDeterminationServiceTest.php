@@ -684,6 +684,43 @@ test('前提条件Aが価格面では不成立でも、財務健全性がpassed�
     expect($signal)->not->toBeNull();
 });
 
+test('前提条件Aが価格面では不成立でも、単年度成長率がマイナスかつ3期平均成長率がプラス（ADR-0015 D2救済）の場合はOR条件により成立し、rsi_oversold_reboundシグナルが発生する', function () {
+    // Arrange: bsdLongDeclinePrelude()（価格面で前提条件A不成立）+ 同一のRSI反発
+    // テイル。equityRatio=45・roe=12はD1救済（RESCUE_MIN_ROE=15・
+    // RESCUE_MIN_EQUITY_RATIO=50）を満たさない値、revenueGrowth/
+    // operatingIncomeGrowthは単年度マイナス（-3.0/-2.0）で通常の4条件判定も
+    // 満たさない。avgRevenueGrowth=4.0・avgOperatingIncomeGrowth=3.0（3期
+    // 平均プラス）のみがFundamentalHealthEvaluator::evaluate()のD2救済経路
+    // （ADR-0015）を満たし、fundamentalStatus='passed'にする。
+    //
+    // このテストは他の全呼び出し元（ShowBuySignalListAction等、いずれも
+    // FundamentalIndicator::healthEvaluatorArgs()経由でavg_*を渡す）とは異なり
+    // determine()自身にavgRevenueGrowth/avgOperatingIncomeGrowthパラメータが
+    // 存在しなかった実害バグの回帰テスト（`/review`3エージェント独立検出、
+    // 2026-09-21）: このパラメータが配線されていないと、D2救済で他画面では
+    // fundamental_status=passedとして扱われる銘柄が、買い増しシグナル判定
+    // だけ前提条件Aを満たせず一切のbuy_signalsが発生しなくなる。
+    $closes = array_merge(bsdLongDeclinePrelude(), [134, 130, 126, 122, 118, 114, 110, 106, 102, 98, 94, 90, 95]);
+    $priceHistory = bsdPriceHistory($closes);
+
+    // Act
+    $result = bsdService()->determine(
+        $priceHistory,
+        marketReturn13w: -35.0,
+        equityRatio: 45.0,
+        roe: 12.0,
+        revenueGrowth: -3.0,
+        operatingIncomeGrowth: -2.0,
+        operatingMargin: 12.0,
+        avgRevenueGrowth: 4.0,
+        avgOperatingIncomeGrowth: 3.0,
+    );
+
+    // Assert: D2救済によるOR成立でrsi_oversold_reboundシグナルが発生する
+    $signal = bsdFindSignal($result, 'rsi_oversold_rebound');
+    expect($signal)->not->toBeNull();
+});
+
 test('前提条件Aが価格面で不成立、かつ財務健全性もpassedにならない場合、依然としてrsi_oversold_reboundシグナルは発生しない', function () {
     // Arrange: 上記と全く同じ価格系列・marketReturn13wだが、成長率をマイナス
     // （revenueGrowth: -5.0, operatingIncomeGrowth: -5.0）にし、
