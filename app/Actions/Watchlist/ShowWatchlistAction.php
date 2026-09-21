@@ -124,7 +124,7 @@ class ShowWatchlistAction
             'rebound_buy_signal_count' => $item->watchlistBuySignals->count(),
             'rebound_buy_signal_types' => $item->watchlistBuySignals->pluck('signal_type')->values()->all(),
             'fundamental_status' => $fundamentalStatus,
-            'fundamental_summary' => $this->fundamentalSummary($fundamentalStatus, $equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin),
+            'fundamental_summary' => $this->fundamentalSummary($fundamentalStatus, $equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin, $avgRevenueGrowth, $avgOperatingIncomeGrowth),
             'suggested_amount' => $suggestedAmount,
             'nisa_recommended' => $nisaRecommended,
             'rsi' => $technical?->rsi,
@@ -192,15 +192,42 @@ class ShowWatchlistAction
         return [(float) $row['allocation_rate'], $comment];
     }
 
-    private function fundamentalSummary(string $status, ?float $equityRatio, ?float $roe, ?float $revenueGrowth, ?float $operatingIncomeGrowth, ?float $operatingMargin): string
-    {
+    private function fundamentalSummary(
+        string $status,
+        ?float $equityRatio,
+        ?float $roe,
+        ?float $revenueGrowth,
+        ?float $operatingIncomeGrowth,
+        ?float $operatingMargin,
+        ?float $avgRevenueGrowth = null,
+        ?float $avgOperatingIncomeGrowth = null,
+    ): string {
         if ($status === 'unavailable') {
             return 'ファンダメンタルズ指標が未取得のため判定できません';
+        }
+
+        // ADR-0015 D1/D2レスキューの合格根拠を正しく表示する
+        // （app/Actions/Signal/ShowBuySignalListAction::fundamentalSummary()
+        // と同じロジック、/review 3回目の指摘・Cycle6で両方修正）。
+        if ($roe !== null && $equityRatio !== null
+            && ! ($operatingIncomeGrowth !== null && $operatingIncomeGrowth > 0.0)
+            && ! ($revenueGrowth !== null && $revenueGrowth > 0.0)
+            && ! ($avgOperatingIncomeGrowth !== null && $avgOperatingIncomeGrowth > 0.0)
+            && ! ($avgRevenueGrowth !== null && $avgRevenueGrowth > 0.0)
+            && $roe >= FundamentalHealthEvaluator::RESCUE_MIN_ROE
+            && $equityRatio >= FundamentalHealthEvaluator::RESCUE_MIN_EQUITY_RATIO) {
+            return sprintf(
+                'ROE%s%%・自己資本比率%s%%と財務健全性が高いため合格しています（成長率は基準を満たしていません）',
+                $this->fmt($roe),
+                $this->fmt($equityRatio),
+            );
         }
 
         $growth = match (true) {
             $operatingIncomeGrowth !== null && $operatingIncomeGrowth > 0.0 => ['営業利益成長率', $operatingIncomeGrowth],
             $revenueGrowth !== null && $revenueGrowth > 0.0 => ['売上高成長率', $revenueGrowth],
+            $avgOperatingIncomeGrowth !== null && $avgOperatingIncomeGrowth > 0.0 => ['3期平均営業利益成長率', $avgOperatingIncomeGrowth],
+            $avgRevenueGrowth !== null && $avgRevenueGrowth > 0.0 => ['3期平均売上高成長率', $avgRevenueGrowth],
             $operatingIncomeGrowth !== null => ['営業利益成長率', $operatingIncomeGrowth],
             default => ['売上高成長率', $revenueGrowth],
         };

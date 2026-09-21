@@ -735,6 +735,49 @@ describe('UC-004: 利確シグナル一覧', function () {
             expect((float) $firstTier['price'])->toEqualWithDelta(2000.0, 0.01);
         });
 
+        // -----------------------------------------------------------
+        // Feature Test拡充（2026-09-21、/review 3回目対応・Cycle7）
+        // -----------------------------------------------------------
+        // D1（財務指標ベースの成長率救済、ROE≧15%かつ自己資本比率≧50%）は
+        // Unit Test（FundamentalHealthEvaluatorTest）では厚くカバーされて
+        // いるが、UC-004画面（ShowSignalListAction→TakeProfitThresholdEvaluator
+        // 経路）でD1単独救済（単年度・3期平均とも成長率がプラスでない）が
+        // 高水準モードに正しく到達することを確認するFeature Testが存在
+        // しなかった（D2救済のテストはあるが、D1単独のケースが未検証）。
+        test('含み益+160%・シグナル0件・単年度・3期平均とも成長率がプラスでないがROE・自己資本比率のD1救済閾値を満たす銘柄は、高水準モード（分割指値+100%/+150%地点）が適用される', function () {
+            [, $snapshot] = ucFrom004TestImportBatch();
+            $holding = ucFrom004TestHolding(['symbol_code' => '4907', 'market' => 'jp', 'symbol_name' => 'D1救済銘柄']);
+            ucFrom004TestHealthyFundamentalIndicator($holding, [
+                // D1のRESCUE閾値（ROE≧15%かつ自己資本比率≧50%）を満たす。
+                'equity_ratio' => 55.0,
+                'roe' => 17.9,
+                'revenue_growth' => -5.0,
+                'operating_income_growth' => -3.0,
+                'avg_revenue_growth' => -2.0,
+                'avg_operating_income_growth' => -1.0,
+            ]);
+            ucFrom004TestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 300,
+                'average_cost' => 1000.00,
+                'current_price' => 2600.00,
+                'unrealized_gain_rate' => 160.0,
+            ]);
+            // Deliberately no Signal row created (シグナル0件).
+
+            $response = ucFrom004TestFetch($this);
+
+            $response->assertSuccessful();
+
+            $row = ucFrom004TestFindRow($response, '4907');
+            expect($row)->not->toBeNull();
+
+            $suggestion = $row['split_limit_suggestion'];
+            $firstTier = $suggestion[0];
+            // 高水準モードなら average_cost(1000) * 2.00 = 2000
+            // （D1救済が効いていない=通常モードだと 1000 * 1.20 = 1200 になる）。
+            expect((float) $firstTier['price'])->toEqualWithDelta(2000.0, 0.01);
+        });
+
         test('含み益+120%・シグナル0件・ファンダメンタルズ指標未設定（unavailable）の銘柄は、通常モードのまま一覧に含まれる', function () {
             [, $snapshot] = ucFrom004TestImportBatch();
             $holding = ucFrom004TestHolding(['symbol_code' => '4905', 'market' => 'jp', 'symbol_name' => '指標未取得銘柄']);

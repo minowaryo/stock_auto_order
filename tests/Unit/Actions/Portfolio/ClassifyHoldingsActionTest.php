@@ -593,17 +593,36 @@ describe('UC-013: ポートフォリオ分類ダッシュボード（ClassifyHol
             expect($row['hold_watch'])->toBeTrue();
         });
 
-        test('相対力〔対市場〕がマイナスの hold銘柄は hold_watch=true になる', function () {
+        test('対セクター相対力が未算出（null）で対市場相対力がマイナスの hold銘柄は hold_watch=true になる（フォールバック、CHG-0017 D4）', function () {
             [, $snapshot] = ucFrom013TestBatch();
             $holding = ucFrom013TestHolding(['symbol_code' => '4002', 'symbol_name' => '相対力劣後株']);
             ucFrom013TestHoldingSnapshot($snapshot, $holding, [
                 'current_price' => 1050, 'unrealized_gain_amount' => 5000, 'unrealized_gain_rate' => 5.0,
             ]);
-            ucFrom013TestTechnicalIndicator($holding, ['relative_strength_vs_market' => -8.0]);
+            // relative_strength_vs_sectorを明示的にnullにし、対市場へのフォールバックを検証する
+            // （デフォルトフィクスチャは両方6.0のため、対セクターを上書きしないと
+            // 対セクター優先〔下のテスト〕と区別できない）。
+            ucFrom013TestTechnicalIndicator($holding, ['relative_strength_vs_market' => -8.0, 'relative_strength_vs_sector' => null]);
             ucFrom013TestFundamentalIndicator($holding);
 
             $result = ucFrom013TestExecute();
             $row = ucFrom013TestFindHolding(ucFrom013TestFindBucket($result['buckets'], 'hold')['holdings'], '4002');
+
+            expect($row)->not->toBeNull();
+            expect($row['hold_watch'])->toBeTrue();
+        });
+
+        test('対セクター相対力が算出済みでマイナスの hold銘柄は、対市場相対力がプラスでも hold_watch=true になる（対セクター優先、CHG-0017 D4）', function () {
+            [, $snapshot] = ucFrom013TestBatch();
+            $holding = ucFrom013TestHolding(['symbol_code' => '4002B', 'symbol_name' => '対セクター劣後株']);
+            ucFrom013TestHoldingSnapshot($snapshot, $holding, [
+                'current_price' => 1050, 'unrealized_gain_amount' => 5000, 'unrealized_gain_rate' => 5.0,
+            ]);
+            ucFrom013TestTechnicalIndicator($holding, ['relative_strength_vs_market' => 6.0, 'relative_strength_vs_sector' => -3.0]);
+            ucFrom013TestFundamentalIndicator($holding);
+
+            $result = ucFrom013TestExecute();
+            $row = ucFrom013TestFindHolding(ucFrom013TestFindBucket($result['buckets'], 'hold')['holdings'], '4002B');
 
             expect($row)->not->toBeNull();
             expect($row['hold_watch'])->toBeTrue();
@@ -644,6 +663,77 @@ describe('UC-013: ポートフォリオ分類ダッシュボード（ClassifyHol
             expect($row)->not->toBeNull();
             expect($row['hold_watch'])->toBeFalse();
             expect($row['health_line'])->not->toBeNull();
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    // CHG-0017 / ADR-0015 D2（2回目の/review・Cycle6）: fundamentalStatus()が
+    // healthEvaluatorArgs()の7要素中5要素しか使っていなかった配線漏れの修正。
+    //
+    // 他の全呼び出し元（ShowSignalListAction/ShowBuySignalListAction/
+    // ShowLossReviewListAction/NewCandidateFinder/ShowWatchlistAction、
+    // Cycle4cで7要素化済み）と異なり、ClassifyHoldingsActionだけが
+    // avg_revenue_growth/avg_operating_income_growthを渡さずFundamentalHealthEvaluator
+    // ::evaluate()を呼んでいたため、D2（3期平均成長率OR救済）で本来passedになる
+    // はずの銘柄がポートフォリオ分類ダッシュボードでだけfailedと判定されていた
+    // （他画面とのクロス画面不整合、/review 3回目の独立検出で発見）。
+    // -----------------------------------------------------------------------
+
+    describe('D2平均成長率レスキューの配線（CHG-0017 / ADR-0015 D2、Cycle6）', function () {
+        test('単年度成長率は両方マイナスだが3期平均売上高成長率がプラスの銘柄は、D2救済によりfundamental_statusがpassedになる（D1のRESCUE閾値は満たさない）', function () {
+            [, $snapshot] = ucFrom013TestBatch();
+            $holding = ucFrom013TestHolding(['symbol_code' => '4005', 'symbol_name' => 'D2救済株']);
+            ucFrom013TestHoldingSnapshot($snapshot, $holding, [
+                'current_price' => 1050, 'unrealized_gain_amount' => 5000, 'unrealized_gain_rate' => 5.0,
+            ]);
+            ucFrom013TestTechnicalIndicator($holding);
+            ucFrom013TestFundamentalIndicator($holding, [
+                // equity_ratio=45.0/roe=12.0はD1のRESCUE閾値（ROE≧15%かつ
+                // 自己資本比率≧50%）を満たさない。単年度revenue_growth/
+                // operating_income_growthも両方マイナスのため、旧5引数呼び出し
+                // （avg_*を渡さない）ではfailedになる。avg_revenue_growth=+8.0
+                // （3期平均、D2）のみがプラスのため、これが正しく渡っていれば
+                // passedになるはず。
+                'equity_ratio' => 45.0, 'roe' => 12.0,
+                'revenue_growth' => -5.0, 'operating_income_growth' => -3.0,
+                'avg_revenue_growth' => 8.0, 'avg_operating_income_growth' => -2.0,
+            ]);
+
+            $result = ucFrom013TestExecute();
+            $row = ucFrom013TestFindHolding(ucFrom013TestFindBucket($result['buckets'], 'hold')['holdings'], '4005');
+
+            expect($row)->not->toBeNull();
+            // fundamental_status自体はholdingsの行に出ないため、D2救済が正しく
+            // 機能していればhold_watch (a) fundamental_status==='failed' に
+            // 該当せずfalseになることで間接確認する。
+            expect($row['hold_watch'])->toBeFalse();
+        });
+
+        // -------------------------------------------------------------------
+        // Feature Test拡充（2026-09-21、/review 3回目対応・Cycle7）
+        // -------------------------------------------------------------------
+        // D1（ROE≧15%かつ自己資本比率≧50%の財務指標救済）単独のケース
+        // （単年度・3期平均とも成長率がプラスでない）が、UC-013画面
+        // （ClassifyHoldingsAction）で正しく救済されることを確認するテストが
+        // 存在しなかった（D2救済のテストはあるが、D1単独のケースが未検証）。
+        test('ROE17.9%/自己資本比率55.0%（D1のRESCUE閾値を満たす）で単年度・3期平均とも成長率がプラスでない銘柄は、D1救済によりhold_watchがfalseになる', function () {
+            [, $snapshot] = ucFrom013TestBatch();
+            $holding = ucFrom013TestHolding(['symbol_code' => '4006', 'symbol_name' => 'D1救済株']);
+            ucFrom013TestHoldingSnapshot($snapshot, $holding, [
+                'current_price' => 1050, 'unrealized_gain_amount' => 5000, 'unrealized_gain_rate' => 5.0,
+            ]);
+            ucFrom013TestTechnicalIndicator($holding);
+            ucFrom013TestFundamentalIndicator($holding, [
+                'equity_ratio' => 55.0, 'roe' => 17.9,
+                'revenue_growth' => -5.0, 'operating_income_growth' => -3.0,
+                'avg_revenue_growth' => -2.0, 'avg_operating_income_growth' => -1.0,
+            ]);
+
+            $result = ucFrom013TestExecute();
+            $row = ucFrom013TestFindHolding(ucFrom013TestFindBucket($result['buckets'], 'hold')['holdings'], '4006');
+
+            expect($row)->not->toBeNull();
+            expect($row['hold_watch'])->toBeFalse();
         });
     });
 

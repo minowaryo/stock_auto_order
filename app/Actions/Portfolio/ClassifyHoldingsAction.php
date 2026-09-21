@@ -402,10 +402,10 @@ class ClassifyHoldingsAction
 
     private function fundamentalStatus(Holding $holding): string
     {
-        [$equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin] = $holding->fundamentalIndicator?->healthEvaluatorArgs()
-            ?? [null, null, null, null, null];
+        [$equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin, $avgRevenueGrowth, $avgOperatingIncomeGrowth] = $holding->fundamentalIndicator?->healthEvaluatorArgs()
+            ?? [null, null, null, null, null, null, null];
 
-        return $this->fundamentalHealthEvaluator->evaluate($equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin);
+        return $this->fundamentalHealthEvaluator->evaluate($equityRatio, $roe, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin, $avgRevenueGrowth, $avgOperatingIncomeGrowth);
     }
 
     /**
@@ -421,7 +421,11 @@ class ClassifyHoldingsAction
             return true;
         }
 
-        $relativeStrength = $holding->technicalIndicator?->relative_strength_vs_market;
+        // ADR-0015 D4: 対セクター相対力を優先し、未算出（null）なら対市場に
+        // フォールバックする（BuySignalDeterminationService::preconditionsSatisfied()
+        // / SignalCriteriaEvaluator::preferredRelativeStrength() と同じ優先順位）。
+        $relativeStrength = $holding->technicalIndicator?->relative_strength_vs_sector
+            ?? $holding->technicalIndicator?->relative_strength_vs_market;
 
         if ($relativeStrength !== null && (float) $relativeStrength < 0.0) {
             return true;
@@ -442,7 +446,10 @@ class ClassifyHoldingsAction
         $technicalIndicator = $holdingSnapshot->holding->technicalIndicator;
 
         $rsi = $technicalIndicator?->rsi !== null ? (float) $technicalIndicator->rsi : null;
-        $relativeStrength = $technicalIndicator?->relative_strength_vs_market !== null ? (float) $technicalIndicator->relative_strength_vs_market : null;
+        // ADR-0015 D4: isHoldWatch()と同じ対セクター優先・対市場フォールバック。
+        $relativeStrength = $technicalIndicator?->relative_strength_vs_sector !== null
+            ? (float) $technicalIndicator->relative_strength_vs_sector
+            : ($technicalIndicator?->relative_strength_vs_market !== null ? (float) $technicalIndicator->relative_strength_vs_market : null);
 
         return sprintf(
             '含み益率%s・RSI%s・財務%s・相対力%s',

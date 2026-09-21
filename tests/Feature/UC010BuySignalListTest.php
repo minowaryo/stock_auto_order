@@ -525,6 +525,67 @@ describe('UC-010: 既存保有株の買い増しタイミングレコメンド�
         });
 
         // ---------------------------------------------------------------
+        // CR (2026-09-21, /review 3回目の指摘・Cycle6): fundamentalSummary()
+        // が avg_revenue_growth/avg_operating_income_growth・D1レスキューを
+        // 一切考慮せず、単年度revenue_growth/operating_income_growthのみを
+        // 見て（マイナスでも）そのまま表示していた。
+        // ---------------------------------------------------------------
+
+        test('単年度成長率は両方マイナスだが3期平均売上高成長率のみプラスでD2救済された銘柄は、fundamental_summaryにマイナスの単年度成長率ではなく3期平均成長率が表示される', function () {
+            [, $snapshot] = ucFrom010TestImportBatch();
+            $holding = ucFrom010TestHolding(['symbol_code' => '5020', 'market' => 'jp', 'symbol_name' => 'D2救済サマリー確認']);
+            $holdingSnapshot = ucFrom010TestHoldingSnapshot($snapshot, $holding);
+            ucFrom010TestBuySignal($holdingSnapshot);
+            ucFrom010TestFundamentalIndicator($holding, [
+                'equity_ratio' => 45.0,
+                'roe' => 12.0,
+                'revenue_growth' => -3.0,
+                'operating_income_growth' => -1.0,
+                'avg_revenue_growth' => 2.0,
+            ]);
+
+            $response = ucFrom010TestFetch($this);
+
+            $response->assertSuccessful();
+            $row = ucFrom010TestFindRow($response, '5020');
+            expect($row)->not->toBeNull();
+            expect($row['fundamental_status'])->toBe('passed');
+            expect($row['fundamental_summary'])->toContain('3期平均売上高成長率');
+            expect($row['fundamental_summary'])->toContain('+2.0');
+            expect($row['fundamental_summary'])->not->toContain('-3.0');
+            expect($row['fundamental_summary'])->not->toContain('-1.0');
+        });
+
+        test('単年度・3期平均とも成長率がプラスでないがROE・自己資本比率のD1救済閾値を満たす銘柄は、fundamental_summaryにマイナスの成長率を表示せずROE・自己資本比率による合格根拠を示す', function () {
+            [, $snapshot] = ucFrom010TestImportBatch();
+            $holding = ucFrom010TestHolding(['symbol_code' => '5021', 'market' => 'jp', 'symbol_name' => 'D1救済サマリー確認']);
+            $holdingSnapshot = ucFrom010TestHoldingSnapshot($snapshot, $holding);
+            ucFrom010TestBuySignal($holdingSnapshot);
+            ucFrom010TestFundamentalIndicator($holding, [
+                // D1のRESCUE閾値（ROE≧15%かつ自己資本比率≧50%）を満たす。
+                'equity_ratio' => 55.0,
+                'roe' => 17.9,
+                'revenue_growth' => -5.0,
+                'operating_income_growth' => -3.0,
+                'avg_revenue_growth' => -2.0,
+                'avg_operating_income_growth' => -1.0,
+            ]);
+
+            $response = ucFrom010TestFetch($this);
+
+            $response->assertSuccessful();
+            $row = ucFrom010TestFindRow($response, '5021');
+            expect($row)->not->toBeNull();
+            expect($row['fundamental_status'])->toBe('passed');
+            expect($row['fundamental_summary'])->toContain('ROE');
+            expect($row['fundamental_summary'])->toContain('財務健全性が高い');
+            expect($row['fundamental_summary'])->not->toContain('-5.0');
+            expect($row['fundamental_summary'])->not->toContain('-3.0');
+            expect($row['fundamental_summary'])->not->toContain('-2.0');
+            expect($row['fundamental_summary'])->not->toContain('-1.0');
+        });
+
+        // ---------------------------------------------------------------
         // CR (2026-09-06, CHG-0012 / ADR-0011): 営業利益率フィルタ（4条件目）
         // ---------------------------------------------------------------
         // ADR-0011: 財務健全性フィルタに営業利益率10%以上を追加する。ROE・
