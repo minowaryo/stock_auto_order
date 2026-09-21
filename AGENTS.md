@@ -29,6 +29,7 @@ Codex は `.claude/rules/` を自動読込しないため、以下の表に従�
 | DB changes | `docs/architecture/data-model.md` + `docs/adr/` |
 | Test changes | `docs/development/testing-strategy.md` + `docs/product/use-cases.md` + `docs/architecture/data-model.md` |
 | Architecture changes | `docs/adr/` (all relevant ADRs) |
+| ADR/CR creation or branch integration | `.claude/rules/06-branch-coordination.md` |
 | Security changes | `docs/security/secrets-handling.md` |
 | Release changes | `docs/operations/deployment.md` |
 | Change request | `docs/rcid/traceability-matrix.md` |

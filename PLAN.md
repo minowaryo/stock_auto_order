@@ -106,7 +106,7 @@
 - **`/review`3回目実施（code-reviewスキル、enhanced level、review-score=483）・Cycle6修正完了**: Step 0のreview-score.shがブランチ全体差分（72ファイル・7317行、migration3件がsensitive path該当）に対しenhanced判定。8角度・4検証パスで9件検出、全件CONFIRMED。**実害バグ3件を修正**: ①`ClassifyHoldingsAction::fundamentalStatus()`が`healthEvaluatorArgs()`の7要素中5要素しか使わずD2救済が無効化（3回目の独立検出。F-013由来だが既にこのブランチの履歴に含まれているため今回はスコープ外扱いを撤回し修正）、②同ファイルの`isHoldWatch()`/`healthLine()`がD4対セクターフォールバック未適用、③`ShowBuySignalListAction`/`ShowWatchlistAction`の`fundamentalSummary()`がD1/D2レスキュー時にマイナスの単年度成長率をそのまま合格根拠として表示（誤解を招く表示バグ）。**リファクタ1件**: `LowGrowthDeterminer::isLowGrowth()`が`SignalCriteriaEvaluator::higherGrowthRate()`と同じロジックを再実装していたため後者に委譲（CHG-0005型ドリフト防止という自身のdocblockの目的に反していた）。Red→Green、フルスイート702→708 passed（0 failed）、pintクリーン。**対象外・バックログ行き**: `SignalCriteriaEvaluator`の判定チェックリスト（成長率行・PEG行）がD1/D2/D3の分岐を一切反映していない件（表示のみの実害・設計判断が要る規模のため`accuracy-improvement-backlog.md`候補Lとして記録）、`ClassifyHoldingsAction::marketValue()`の3重実装・5倍のDB往復（F-013側で既知・ADR-0014で許容済みのトレードオフ、CHG-0017スコープ外）
 - **Cycle7（Feature Test拡充）完了**: D1（財務指標救済）は`FundamentalHealthEvaluatorTest`でUnit Testとして厚くカバーされているが、UC-004/UC-008/UC-011/UC-013の各画面でD1単独（単年度・3期平均とも成長率がプラスでない、ROE/自己資本比率のみで救済）を確認するFeature Testが存在しないことを`/review`後に監査で確認（D2救済のテストはCycle4c/4dで各画面に追加済みだったが、D1単独ケースが漏れていた）。4画面に1件ずつ追加（UC-004: 高水準モード到達、UC-008: 候補一覧への含有、UC-011: `fundamental_status=passed`、UC-013: `hold_watch=false`）。**プロダクションコードの変更なし**（全画面とも既存配線が正しく機能していることを確認するのみ、隠れたバグは見つからず）。フルスイート708→712 passed（0 failed）、pintクリーン
 - **Cycle D7（UC-004 `valuation_zone_badge`）Gate4承認・Green完了（別ブランチ`feat/chg0017-d7-valuation-badge`、2026-09-21マージ）**: `ShowSignalListAction`へ既存`LowGrowthDeterminer`をDIし、低成長かつ`PER > 0 && PER <= BuySignalDeterminationService::PER_UNDERVALUED_THRESHOLD`かつ`dividend_yield >= BuySignalDeterminationService::DIVIDEND_YIELD_UNDERVALUED_THRESHOLD`の場合だけ「絶対バリュエーション上は割安ゾーン」を返す表示専用項目を追加。UC-004 Bladeの銘柄セルにSuccess配色の補助バッジを表示。負PER・PER 0・各閾値外・成長率5%超の回帰テストを追加。UC-010は既存の`signals->isNotEmpty()`除外により同時掲載されないため無変更。D7はCycle5〜7と並行して別ブランチで進んでいたため、本マージで合流させた（コンフリクトはPLAN.md本エントリのみ、コードは無衝突）
-- 次: pintクリーン確認・フルスイート再確認（マージ後730 passed）→コミット（push要再確認）
+- マージ後フルスイート730 passed・pintクリーンを確認済み。2026-09-21、origin/mainへpush済み（それまでローカルmainのみに25コミット分〔CHG-0017/CHG-0018/F-013の各マージコミット含む〕が滞留していたため、本pushで解消）
 
 ### Files touched
 
@@ -138,7 +138,7 @@
 
 **完了**。`accuracy-improvement-backlog.md`への記録完了。次のアクション: 「次の1手」（`FundamentalHealthEvaluator`の成長率救済・PEG基準是正、`BuySignalDeterminationService`の相対力フォールバック、押し目買いの中期トレンド条件、スタイルタグ導入）を独立CRとして起票する場合は、ドキュメント先行・別ブランチで進める（本プロジェクトの標準方式）。候補A〜J（ファンダ履歴蓄積／ATR出口戦略／信用需給／ウォッチリスト棚卸し／検証基盤等）は次の1手の実測結果が出るまで着手判断を保留。
 
-## ポートフォリオ分類ダッシュボード（F-013・UC-013・ADR-0014・CHG-0015）Gate1/2最終確定・実装着手待ち（2026-09-08〜09-17）
+## ポートフォリオ分類ダッシュボード（F-013・UC-013・ADR-0014・CHG-0015）第1段階Green完了・mainマージ済み（2026-09-08〜09-19）
 
 ### Decision
 
@@ -164,13 +164,13 @@
 
 **ドキュメント（Gate2最終確定、`feat/f013-portfolio-buckets` ブランチ、2026-09-17）**: `docs/adr/ADR-0014-portfolio-bucket-classification.md`（Status: Accepted、D3〜D5・D9の★判断ポイントを確定内容で置換、D9-1〜D9-4・D10・D10-1・D11を新設）、`docs/adr/ADR-0003-f009-scoring-transparency-relaxation.md`（Status: Superseded by ADR-0014）、`docs/product/use-cases.md`（UC-013業務ルール全面改訂・承認記録2行追加、UC-009業務ルール全面改訂〔top-10/20廃止・分類俯瞰への委譲〕、UC-004に並び順ルール追加）、`docs/product/requirements.md`（F-013説明改訂、UC-004改修・UC-009ロジック退役を明記）、`docs/architecture/data-model.md`（`import_summary_reports`/`import_summary_report_items`に書き込み廃止の注記、初期パラメータ値表にバケツ内ソート順5行追加・UC-009の件数区分/合成スコア重み付け2行を廃止、承認記録・変更履歴各1行）、`docs/rcid/traceability-matrix.md`（F-013行・CHG-0015行を確定内容に更新）、`docs/product/accuracy-improvement-backlog.md`（`hold`好調キープ強調・20%アクティブ枠トラッキングの2行追加）、`PLAN.md`（本エントリ）
 
-**コード**: 未着手（F-012 マージ後、マージ済み）。実装ステップ（第1段階: Cycle 1 `ClassifyHoldingsAction` の純ロジック → Cycle 2 サマリーレポートタブへのセクション追加・UC-009旧ロジック削除 → Cycle 3 `ShowSignalListAction`への`take_profit`並び順追加、各 Red→Gate4→Green→Refactor）はプラン確定時に詳細化
+**コード（Green、`feat/f013-portfolio-buckets`ブランチ、2026-09-19）**: Cycle 1（`b7c90fc`）: `app/Actions/Portfolio/ClassifyHoldingsAction.php`新規（純ロジック、6バケツへの再投影・排他解決、DBスキーマ変更なし）＋`ClassifyHoldingsActionTest.php`。`/review`3件即修正（symbol_code単独キーの衝突対策・`orderedBucketHoldings()`のnullガード・`FundamentalHealthEvaluator::evaluate()`の重複呼び出し解消）。実データ135銘柄で件数整合を確認（reduce64+hold61+increase10=135）。Cycle 2（`728b66b`）: `ShowImportSummaryReportAction.php`から独自候補選定ロジック（`buildTakeProfitCandidates`/`buildRebalanceCandidates`/`buildNewCandidateItems`/`composite_score`等）を削除しCycle 1の`ClassifyHoldingsAction`呼び出しに置換（D9-1）、`ImportCsvAction.php`のプレースホルダー行作成を削除（D9-2）、`summary-report-body.blade.php`を分類俯瞰UIに置換。**このコミットに元の計画の「Cycle 3」（`ShowSignalListAction`への`take_profit`並び順追加、D10-1）も一緒に含めて実装済み**（`ShowBuySignalListAction`/`ShowLossReviewListAction`と同じcompareRows方式）。実データでの認証済みcurl確認済み（旧フィールド0件・分類集計が一致・ソート順も設計通り）。E2Eテストなし（`.claude/rules/31-e2e-testing.md`の既存判断＝非クリティカルフローの集計画面は対象外、と整合）。フルスイート623 passed。追加`/review`修正（`7f70ec3`）: HIGH（`ShowImportSummaryReportAction`が引数の`ImportBatch`を無視し常に最新スナップショットを見る実装だったため、Show画面のキャプションが古いバッチURLでも「今日」の日付を表示する不整合を修正）、MEDIUM（`bucket_reason`をD9-4で規定した「`SignalCriteriaEvaluator`の達成度データからの機械生成」に変更、当初はバケツ種別ごとの固定文言だった）。フルスイート625 passed、pintクリーン
 
 ### Status
 
-**Gate1（requirements.md）／Gate2（use-cases.md UC-013）を2026-09-17に本人が最終承認**。第1段階は DB スキーマ変更を伴わないため Gate 3 は影響範囲確認のみ（2026-09-17確認済み。第2段階の `portfolio_classifications` は別CRで Gate 3 実質承認）。実装は F-012 マージ後（マージ済み）、ブランチ `feat/f013-portfolio-buckets` で。次はTDDサイクル（Cycle 1: `ClassifyHoldingsAction`のRed）から。
+**Gate1（requirements.md）／Gate2（use-cases.md UC-013）を2026-09-17に本人が最終承認**。第1段階は DB スキーマ変更を伴わないため Gate 3 は影響範囲確認のみ（2026-09-17確認済み。第2段階の `portfolio_classifications` は別CRで Gate 3 実質承認）。**Cycle 1〜2（当初計画のCycle 3の`take_profit`並び順分もCycle 2に含めて実装）がGreen完了・`/review`2回対応済み、2026-09-21にmainへマージ**（コミット`3ac3f9c`。CHG-0017 value/cyclical judgment branchingとの合流マージで、両ブランチのロジックが同時に走って初めて判明した競合3件を解消——`BuySignalDeterminationService`のコンストラクタ/引数統合、テストフィクスチャの偶発的なD1救済該当の修正、`peg_undervalued`と`per_undervalued`が同一PER値に反応することによるアサーション更新。マージ後フルスイート720 passed）。第1段階の実装は完了。残るのは第2段階（`portfolio_classifications`永続化・週次遷移表示・トレードジャーナル、別CRでGate3実質承認から）のみ
 
-> **ブランチ状況の補足**: Phase 0（2026-09-08）は当時の`feat/f012-favorites-watchlist`ブランチ上で行われ、F-012マージ（`444ee65`）でmainに統合済み。Gate2最終確定分（2026-09-17）はmain（`4d6071e`）から新規に切った`feat/f013-portfolio-buckets`ブランチ上で作業（他の未マージ機能ブランチ〔`feat/chg0016-candidate-table-sticky-header`〕とは独立）。
+> **ブランチ状況の補足**: Phase 0（2026-09-08）は当時の`feat/f012-favorites-watchlist`ブランチ上で行われ、F-012マージ（`444ee65`）でmainに統合済み。Gate2最終確定分（2026-09-17）・Cycle1〜2実装（2026-09-19）はmain（`4d6071e`）から新規に切った`feat/f013-portfolio-buckets`ブランチ上で作業。mainへのマージは`feat/chg0017-value-cyclical-judgment`との合流マージ（`3ac3f9c`）として実施（詳細は上記CHG-0017エントリ参照）。
 
 ## お気に入り未保有銘柄ウォッチリスト／新規投資候補画面の刷新（F-012・UC-012・ADR-0013・CHG-0014）実装完了・mainマージ済み（2026-09-06〜09-12）
 
