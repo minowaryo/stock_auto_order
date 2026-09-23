@@ -228,6 +228,8 @@ class ShowSignalListAction
             'revenue_growth' => $fundamentalIndicator?->revenue_growth !== null ? (float) $fundamentalIndicator->revenue_growth : null,
             'operating_income_growth' => $fundamentalIndicator?->operating_income_growth !== null ? (float) $fundamentalIndicator->operating_income_growth : null,
             'operating_margin' => $fundamentalIndicator?->operating_margin !== null ? (float) $fundamentalIndicator->operating_margin : null,
+            'per' => $fundamentalIndicator?->per !== null ? (float) $fundamentalIndicator->per : null,
+            'pbr' => $fundamentalIndicator?->pbr !== null ? (float) $fundamentalIndicator->pbr : null,
         ];
     }
 

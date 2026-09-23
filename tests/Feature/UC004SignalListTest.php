@@ -819,15 +819,16 @@ describe('UC-004: 利確シグナル一覧', function () {
             $row = ucFrom004TestFindRow(ucFrom004TestFetch($this), '7203');
 
             expect($row['criteria'])->toHaveKeys(['technical', 'fundamental', 'summary']);
-            expect($row['criteria']['technical'])->toHaveCount(7);
+            // CHG-0019: テクニカルチェックリストは7→9項目（PER・PBRを基準なしの参考表示として追加）
+            expect($row['criteria']['technical'])->toHaveCount(9);
             // CHG-0012 / ADR-0011: 財務健全性チェックリストは3→4項目（営業利益率を追加）
             expect($row['criteria']['fundamental'])->toHaveCount(4);
-            expect($row['criteria']['summary']['technical']['total'])->toBe(7);
+            expect($row['criteria']['summary']['technical']['total'])->toBe(9);
             expect($row['criteria']['summary']['fundamental']['total'])->toBe(4);
 
             foreach ($row['criteria']['technical'] as $item) {
                 expect($item)->toHaveKeys(['label', 'threshold_label', 'value_label', 'status']);
-                expect($item['status'])->toBeIn(['met', 'near', 'unmet', 'unavailable']);
+                expect($item['status'])->toBeIn(['met', 'near', 'unmet', 'unavailable', 'info']);
             }
         });
 

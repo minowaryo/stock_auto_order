@@ -192,13 +192,13 @@ function criterionRow(array $rows, string $label): array
 
 describe('SignalCriteriaEvaluator: 判定チェックリスト（CHG-0007）', function () {
     describe('共通の返却構造', function () {
-        test('evaluateTakeProfit はテクニカル7項目・財務4項目とグループ別サマリを返す', function () {
+        test('evaluateTakeProfit はテクニカル9項目（CHG-0019でPER・PBRを追加、ともに基準なしの参考表示）・財務4項目とグループ別サマリを返す', function () {
             $result = signalCriteriaEvaluator()->evaluateTakeProfit(tpMetricsAllMet());
 
             expect($result)->toHaveKeys(['technical', 'fundamental', 'summary']);
-            expect($result['technical'])->toHaveCount(7);
+            expect($result['technical'])->toHaveCount(9);
             expect($result['fundamental'])->toHaveCount(4);
-            expect($result['summary']['technical']['total'])->toBe(7);
+            expect($result['summary']['technical']['total'])->toBe(9);
             expect($result['summary']['fundamental']['total'])->toBe(4);
 
             foreach ([...$result['technical'], ...$result['fundamental']] as $row) {
@@ -218,11 +218,47 @@ describe('SignalCriteriaEvaluator: 判定チェックリスト（CHG-0007）', f
     });
 
     describe('利確検討（evaluateTakeProfit）', function () {
-        test('全項目を満たす銘柄はテクニカル7/7・財務4/4が met になる', function () {
+        test('全項目を満たす銘柄はテクニカル7/9・財務4/4が met になる（PER・PBRはtpMetricsAllMet()未設定のためunavailable、CHG-0019）', function () {
             $result = signalCriteriaEvaluator()->evaluateTakeProfit(tpMetricsAllMet());
 
-            expect($result['summary']['technical'])->toMatchArray(['met' => 7, 'near' => 0, 'total' => 7]);
+            // tpMetricsAllMet()はper/pbrキーを持たないため、この2項目は
+            // unavailable（met/nearに数えない）。totalのみ9に増える。
+            expect($result['summary']['technical'])->toMatchArray(['met' => 7, 'near' => 0, 'total' => 9]);
             expect($result['summary']['fundamental'])->toMatchArray(['met' => 4, 'near' => 0, 'total' => 4]);
+        });
+
+        // -------------------------------------------------------------
+        // CHG-0019: PER・PBRチップ（テクニカル8・9項目目）
+        //
+        // ADR-0016 D3の買い増し候補（evaluateBuy）と異なり、利確検討には
+        // 「PERが低い＝利確を後押しする事実」という判定ロジックが存在しない
+        // （割安であることは利確を後押ししない、むしろ逆）。そのため
+        // evaluateBuyのPERのようなmet/near/unmet閾値は持たせず、PBRと同様に
+        // 両方とも基準なしの参考表示（'none'方向→'info'ステータス）とする。
+        // この方向性はGate 4で確認する契約。
+        // -------------------------------------------------------------
+        test('evaluateTakeProfit のテクニカル配列の末尾2項目はPER・PBRである', function () {
+            $result = signalCriteriaEvaluator()->evaluateTakeProfit(tpMetricsAllMet());
+
+            expect($result['technical'])->toHaveCount(9);
+            expect($result['technical'][7]['label'])->toBe('PER');
+            expect($result['technical'][8]['label'])->toBe('PBR');
+        });
+
+        test('PER・PBRはいずれも判定基準を持たない実測値表示のため、値があれば met/near/unmet のいずれでもない info、nullなら unavailable', function () {
+            $withValues = signalCriteriaEvaluator()->evaluateTakeProfit(tpMetricsAllMet(['per' => 12.0, 'pbr' => 1.3]));
+            $withoutValues = signalCriteriaEvaluator()->evaluateTakeProfit(tpMetricsAllMet(['per' => null, 'pbr' => null]));
+
+            expect(criterionRow($withValues['technical'], 'PER')['status'])->toBe('info');
+            expect(criterionRow($withValues['technical'], 'PER')['value_label'])->toBe('12.0');
+            expect(criterionRow($withValues['technical'], 'PER')['threshold_label'])->toBe('');
+            expect(criterionRow($withValues['technical'], 'PBR')['status'])->toBe('info');
+            expect(criterionRow($withValues['technical'], 'PBR')['value_label'])->toBe('1.30');
+
+            expect(criterionRow($withoutValues['technical'], 'PER')['status'])->toBe('unavailable');
+            expect(criterionRow($withoutValues['technical'], 'PER')['value_label'])->toBe('—');
+            expect(criterionRow($withoutValues['technical'], 'PBR')['status'])->toBe('unavailable');
+            expect(criterionRow($withoutValues['technical'], 'PBR')['value_label'])->toBe('—');
         });
 
         test('含み益率の基準ラベルは利確ライン（gain_line_threshold）に追従する', function () {
@@ -647,26 +683,60 @@ function lossMetricsAllMet(array $overrides = []): array
 }
 
 describe('整理検討チェックリスト（evaluateLossReview、UC-011 / ADR-0010 D6 改訂）', function () {
-    test('テクニカル7項目・財務4項目とグループ別サマリを返す（返却構造は evaluateTakeProfit/evaluateBuy と同一）', function () {
+    test('テクニカル9項目（CHG-0019でPER・PBRを追加、ともに基準なしの参考表示）・財務4項目とグループ別サマリを返す（返却構造は evaluateTakeProfit/evaluateBuy と同一）', function () {
         $result = signalCriteriaEvaluator()->evaluateLossReview(lossMetricsAllMet());
 
         expect($result)->toHaveKeys(['technical', 'fundamental', 'summary']);
-        expect($result['technical'])->toHaveCount(7);
+        expect($result['technical'])->toHaveCount(9);
         expect($result['fundamental'])->toHaveCount(4);
-        expect($result['summary']['technical']['total'])->toBe(7);
+        expect($result['summary']['technical']['total'])->toBe(9);
         expect($result['summary']['fundamental']['total'])->toBe(4);
 
         foreach ([...$result['technical'], ...$result['fundamental']] as $row) {
             expect($row)->toHaveKeys(['label', 'threshold_label', 'value_label', 'status']);
-            expect($row['status'])->toBeIn(['met', 'near', 'unmet', 'unavailable']);
+            expect($row['status'])->toBeIn(['met', 'near', 'unmet', 'unavailable', 'info']);
         }
     });
 
-    test('整理を全方向で後押しする銘柄はテクニカル7/7・財務4/4が met になる（財務は毀損＝met の反転契約）', function () {
+    test('整理を全方向で後押しする銘柄はテクニカル7/9・財務4/4が met になる（財務は毀損＝met の反転契約。PER・PBRはlossMetricsAllMet()未設定のためunavailable、CHG-0019）', function () {
         $result = signalCriteriaEvaluator()->evaluateLossReview(lossMetricsAllMet());
 
-        expect($result['summary']['technical'])->toMatchArray(['met' => 7, 'near' => 0, 'total' => 7]);
+        expect($result['summary']['technical'])->toMatchArray(['met' => 7, 'near' => 0, 'total' => 9]);
         expect($result['summary']['fundamental'])->toMatchArray(['met' => 4, 'near' => 0, 'total' => 4]);
+    });
+
+    // -------------------------------------------------------------
+    // CHG-0019: PER・PBRチップ（テクニカル8・9項目目）
+    //
+    // 整理検討でも「PERが低い＝整理を後押しする事実」という判定ロジックは
+    // 存在しない（割安であることは整理の後押しにならない）。買い増し候補の
+    // evaluateBuyとは異なりmet/near/unmet閾値は持たせず、両方とも基準なしの
+    // 参考表示（'none'方向→'info'ステータス）とする。財務4項目の毀損＝met
+    // 反転契約とは独立（技術グループに属するため）。この方向性はGate 4で
+    // 確認する契約。
+    // -------------------------------------------------------------
+    test('evaluateLossReview のテクニカル配列の末尾2項目はPER・PBRである', function () {
+        $result = signalCriteriaEvaluator()->evaluateLossReview(lossMetricsAllMet());
+
+        expect($result['technical'])->toHaveCount(9);
+        expect($result['technical'][7]['label'])->toBe('PER');
+        expect($result['technical'][8]['label'])->toBe('PBR');
+    });
+
+    test('PER・PBRはいずれも判定基準を持たない実測値表示のため、値があれば met/near/unmet のいずれでもない info、nullなら unavailable', function () {
+        $withValues = signalCriteriaEvaluator()->evaluateLossReview(lossMetricsAllMet(['per' => 12.0, 'pbr' => 1.3]));
+        $withoutValues = signalCriteriaEvaluator()->evaluateLossReview(lossMetricsAllMet(['per' => null, 'pbr' => null]));
+
+        expect(criterionRow($withValues['technical'], 'PER')['status'])->toBe('info');
+        expect(criterionRow($withValues['technical'], 'PER')['value_label'])->toBe('12.0');
+        expect(criterionRow($withValues['technical'], 'PER')['threshold_label'])->toBe('');
+        expect(criterionRow($withValues['technical'], 'PBR')['status'])->toBe('info');
+        expect(criterionRow($withValues['technical'], 'PBR')['value_label'])->toBe('1.30');
+
+        expect(criterionRow($withoutValues['technical'], 'PER')['status'])->toBe('unavailable');
+        expect(criterionRow($withoutValues['technical'], 'PER')['value_label'])->toBe('—');
+        expect(criterionRow($withoutValues['technical'], 'PBR')['status'])->toBe('unavailable');
+        expect(criterionRow($withoutValues['technical'], 'PBR')['value_label'])->toBe('—');
     });
 
     // ---- テクニカル7項目（契約変更なし・現行実装のまま。回帰確認用に維持） ----

@@ -365,6 +365,27 @@ describe('UC-004: 利確検討画面（Livewire）', function () {
             expect($html)->toContain('1,350.00');
         });
 
+        test('利確検討の一覧にPER・PBRが表示される（CHG-0019、判定基準を持たない参考表示）', function () {
+            $user = User::factory()->create();
+            [, $snapshot] = signalListTestImportBatch();
+
+            $holding = signalListTestHolding([
+                'symbol_code' => '7203', 'market' => 'jp', 'symbol_name' => 'トヨタ自動車',
+            ]);
+            $holdingSnapshot = signalListTestHoldingSnapshot($snapshot, $holding, [
+                'quantity' => 300, 'average_cost' => 1000.00, 'current_price' => 1300.00, 'unrealized_gain_rate' => 30.0,
+            ]);
+            signalListTestSignal($holdingSnapshot, ['signal_type' => 'rsi_reversal']);
+            signalListTestFundamentalIndicator($holding, ['per' => 23.4, 'pbr' => 3.21]);
+
+            $html = Livewire::actingAs($user)->test(SignalList::class)->html();
+
+            expect($html)->toContain('PER');
+            expect($html)->toContain('PBR');
+            expect($html)->toContain('23.4');
+            expect($html)->toContain('3.21');
+        });
+
         test('含み益+20%超・シグナルなしの銘柄も一覧に含まれ、理由サマリがActionの「シグナル未検出」文言のまま表示される', function () {
             $user = User::factory()->create();
             [, $snapshot] = signalListTestImportBatch();
@@ -821,6 +842,21 @@ describe('UC-011: 整理検討（含み損）画面（Livewire）', function () 
         $html = $component->html();
         expect($html)->toContain('-40.0%');   // 含み損率（sprintf('%+.1f%%') 相当）
         expect($html)->toContain('ROE');        // 財務健全性サマリ
+    });
+
+    test('整理検討の一覧にPER・PBRが表示される（CHG-0019、判定基準を持たない参考表示）', function () {
+        $user = User::factory()->create();
+        [, $snapshot] = signalListTestImportBatch();
+
+        $holding = signalListTestLossReviewHolding($snapshot, ['symbol_code' => '7203', 'symbol_name' => 'トヨタ自動車']);
+        signalListTestFundamentalIndicator($holding, ['per' => 23.4, 'pbr' => 3.21]);
+
+        $html = Livewire::actingAs($user)->test(SignalList::class)->html();
+
+        expect($html)->toContain('PER');
+        expect($html)->toContain('PBR');
+        expect($html)->toContain('23.4');
+        expect($html)->toContain('3.21');
     });
 
     test('fundamental_status=failed の含み損銘柄も整理検討セクションに表示される', function () {

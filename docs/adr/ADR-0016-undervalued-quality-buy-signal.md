@@ -58,13 +58,25 @@ PBRは条件に含めない（D2実測検証セクション参照）。
 - PER: 通常の判定項目として基準値（≤15）・met/near/unmet色分けを表示する（新シグナルの判定根拠と一致させる）
 - PBR: 判定条件を持たないため、基準値・色分けなしの**単なる実測値表示**とする。`SignalCriteriaEvaluator::classify()` に基準なし方向 `'none'` を追加し、値があれば新設ステータス `'info'`（unavailableと視覚的に区別できる配色）を返す
 
-対象は買い増し候補セクション（UC-010）のみとし、利確検討（UC-004）・整理検討（UC-011）は対象外とする。
+対象は買い増し候補セクション（UC-010）のみとし、利確検討（UC-004）・整理検討（UC-011）は対象外とする（2026-09-23、CHG-0019のD4でUC-004/UC-011にも拡張。ただしmet/near/unmet閾値は持たせず参考表示のみとする点が異なる。詳細は下記D4参照）。
 
 ### D2追記（`/review`指摘、2026-09-19）: PERにも下限ガードが必要
 
 D2策定時「PERは`FundamentalIndicatorMapper::calculatePer()`が既にeps<=0でnull化済み」と整理したが、これはJP側のみに当てはまる。US側`UsFundamentalIndicatorMapper`はFinnhubの`peTTM`をそのまま採用しており、赤字（トレーリング12ヶ月で実質赤字）企業では負値になりうる（ADR-0009参照。`peg_ratio`の`pegTTM`が負値を返しうるのと同じ構図で、ADR-0012 D4で修正済みのPEG下限ガードと同一クラスのバグ）。下限ガードなしでは`determinePerUndervalued()`が「PERが低い（実際は負値）＝割安」と誤判定し、赤字の米国株を`per_undervalued`として買い増し候補に表示してしまう。
 
 `BuySignalDeterminationService::determinePerUndervalued()`の条件を`$per > 0.0 && $per <= self::PER_UNDERVALUED_THRESHOLD`に修正し、`SignalCriteriaEvaluator::evaluateBuy()`のPER行の`direction`も`'lte'`から`'lte_positive'`（負値・ゼロを`met`/`near`と誤読させない、PEGチップと同じ扱い）に修正した。回帰テストを`BuySignalDeterminationServiceTest`・`SignalCriteriaEvaluatorTest`に追加。
+
+### D4（2026-09-23、CHG-0019）: 利確検討（UC-004）・整理検討（UC-011）へPER/PBRを拡張
+
+D3では「対象は買い増し候補セクション（UC-010）のみ」としていたが、利用者から売買シグナル画面と新規投資候補画面のフォーマット・表示項目が食い違っているとの指摘があり、調査の結果PER/PBRが利確検討・整理検討に一切表示されていないことが判明した（新規投資候補〔UC-012〕はUC-010の`criteria`をそのまま流用するため既に表示されていた）。
+
+`SignalCriteriaEvaluator::evaluateTakeProfit()`（UC-004）・`evaluateLossReview()`（UC-011）のテクニカル配列末尾にPER・PBRの2項目を追加する（各7→9項目）。
+
+- **D3のPERとは異なり、met/near/unmet閾値は持たせない**。UC-010のPERは`per_undervalued`シグナル（D2）という実際の判定ロジックと対応しているが、UC-004/UC-011にはPERを使う判定ロジックが存在しない。割安であることは利確・整理を後押しする理由にはならない（むしろ逆）ため、機械的にD3のPER判定〔≤15=met〕を持ち込むと意味が反転して誤解を招く
+- そのためPER・PBRとも`direction`＝`'none'`（D3でPBR用に新設済み）を使い、両方とも基準なしの参考表示（`status`＝`'info'`）とする
+- UC-011の財務健全性4項目が持つ「基準割れ＝met」の反転契約（ADR-0010 D6）は`fundamentalRows($metrics, true)`のみに適用され、テクニカル配列に属するPER/PBRには適用されない（反転しない）
+
+却下案: UC-010と同じPER≤15の閾値をUC-004/UC-011にも適用する案は、上記の意味反転の問題により却下。「利確・整理を後押しする」方向の新しいPER閾値（例: 割高＝利確を後押し）を独自に定義する案も検討したが、根拠となる判定ロジックが存在しない状態で新しい絶対閾値を発明することになり、`docs/product/ui-guidelines.md`が求める「新しい判定基準を設けない」表示専用機能の原則から外れるため見送り、既存の`'info'`表示方式を流用する方針とした。
 
 ## Rationale
 

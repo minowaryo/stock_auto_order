@@ -29,6 +29,26 @@
 
 **マージ完了、最終`/review`（high、5エージェント並列）で確定バグ3件を追加修正・回帰テスト追加、フルスイート739 passed（0 failed）・pintクリーン**。`migrate:fresh`での新規DBからの全マイグレーション成功も確認済み。7ブランチ全てmain祖先に取り込み済み（`git merge-base --is-ancestor`で検証）。コミット・push実施
 
+## 売買シグナル画面のPER/PBR表示をUC-004・UC-011に拡張（CHG-0019、ADR-0016 D4）Green完了（2026-09-23）
+
+### Decision
+
+- 本人指摘: 「売買シグナル画面と投資候補一覧のデザインが違いすぎる」「PER/PBRが画面に出ていない」。調査の結果、真の項目差分はPER/PBRのみと判明（RSI・ROE・自己資本比率・営業利益率は既に判定チェックリストのチップとして両画面に存在）。フォーマット差分は当時未マージだったCHG-0016で既に解消済みと判明
+- 続けて調査したところ、CHG-0018（ADR-0016 D3）が既に買い増し候補（UC-010、および`criteria`を共有する新規投資候補UC-012）にPER/PBRチップを追加済み・mainマージ済みであることが判明（本人・別セッションによる並行作業）。ADR-0016 D3は「対象はUC-010のみ、利確検討（UC-004）・整理検討（UC-011）は対象外」と明記されていたため、当初計画していた3テーブル一律追加は不要と判断し、UC-004/UC-011のみへスコープを絞り直した
+- 本人確認（AskUserQuestion）: 表示方法は売買シグナル画面のチップ形式を踏襲しつつ、表示項目は両画面の和集合とする方針で合意。「PER・PBR以外に差分は無いか」を確認した上でGate4承認を得た
+- 設計判断: UC-010のPERはmet/near/unmet閾値（≤15）を持つが、これは`per_undervalued`シグナルという実際の判定ロジックと対応しているため。UC-004/UC-011にはPERを使う判定ロジックが存在せず、割安であることは利確・整理を後押しする理由にならない（むしろ逆）ため、機械的に同じ閾値を持ち込むと意味が反転して誤解を招く。よってUC-004/UC-011のPER・PBRは両方ともPBRと同じ基準なしの参考表示（`status`＝`info`）とした（ADR-0016 D4として追記）
+- Red→Gate4承認→Green、フルスイート745 passed（0 failed）・pintクリーン。実機確認（Sailコンテナ内にPlaywright+Chromiumをセットアップしスクリーンショット取得、Playwright MCPは接続タイムアウトのためフォールバック使用）で3テーブルとも判定チェックリストの想定位置にPER/PBRが表示され、買い増し候補のみ閾値で色分け・利確検討/整理検討は中立表示であることを確認済み
+
+### Files touched
+
+**コード（Green）**: `app/Services/Analysis/SignalCriteriaEvaluator.php`（`evaluateTakeProfit()`/`evaluateLossReview()`にPER・PBR行を追加）、`app/Actions/Signal/ShowSignalListAction.php`／`ShowLossReviewListAction.php`（metricsへper/pbr配線）、`resources/views/livewire/signal/signal-list.blade.php`（テーブル固定幅1478→1622px・1512→1656px）。テスト: `tests/Unit/Services/Analysis/SignalCriteriaEvaluatorTest.php`、`tests/Feature/SignalListTest.php`、`tests/Feature/UC004SignalListTest.php`、`tests/Feature/UC011LossReviewListTest.php`
+
+**ドキュメント**: `docs/adr/ADR-0016-undervalued-quality-buy-signal.md`（D4追記）、`docs/product/use-cases.md`（UC-004/UC-011の`criteria`項目数・業務ルール改訂、承認記録1行）、`docs/rcid/traceability-matrix.md`（CHG-0019行・F-004/F-011行に注記）、`PLAN.md`（本エントリ）
+
+### Status
+
+**Gate4承認済み・Green実装完了、実機確認済み**。コミット・push未実施（本人の明示的指示待ち）。
+
 ## 買い増しシグナル共通前提の緩和とPER単体シグナルの追加（F-010改修・UC-010・ADR-0016・CHG-0018）Phase 0 ドキュメント先行（2026-09-19〜）
 
 ### Decision

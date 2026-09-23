@@ -157,6 +157,8 @@ class ShowLossReviewListAction
             'revenue_growth' => $revenueGrowth,
             'operating_income_growth' => $operatingIncomeGrowth,
             'operating_margin' => $operatingMargin,
+            'per' => $fundamentalIndicator?->per !== null ? (float) $fundamentalIndicator->per : null,
+            'pbr' => $fundamentalIndicator?->pbr !== null ? (float) $fundamentalIndicator->pbr : null,
         ]);
 
         $portfolioLossShare = $portfolioTotal > 0.0

@@ -129,6 +129,26 @@ final class SignalCriteriaEvaluator
                 'lt',
                 fn (float $v) => sprintf('%+.1f', $v),
             ),
+            // CHG-0019: 利確検討にはPERを使う判定ロジックが無い（割安である
+            // ことは利確を後押ししない）ため、買い増し候補のPERのような
+            // met/near/unmet閾値は持たせず、PBRと同じ基準なしの参考表示
+            // （'none'→'info'）とする。
+            $this->row(
+                'PER',
+                '',
+                $metrics['per'] ?? null,
+                0.0,
+                'none',
+                fn (float $v) => number_format($v, 1),
+            ),
+            $this->row(
+                'PBR',
+                '',
+                $metrics['pbr'] ?? null,
+                0.0,
+                'none',
+                fn (float $v) => number_format($v, 2),
+            ),
         ];
 
         $fundamental = $this->fundamentalRows($metrics);
@@ -324,6 +344,25 @@ final class SignalCriteriaEvaluator
                 (float) LossReviewThresholds::NO_REBOUND_SIGNAL_COUNT,
                 'lte',
                 fn (float $v) => number_format($v, 0).'件',
+            ),
+            // CHG-0019: 整理検討にもPERを使う判定ロジックが無い（割安である
+            // ことは整理の後押しにならない）ため、利確検討と同じく基準なしの
+            // 参考表示（'none'→'info'）とする。
+            $this->row(
+                'PER',
+                '',
+                $metrics['per'] ?? null,
+                0.0,
+                'none',
+                fn (float $v) => number_format($v, 1),
+            ),
+            $this->row(
+                'PBR',
+                '',
+                $metrics['pbr'] ?? null,
+                0.0,
+                'none',
+                fn (float $v) => number_format($v, 2),
             ),
         ];
 
