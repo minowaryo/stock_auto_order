@@ -2,17 +2,31 @@
 
 namespace App\Services\MarketData;
 
+use App\Services\SignalOutcome\WeekDateNormalizer;
 use Illuminate\Support\Facades\Http;
 
 /**
  * Fetches weekly price history from the unofficial Yahoo Finance chart API
  * (v8, range=2y&interval=1wk).
  *
+ * Two trailing-row rules are applied before the $weeks slicing so that the
+ * last week is never counted twice:
+ *   1. A volume=0 placeholder whose close equals the previous close
+ *      (in-progress current week) is dropped.
+ *   2. A last row that falls in the same week as the previous row
+ *      (Yahoo's trailing last-trading-day bar, CHG-0022) is dropped and the
+ *      earlier weekly bar is kept. "Same week" follows
+ *      WeekDateNormalizer::weekStart() (ADR-0017 D2).
+ *
  * docs/adr/ADR-0004-analysis-engine-indicator-expansion.md (§1)
  */
 final class YahooFinanceChartClient
 {
     private const BASE_URL = 'https://query1.finance.yahoo.com/v8/finance/chart/';
+
+    public function __construct(
+        private readonly WeekDateNormalizer $weekDateNormalizer = new WeekDateNormalizer,
+    ) {}
 
     /**
      * @return array<int, array{date: string, close: float, volume: int}>
@@ -63,6 +77,17 @@ final class YahooFinanceChartClient
         if ($lastIndex > 0
             && $history[$lastIndex]['volume'] === 0
             && $history[$lastIndex]['close'] === $history[$lastIndex - 1]['close']
+        ) {
+            array_pop($history);
+        }
+
+        // Yahoo can also append a trailing bar for the last trading day (with
+        // nonzero volume) dated inside the same week as the previous weekly
+        // bar. Keep the earlier weekly bar and drop the trailing duplicate.
+        $lastIndex = count($history) - 1;
+        if ($lastIndex > 0
+            && $this->weekDateNormalizer->weekStart($history[$lastIndex]['date'])
+                === $this->weekDateNormalizer->weekStart($history[$lastIndex - 1]['date'])
         ) {
             array_pop($history);
         }
