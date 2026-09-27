@@ -19,9 +19,12 @@
 
 **Phase 0（ドキュメントのみ、コード変更なし）**: `docs/product/accuracy-improvement-backlog.md`（新節「エビデンス提言の取込」：本人判断・補正事項・提言と既存候補の対応・採用する「やらないこと」・候補M〜P、優先順位1位への追記）、`BACKGROUND.md`（数値目標を対ガチホ差分の目標へ改訂）、`docs/ai-context/project-summary.md`（目的欄1文）、`docs/history/plan-archive.md`（CHG-0012エントリ退避）、`PLAN.md`（本エントリ）。一次資料2件（`docs/original-docs/stock-auto-order-recommendations-*.md`）は本人追加分をそのままコミット（内容の編集なし）
 
+**Phase 1 Gate1〜3叩き台**: `docs/adr/ADR-0017-signal-outcome-tracking.md`（新規、Proposed。D1前向き記録のみ／D2 `weekly_prices`・`index_weekly_prices`／D3 `signal_occurrences`／D4 結果は読み取り時算出／D5 分割調整前提の固定／D6 既存6スナップショット移送／D7 評価指標・判定基準の事前固定／D8 表示）、`docs/product/requirements.md`（2章IN追加・OUTのバックテスト文言整理、4章F-014、5章データ保持、7章着手順）、`docs/product/use-cases.md`（UC一覧・UC-014新設・承認記録に提案行）、`docs/architecture/data-model.md`（ER図・3テーブル定義・設計方針「上書き型の時系列」・承認記録・変更履歴）、`docs/rcid/traceability-matrix.md`（F-014行・CHG-0020行）、`docs/ai-context/module-map.md`・`glossary.md`（用語3件）
+- 叩き台作成時の実測: Yahoo `quote.close`はNTT 9432（2023-06-25 25:1分割）で分割前も約161円＝**分割遡及調整済み**、`adjclose`は配当込みで別物（約9%差）。ファーストリテイリング9983は提言書が例示した2024-03の期間にYahooが分割イベントを返さず未確認。個別株の`holdings`は219件
+
 ### Status
 
-**Phase 0完了**。次: Gate1〜3ドキュメント叩き台（ADR-0017・requirements.md・use-cases.md UC-014・data-model.md・traceability-matrix.md）を作成し、本人承認を待つ。コードはGate2・3承認後に`/tdd`で着手（想定Cycle: ①`weekly_prices`/`index_weekly_prices`/`signal_occurrences`のmigrationと価格UPSERT、②シグナル発生記録と既存6スナップショットの移送、③超過リターン算出の純ロジック＋分割前提の回帰テスト、④集計表示）
+**Phase 0完了・Phase 1 Gate1〜3叩き台作成済み**。本人のレビュー待ち。★Gate2で確定が必要な事項: UC-014の画面配置（売買シグナル画面内の新セクション／新ルート＋既存タブからのリンク）。コードはGate2・3承認後に`/tdd`で着手（想定Cycle: ①`weekly_prices`/`index_weekly_prices`/`signal_occurrences`のmigrationと価格UPSERT、②シグナル発生記録と既存6スナップショットの移送、③超過リターン算出の純ロジック＋分割前提の回帰テスト、④集計表示）
 
 ## mainへのマージ・最終`/review`・push（CHG-0016・CHG-0017・CHG-0018・F-013第1段階、2026-09-21）
 
