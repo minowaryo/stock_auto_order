@@ -321,8 +321,12 @@ class FetchExternalMarketDataAction
                         operatingIncomeGrowth: $fundamental['operating_income_growth'] ?? null,
                         operatingMargin: $fundamental['operating_margin'] ?? null,
                         dividendYield: $fundamental['dividend_yield'] ?? null,
-                        avgRevenueGrowth: $fundamental['avg_revenue_growth'] ?? null,
-                        avgOperatingIncomeGrowth: $fundamental['avg_operating_income_growth'] ?? null,
+                        // CHG-0025: the mapper's $fundamental never carries the
+                        // 3-period averages; they are computed separately into
+                        // $avgGrowth (JP only, empty for US), so read them there
+                        // or the ADR-0015 D2 rescue never applies to held stocks.
+                        avgRevenueGrowth: $avgGrowth['avg_revenue_growth'] ?? null,
+                        avgOperatingIncomeGrowth: $avgGrowth['avg_operating_income_growth'] ?? null,
                     );
 
                     // Re-determination: same drop-then-recreate pattern as the
