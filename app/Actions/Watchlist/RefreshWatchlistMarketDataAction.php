@@ -19,6 +19,8 @@ use App\Services\MarketData\JpStockPriceClientInterface;
 use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\MarketData\MarketIndexClientInterface;
 use App\Services\MarketData\UsStockPriceClientInterface;
+use App\Services\SignalOutcome\SignalOccurrenceMetricsBuilder;
+use App\Services\SignalOutcome\SignalOccurrenceRecorder;
 use App\Services\SignalOutcome\WeeklyPriceRecorder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -62,6 +64,8 @@ class RefreshWatchlistMarketDataAction
         private readonly UsFundamentalIndicatorMapper $usFundamentalIndicatorMapper,
         private readonly BuySignalDeterminationService $buySignalDeterminationService,
         private readonly WeeklyPriceRecorder $weeklyPriceRecorder,
+        private readonly SignalOccurrenceRecorder $signalOccurrenceRecorder,
+        private readonly SignalOccurrenceMetricsBuilder $signalOccurrenceMetricsBuilder,
     ) {}
 
     /**
@@ -228,6 +232,21 @@ class RefreshWatchlistMarketDataAction
                 ]);
             }
         });
+
+        // UC-014 (ADR-0017 D3): append the committed watchlist_buy signals
+        // outside the transaction; the recorder never throws.
+        $observedWeek = $this->signalOccurrenceMetricsBuilder->observedWeek($priceHistory);
+
+        if ($observedWeek !== null) {
+            $this->signalOccurrenceRecorder->record(
+                $holding,
+                'watchlist_buy',
+                array_column($buySignals, 'signal_type'),
+                $observedWeek,
+                null,
+                $this->signalOccurrenceMetricsBuilder->build($priceHistory, $technical, $fundamental),
+            );
+        }
 
         return $currentPrice;
     }

@@ -65,7 +65,8 @@ Accepted（2026-09-27、Gate 1〜3 本人承認。D8の画面配置は新ルー�
 
 ### D6 既存スナップショット分の移送（一度だけ）
 
-- 既存6スナップショットの `signals` / `buy_signals` を `signal_occurrences` へ移送する Artisan コマンドを用意する（`observed_week` はスナップショット作成日の直前の確定週、`metrics` は null＝根拠値不明）
+- 既存スナップショットの `signals` / `buy_signals`、および現在の `watchlist_buy_signals` を `signal_occurrences` へ移送する Artisan コマンド `signal-outcomes:backfill` を用意する。`observed_week` は作成日時（ウォッチリストは `determined_at`）を**マニラ時間（Asia/Manila）に換算した日付を含むISO週の月曜**、`metrics` は null＝根拠値不明。INSERT IGNORE のため再実行しても重複せず、分析処理がリアルタイムに記録した行（根拠値あり）を上書きしない
+- 日付判定の基準をマニラ時間とするのは、本人の生活圏の時刻に表示・日付判定を統一する方針（2026-09-27 本人指示。DBの保存はUTCのまま）による。JP株の週足は月曜0時JST（＝日曜23時マニラ）に切り替わるため、日曜23時台マニラ時間の取込だけはリアルタイム記録の週（翌週）と移送時の週（当週）が1週ずれうるが、移送は一度きりの処理であり許容する
 - 価格は次回の取得（104週系列の UPSERT）で埋まるため、移送直後から +4週 の結果は計算できる
 
 ### D7 評価指標と判定基準を事前に固定する

@@ -5,6 +5,7 @@ namespace App\Actions\Analysis;
 use App\Models\BuySignal;
 use App\Models\FinancialStatement;
 use App\Models\FundamentalIndicator;
+use App\Models\Holding;
 use App\Models\HoldingSnapshot;
 use App\Models\ImportBatch;
 use App\Models\MarketIndicatorSnapshot;
@@ -22,6 +23,8 @@ use App\Services\MarketData\JpStockPriceClientInterface;
 use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\MarketData\MarketIndexClientInterface;
 use App\Services\MarketData\UsStockPriceClientInterface;
+use App\Services\SignalOutcome\SignalOccurrenceMetricsBuilder;
+use App\Services\SignalOutcome\SignalOccurrenceRecorder;
 use App\Services\SignalOutcome\WeeklyPriceRecorder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -70,6 +73,8 @@ class FetchExternalMarketDataAction
         private readonly SignalDeterminationService $signalDeterminationService,
         private readonly BuySignalDeterminationService $buySignalDeterminationService,
         private readonly WeeklyPriceRecorder $weeklyPriceRecorder,
+        private readonly SignalOccurrenceRecorder $signalOccurrenceRecorder,
+        private readonly SignalOccurrenceMetricsBuilder $signalOccurrenceMetricsBuilder,
     ) {}
 
     public function execute(ImportBatch $batch): void
@@ -179,8 +184,12 @@ class FetchExternalMarketDataAction
             $holdingSnapshot = $row['holdingSnapshot'];
             $priceHistory = $row['priceHistory'];
 
+            // UC-014 (ADR-0017 D3): what the transaction determined, recorded
+            // to signal_occurrences only after it commits.
+            $occurrences = null;
+
             try {
-                DB::transaction(function () use ($holding, $holdingSnapshot, $priceHistory, $row, $nikkeiReturn13w, $sp500Return13w, $sectorAverageReturns) {
+                DB::transaction(function () use ($holding, $holdingSnapshot, $priceHistory, $row, $nikkeiReturn13w, $sp500Return13w, $sectorAverageReturns, &$occurrences) {
                     $marketReturn13w = $holding->market === 'jp' ? $nikkeiReturn13w : $sp500Return13w;
                     $sectorReturn13w = $row['sectorClassificationId'] !== null
                         ? ($sectorAverageReturns[$row['sectorClassificationId']] ?? null)
@@ -194,6 +203,7 @@ class FetchExternalMarketDataAction
                     );
 
                     $pegRatio = null;
+                    $avgGrowth = [];
 
                     // Fundamentals/sector are JP個別株限定 (UC-002業務ルール
                     // "指標計算はJP株・US株の個別株のみ対象" + fundamentals自体はJP限定).
@@ -205,15 +215,19 @@ class FetchExternalMarketDataAction
 
                         $fundamental = $this->fundamentalIndicatorMapper->map($statements, $currentPrice);
 
+                        // ADR-0015 D2 (Cycle4a): 直近3期平均のYoY成長率
+                        // （単年度のrevenue_growth/operating_income_growthとは
+                        // 別カラムに保存する）。
+                        $avgGrowth = [
+                            'avg_revenue_growth' => $this->fundamentalIndicatorMapper->averageAnnualGrowth($statements, 'net_sales'),
+                            'avg_operating_income_growth' => $this->fundamentalIndicatorMapper->averageAnnualGrowth($statements, 'operating_profit'),
+                        ];
+
                         FundamentalIndicator::updateOrCreate(
                             ['holding_id' => $holding->id],
                             [
                                 ...$fundamental,
-                                // ADR-0015 D2 (Cycle4a): 直近3期平均のYoY成長率
-                                // （単年度のrevenue_growth/operating_income_growthとは
-                                // 別カラムに保存する）。
-                                'avg_revenue_growth' => $this->fundamentalIndicatorMapper->averageAnnualGrowth($statements, 'net_sales'),
-                                'avg_operating_income_growth' => $this->fundamentalIndicatorMapper->averageAnnualGrowth($statements, 'operating_profit'),
+                                ...$avgGrowth,
                                 'fetched_at' => now(),
                             ],
                         );
@@ -260,6 +274,8 @@ class FetchExternalMarketDataAction
                         $pegRatio = $fundamental['peg_ratio'];
                     }
 
+                    $takeProfitTypes = null;
+
                     // UC-004業務ルール: 含み益+20%未満は利確シグナル判定の対象外.
                     if ((float) $holdingSnapshot->unrealized_gain_rate > self::SIGNAL_GAIN_RATE_THRESHOLD) {
                         $signals = $this->signalDeterminationService->determine(
@@ -284,6 +300,8 @@ class FetchExternalMarketDataAction
                                 'reason_summary' => $signal['reason_summary'],
                             ]);
                         }
+
+                        $takeProfitTypes = array_column($signals, 'signal_type');
                     }
 
                     // UC-010業務ルール（ADR-0007）: 買い増しシグナル判定は
@@ -320,6 +338,16 @@ class FetchExternalMarketDataAction
                             'reason_summary' => $buySignal['reason_summary'],
                         ]);
                     }
+
+                    $occurrences = [
+                        'take_profit' => $takeProfitTypes,
+                        'buy' => array_column($buySignals, 'signal_type'),
+                        'metrics' => $this->signalOccurrenceMetricsBuilder->build(
+                            $priceHistory,
+                            $technical,
+                            [...($fundamental ?? []), ...$avgGrowth],
+                        ),
+                    ];
                 });
             } catch (Throwable $e) {
                 // See the safety note on the identical log call above.
@@ -331,7 +359,33 @@ class FetchExternalMarketDataAction
 
                 continue;
             }
+
+            $this->recordSignalOccurrences($holding, $snapshot, $priceHistory, $occurrences);
         }
+    }
+
+    /**
+     * UC-014 (ADR-0017 D3): append the committed take-profit / buy signals
+     * to signal_occurrences. Runs outside the per-holding transaction and
+     * the recorder never throws, so a recording failure never affects the
+     * saved signals.
+     *
+     * @param  array<int, array{date: string, close: float, volume: int}>  $priceHistory
+     * @param  array{take_profit: array<int, string>|null, buy: array<int, string>, metrics: array<string, mixed>}|null  $occurrences
+     */
+    private function recordSignalOccurrences(Holding $holding, Snapshot $snapshot, array $priceHistory, ?array $occurrences): void
+    {
+        $observedWeek = $this->signalOccurrenceMetricsBuilder->observedWeek($priceHistory);
+
+        if ($occurrences === null || $observedWeek === null) {
+            return;
+        }
+
+        if ($occurrences['take_profit'] !== null) {
+            $this->signalOccurrenceRecorder->record($holding, 'take_profit', $occurrences['take_profit'], $observedWeek, $snapshot->id, $occurrences['metrics']);
+        }
+
+        $this->signalOccurrenceRecorder->record($holding, 'buy', $occurrences['buy'], $observedWeek, $snapshot->id, $occurrences['metrics']);
     }
 
     /**

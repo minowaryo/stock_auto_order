@@ -498,7 +498,8 @@
 **Index**: `(holding_id, source, signal_type, observed_week)` unique（同じ週の再実行で重複させない。先頭列が`holding_id`のためFKインデックスを兼ねる）、`(source, signal_type, observed_week)`（UC-014の種別別集計用）、`snapshot_id`
 **FK**: `holding_id` → `holdings(id)`、`snapshot_id` → `snapshots(id)`
 
-> **履歴ログ（追記のみ）**: UPDATE/DELETEしない。初回導入時に既存6スナップショット（2026-08-28〜09-20）の`signals`／`buy_signals`を一度だけ移送する（`observed_week`はスナップショット作成日以前の直近確定週、`metrics`はnull）。
+> **履歴ログ（追記のみ）**: UPDATE/DELETEしない。書き込みは`SignalOccurrenceRecorder`（INSERT IGNORE、例外を握りつぶし警告ログ）経由で、分析処理のトランザクションのコミット後に行う。`observed_week`は判定に使った週足系列の最終行の週の月曜。`metrics`の17キーは`SignalOccurrenceMetricsBuilder`で組み立てる（財務健全性の判定結果は含めない）。
+> **既存データの移送（2026-09-27実施）**: `php artisan signal-outcomes:backfill`で既存スナップショットの`signals`／`buy_signals`と現在の`watchlist_buy_signals`を移送（`observed_week`は作成日時・`determined_at`をマニラ時間に換算した日付を含むISO週の月曜、`metrics`はnull）。開発DBで425件（2026-08-24〜09-21の5週分）を移送、再実行で0件追加を確認済み。
 
 ---
 
