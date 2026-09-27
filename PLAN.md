@@ -1,7 +1,27 @@
 # PLAN.md
 
 > 2026-08-27（フロントエンド実装Phase5完了時点。UC-010 Gate4完了・コミット`ba239fe`分も含む）以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、Phase2 UC-008（Cycle1・Cycle2）完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査完了、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了、利確・リバランス閾値の動的分岐ロジック検討〔検討事項の記録のみ、実装はCHG-0006として2026-08-28〜29に別途完了〕、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、フロントエンド実装Phase4（UC-003銘柄詳細画面）完了、UC-010 Gate2/Gate3正式承認（買いシグナル7種の前提条件追加）完了、UC-010 Gate4完了・コミット（`ba239fe`）、フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了、およびフロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了〔2026-09-05、CHG-0011作業時に退避〕等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
-> **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。300行超過に伴い「数値表示フォーマット修正完了（2026-08-28）」「UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0012 Phase 0作業時）。約298行に達したため「利確検討ラインの動的分岐 CHG-0006（2026-08-28〜29）」「売買シグナル画面の可読性改善（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0013／ADR-0012作業時）。300行超過に伴い「取込後サマリーレポートのグローバルナビタブ化 CHG-0008（2026-09-05）」の1エントリを退避済み（2026-09-12、F-012・CHG-0012のステータス記述を実態〔mainマージ済み〕に修正した際に発生した増分に対応）。300行超過に伴い「売買シグナル画面 判定チェックリスト表示 CHG-0007（2026-08-29〜09-05）」の1エントリを退避済み（2026-09-12、CHG-0016〔新規投資候補テーブルの固定ヘッダー化〕作業時）。300行超過に伴い「整理検討（含み損）候補一覧の新設 F-011（2026-09-05〜06）」の1エントリを退避済み（2026-09-21、CHG-0017/CHG-0018マージ後の最終`/review`・コミット・push前整理時）。
+> **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。300行超過に伴い「数値表示フォーマット修正完了（2026-08-28）」「UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0012 Phase 0作業時）。約298行に達したため「利確検討ラインの動的分岐 CHG-0006（2026-08-28〜29）」「売買シグナル画面の可読性改善（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0013／ADR-0012作業時）。300行超過に伴い「取込後サマリーレポートのグローバルナビタブ化 CHG-0008（2026-09-05）」の1エントリを退避済み（2026-09-12、F-012・CHG-0012のステータス記述を実態〔mainマージ済み〕に修正した際に発生した増分に対応）。300行超過に伴い「売買シグナル画面 判定チェックリスト表示 CHG-0007（2026-08-29〜09-05）」の1エントリを退避済み（2026-09-12、CHG-0016〔新規投資候補テーブルの固定ヘッダー化〕作業時）。300行超過に伴い「整理検討（含み損）候補一覧の新設 F-011（2026-09-05〜06）」の1エントリを退避済み（2026-09-21、CHG-0017/CHG-0018マージ後の最終`/review`・コミット・push前整理時）。300行超過見込みに伴い「財務健全性フィルタに営業利益率を追加 CHG-0012（2026-09-06〜07）」の1エントリを退避済み（2026-09-27、エビデンス提言取込・CHG-0020 Phase 0作業時）。
+
+## エビデンス提言の取込とシグナル検証基盤（CHG-0020・ADR-0017・F-014・UC-014）Phase 0 完了・Gate1〜3叩き台作成中（2026-09-27〜）
+
+### Decision
+
+- 本人要望: `docs/original-docs/`に追加した外部調査ベースの改善提言2件（`stock-auto-order-recommendations-summary.md`／`-detail.md`、2026-09-23）を参考に後続計画を進めたい
+- Planフェーズで承認。プランファイル: `~/.claude/plans/stock_auto_order-evidence-roadmap-phase.md`
+- 提言の要旨: 半導体集中で実効ベット数2〜5のため、シグナル精緻化から取れるアルファはほぼない。価値があるのは①シグナルの検証機構（現在ゼロ）、②エクスポージャー管理。PEGの高成長側だけは天井で買いシグナルを出す方向に系統的に逆向き
+- **現物確認で提言書の記述を補正**（詳細は`accuracy-improvement-backlog.md`「エビデンス提言の取込」節）: シグナルは`holding_snapshot_id`単位の削除のため過去6スナップショット分は残っている（根拠値・株価は無し、`watchlist_buy_signals`は履歴なし）／PEG≤1.0の53銘柄中32銘柄が成長率30%超で、山側ガードの単純適用は買いPEGシグナルの大半を消す／`WatchedTheme`によるUC-009の絞り込みはF-013で退役済み／`fetchSectorInfo()`はHTTP失敗を黙ってnull扱い（セクター7/146の原因候補）
+- 本人判断（AskUserQuestion）: (1) 着手順は**検証基盤→PEG山側ガード**、(2) CHG-0016エントリで合意していた「新規投資候補の序列4軸追加」は**検証基盤で実測するまで4軸とも保留**（対市場相対リターンは日本で横断面モメンタムが機能しないとの実証あり）、(3) 検証基盤は**前向き記録のみ**（バックテストは`requirements.md`2章OUTのまま）、(4) `BACKGROUND.md`の数値目標を**今回見直す**（下限ライン→目標、現金ベース→対ガチホ差分）
+- 番号: ADR-**0017**、CR=**CHG-0020**、機能=**F-014**、UC=**UC-014**（全ローカルブランチでADR最大0016・CHG最大0019を確認済み）。PEG山側ガードは後続のCHG-0021想定
+- ブランチ: `feat/chg0020-signal-outcome-tracking`を`feat/chg0019-signals-per-pbr-parity`（main未マージ）のHEADから分岐。本ブランチをmainへマージすればCHG-0019も含まれる（`.claude/rules/06-branch-coordination.md`）
+
+### Files touched
+
+**Phase 0（ドキュメントのみ、コード変更なし）**: `docs/product/accuracy-improvement-backlog.md`（新節「エビデンス提言の取込」：本人判断・補正事項・提言と既存候補の対応・採用する「やらないこと」・候補M〜P、優先順位1位への追記）、`BACKGROUND.md`（数値目標を対ガチホ差分の目標へ改訂）、`docs/ai-context/project-summary.md`（目的欄1文）、`docs/history/plan-archive.md`（CHG-0012エントリ退避）、`PLAN.md`（本エントリ）。一次資料2件（`docs/original-docs/stock-auto-order-recommendations-*.md`）は本人追加分をそのままコミット（内容の編集なし）
+
+### Status
+
+**Phase 0完了**。次: Gate1〜3ドキュメント叩き台（ADR-0017・requirements.md・use-cases.md UC-014・data-model.md・traceability-matrix.md）を作成し、本人承認を待つ。コードはGate2・3承認後に`/tdd`で着手（想定Cycle: ①`weekly_prices`/`index_weekly_prices`/`signal_occurrences`のmigrationと価格UPSERT、②シグナル発生記録と既存6スナップショットの移送、③超過リターン算出の純ロジック＋分割前提の回帰テスト、④集計表示）
 
 ## mainへのマージ・最終`/review`・push（CHG-0016・CHG-0017・CHG-0018・F-013第1段階、2026-09-21）
 
@@ -242,27 +262,6 @@
 ### Status
 
 Green実装・Refactor完了。フルスイート582件Green（13 deprecated は既存・無関係）、pint適用済み。実データ（live J-Quants）で 8001/8058/1605/7203 の成長率が妥当な通期比になることを確認（8001 revenue_growth: +316% → +0.67%）。C〜G の低優先課題は `docs/product/accuracy-improvement-backlog.md`「内部計算ロジックの精度課題」節に記録済み。当初 `feat/chg0012-operating-margin-criterion` 上で未コミットのまま作業していたが、CHG-0012（営業利益率、無関係）とは別件のため独立ブランチ `feat/chg0013-growth-rate-fy-comparison` に分離してコミット、`/review`（コメント英訳・data-model.mdのindex 0記述誤りの訂正・backlog H〜K追加）を経て**mainマージ済み**（`f2a73a7`／`2a7bceb`。2026-09-12、`feat/f012-favorites-watchlist` 経由でmainへ統合後、この独立ブランチとの内容差分を突き合わせ`/review`分の差分を追加反映）。`feat/chg0013-growth-rate-fy-comparison` ブランチは以後削除可
-
-## 財務健全性フィルタに営業利益率を追加（CHG-0012・ADR-0011）実装完了・mainマージ済み（2026-09-06〜09-07）
-
-### Decision
-
-- 本人要望: 「財務健全性を確認できるわかりやすい項目を、中長期目線での評価がしやすくなるよう3項目からもう1項目足したい。おすすめは？」→ 営業利益率（営業利益÷売上高）を推奨・採用。3項目（ROE・自己資本比率・成長率）は資本効率／BSの頑丈さ／成長を見るが「事業そのものの稼ぐ力（利益率）」が欠けていた
-- Planフェーズ承認済み。プランファイル: `~/.claude/plans/stock_auto_order-operating-margin-phase.md`
-- 本人と確定（AskUserQuestion）: (1) **表示のみでなく判定に組み込む**（`FundamentalHealthEvaluator` の4条件目）、(2) 閾値 **10%以上**（8%案と実測比較。8%＝追加で2銘柄 failed／10%＝5銘柄。境界9〜10%の3銘柄を切ることを許容）、(3) `|営業利益率|>999%` は「—」（算出不可）扱いで Mapper が null 化
-- 実測検証済み（保有128銘柄）: US=Finnhub `stock/metric` の `operatingMarginTTM`（無ければ `operatingMarginAnnual`）に存在・パーセントスケール・実態一致。JP=J-Quants で既取得の `net_sales`/`operating_profit` から実測算出（新規APIコールなし）。判定組み込みの実影響は 財務 `passed` が JP 15→11・US 12→11（合計 27→22）。落ちる銘柄: 3088マツキヨココカラ7.6% / 7867タカラトミー9.0% / 5288アジアパイルHD9.4% / 5805SWCC9.8% / IONQ-408%（いずれも妥当な検出）。ACHR は `operatingMarginAnnual=-243100` を返すため `decimal(7,4)` だと ADR-0006 と同じ INSERT エラー → `decimal(10,4)` ＋ null化で予防
-- 影響範囲: `FundamentalHealthEvaluator::evaluate()` が5引数化 → 呼び出し元6機能（`TakeProfitThresholdEvaluator`／`NewCandidateFinder`／`ShowImportSummaryReportAction`／`ShowBuySignalListAction`／`ShowLossReviewListAction`）改修必須。`FundamentalIndicator::healthEvaluatorArgs()` を4→5要素化。判定チェックリスト（`SignalCriteriaEvaluator::fundamentalRows()`）が財務3→4項目、Bladeのテーブル固定幅 `w-[1440px]`→`w-[1512px]`。UC-011 は ADR-0010 D6 の反転フラグに営業利益率も乗せる。NISA推奨の追加基準は変更しない。**`NewCandidateFinder` の SQL事前絞り込みに `operating_margin>=10` を足さない**（NULL行がSQLで落ち evaluator の unavailable 判定に到達しなくなる）
-- **実施タイミング**: F-011（`feat/f011-loss-review-list`）が `fundamentalRows()` と `SignalCriteriaEvaluatorTest` の `'total' => 3` アサート群を触っている最中のため、**F-011 マージ後に独立CRとして実装着手**。本セッションは Phase 0（ドキュメント＋ADR-0011）のみ、別ブランチ `feat/chg0012-operating-margin-criterion` で先行
-
-### Files touched
-
-**ドキュメント（Phase 0、本セッション）**: `docs/adr/ADR-0011-operating-margin-health-criterion.md`（新規、Status: Proposed）、`docs/architecture/data-model.md`（`fundamental_indicators` に `operating_margin` 行・US Mapper注記・「保留・確定が必要な初期パラメータ値」表4行〔財務健全性フィルタ／買い増し用／整理検討3→4項目／near バッファ〕・承認記録・変更履歴）、`docs/product/use-cases.md`（UC-001フロー7・UC-003フロー4・UC-004/010/011 判定チェックリスト財務3→4項目・UC-005/008/009 健全性フィルタ・`criteria`データ辞書・`fundamental_summary`例・承認記録）、`docs/product/requirements.md`（3章ファンダ指標一覧・F-010説明）、`docs/product/ui-guidelines.md`（チップ配色規約・サマリバッジ文言・固定件数記述・テーブル幅注記）、`docs/product/accuracy-improvement-backlog.md`（営業利益率の行を追加）、`docs/rcid/traceability-matrix.md`（CHG-0012行・F-004/009/010/011行に注記）、`PLAN.md`（本エントリ＋2エントリ退避）
-
-**コード（Green、`508a9fc`）**: migration `add_operating_margin_to_fundamental_indicators_table`（`decimal(10,4)` nullable）、`FundamentalIndicator`（fillable/cast/`healthEvaluatorArgs()`5要素化）、`FundamentalIndicatorMapper`（JP、`operating_profit/net_sales*100`）、`UsFundamentalIndicatorMapper`（US、`operatingMarginTTM`??`Annual`）、`FundamentalHealthEvaluator::evaluate()`（5引数化）、呼び出し元6機能（`ShowSignalListAction`／`ShowBuySignalListAction`／`ShowLossReviewListAction`／`NewCandidateFinder`／`ShowImportSummaryReportAction`／`TakeProfitThresholdEvaluator`）、`SignalCriteriaEvaluator::fundamentalRows()`（4項目目・整理検討テーブルは反転）、`holding-detail.blade.php`・`signal-list.blade.php`（テーブル幅+72px）。テスト9ファイル更新（`FundamentalHealthEvaluatorTest`/`FundamentalIndicatorMapperTest`/`UsFundamentalIndicatorMapperTest`/`SignalCriteriaEvaluatorTest`/`TakeProfitThresholdEvaluatorTest`ほかFeature Test6本）
-
-### Status
-
-**Green実装完了、mainマージ済み**（コミット`6d5a9cb`、F-011マージ後に`feat/chg0012-operating-margin-criterion`ブランチで実装）。実DB確認: `fundamental_indicators.operating_margin`列が実際に存在。当時のフルスイート**572 passed**（現在は後続作業を含め606 passed）。実データ確認（保有135銘柄）: 財務`passed`がJP 15→11・US 12→11（合計27→22）、想定銘柄（マツキヨ7.6%/タカラトミー9.0%/アジアパイルHD9.4%/SWCC9.8%/IONQ-408%）が想定通りfailedになることをADR-0011どおり確認済み。
 
 ## 今後の対応（未着手）（2026-08-27追記、Phase5の実ブラウザ確認時に発見）
 
