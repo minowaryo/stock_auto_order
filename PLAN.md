@@ -24,7 +24,7 @@
 
 ### Status
 
-**Phase 0完了・Phase 1 Gate1〜3叩き台作成済み**。本人のレビュー待ち。★Gate2で確定が必要な事項: UC-014の画面配置（売買シグナル画面内の新セクション／新ルート＋既存タブからのリンク）。コードはGate2・3承認後に`/tdd`で着手（想定Cycle: ①`weekly_prices`/`index_weekly_prices`/`signal_occurrences`のmigrationと価格UPSERT、②シグナル発生記録と既存6スナップショットの移送、③超過リターン算出の純ロジック＋分割前提の回帰テスト、④集計表示）
+**Phase 0完了・Gate1〜3承認済み（2026-09-27、本人「すすめてよい」）**。Gate2の★画面配置は新ルート`/signal-outcomes`＋`/signals`上部リンクで確定（AskUserQuestion）。Gate4（`/tdd`）Cycle1着手。コードはGate2・3承認後に`/tdd`で着手（想定Cycle: ①`weekly_prices`/`index_weekly_prices`/`signal_occurrences`のmigrationと価格UPSERT、②シグナル発生記録と既存6スナップショットの移送、③超過リターン算出の純ロジック＋分割前提の回帰テスト、④集計表示）
 
 ## mainへのマージ・最終`/review`・push（CHG-0016・CHG-0017・CHG-0018・F-013第1段階、2026-09-21）
 
