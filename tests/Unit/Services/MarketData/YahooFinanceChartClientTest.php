@@ -687,3 +687,58 @@ test('週数指定がある場合、同一週の末尾バー除外後に直近N�
         ['date' => '2026-09-20', 'close' => 2989.5, 'volume' => 54901300],
     ]);
 });
+
+/*
+|--------------------------------------------------------------------------
+| CHG-0020 /review fix — fold ALL rows by week, not only the last pair
+|--------------------------------------------------------------------------
+|
+| When Yahoo already publishes the next week's bar, the previous week's
+| trailing last-trading-day bar is no longer the LAST row but sits in the
+| middle of the series. The client must apply the same "first row per
+| Monday-start week wins" rule as WeeklyPriceRecorder
+| (WeekDateNormalizer::foldByWeek(), ADR-0017 D2) to every row.
+|
+| Expected Red against the current implementation, which only compares the
+| last two rows (09-25 vs 09-27 are different weeks, so 09-25 survives).
+|
+*/
+
+test('同一週の最終取引日バーの後に新しい週の週足バーが続く場合（系列途中の重複）も、その最終取引日バーは除外され新しい週のバーで終わる', function () {
+    // Arrange: JP-style; Sun 09-20 15:00 weekly, Fri 09-25 06:30 trailing (nonzero volume),
+    // Sun 09-27 15:00 new-week bar (nonzero volume)
+    Http::fake([
+        'query1.finance.yahoo.com/*' => Http::response([
+            'chart' => [
+                'result' => [
+                    [
+                        // Sun 09-13 15:00, Sun 09-20 15:00, Fri 09-25 06:30, Sun 09-27 15:00 (UTC)
+                        'timestamp' => [1789311600, 1789916400, 1790317800, 1790521200],
+                        'indicators' => [
+                            'quote' => [
+                                [
+                                    'close' => [2950.0, 2989.5, 2989.5, 3010.0],
+                                    'volume' => [52000000, 54901300, 21084000, 48000000],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                'error' => null,
+            ],
+        ], 200),
+    ]);
+
+    $client = new YahooFinanceChartClient;
+
+    // Act
+    $result = $client->fetchWeeklyHistory('7203.T', 104);
+
+    // Assert: no 09-25 row; series ends with the new week's bar
+    expect(array_column($result, 'date'))->not->toContain('2026-09-25');
+    expect($result)->toBe([
+        ['date' => '2026-09-13', 'close' => 2950.0, 'volume' => 52000000],
+        ['date' => '2026-09-20', 'close' => 2989.5, 'volume' => 54901300],
+        ['date' => '2026-09-27', 'close' => 3010.0, 'volume' => 48000000],
+    ]);
+});

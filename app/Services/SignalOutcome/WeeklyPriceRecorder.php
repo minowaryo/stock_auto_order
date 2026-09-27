@@ -5,6 +5,7 @@ namespace App\Services\SignalOutcome;
 use App\Models\Holding;
 use App\Models\IndexWeeklyPrice;
 use App\Models\WeeklyPrice;
+use App\Services\MarketData\WeekDateNormalizer;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -32,10 +33,10 @@ class WeeklyPriceRecorder
         try {
             $rows = [];
 
-            foreach ($this->firstRowPerWeek($history) as $weekDate => $row) {
+            foreach ($this->weekDateNormalizer->foldByWeek($history) as $row) {
                 $rows[] = [
                     'holding_id' => $holding->id,
-                    'week_date' => $weekDate,
+                    'week_date' => $this->weekDateNormalizer->weekStart($row['date']),
                     'close' => $row['close'],
                     'volume' => $row['volume'],
                 ];
@@ -62,10 +63,10 @@ class WeeklyPriceRecorder
         try {
             $rows = [];
 
-            foreach ($this->firstRowPerWeek($history) as $weekDate => $row) {
+            foreach ($this->weekDateNormalizer->foldByWeek($history) as $row) {
                 $rows[] = [
                     'index_name' => $indexName,
-                    'week_date' => $weekDate,
+                    'week_date' => $this->weekDateNormalizer->weekStart($row['date']),
                     'close' => $row['close'],
                 ];
             }
@@ -81,21 +82,5 @@ class WeeklyPriceRecorder
                 'exception' => $e->getMessage(),
             ]);
         }
-    }
-
-    /**
-     * @param  array<int, array{date: string, close: float, volume: int}>  $history
-     * @return array<string, array{date: string, close: float, volume: int}>
-     */
-    private function firstRowPerWeek(array $history): array
-    {
-        $byWeek = [];
-
-        foreach ($history as $row) {
-            $weekDate = $this->weekDateNormalizer->weekStart($row['date']);
-            $byWeek[$weekDate] ??= $row;
-        }
-
-        return $byWeek;
     }
 }

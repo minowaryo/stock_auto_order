@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Actions\Analysis\FetchExternalMarketDataAction;
 use App\Actions\Watchlist\RefreshWatchlistMarketDataAction;
+use App\Models\BuySignal;
 use App\Models\Holding;
 use App\Models\HoldingSnapshot;
 use App\Models\ImportBatch;
@@ -18,6 +19,7 @@ use App\Services\MarketData\JpStockPriceClientInterface;
 use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\MarketData\MarketIndexClientInterface;
 use App\Services\MarketData\UsStockPriceClientInterface;
+use Illuminate\Support\Facades\Log;
 use Tests\Support\Fakes\FakeFinnhubClient;
 use Tests\Support\Fakes\FakeJpStockPriceClient;
 use Tests\Support\Fakes\FakeJQuantsClient;
@@ -258,6 +260,48 @@ describe('UC-014 週次価格履歴の保存（CSV取込の分析処理: FetchEx
         expect(WeeklyPrice::where('holding_id', $failing->id)->count())->toBe(0);
         expect(WeeklyPrice::where('holding_id', $ok->id)->count())->toBe(20);
         expect(Signal::where('holding_snapshot_id', $okHoldingSnapshot->id)->where('signal_type', 'bollinger_overheat')->count())->toBe(1);
+        expect(IndexWeeklyPrice::count())->toBe(60);
+    });
+    test('保有銘柄の週次価格履歴の保存がDBエラーで失敗しても、その銘柄の利確シグナル・買いシグナル・テクニカル指標は従来どおり作成され例外は投げられない（UC-014エラーケース）', function () {
+        // Arrange: two holdings with the SAME closes. For the failing one the
+        // oldest bar carries a negative volume, which MySQL strict mode rejects
+        // for weekly_prices.volume (unsignedBigInteger) — a real DB-level
+        // failure inside the real WeeklyPriceRecorder's upsert, caught by its
+        // try/catch. That bar is outside the last 20 weeks, so indicator /
+        // signal inputs (closes, volume_ma20) are identical for both holdings.
+        // (No Schema DDL here: on MySQL it would implicitly commit the
+        // RefreshDatabase transaction.)
+        Log::spy();
+        [$batch, $snapshot] = uc014ImportBatch();
+        $failing = uc014Holding('9101', 'jp', '週次保存失敗銘柄');
+        $failingHoldingSnapshot = uc014HoldingSnapshot($snapshot, $failing, 25.0);
+        $control = uc014Holding('9102', 'jp', '対照銘柄');
+        $controlHoldingSnapshot = uc014HoldingSnapshot($snapshot, $control, 25.0);
+
+        $closes = array_merge([100.0], uc014OverheatCloses()); // 21 weeks
+        $controlHistory = uc014Weekly('2026-09-20', $closes, 1000);
+        $failingHistory = $controlHistory;
+        $failingHistory[0]['volume'] = -1;
+
+        uc014BindFakes(jp: ['9101' => $failingHistory, '9102' => $controlHistory]);
+
+        // Act (reaching the assertions means no exception escaped)
+        app(FetchExternalMarketDataAction::class)->execute($batch);
+
+        // Assert: the failing holding's weekly prices were not saved, the control's were
+        expect(WeeklyPrice::where('holding_id', $failing->id)->count())->toBe(0);
+        expect(WeeklyPrice::where('holding_id', $control->id)->count())->toBe(21);
+        Log::shouldHaveReceived('warning')->atLeast()->once();
+
+        // Assert: existing analysis outputs are unaffected for the failing holding
+        expect(Signal::where('holding_snapshot_id', $failingHoldingSnapshot->id)->where('signal_type', 'bollinger_overheat')->count())->toBe(1);
+        expect(TechnicalIndicator::where('holding_id', $failing->id)->exists())->toBeTrue();
+        expect(BuySignal::where('holding_snapshot_id', $failingHoldingSnapshot->id)->pluck('signal_type')->sort()->values()->all())
+            ->toBe(BuySignal::where('holding_snapshot_id', $controlHoldingSnapshot->id)->pluck('signal_type')->sort()->values()->all());
+        expect(Signal::where('holding_snapshot_id', $failingHoldingSnapshot->id)->pluck('signal_type')->sort()->values()->all())
+            ->toBe(Signal::where('holding_snapshot_id', $controlHoldingSnapshot->id)->pluck('signal_type')->sort()->values()->all());
+
+        // Assert: index recording is independent and still succeeds
         expect(IndexWeeklyPrice::count())->toBe(60);
     });
 });

@@ -448,7 +448,7 @@
 |---|---|---|---|---|
 | id | bigint | NO | auto | 主キー |
 | holding_id | bigint | NO | - | `holdings.id` への参照 |
-| week_date | date | NO | - | 週足の日付（Yahoo Finance chart APIの週の基準日、`YahooFinanceChartClient`が返す`date`） |
+| week_date | date | NO | - | 週の月曜日付（`App\Services\MarketData\WeekDateNormalizer::weekStart()`で正規化。Yahooの生の日付ではない） |
 | close | decimal(15,4) | NO | - | 週足終値（**分割遡及調整済み・配当は未調整**。Yahoo `indicators.quote[0].close`。ADR-0017 D5） |
 | volume | bigint unsigned | NO | 0 | 週足出来高 |
 | created_at | timestamp | NO | now() | 作成日時 |
@@ -459,7 +459,7 @@
 
 > **上書き型の時系列**: 取得のたびに104週分を`(holding_id, week_date)`でUPSERTする。Yahoo側で分割の遡及調整が入った場合、直近104週の範囲は最新の調整値に揃う（104週より古い行は取得範囲外のため更新されない）。リターン計算は常にこの系列内の2点で行い、`holding_snapshots.current_price`（CSV由来の未調整株価）とは混ぜない。株価水準の判定（単元金額等）には未調整の`current_price`を使う（ADR-0017 D5）。
 > 保存の失敗は既存のシグナル判定・保存を止めない（UC-014エラーケース）。
-> **`week_date`の正規化（Gate4 Cycle1で実測・確定、2026-09-27）**: Yahooの週足日付（`gmdate`）はJP株・日経平均が日曜（=月曜0時JST）、US株・S&P500が月曜で、さらに末尾に直近取引日（例: 金曜）の足が出来高付き・前週足と同じ終値で付くことがある（`YahooFinanceChartClient`は出来高0の仮置き行しか除去しない）。そこで`WeekDateNormalizer::weekStart()`で「日付+1日を含むISO週の月曜」に揃え、同じ週に複数行あれば先に出現した週足を採用する（`WeeklyPriceRecorder`）。実データ（ウォッチリスト90銘柄・2指数）で`week_date`が全行月曜・重複なしを確認済み。末尾足が指標計算側で二重計上される既存バグは別CR（CHG-0022）で修正する。
+> **`week_date`の正規化（Gate4 Cycle1で実測・確定、2026-09-27）**: Yahooの週足日付（`gmdate`）はJP株・日経平均が日曜（=月曜0時JST）、US株・S&P500が月曜で、さらに末尾に直近取引日（例: 金曜）の足が出来高付き・前週足と同じ終値で付くことがある（`YahooFinanceChartClient`は出来高0の仮置き行しか除去しない）。そこで`WeekDateNormalizer::weekStart()`で「日付+1日を含むISO週の月曜」に揃え、同じ週に複数行あれば先に出現した週足を採用する。実データ（ウォッチリスト90銘柄・2指数）で`week_date`が全行月曜・重複なしを確認済み。**2026-09-27 CHG-0022・/review対応で、同じ週の畳み込みは`WeekDateNormalizer::foldByWeek()`に一本化**し、`YahooFinanceChartClient`（指標計算に渡す系列）と`WeeklyPriceRecorder`（保存）の両方がこれを使う。指標計算と保存で週の扱いが食い違うことはない。
 
 ---
 
@@ -470,7 +470,7 @@
 | カラム | 型 | Nullable | デフォルト | 説明 |
 |---|---|---|---|---|
 | id | bigint | NO | auto | 主キー |
-| index_name | enum('nikkei225','sp500') | NO | - | 指数名（`MarketIndexClient`の対応表と同一。価格指数で配当を含まない） |
+| index_name | enum('nikkei225','sp500') | NO | - | 指数名（`MarketIndexClient`の対応表と同一。価格指数で配当を含まない）。**将来VIX・米10年債等を記録対象に加える場合は、先にこのenumを拡張するマイグレーションが必要**（`WeeklyPriceRecorder`は例外を握りつぶして警告ログのみ出すため、拡張漏れは保存されないまま気づきにくい） |
 | week_date | date | NO | - | 週足の日付 |
 | close | decimal(15,4) | NO | - | 週足終値 |
 | created_at | timestamp | NO | now() | 作成日時 |

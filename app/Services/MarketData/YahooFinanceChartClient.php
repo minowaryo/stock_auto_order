@@ -2,21 +2,19 @@
 
 namespace App\Services\MarketData;
 
-use App\Services\SignalOutcome\WeekDateNormalizer;
 use Illuminate\Support\Facades\Http;
 
 /**
  * Fetches weekly price history from the unofficial Yahoo Finance chart API
  * (v8, range=2y&interval=1wk).
  *
- * Two trailing-row rules are applied before the $weeks slicing so that the
- * last week is never counted twice:
- *   1. A volume=0 placeholder whose close equals the previous close
+ * Two rules are applied before the $weeks slicing so that no week is ever
+ * counted twice:
+ *   1. A trailing volume=0 placeholder whose close equals the previous close
  *      (in-progress current week) is dropped.
- *   2. A last row that falls in the same week as the previous row
- *      (Yahoo's trailing last-trading-day bar, CHG-0022) is dropped and the
- *      earlier weekly bar is kept. "Same week" follows
- *      WeekDateNormalizer::weekStart() (ADR-0017 D2).
+ *   2. Rows falling in the same week (Yahoo's last-trading-day bar, which can
+ *      appear anywhere in the series, CHG-0022) are folded into the first row
+ *      of that week via WeekDateNormalizer::foldByWeek() (ADR-0017 D2).
  *
  * docs/adr/ADR-0004-analysis-engine-indicator-expansion.md (§1)
  */
@@ -81,16 +79,10 @@ final class YahooFinanceChartClient
             array_pop($history);
         }
 
-        // Yahoo can also append a trailing bar for the last trading day (with
-        // nonzero volume) dated inside the same week as the previous weekly
-        // bar. Keep the earlier weekly bar and drop the trailing duplicate.
-        $lastIndex = count($history) - 1;
-        if ($lastIndex > 0
-            && $this->weekDateNormalizer->weekStart($history[$lastIndex]['date'])
-                === $this->weekDateNormalizer->weekStart($history[$lastIndex - 1]['date'])
-        ) {
-            array_pop($history);
-        }
+        // Yahoo can also emit a last-trading-day bar (nonzero volume) dated
+        // inside the same week as a weekly bar, not only at the tail. Keep
+        // the first row of each week (shared rule with WeeklyPriceRecorder).
+        $history = $this->weekDateNormalizer->foldByWeek($history);
 
         if (count($history) > $weeks) {
             $history = array_slice($history, -$weeks);
