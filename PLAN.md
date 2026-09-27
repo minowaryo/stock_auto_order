@@ -24,7 +24,9 @@
 
 ### Status
 
-**Phase 0完了・Gate1〜3承認済み（2026-09-27、本人「すすめてよい」）**。Gate2の★画面配置は新ルート`/signal-outcomes`＋`/signals`上部リンクで確定（AskUserQuestion）。Gate4（`/tdd`）Cycle1着手。コードはGate2・3承認後に`/tdd`で着手（想定Cycle: ①`weekly_prices`/`index_weekly_prices`/`signal_occurrences`のmigrationと価格UPSERT、②シグナル発生記録と既存6スナップショットの移送、③超過リターン算出の純ロジック＋分割前提の回帰テスト、④集計表示）
+**Phase 0完了・Gate1〜3承認済み（2026-09-27、本人「すすめてよい」）**。Gate2の★画面配置は新ルート`/signal-outcomes`＋`/signals`上部リンクで確定（AskUserQuestion）。Gate4（`/tdd`）Cycle1着手。
+- **Cycle1 Green完了（2026-09-27）**: migration3件（`weekly_prices`／`index_weekly_prices`／`signal_occurrences`）＋Model3件、`WeekDateNormalizer`（週の月曜に正規化）・`WeeklyPriceRecorder`（先勝ちの週重複排除＋UPSERT、例外は握りつぶして警告ログ）を新設し、`FetchExternalMarketDataAction`／`RefreshWatchlistMarketDataAction`の取得直後（トランザクション外）に配線。Red 23件→Gate4承認→Green。Green中にMySQL JSON型がキー順を正規化するため`SignalOccurrenceTest`の1件を`toBe`→`toEqual`へ修正（本人がGate4再承認）。フルスイート768 passed・pintクリーン。開発DBへmigrate適用（未適用だった2026-09-19の`per_undervalued`追加も同時適用）、`watchlist:refresh`実行で`weekly_prices` 9,218行（90銘柄、大半103週）・`index_weekly_prices` 207行、`week_date`全行月曜・重複なしを確認
+- **Cycle1で発見した既存バグ（本人指示で後続CR、CHG-0022）**: `YahooFinanceChartClient`が末尾の直近取引日足（出来高あり・前週足と同終値）を除去せず、RSI・13週リターン等の指標計算で最終週が二重計上されている（7203・AAPLで実測）コードはGate2・3承認後に`/tdd`で着手（想定Cycle: ①`weekly_prices`/`index_weekly_prices`/`signal_occurrences`のmigrationと価格UPSERT、②シグナル発生記録と既存6スナップショットの移送、③超過リターン算出の純ロジック＋分割前提の回帰テスト、④集計表示）
 
 ## mainへのマージ・最終`/review`・push（CHG-0016・CHG-0017・CHG-0018・F-013第1段階、2026-09-21）
 

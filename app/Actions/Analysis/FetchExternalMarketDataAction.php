@@ -22,6 +22,7 @@ use App\Services\MarketData\JpStockPriceClientInterface;
 use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\MarketData\MarketIndexClientInterface;
 use App\Services\MarketData\UsStockPriceClientInterface;
+use App\Services\SignalOutcome\WeeklyPriceRecorder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -68,6 +69,7 @@ class FetchExternalMarketDataAction
         private readonly UsFundamentalIndicatorMapper $usFundamentalIndicatorMapper,
         private readonly SignalDeterminationService $signalDeterminationService,
         private readonly BuySignalDeterminationService $buySignalDeterminationService,
+        private readonly WeeklyPriceRecorder $weeklyPriceRecorder,
     ) {}
 
     public function execute(ImportBatch $batch): void
@@ -78,6 +80,12 @@ class FetchExternalMarketDataAction
         // of any eligible stock holding.
         $nikkeiHistory = $this->marketIndexClient->fetchWeeklyHistory('nikkei225');
         $sp500History = $this->marketIndexClient->fetchWeeklyHistory('sp500');
+
+        // UC-014 (ADR-0017 D2): keep the fetched index series for excess-return
+        // calculation. The recorder never throws, and this runs outside any
+        // DB::transaction so a recording failure never rolls back analysis.
+        $this->weeklyPriceRecorder->recordIndex('nikkei225', $nikkeiHistory);
+        $this->weeklyPriceRecorder->recordIndex('sp500', $sp500History);
 
         $this->saveMarketIndicatorSnapshot($snapshot, 'nikkei225', $nikkeiHistory);
         $this->saveMarketIndicatorSnapshot($snapshot, 'sp500', $sp500History);
@@ -104,6 +112,9 @@ class FetchExternalMarketDataAction
                 $priceHistory = $holding->market === 'jp'
                     ? $this->jpStockPriceClient->fetchWeeklyPriceHistory($holding->symbol_code)
                     : $this->usStockPriceClient->fetchWeeklyPriceHistory($holding->symbol_code);
+
+                // UC-014 (ADR-0017 D2): outside any DB::transaction; never throws.
+                $this->weeklyPriceRecorder->recordHolding($holding, $priceHistory);
 
                 $sectorClassificationId = $holding->sector_classification_id;
 

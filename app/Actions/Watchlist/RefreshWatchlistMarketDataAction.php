@@ -19,6 +19,7 @@ use App\Services\MarketData\JpStockPriceClientInterface;
 use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\MarketData\MarketIndexClientInterface;
 use App\Services\MarketData\UsStockPriceClientInterface;
+use App\Services\SignalOutcome\WeeklyPriceRecorder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -60,6 +61,7 @@ class RefreshWatchlistMarketDataAction
         private readonly FundamentalIndicatorMapper $fundamentalIndicatorMapper,
         private readonly UsFundamentalIndicatorMapper $usFundamentalIndicatorMapper,
         private readonly BuySignalDeterminationService $buySignalDeterminationService,
+        private readonly WeeklyPriceRecorder $weeklyPriceRecorder,
     ) {}
 
     /**
@@ -78,8 +80,16 @@ class RefreshWatchlistMarketDataAction
             $targets = $this->unheldWatchlistItems();
             $run->update(['total_count' => $targets->count()]);
 
-            $nikkeiReturn13w = $this->calculate13wReturn($this->safeFetchIndex('nikkei225'));
-            $sp500Return13w = $this->calculate13wReturn($this->safeFetchIndex('sp500'));
+            $nikkeiHistory = $this->safeFetchIndex('nikkei225');
+            $sp500History = $this->safeFetchIndex('sp500');
+
+            // UC-014 (ADR-0017 D2): keep the fetched index series. The
+            // recorder never throws (empty history on fetch failure is a no-op).
+            $this->weeklyPriceRecorder->recordIndex('nikkei225', $nikkeiHistory);
+            $this->weeklyPriceRecorder->recordIndex('sp500', $sp500History);
+
+            $nikkeiReturn13w = $this->calculate13wReturn($nikkeiHistory);
+            $sp500Return13w = $this->calculate13wReturn($sp500History);
 
             foreach ($targets as $item) {
                 try {
@@ -150,6 +160,9 @@ class RefreshWatchlistMarketDataAction
         $priceHistory = $holding->market === 'jp'
             ? $this->jpStockPriceClient->fetchWeeklyPriceHistory($holding->symbol_code)
             : $this->usStockPriceClient->fetchWeeklyPriceHistory($holding->symbol_code);
+
+        // UC-014 (ADR-0017 D2): outside the transaction below; never throws.
+        $this->weeklyPriceRecorder->recordHolding($holding, $priceHistory);
 
         $technical = $this->technicalIndicatorCalculator->calculate($priceHistory, $marketReturn13w, null);
 

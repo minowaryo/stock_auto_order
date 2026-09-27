@@ -344,3 +344,87 @@ test('volumeが0でもcloseが前週と異なる場合は除外しない', funct
         ['date' => '2024-01-15', 'close' => 102.25, 'volume' => 0],
     ]);
 });
+
+/*
+|--------------------------------------------------------------------------
+| ADR-0017 D5 — 分割調整の前提を固定する回帰テスト（CHG-0020 Cycle1）
+|--------------------------------------------------------------------------
+|
+| Source of truth: docs/adr/ADR-0017-signal-outcome-tracking.md D5,
+| docs/architecture/data-model.md `weekly_prices.close`.
+|
+| Premise pinned here (measured 2026-09-27 against NTT 9432.T, which did a
+| 25:1 split around 2023-06-25):
+|   - indicators.quote[0].close is ALREADY split-adjusted retroactively
+|     (pre-split weekly closes come back at ~161 JPY, continuous with the
+|     post-split series) but NOT dividend-adjusted.
+|   - indicators.adjclose[0].adjclose is dividend-adjusted and differs from
+|     close by ~9% for NTT — it must NOT be used (index series are price
+|     indices without dividends, so excess returns must compare price vs
+|     price).
+| weekly_prices stores this series for UC-014 excess-return calculation, so
+| if a future change switched to adjclose (or Yahoo stopped retro-adjusting
+| splits) this test must fail.
+|
+| This test pins an EXISTING assumption of YahooFinanceChartClient and is
+| expected to already pass (not a Red test in the usual sense).
+|
+*/
+
+test('分割前後の週足はquote.close（分割遡及調整済み・配当未調整）の連続した系列で返り、adjcloseは使われない（NTT 9432相当）', function () {
+    // Arrange: JP-style bars stamped Sunday 15:00 UTC around the 2023-06-25 25:1 split
+    Http::fake([
+        'query1.finance.yahoo.com/*' => Http::response([
+            'chart' => [
+                'result' => [
+                    [
+                        'meta' => ['symbol' => '9432.T', 'currency' => 'JPY'],
+                        'timestamp' => [1686495600, 1687100400, 1687705200, 1688310000],
+                        'events' => [
+                            'splits' => [
+                                '1687705200' => [
+                                    'date' => 1687705200,
+                                    'numerator' => 25.0,
+                                    'denominator' => 1.0,
+                                    'splitRatio' => '25:1',
+                                ],
+                            ],
+                        ],
+                        'indicators' => [
+                            'quote' => [
+                                [
+                                    'close' => [160.9, 161.8, 163.2, 164.0],
+                                    'volume' => [120000000, 130000000, 250000000, 180000000],
+                                ],
+                            ],
+                            'adjclose' => [
+                                [
+                                    'adjclose' => [147.1, 147.9, 149.2, 150.0],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                'error' => null,
+            ],
+        ], 200),
+    ]);
+
+    $client = new YahooFinanceChartClient;
+
+    // Act
+    $result = $client->fetchWeeklyHistory('9432.T', 104);
+
+    // Assert: quote.close as-is — continuous across the split (no ~25x jump)
+    expect($result)->toBe([
+        ['date' => '2023-06-11', 'close' => 160.9, 'volume' => 120000000],
+        ['date' => '2023-06-18', 'close' => 161.8, 'volume' => 130000000],
+        ['date' => '2023-06-25', 'close' => 163.2, 'volume' => 250000000],
+        ['date' => '2023-07-02', 'close' => 164.0, 'volume' => 180000000],
+    ]);
+
+    $closes = array_column($result, 'close');
+    for ($i = 1; $i < count($closes); $i++) {
+        expect(abs($closes[$i] / $closes[$i - 1] - 1))->toBeLessThan(0.5);
+    }
+});
