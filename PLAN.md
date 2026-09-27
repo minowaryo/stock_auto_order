@@ -32,7 +32,9 @@
 - **Cycle2 Green完了（2026-09-27）**: `SignalOccurrenceRecorder`（INSERT IGNORE・例外は警告ログ）・`SignalOccurrenceMetricsBuilder`（根拠値17キーを1か所で組み立て）を新設し、両Actionのトランザクションのコミット後に`take_profit`／`buy`／`watchlist_buy`を記録。移送コマンド`signal-outcomes:backfill`を追加。Red 23件→Gate4承認→Green、フルスイート803 passed・pintクリーン。開発DBで移送425件（5週分）、再実行0件を確認
 - **日付の基準をマニラ時間に統一（2026-09-27 本人指示）**: 調査の結果、アプリ・PHP・MySQLともUTCで、画面の日時もUTCのまま無表記で表示されていた。本人選択（AskUserQuestion）で「DB保存はUTCのまま、表示と日付判定をAsia/Manilaに」と確定。移送コマンドの週判定はCycle2でマニラ時間に対応済み（ADR-0017 D6追記）。画面表示の変換は別CRで対応予定
 - **Cycle2で発見した既存バグ（別CRで対応予定）**: `FetchExternalMarketDataAction`の日本株処理で、`BuySignalDeterminationService::determine()`へ渡す`$fundamental`に`avg_revenue_growth`／`avg_operating_income_growth`が含まれず常にnull（DBには保存されている）。保有中の日本株の買い増し判定でADR-0015 D2（3期平均成長率救済）が効いていない。2026-09-21の最終`/review`修正①の配線漏れ。ウォッチリスト側（`RefreshWatchlistMarketDataAction`）は正しく渡している
-- 次: 画面表示のマニラ時間化（別CR）、D2配線漏れの修正（別CR）、CHG-0020 Cycle3（超過リターン算出の純ロジック）コードはGate2・3承認後に`/tdd`で着手（想定Cycle: ①`weekly_prices`/`index_weekly_prices`/`signal_occurrences`のmigrationと価格UPSERT、②シグナル発生記録と既存6スナップショットの移送、③超過リターン算出の純ロジック＋分割前提の回帰テスト、④集計表示）
+- **CHG-0024（ADR-0018）画面表示のマニラ時間化 完了（2026-09-27）**: 設定値`app.display_timezone`（既定Asia/Manila）と`App\Support\DisplayTime`を新設し、取込履歴・新規投資候補の最終更新/ウォッチ記録・銘柄メモ・サマリーレポートのキャプション・株価チャートの日付・移送コマンドの週判定を変換。DB保存・JSON APIはUTCのまま。Red 16件→Gate4承認→Green、フルスイート818 passed、実画面で確認済み
+- **並行作業の調整（2026-09-27）**: 別セッション`stock-auto-order-17`がCHG-0023（`JQuantsClient::fetchSectorInfo()`のHTTPエラー処理、候補M）を担当・`FetchExternalMarketDataAction`のセクター部分は基本触らない。番号はCHG-0023=別セッション、CHG-0024/0025・ADR-0018=本セッション。作業ツリーの未コミットdocs3ファイル（候補D）はどちらのセッションの作業でもなく、本人確認待ち（両セッションとも触らない）
+- 次: CHG-0025（D2配線漏れの修正）、CHG-0020 Cycle3（超過リターン算出の純ロジック）コードはGate2・3承認後に`/tdd`で着手（想定Cycle: ①`weekly_prices`/`index_weekly_prices`/`signal_occurrences`のmigrationと価格UPSERT、②シグナル発生記録と既存6スナップショットの移送、③超過リターン算出の純ロジック＋分割前提の回帰テスト、④集計表示）
 
 ## mainへのマージ・最終`/review`・push（CHG-0016・CHG-0017・CHG-0018・F-013第1段階、2026-09-21）
 

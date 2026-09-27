@@ -4,6 +4,7 @@ namespace App\Livewire\ImportSummaryReport;
 
 use App\Actions\ImportSummaryReport\ShowImportSummaryReportAction;
 use App\Models\ImportBatch;
+use App\Support\DisplayTime;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -35,7 +36,7 @@ class Latest extends Component
         }
 
         $this->report = $showImportSummaryReportAction->execute($batch);
-        $this->importedAtLabel = $batch->imported_at?->format('Y-m-d H:i');
+        $this->importedAtLabel = DisplayTime::dateTime($batch->imported_at);
     }
 
     public function render()

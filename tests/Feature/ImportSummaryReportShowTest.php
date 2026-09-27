@@ -490,8 +490,9 @@ describe('UC-009: 取込後サマリーレポート画面（Livewire）— 分�
             // キャプションの基準日時は「開いたURLの取込バッチ（$oldBatch）の
             // 日時」ではなく「実際に表示している最新スナップショット
             // （$newSnapshot）の日時」と一致する（食い違わない）。
-            expect($component->get('importedAtLabel'))->toBe($newSnapshot->snapshotted_at->format('Y-m-d H:i'));
-            expect($component->get('importedAtLabel'))->not->toBe($oldBatch->imported_at->format('Y-m-d H:i'));
+            // CHG-0024 / ADR-0018: キャプションは表示タイムゾーン（既定 Asia/Manila）に換算して比較する。
+            expect($component->get('importedAtLabel'))->toBe($newSnapshot->snapshotted_at->copy()->setTimezone('Asia/Manila')->format('Y-m-d H:i'));
+            expect($component->get('importedAtLabel'))->not->toBe($oldBatch->imported_at->copy()->setTimezone('Asia/Manila')->format('Y-m-d H:i'));
         });
     });
 });

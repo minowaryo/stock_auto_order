@@ -8,6 +8,7 @@ use App\Models\SignalOccurrence;
 use App\Models\Snapshot;
 use App\Models\WatchlistBuySignal;
 use App\Services\SignalOutcome\SignalOccurrenceRecorder;
+use App\Support\DisplayTime;
 use Carbon\CarbonInterface;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Collection;
@@ -20,16 +21,15 @@ use Illuminate\Database\Eloquent\Collection;
  *   (snapshot_id set)
  * - current watchlist_buy_signals → watchlist_buy (snapshot_id null)
  * - observed_week = ISO-week Monday of snapshots.created_at /
- *   determined_at converted to Asia/Manila (the user's date-judgment
- *   timezone; the app timezone is UTC)
+ *   determined_at converted to the display timezone
+ *   (config('app.display_timezone'), the user's date-judgment timezone;
+ *   the app timezone is UTC)
  * - metrics = null (根拠値不明). Insert-or-ignore, so occurrences already
  *   recorded live (with metrics) are never overwritten and re-running is a
  *   no-op.
  */
 class BackfillSignalOccurrencesCommand extends Command
 {
-    private const OBSERVED_WEEK_TIMEZONE = 'Asia/Manila';
-
     protected $signature = 'signal-outcomes:backfill';
 
     protected $description = '既存スナップショットの利確・買い増しシグナルと現在のウォッチリスト押し目買いシグナルをシグナル発生記録（signal_occurrences）へ移送する';
@@ -80,7 +80,7 @@ class BackfillSignalOccurrencesCommand extends Command
     private function observedWeek(CarbonInterface $timestamp): string
     {
         return $timestamp->copy()
-            ->setTimezone(self::OBSERVED_WEEK_TIMEZONE)
+            ->setTimezone(DisplayTime::timezone())
             ->startOfWeek(CarbonInterface::MONDAY)
             ->toDateString();
     }

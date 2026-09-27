@@ -4,6 +4,7 @@ namespace App\Actions\Holding;
 
 use App\Models\Holding;
 use App\Models\HoldingSnapshot;
+use App\Support\DisplayTime;
 
 /**
  * UC-003 (銘柄詳細表示): assembles a single holding's detail view — price
@@ -43,7 +44,7 @@ class ShowHoldingDetailAction
         $priceHistory = $holdingSnapshots
             ->filter(fn (HoldingSnapshot $holdingSnapshot) => $holdingSnapshot->snapshot->snapshotted_at->greaterThanOrEqualTo($cutoff))
             ->map(fn (HoldingSnapshot $holdingSnapshot) => [
-                'date' => $holdingSnapshot->snapshot->snapshotted_at->toDateString(),
+                'date' => DisplayTime::date($holdingSnapshot->snapshot->snapshotted_at),
                 'close_price' => $holdingSnapshot->current_price,
                 'ma20' => $holdingSnapshot->ma20,
                 'ma75' => $holdingSnapshot->ma75,

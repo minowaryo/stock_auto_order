@@ -288,7 +288,8 @@ describe('UC-003: 銘柄詳細表示', function () {
             $priceHistory = $response->json('data.price_history');
             expect($priceHistory)->toHaveCount(3);
 
-            $latest = collect($priceHistory)->firstWhere('date', now()->toDateString());
+            // CHG-0024 / ADR-0018: price_history.date は表示タイムゾーン（既定 Asia/Manila）の日付。
+            $latest = collect($priceHistory)->firstWhere('date', now()->setTimezone('Asia/Manila')->toDateString());
             expect($latest)->not->toBeNull();
             expect((float) $latest['close_price'])->toEqualWithDelta(2500.0, 0.01);
             expect((float) $latest['ma20'])->toEqualWithDelta(2400.0, 0.01);

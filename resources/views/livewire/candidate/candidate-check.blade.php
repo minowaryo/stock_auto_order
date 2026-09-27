@@ -17,7 +17,7 @@
                 @if ($activeRun && in_array($activeRun->status, ['queued', 'processing']))
                     <span class="text-primary font-medium">更新中 {{ $activeRun->processed_count }}/{{ $activeRun->total_count }}</span>
                 @elseif ($activeRun && $activeRun->finished_at)
-                    最終更新: {{ $activeRun->finished_at->format('Y-m-d H:i') }}
+                    最終更新: {{ \App\Support\DisplayTime::dateTime($activeRun->finished_at) }}
                     @if ($activeRun->failed_count > 0)（{{ $activeRun->failed_count }}件は取得失敗）@endif
                 @endif
                 <div>ウォッチリスト {{ $watchlistCount }}件 / 未保有 {{ count($rows) }}件</div>
@@ -140,7 +140,7 @@
                                             @if (! empty($expandedDetail['watch_memo_history']))
                                                 <ul class="mb-2 space-y-1 text-[12px] text-text-secondary">
                                                     @foreach ($expandedDetail['watch_memo_history'] as $w)
-                                                        <li>{{ $w['recorded_at'] }} [{{ $w['watch_status'] }}] {{ $w['memo'] }}</li>
+                                                        <li>{{ \App\Support\DisplayTime::dateTime(\Illuminate\Support\Carbon::make($w['recorded_at'])) }} [{{ $w['watch_status'] }}] {{ $w['memo'] }}</li>
                                                     @endforeach
                                                 </ul>
                                             @endif

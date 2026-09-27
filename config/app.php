@@ -67,6 +67,9 @@ return [
 
     'timezone' => 'UTC',
 
+    // Timezone used for displaying timestamps and date judgments (ADR-0018).
+    'display_timezone' => env('APP_DISPLAY_TIMEZONE', 'Asia/Manila'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration

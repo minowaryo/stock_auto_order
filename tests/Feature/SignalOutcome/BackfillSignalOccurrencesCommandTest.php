@@ -145,6 +145,23 @@ test('発生週はスナップショット作成日時をマニラ時間に換�
     '日本時間では月曜00:30だがマニラ時間ではまだ日曜23:30の取込は当週月曜（マニラ時間で判定する）' => ['2026-09-20 15:30:00', '2026-09-14'],
 ]);
 
+// CHG-0024 / ADR-0018 D4: the date-judgment timezone is config('app.display_timezone'),
+// not a hard-coded Asia/Manila. Expected Red: observed_week stays 2026-09-14 (Manila).
+test('発生週の判定は設定値app.display_timezoneのタイムゾーンで行う（Asia/Tokyoに変えると日本時間の週になる）', function () {
+    // Arrange: Sun 23:30 Manila = Mon 00:30 JST
+    config(['app.display_timezone' => 'Asia/Tokyo']);
+    $holding = bsoHolding('7203');
+    $snapshot = bsoSnapshot('2026-09-20 15:30:00');
+    bsoSignal(bsoHoldingSnapshot($snapshot, $holding), 'macd_dead_cross');
+
+    // Act
+    $this->artisan('signal-outcomes:backfill')->assertSuccessful();
+
+    // Assert
+    $occurrence = SignalOccurrence::where('holding_id', $holding->id)->sole();
+    expect($occurrence->observed_week->toDateString())->toBe('2026-09-21');
+});
+
 test('現在のウォッチリスト押し目買いシグナルはwatchlist_buyとして、スナップショットなし・判定日時の週で移送される', function () {
     // Arrange
     $holding = bsoHolding('8888');
