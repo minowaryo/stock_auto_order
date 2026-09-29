@@ -138,3 +138,16 @@
 - 現象: Livewireのフィルタ（`wire:model.live`）や`wire:poll`での再描画時にJSを再実行させたく`livewire:updated`というDOM CustomEventをリッスンする実装をしたが、実ブラウザで一切発火しなかった（`php artisan test`では検出不可。実ブラウザのconsole.logで初めて気づいた）
 - 原因: `vendor/livewire/livewire/dist/livewire.js`が実際にdispatchするDOM CustomEventは`livewire:init`/`livewire:initializing`/`livewire:initialized`/`livewire:navigate`/`livewire:navigating`/`livewire:navigated`のみで、`livewire:updated`（Livewire v2時代のイベント）はLivewire v3以降廃止されている。再描画ごとのフックはDOM CustomEventではなく`Livewire.hook(name, callback)`というJS APIで提供され、DOM差分適用（morphdom）完了後に発火する`morphed`（`Livewire.hook('morphed', ({ el, component }) => {...})`）が該当する
 - 対処: 再描画ごとの処理は`document.addEventListener('livewire:updated', ...)`ではなく`window.Livewire.hook('morphed', callback)`を使う（`resources/js/app.js`の横スクロール同期、CHG-0016）。使えるフック名は`vendor/livewire/livewire/dist/livewire.js`を`trigger2(`または`trigger(`でgrepすると確認できる（`morph`/`morph.updated`/`morphed`/`commit`等）。`@vite`でビルドされたJSを配信する構成のため、この種の実装ミスもTailwind同様「実際に動くかは実ブラウザで確認するまで分からない」（上記Viteの項目も参照）
+
+### Yahoo Finance chart API（`interval=1wk`） — 週足の末尾に「直近取引日の足」が付き、最終週が二重になる
+
+- 現象: `range=2y&interval=1wk`で取得した週足の最後に、週足と同じ週に属する直近取引日（例: 金曜）の行が付くことがある。終値は前行の週足と同じで、出来高は0のこともあれば非ゼロ（その日の出来高）のこともある（2026-09-27実測: 7203.T・AAPLは非ゼロ、^N225は0）。出来高0の行しか除いていなかったため、RSI・13週リターン・MA・相対力の計算で最終週が二重に数えられていた（7203のRSIで65.13→65.92程度のずれ）
+- 日付の刻印も市場で異なる: `gmdate`で見るとJP株・^N225の週足は日曜15:00 UTC（=月曜0時JST）、US株・^GSPCは月曜04:00 UTC
+- 対処（CHG-0022）: `YahooFinanceChartClient`で、末尾行が直前行と同じ週（`WeekDateNormalizer::weekStart()`＝「日付+1日を含むISO週の月曜」）なら末尾行を捨て、週足を正とする。週次価格履歴の保存（`WeeklyPriceRecorder`、CHG-0020）も同じ規則で週を揃えている
+
+### 共有Sailコンテナ・testing DB — 複数Claude Codeセッションが同一チェックアウトを共有し、並行テスト実行がtesting DBを一時的に壊す
+
+- 現象: `php artisan test`が突然100件超失敗し、エラーは「Base table or view not found」（`market_indicator_snapshots`・`watchlist_items`等の既存テーブルが無いと言われる）。`migrate:status`ではすべて`Ran`と表示され、直前まで同じテストは全件Greenだった
+- 原因: 複数のClaude Codeセッションが**worktreeではなく同一の`/root/workspace/stock_auto_order`チェックアウト**を見ていた（`git worktree list`は`/tmp/stock_auto_order-*`等の別worktreeを表示するが、`.env`はgitignore対象で新規worktreeにはコピーされないため、`COMPOSE_PROJECT_NAME`が一致する限り`./vendor/bin/sail exec`はどのworktreeから実行しても同じ1つのコンテナ（`docker inspect`のMountsで確認できる、ホスト側バインド先固定）に繋がる）。この状態で別セッションが`php artisan test`（`RefreshDatabase`）を並行実行すると、片方のプロセスが`testing`データベースのテーブルをドロップ・再作成している最中に、もう片方のプロセスがそのテーブルへクエリを投げて失敗する
+- 見分け方: 失敗が特定のロジック（例: 今回変更したファイル）に限定されず、無関係な既存テーブル・既存機能で広く発生している場合はこれを疑う。`docker exec <laravel.testコンテナ名> ps aux | grep -i "artisan test\|pest"`で他プロセスの実行有無を確認する。`ListAgents`で他セッションの稼働状況も確認する
+- 対処: 失敗直後にコードを疑って修正しない。他プロセスの終了を待ってから同じテストを再実行し、失敗が消えれば「並行実行によるDB破損」と確定する（本件は再実行で130 failed→0 failedに復帰し、コード側に問題はなかった）。恒常対策として、DB状態を変える操作（`php artisan test`・`migrate`系・シード等）の前に他セッションへ一声かける運用に合意した（2026-09-30）。テストDBの完全分離（セッションごとに別のDB名・別コンテナ）が根本対策だが未実施

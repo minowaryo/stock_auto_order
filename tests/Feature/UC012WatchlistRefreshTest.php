@@ -18,11 +18,13 @@ use App\Models\WatchlistItem;
 use App\Models\WatchlistRefreshRun;
 use App\Services\MarketData\FinnhubClientInterface;
 use App\Services\MarketData\JpStockPriceClientInterface;
+use App\Services\MarketData\JQuantsClient;
 use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\MarketData\MarketIndexClientInterface;
 use App\Services\MarketData\UsStockPriceClientInterface;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Http;
 use Tests\Support\Fakes\FakeFinnhubClient;
 use Tests\Support\Fakes\FakeJpStockPriceClient;
 use Tests\Support\Fakes\FakeJQuantsClient;
@@ -552,4 +554,56 @@ test('未保有のウォッチリスト銘柄（JP）でも直近3期平均成�
     expect(round($indicator->avg_revenue_growth, 1))->toBe(10.0);
     expect($indicator->avg_operating_income_growth)->not->toBeNull();
     expect(round($indicator->avg_operating_income_growth, 1))->toBe(10.0);
+});
+
+// -----------------------------------------------------------------------
+// 再発防止（Red phase）: JQuantsClient::fetchStatements()の->throw()が
+// RefreshWatchlistMarketDataAction::refreshHolding()内でどこにも捕まらない
+// バグの回帰テスト。
+//
+// 背景（コードレビューで確認済み、未修正）: refreshHolding()は
+// fetchStatements()呼び出し（jp市場のみ）をDB::transaction()の外側・
+// try/catchなしで呼んでいる。/fins/summaryが429を返すと例外がそのまま
+// execute()内の per-symbol catch(Throwable) まで伝播し、failed_count++
+// され、technical_indicators/fundamental_indicatorsの更新自体がスキップ
+// される（UC-002「保有中でない銘柄」に対する502WatchlistBuySignal判定
+// までまとめて失敗する）。FetchExternalMarketDataAction同様、
+// 「fetchStatements失敗時はstatements=[]相当で劣化継続する」動作に
+// 揃えるのが期待値。
+//
+// Expected Red cause: 現状はrefreshHolding()内で例外が捕まらず、
+// technical_indicatorsが更新されずfailed_countが1に増える（assertion
+// failureで検出、構文エラーではない）。
+// -----------------------------------------------------------------------
+
+test('未保有JP銘柄の/fins/summaryが429でも、technical_indicatorsは更新されfailed_countに数えられない', function () {
+    $h = uc012WatchlistHolding('9429', 'jp', '429テスト');
+
+    app()->instance(JpStockPriceClientInterface::class, new FakeJpStockPriceClient(['9429' => uc012Price(uc012RisingCloses())]));
+    app()->instance(UsStockPriceClientInterface::class, new FakeUsStockPriceClient);
+    // Fake差し替えではなく、本物のJQuantsClientを使ってHttp::fake経由で
+    // ->throw()由来のRequestExceptionを実際に発生させる（FetchExternalMarketDataActionTestの
+    // 「セクターマスターが429でも…」テストと同じ手法）。
+    app()->instance(JQuantsClientInterface::class, new JQuantsClient);
+    app()->instance(FinnhubClientInterface::class, new FakeFinnhubClient);
+
+    Http::preventStrayRequests();
+    Http::fake([
+        'api.jquants.com/v2/fins/summary*' => Http::response(['message' => 'Too Many Requests'], 429),
+    ]);
+
+    $run = app(RefreshWatchlistMarketDataAction::class)->execute();
+
+    // 429を劣化継続すれば、technical_indicatorsは更新されるはず
+    // （現状はrefreshHolding()全体が例外で中断し、この行は作られない）。
+    expect(TechnicalIndicator::where('holding_id', $h->id)->exists())->toBeTrue();
+
+    // 429で銘柄処理全体が失敗扱いになってはいけない
+    // （現状はfailed_count=1になり、processed_countのみ増える）。
+    expect($run->failed_count)->toBe(0);
+    expect($run->processed_count)->toBe(1);
+
+    $item = WatchlistItem::where('holding_id', $h->id)->first();
+    expect($item->last_close)->not->toBeNull();
+    expect($item->last_refreshed_at)->not->toBeNull();
 });

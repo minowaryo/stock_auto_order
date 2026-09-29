@@ -4,6 +4,7 @@ namespace App\Livewire\ImportSummaryReport;
 
 use App\Actions\ImportSummaryReport\ShowImportSummaryReportAction;
 use App\Models\ImportBatch;
+use App\Support\DisplayTime;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -36,7 +37,7 @@ class Show extends Component
     {
         $this->report = $showImportSummaryReportAction->execute($importBatch);
         $classifiedAt = $this->report['classification']['classified_at'] ?? null;
-        $this->importedAtLabel = $classifiedAt?->format('Y-m-d H:i');
+        $this->importedAtLabel = DisplayTime::dateTime($classifiedAt);
     }
 
     public function render()

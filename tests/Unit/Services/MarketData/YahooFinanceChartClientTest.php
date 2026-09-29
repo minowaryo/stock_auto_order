@@ -344,3 +344,401 @@ test('volumeが0でもcloseが前週と異なる場合は除外しない', funct
         ['date' => '2024-01-15', 'close' => 102.25, 'volume' => 0],
     ]);
 });
+
+/*
+|--------------------------------------------------------------------------
+| ADR-0017 D5 — 分割調整の前提を固定する回帰テスト（CHG-0020 Cycle1）
+|--------------------------------------------------------------------------
+|
+| Source of truth: docs/adr/ADR-0017-signal-outcome-tracking.md D5,
+| docs/architecture/data-model.md `weekly_prices.close`.
+|
+| Premise pinned here (measured 2026-09-27 against NTT 9432.T, which did a
+| 25:1 split around 2023-06-25):
+|   - indicators.quote[0].close is ALREADY split-adjusted retroactively
+|     (pre-split weekly closes come back at ~161 JPY, continuous with the
+|     post-split series) but NOT dividend-adjusted.
+|   - indicators.adjclose[0].adjclose is dividend-adjusted and differs from
+|     close by ~9% for NTT — it must NOT be used (index series are price
+|     indices without dividends, so excess returns must compare price vs
+|     price).
+| weekly_prices stores this series for UC-014 excess-return calculation, so
+| if a future change switched to adjclose (or Yahoo stopped retro-adjusting
+| splits) this test must fail.
+|
+| This test pins an EXISTING assumption of YahooFinanceChartClient and is
+| expected to already pass (not a Red test in the usual sense).
+|
+*/
+
+test('分割前後の週足はquote.close（分割遡及調整済み・配当未調整）の連続した系列で返り、adjcloseは使われない（NTT 9432相当）', function () {
+    // Arrange: JP-style bars stamped Sunday 15:00 UTC around the 2023-06-25 25:1 split
+    Http::fake([
+        'query1.finance.yahoo.com/*' => Http::response([
+            'chart' => [
+                'result' => [
+                    [
+                        'meta' => ['symbol' => '9432.T', 'currency' => 'JPY'],
+                        'timestamp' => [1686495600, 1687100400, 1687705200, 1688310000],
+                        'events' => [
+                            'splits' => [
+                                '1687705200' => [
+                                    'date' => 1687705200,
+                                    'numerator' => 25.0,
+                                    'denominator' => 1.0,
+                                    'splitRatio' => '25:1',
+                                ],
+                            ],
+                        ],
+                        'indicators' => [
+                            'quote' => [
+                                [
+                                    'close' => [160.9, 161.8, 163.2, 164.0],
+                                    'volume' => [120000000, 130000000, 250000000, 180000000],
+                                ],
+                            ],
+                            'adjclose' => [
+                                [
+                                    'adjclose' => [147.1, 147.9, 149.2, 150.0],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                'error' => null,
+            ],
+        ], 200),
+    ]);
+
+    $client = new YahooFinanceChartClient;
+
+    // Act
+    $result = $client->fetchWeeklyHistory('9432.T', 104);
+
+    // Assert: quote.close as-is — continuous across the split (no ~25x jump)
+    expect($result)->toBe([
+        ['date' => '2023-06-11', 'close' => 160.9, 'volume' => 120000000],
+        ['date' => '2023-06-18', 'close' => 161.8, 'volume' => 130000000],
+        ['date' => '2023-06-25', 'close' => 163.2, 'volume' => 250000000],
+        ['date' => '2023-07-02', 'close' => 164.0, 'volume' => 180000000],
+    ]);
+
+    $closes = array_column($result, 'close');
+    for ($i = 1; $i < count($closes); $i++) {
+        expect(abs($closes[$i] / $closes[$i - 1] - 1))->toBeLessThan(0.5);
+    }
+});
+
+/*
+|--------------------------------------------------------------------------
+| CHG-0022 — 同一週に属する末尾バー（最終取引日バー）の除外（回帰テスト）
+|--------------------------------------------------------------------------
+|
+| Measured 2026-09-27 against the real Yahoo Finance chart API
+| (range=...&interval=1wk): besides the volume=0 in-progress placeholder
+| handled above, Yahoo also appends a trailing bar for the LAST TRADING DAY
+| with NONZERO volume, stamped with a date inside the same week as the
+| previous (proper weekly) bar:
+|   - 7203.T: Sun 2026-09-20 15:00 UTC (close 2989.5, vol 54901300)
+|             then Fri 2026-09-25 06:30 UTC (close 2989.5, vol 21084000)
+|   - AAPL:   Mon 2026-09-21 04:00 UTC (close 341.07, vol 162053000)
+|             then Fri 2026-09-25 20:00 UTC (close 341.07, vol 29649787)
+|   - ^N225:  trailing Fri 2026-09-25 06:45 UTC with volume 0 (already
+|             handled by the existing placeholder rule)
+| Keeping that trailing bar makes callers (TechnicalIndicatorCalculator:
+| RSI, 13-week returns, MA, ...) count the last week twice.
+|
+| Expected contract (CHG-0022):
+|   - "Week" of a row = Monday of the ISO week containing
+|     (gmdate('Y-m-d', timestamp) + 1 day). This maps JP/^N225 weekly bars
+|     (stamped Sunday 15:00 UTC) and US weekly bars (Monday 04:00 UTC) to
+|     the same Monday week start as their trailing Friday bars.
+|   - If the last row falls in the same week as the previous row, the last
+|     row is dropped and the earlier (proper weekly) bar is kept.
+|   - A last row that starts a genuinely new week is kept.
+|   - The existing volume=0 placeholder rule keeps working.
+|   - The $weeks slicing applies after the drop.
+|
+| Tests 1/2/3/6 below are expected to fail (Red) against the current
+| implementation, which only drops a trailing row when volume === 0 AND
+| close equals the previous close. Tests 4/5 are guards that already pass.
+|
+*/
+
+test('日本株形式（日曜15:00UTC刻印）の週足末尾に同一週の出来高ありの最終取引日バーが付く場合、その末尾バーは除外され週足バーが最後に残る', function () {
+    // Arrange: 7203.T-like series; last element is the trailing Friday bar
+    Http::fake([
+        'query1.finance.yahoo.com/*' => Http::response([
+            'chart' => [
+                'result' => [
+                    [
+                        // Sun 09-06 15:00, Sun 09-13 15:00, Sun 09-20 15:00, Fri 09-25 06:30 (UTC)
+                        'timestamp' => [1788706800, 1789311600, 1789916400, 1790317800],
+                        'indicators' => [
+                            'quote' => [
+                                [
+                                    'close' => [2900.0, 2950.0, 2989.5, 2989.5],
+                                    'volume' => [50000000, 52000000, 54901300, 21084000],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                'error' => null,
+            ],
+        ], 200),
+    ]);
+
+    $client = new YahooFinanceChartClient;
+
+    // Act
+    $result = $client->fetchWeeklyHistory('7203.T', 104);
+
+    // Assert: the trailing Friday bar is dropped; the Sunday-stamped weekly bar (original volume) is last
+    expect($result)->toBe([
+        ['date' => '2026-09-06', 'close' => 2900.0, 'volume' => 50000000],
+        ['date' => '2026-09-13', 'close' => 2950.0, 'volume' => 52000000],
+        ['date' => '2026-09-20', 'close' => 2989.5, 'volume' => 54901300],
+    ]);
+});
+
+test('米国株形式（月曜04:00UTC刻印）の週足末尾に同一週の出来高ありの金曜20:00UTCバーが付く場合、その末尾バーは除外される', function () {
+    // Arrange: AAPL-like series
+    Http::fake([
+        'query1.finance.yahoo.com/*' => Http::response([
+            'chart' => [
+                'result' => [
+                    [
+                        // Mon 09-07 04:00, Mon 09-14 04:00, Mon 09-21 04:00, Fri 09-25 20:00 (UTC)
+                        'timestamp' => [1788753600, 1789358400, 1789963200, 1790366400],
+                        'indicators' => [
+                            'quote' => [
+                                [
+                                    'close' => [330.0, 335.5, 341.07, 341.07],
+                                    'volume' => [150000000, 155000000, 162053000, 29649787],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                'error' => null,
+            ],
+        ], 200),
+    ]);
+
+    $client = new YahooFinanceChartClient;
+
+    // Act
+    $result = $client->fetchWeeklyHistory('AAPL', 104);
+
+    // Assert
+    expect($result)->toBe([
+        ['date' => '2026-09-07', 'close' => 330.0, 'volume' => 150000000],
+        ['date' => '2026-09-14', 'close' => 335.5, 'volume' => 155000000],
+        ['date' => '2026-09-21', 'close' => 341.07, 'volume' => 162053000],
+    ]);
+});
+
+test('同一週の末尾バーの終値が週足バーと異なる場合（週途中の日中バー）でも末尾バーは除外され週足バーが残る', function () {
+    // Arrange: trailing Wednesday bar inside the same week as the Sunday-stamped
+    // weekly bar, with a DIFFERENT close (e.g. fetched mid-week).
+    // The weekly bar is the canonical row for its week; any later row in the
+    // same week is a duplicate representation of that week and must not be
+    // counted as an additional week, regardless of its close/volume.
+    Http::fake([
+        'query1.finance.yahoo.com/*' => Http::response([
+            'chart' => [
+                'result' => [
+                    [
+                        // Sun 09-13 15:00, Sun 09-20 15:00, Wed 09-23 06:00 (UTC)
+                        'timestamp' => [1789311600, 1789916400, 1790143200],
+                        'indicators' => [
+                            'quote' => [
+                                [
+                                    'close' => [2950.0, 2989.5, 2975.0],
+                                    'volume' => [52000000, 54901300, 12000000],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                'error' => null,
+            ],
+        ], 200),
+    ]);
+
+    $client = new YahooFinanceChartClient;
+
+    // Act
+    $result = $client->fetchWeeklyHistory('7203.T', 104);
+
+    // Assert
+    expect($result)->toBe([
+        ['date' => '2026-09-13', 'close' => 2950.0, 'volume' => 52000000],
+        ['date' => '2026-09-20', 'close' => 2989.5, 'volume' => 54901300],
+    ]);
+});
+
+test('末尾が前行の7日後に始まる新しい週（出来高あり）の場合は除外されない', function () {
+    // Arrange: JP-style; last row is the next Sunday 15:00 UTC stamp (a genuinely new week)
+    Http::fake([
+        'query1.finance.yahoo.com/*' => Http::response([
+            'chart' => [
+                'result' => [
+                    [
+                        // Sun 09-13 15:00, Sun 09-20 15:00, Sun 09-27 15:00 (UTC)
+                        'timestamp' => [1789311600, 1789916400, 1790521200],
+                        'indicators' => [
+                            'quote' => [
+                                [
+                                    'close' => [2950.0, 2989.5, 2989.5],
+                                    'volume' => [52000000, 54901300, 48000000],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                'error' => null,
+            ],
+        ], 200),
+    ]);
+
+    $client = new YahooFinanceChartClient;
+
+    // Act
+    $result = $client->fetchWeeklyHistory('7203.T', 104);
+
+    // Assert: all three rows kept (same close as the previous week is legitimate here)
+    expect($result)->toBe([
+        ['date' => '2026-09-13', 'close' => 2950.0, 'volume' => 52000000],
+        ['date' => '2026-09-20', 'close' => 2989.5, 'volume' => 54901300],
+        ['date' => '2026-09-27', 'close' => 2989.5, 'volume' => 48000000],
+    ]);
+});
+
+test('指数（^N225相当）の同一週末尾バーが出来高0の場合も従来通り除外される', function () {
+    // Arrange: ^N225-like; trailing Fri 09-25 06:30 UTC bar with volume 0 and same close
+    Http::fake([
+        'query1.finance.yahoo.com/*' => Http::response([
+            'chart' => [
+                'result' => [
+                    [
+                        'timestamp' => [1789311600, 1789916400, 1790317800],
+                        'indicators' => [
+                            'quote' => [
+                                [
+                                    'close' => [44000.0, 45000.5, 45000.5],
+                                    'volume' => [0, 0, 0],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                'error' => null,
+            ],
+        ], 200),
+    ]);
+
+    $client = new YahooFinanceChartClient;
+
+    // Act
+    $result = $client->fetchWeeklyHistory('^N225', 104);
+
+    // Assert
+    expect($result)->toBe([
+        ['date' => '2026-09-13', 'close' => 44000.0, 'volume' => 0],
+        ['date' => '2026-09-20', 'close' => 45000.5, 'volume' => 0],
+    ]);
+});
+
+test('週数指定がある場合、同一週の末尾バー除外後に直近N週へ絞られ週足バーで終わる', function () {
+    // Arrange: 4 proper JP weekly bars + trailing Friday bar in the last week
+    Http::fake([
+        'query1.finance.yahoo.com/*' => Http::response([
+            'chart' => [
+                'result' => [
+                    [
+                        // Sun 08-30, 09-06, 09-13, 09-20 15:00 UTC, then Fri 09-25 06:30 UTC
+                        'timestamp' => [1788102000, 1788706800, 1789311600, 1789916400, 1790317800],
+                        'indicators' => [
+                            'quote' => [
+                                [
+                                    'close' => [2880.0, 2900.0, 2950.0, 2989.5, 2989.5],
+                                    'volume' => [49000000, 50000000, 52000000, 54901300, 21084000],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                'error' => null,
+            ],
+        ], 200),
+    ]);
+
+    $client = new YahooFinanceChartClient;
+
+    // Act
+    $result = $client->fetchWeeklyHistory('7203.T', 3);
+
+    // Assert: min(3, 4 distinct weeks) = 3 rows, ending with the Sunday-stamped weekly bar
+    expect($result)->toBe([
+        ['date' => '2026-09-06', 'close' => 2900.0, 'volume' => 50000000],
+        ['date' => '2026-09-13', 'close' => 2950.0, 'volume' => 52000000],
+        ['date' => '2026-09-20', 'close' => 2989.5, 'volume' => 54901300],
+    ]);
+});
+
+/*
+|--------------------------------------------------------------------------
+| CHG-0020 /review fix — fold ALL rows by week, not only the last pair
+|--------------------------------------------------------------------------
+|
+| When Yahoo already publishes the next week's bar, the previous week's
+| trailing last-trading-day bar is no longer the LAST row but sits in the
+| middle of the series. The client must apply the same "first row per
+| Monday-start week wins" rule as WeeklyPriceRecorder
+| (WeekDateNormalizer::foldByWeek(), ADR-0017 D2) to every row.
+|
+| Expected Red against the current implementation, which only compares the
+| last two rows (09-25 vs 09-27 are different weeks, so 09-25 survives).
+|
+*/
+
+test('同一週の最終取引日バーの後に新しい週の週足バーが続く場合（系列途中の重複）も、その最終取引日バーは除外され新しい週のバーで終わる', function () {
+    // Arrange: JP-style; Sun 09-20 15:00 weekly, Fri 09-25 06:30 trailing (nonzero volume),
+    // Sun 09-27 15:00 new-week bar (nonzero volume)
+    Http::fake([
+        'query1.finance.yahoo.com/*' => Http::response([
+            'chart' => [
+                'result' => [
+                    [
+                        // Sun 09-13 15:00, Sun 09-20 15:00, Fri 09-25 06:30, Sun 09-27 15:00 (UTC)
+                        'timestamp' => [1789311600, 1789916400, 1790317800, 1790521200],
+                        'indicators' => [
+                            'quote' => [
+                                [
+                                    'close' => [2950.0, 2989.5, 2989.5, 3010.0],
+                                    'volume' => [52000000, 54901300, 21084000, 48000000],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                'error' => null,
+            ],
+        ], 200),
+    ]);
+
+    $client = new YahooFinanceChartClient;
+
+    // Act
+    $result = $client->fetchWeeklyHistory('7203.T', 104);
+
+    // Assert: no 09-25 row; series ends with the new week's bar
+    expect(array_column($result, 'date'))->not->toContain('2026-09-25');
+    expect($result)->toBe([
+        ['date' => '2026-09-13', 'close' => 2950.0, 'volume' => 52000000],
+        ['date' => '2026-09-20', 'close' => 2989.5, 'volume' => 54901300],
+        ['date' => '2026-09-27', 'close' => 3010.0, 'volume' => 48000000],
+    ]);
+});

@@ -19,6 +19,11 @@ use App\Services\MarketData\JpStockPriceClientInterface;
 use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\MarketData\MarketIndexClientInterface;
 use App\Services\MarketData\UsStockPriceClientInterface;
+use App\Services\SignalOutcome\SignalOccurrenceMetricsBuilder;
+use App\Services\SignalOutcome\SignalOccurrenceRecorder;
+use App\Services\SignalOutcome\WeeklyPriceRecorder;
+use Illuminate\Http\Client\HttpClientException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -60,6 +65,9 @@ class RefreshWatchlistMarketDataAction
         private readonly FundamentalIndicatorMapper $fundamentalIndicatorMapper,
         private readonly UsFundamentalIndicatorMapper $usFundamentalIndicatorMapper,
         private readonly BuySignalDeterminationService $buySignalDeterminationService,
+        private readonly WeeklyPriceRecorder $weeklyPriceRecorder,
+        private readonly SignalOccurrenceRecorder $signalOccurrenceRecorder,
+        private readonly SignalOccurrenceMetricsBuilder $signalOccurrenceMetricsBuilder,
     ) {}
 
     /**
@@ -78,8 +86,16 @@ class RefreshWatchlistMarketDataAction
             $targets = $this->unheldWatchlistItems();
             $run->update(['total_count' => $targets->count()]);
 
-            $nikkeiReturn13w = $this->calculate13wReturn($this->safeFetchIndex('nikkei225'));
-            $sp500Return13w = $this->calculate13wReturn($this->safeFetchIndex('sp500'));
+            $nikkeiHistory = $this->safeFetchIndex('nikkei225');
+            $sp500History = $this->safeFetchIndex('sp500');
+
+            // UC-014 (ADR-0017 D2): keep the fetched index series. The
+            // recorder never throws (empty history on fetch failure is a no-op).
+            $this->weeklyPriceRecorder->recordIndex('nikkei225', $nikkeiHistory);
+            $this->weeklyPriceRecorder->recordIndex('sp500', $sp500History);
+
+            $nikkeiReturn13w = $this->calculate13wReturn($nikkeiHistory);
+            $sp500Return13w = $this->calculate13wReturn($sp500History);
 
             foreach ($targets as $item) {
                 try {
@@ -151,6 +167,9 @@ class RefreshWatchlistMarketDataAction
             ? $this->jpStockPriceClient->fetchWeeklyPriceHistory($holding->symbol_code)
             : $this->usStockPriceClient->fetchWeeklyPriceHistory($holding->symbol_code);
 
+        // UC-014 (ADR-0017 D2): outside the transaction below; never throws.
+        $this->weeklyPriceRecorder->recordHolding($holding, $priceHistory);
+
         $technical = $this->technicalIndicatorCalculator->calculate($priceHistory, $marketReturn13w, null);
 
         $currentPrice = $priceHistory !== []
@@ -158,7 +177,21 @@ class RefreshWatchlistMarketDataAction
             : null;
 
         if ($holding->market === 'jp') {
-            $statements = $this->jQuantsClient->fetchStatements($holding->symbol_code);
+            try {
+                $statements = $this->jQuantsClient->fetchStatements($holding->symbol_code);
+            } catch (HttpClientException $exception) {
+                Log::warning('RefreshWatchlistMarketDataAction: J-Quants statements fetch failed', [
+                    'holding_id' => $holding->id,
+                    'symbol_code' => $holding->symbol_code,
+                    'exception' => $exception->getMessage(),
+                    ...($exception instanceof RequestException
+                        ? ['http_status' => $exception->response->status()]
+                        : []),
+                ]);
+
+                $statements = [];
+            }
+
             $fundamental = $this->fundamentalIndicatorMapper->map($statements, $currentPrice);
 
             // ADR-0015 D2（2回目の/review・Cycle4d）: 保有銘柄パイプライン
@@ -215,6 +248,21 @@ class RefreshWatchlistMarketDataAction
                 ]);
             }
         });
+
+        // UC-014 (ADR-0017 D3): append the committed watchlist_buy signals
+        // outside the transaction; the recorder never throws.
+        $observedWeek = $this->signalOccurrenceMetricsBuilder->observedWeek($priceHistory);
+
+        if ($observedWeek !== null) {
+            $this->signalOccurrenceRecorder->record(
+                $holding,
+                'watchlist_buy',
+                array_column($buySignals, 'signal_type'),
+                $observedWeek,
+                null,
+                $this->signalOccurrenceMetricsBuilder->build($priceHistory, $technical, $fundamental),
+            );
+        }
 
         return $currentPrice;
     }

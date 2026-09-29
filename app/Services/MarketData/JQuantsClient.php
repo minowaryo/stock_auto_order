@@ -2,6 +2,7 @@
 
 namespace App\Services\MarketData;
 
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -14,26 +15,43 @@ final class JQuantsClient implements JQuantsClientInterface
 {
     private const BASE_URL = 'https://api.jquants.com/v2';
 
+    /** @var array<string, array{code: string, name: string}>|null */
+    private ?array $sectorInfoBySymbolCode = null;
+
+    private ?RequestException $sectorMasterException = null;
+
     public function fetchSectorInfo(string $symbolCode): ?array
     {
-        $response = Http::withHeaders([
-            'x-api-key' => config('services.jquants.api_key'),
-        ])->get(self::BASE_URL.'/equities/master', [
-            'code' => $symbolCode,
-        ]);
-
-        $data = $response->json('data') ?? [];
-
-        if (empty($data)) {
-            return null;
+        if ($this->sectorMasterException !== null) {
+            throw $this->sectorMasterException;
         }
 
-        $row = $data[0];
+        if ($this->sectorInfoBySymbolCode === null) {
+            try {
+                $response = Http::withHeaders([
+                    'x-api-key' => config('services.jquants.api_key'),
+                ])->get(self::BASE_URL.'/equities/master')->throw();
+            } catch (RequestException $exception) {
+                $this->sectorMasterException = $exception;
 
-        return [
-            'code' => $row['S17'],
-            'name' => $row['S17Nm'],
-        ];
+                throw $exception;
+            }
+
+            $this->sectorInfoBySymbolCode = [];
+
+            foreach ($response->json('data') ?? [] as $row) {
+                $this->sectorInfoBySymbolCode[$row['Code']] = [
+                    'code' => $row['S17'],
+                    'name' => $row['S17Nm'],
+                ];
+            }
+        }
+
+        $jQuantsCode = strlen($symbolCode) === 4
+            ? $symbolCode.'0'
+            : $symbolCode;
+
+        return $this->sectorInfoBySymbolCode[$jQuantsCode] ?? null;
     }
 
     public function fetchStatements(string $symbolCode, int $periods = 16): array
@@ -42,7 +60,7 @@ final class JQuantsClient implements JQuantsClientInterface
             'x-api-key' => config('services.jquants.api_key'),
         ])->get(self::BASE_URL.'/fins/summary', [
             'code' => $symbolCode,
-        ]);
+        ])->throw();
 
         $data = $response->json('data') ?? [];
 

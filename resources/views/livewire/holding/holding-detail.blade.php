@@ -162,7 +162,7 @@
             <ul class="text-[13px] space-y-2">
                 @foreach ($detail['memo_history'] as $memo)
                     <li class="border-b border-app-border pb-2 last:border-b-0">
-                        <div class="text-text-secondary text-xs">{{ $memo['recorded_at'] }}</div>
+                        <div class="text-text-secondary text-xs">{{ \App\Support\DisplayTime::dateTime(\Illuminate\Support\Carbon::make($memo['recorded_at'])) }}</div>
                         <div>{{ $memo['body'] }}</div>
                     </li>
                 @endforeach

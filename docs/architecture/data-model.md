@@ -24,6 +24,10 @@
 [holding_snapshots] ──1:N── [buy_signals]
 [holding_snapshots] ──1:N── [holding_snapshot_accounts]
 
+[holdings] ──1:N── [weekly_prices]（週次価格履歴、ADR-0017）
+[holdings] ──1:N── [signal_occurrences] ──N:1(nullable)── [snapshots]（シグナル発生記録、ADR-0017）
+[index_weekly_prices]（指数の週次価格履歴、独立。ADR-0017）
+
 [import_batches] ──1:1── [import_summary_reports] ──1:N── [import_summary_report_items]
 
 [holdings] ──1:N── [holding_memos]
@@ -388,7 +392,7 @@
 **Index**: `holding_id` unique、`is_starred`
 **FK**: `holding_id` → `holdings(id)`
 
-> CSV再アップロードは追加のみ（前回あって今回無い銘柄も削除しない、UC-012業務ルール）。行の物理削除は「本人が画面から明示的にウォッチリストから外す」操作でのみ行う（UC-012 でこの操作を定義しているため `.claude/rules/30-testing.md` のCRUD網羅ルールの対象。`is_starred` の付け外しは UPDATE）。
+> CSV再アップロードは追加のみ（前回あって今回無い銘柄も削除しない、UC-012業務ルール）。棚卸し時も行の物理削除は行わず、本人が画面で `is_starred` を解除して監視終了として扱う（`is_starred` の付け外しは UPDATE）。楽天側でお気に入り解除済みの行も、過去メモとともに保持する。
 > `is_starred` を `watch_records`（UC-006、追記のみ）に寄せない理由: `watch_records` は履歴テーブルで「★を外す」が表現できない（外す＝『様子見』を追記では意味が変わる）。★は独立 boolean とする（ADR-0013 D7）。
 > 一覧に表示するのは「未保有」＝直近スナップショットの `holding_snapshots` に当該 `holding_id` が存在しない銘柄のみ。保有済みになった銘柄は行を残したまま一覧から自動的に外れる。
 
@@ -433,6 +437,69 @@
 **Index**: `(status, created_at)`
 
 > 二重実行の防止: `status IN ('queued','processing')` の行が存在する間は新規のキュー投入を受け付けない（UC-012 エラーケース「更新処理を実行中です」）。古い実行記録は保持し続けても個人利用規模では問題にならないため、当面は自動削除しない。
+
+---
+
+### weekly_prices（週次価格履歴・UC-014、ADR-0017）
+
+`FetchExternalMarketDataAction`（保有銘柄）／`RefreshWatchlistMarketDataAction`（未保有ウォッチリスト銘柄）が指標算出のために毎回取得している週足104週を、捨てずに保存する。シグナル発生後の超過リターン算出（UC-014）の元データ。
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| holding_id | bigint | NO | - | `holdings.id` への参照 |
+| week_date | date | NO | - | 週の月曜日付（`App\Services\MarketData\WeekDateNormalizer::weekStart()`で正規化。Yahooの生の日付ではない） |
+| close | decimal(15,4) | NO | - | 週足終値（**分割遡及調整済み・配当は未調整**。Yahoo `indicators.quote[0].close`。ADR-0017 D5） |
+| volume | bigint unsigned | NO | 0 | 週足出来高 |
+| created_at | timestamp | NO | now() | 作成日時 |
+| updated_at | timestamp | NO | now() | 更新日時（取得のたびに上書き） |
+
+**Index**: `(holding_id, week_date)` unique（先頭列が`holding_id`のためFKインデックスを兼ねる）
+**FK**: `holding_id` → `holdings(id)`
+
+> **上書き型の時系列**: 取得のたびに104週分を`(holding_id, week_date)`でUPSERTする。Yahoo側で分割の遡及調整が入った場合、直近104週の範囲は最新の調整値に揃う（104週より古い行は取得範囲外のため更新されない）。リターン計算は常にこの系列内の2点で行い、`holding_snapshots.current_price`（CSV由来の未調整株価）とは混ぜない。株価水準の判定（単元金額等）には未調整の`current_price`を使う（ADR-0017 D5）。
+> 保存の失敗は既存のシグナル判定・保存を止めない（UC-014エラーケース）。
+> **`week_date`の正規化（Gate4 Cycle1で実測・確定、2026-09-27）**: Yahooの週足日付（`gmdate`）はJP株・日経平均が日曜（=月曜0時JST）、US株・S&P500が月曜で、さらに末尾に直近取引日（例: 金曜）の足が出来高付き・前週足と同じ終値で付くことがある（`YahooFinanceChartClient`は出来高0の仮置き行しか除去しない）。そこで`WeekDateNormalizer::weekStart()`で「日付+1日を含むISO週の月曜」に揃え、同じ週に複数行あれば先に出現した週足を採用する。実データ（ウォッチリスト90銘柄・2指数）で`week_date`が全行月曜・重複なしを確認済み。**2026-09-27 CHG-0022・/review対応で、同じ週の畳み込みは`WeekDateNormalizer::foldByWeek()`に一本化**し、`YahooFinanceChartClient`（指標計算に渡す系列）と`WeeklyPriceRecorder`（保存）の両方がこれを使う。指標計算と保存で週の扱いが食い違うことはない。
+
+---
+
+### index_weekly_prices（指数の週次価格履歴・UC-014、ADR-0017）
+
+`MarketIndexClient`が相対力（対市場）算出のために毎回取得している指数の週足を保存する。`market_indicator_snapshots`（スナップショットごとの直近1点）とは用途が異なる（こちらは超過リターン算出用の系列）。
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| index_name | enum('nikkei225','sp500') | NO | - | 指数名（`MarketIndexClient`の対応表と同一。価格指数で配当を含まない）。**将来VIX・米10年債等を記録対象に加える場合は、先にこのenumを拡張するマイグレーションが必要**（`WeeklyPriceRecorder`は例外を握りつぶして警告ログのみ出すため、拡張漏れは保存されないまま気づきにくい） |
+| week_date | date | NO | - | 週足の日付 |
+| close | decimal(15,4) | NO | - | 週足終値 |
+| created_at | timestamp | NO | now() | 作成日時 |
+| updated_at | timestamp | NO | now() | 更新日時 |
+
+**Index**: `(index_name, week_date)` unique
+
+---
+
+### signal_occurrences（シグナル発生記録・UC-014、ADR-0017）
+
+週次の判定で実際に出たシグナルを、発生時点の判定根拠値とともに追記する。`signals`／`buy_signals`／`watchlist_buy_signals`の削除→再作成ロジックには触らず、各書き込みの直後に本テーブルへ追記する（ADR-0017 D3。既存画面の抽出クエリに影響させないため）。結果（超過リターン）は保存せず、読み取り時に`weekly_prices`／`index_weekly_prices`から算出する（D4）。
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| holding_id | bigint | NO | - | `holdings.id` への参照 |
+| source | enum('take_profit','buy','watchlist_buy') | NO | - | 発生元（`signals`／`buy_signals`／`watchlist_buy_signals`） |
+| signal_type | varchar(50) | NO | - | シグナル種別（発生元テーブルの`signal_type`の値をそのまま格納。値域が3テーブルで異なり今後も増えるため enum にしない） |
+| observed_week | date | NO | - | 判定に使った週足系列の最終確定週（`weekly_prices.week_date`と同じ基準）。超過リターンの起点 |
+| snapshot_id | bigint | YES | null | `snapshots.id` への参照。`take_profit`／`buy`で設定、`watchlist_buy`はnull |
+| metrics | json | YES | null | 発生時点の判定根拠値（終値・RSI・52週高値比・相対力〔対市場/対セクター〕・`ma75_trend_rising`・PER・PBR・PEG・ROE・自己資本比率・営業利益率・成長率〔単年/3期平均〕・配当利回り・財務健全性判定）。既存スナップショットからの移送分はnull（D6） |
+| created_at | timestamp | NO | now() | 作成日時 |
+
+**Index**: `(holding_id, source, signal_type, observed_week)` unique（同じ週の再実行で重複させない。先頭列が`holding_id`のためFKインデックスを兼ねる）、`(source, signal_type, observed_week)`（UC-014の種別別集計用）、`snapshot_id`
+**FK**: `holding_id` → `holdings(id)`、`snapshot_id` → `snapshots(id)`
+
+> **履歴ログ（追記のみ）**: UPDATE/DELETEしない。書き込みは`SignalOccurrenceRecorder`（INSERT IGNORE、例外を握りつぶし警告ログ）経由で、分析処理のトランザクションのコミット後に行う。`observed_week`は判定に使った週足系列の最終行の週の月曜。`metrics`の17キーは`SignalOccurrenceMetricsBuilder`で組み立てる（財務健全性の判定結果は含めない）。
+> **既存データの移送（2026-09-27実施）**: `php artisan signal-outcomes:backfill`で既存スナップショットの`signals`／`buy_signals`と現在の`watchlist_buy_signals`を移送（`observed_week`は作成日時・`determined_at`をマニラ時間に換算した日付を含むISO週の月曜、`metrics`はnull）。開発DBで425件（2026-08-24〜09-21の5週分）を移送、再実行で0件追加を確認済み。
 
 ---
 
@@ -504,7 +571,8 @@
 - 外部キーには必ずインデックスを作成
 - テーブルは「現在値キャッシュ（UPSERT、履歴を持たない）」と「履歴ログ（追記のみ、UPDATE/DELETEしない）」の2種類に分けて設計する
   - 現在値キャッシュ: `technical_indicators`/`fundamental_indicators`（`holding_id`単位で1行、値が変わってもINSERTせずUPDATEする。J-Quantsの更新頻度〔最大12週遅延〕に対して毎週INSERTすると同一内容の行が積み上がるため）
-  - 履歴ログ: `holding_snapshots`（`ma20`/`ma75`含む）/`financial_statements`（決算期単位）/`signals`/`market_indicator_snapshots`は、時点ごとに値そのものが変わりうる真の時系列データのため追記のみとする（UC-001業務ルール「既存スナップショットは上書きせず、履歴として蓄積する」）
+  - 履歴ログ: `holding_snapshots`（`ma20`/`ma75`含む）/`financial_statements`（決算期単位）/`signals`/`market_indicator_snapshots`は、時点ごとに値そのものが変わりうる真の時系列データのため追記のみとする（UC-001業務ルール「既存スナップショットは上書きせず、履歴として蓄積する」）。`signal_occurrences`（ADR-0017）もこちら
+  - 上書き型の時系列（2026-09-27追加、ADR-0017）: `weekly_prices`/`index_weekly_prices`は日付ごとに行を持つ時系列だが、外部ソース側の分割遡及調整に追随するため、同じ`(対象, week_date)`の行は取得のたびに上書きする
 
 ## 保留・確定が必要な初期パラメータ値（Gate 3承認時点の状態）
 
@@ -608,6 +676,8 @@
 | 2026-09-06 | （Gate3レビュー待ち） | 提案（CR） | 財務健全性フィルタに**営業利益率（`operating_margin`）を4条件目**として追加（CHG-0012／ADR-0011）。`fundamental_indicators` に `operating_margin decimal(10,4) nullable` を1列追加（**本CR唯一のスキーマ変更・マイグレーション必要**、`after('equity_ratio')`）。閾値は10%以上（叩き台。8%案との実測比較の経緯はADR-0011）。JP株は `operating_profit ÷ net_sales × 100` の実測算出、US株は Finnhub `operatingMarginTTM`（無ければ `operatingMarginAnnual`）採用で、`peg_ratio` と同様に算出方法混在。`\|営業利益率\| > 999%` は両Mapperでnull化。「財務健全性フィルタ」「買い増し用ファンダメンタルズ健全性フィルタ」「整理検討の財務健全性3項目（→4項目）」「判定チェックリストの near バッファ」の各行と `fundamental_indicators` カラム表を改訂。実測影響: 財務 `passed` が JP 15→11・US 12→11（合計 27→22）。F-011（`feat/f011-loss-review-list`）マージ後に独立CRとして実装着手する |
 | 2026-09-19 | minowaryo | 承認（Gate4 Cycle4a着手時追加） | D2（成長率OR救済）の配線にあたり`fundamental_indicators`に`avg_revenue_growth`/`avg_operating_income_growth` decimal(10,4) nullableを2列追加するマイグレーションが必要と判明（単年度の`revenue_growth`/`operating_income_growth`とは別カラムに直近3期平均を保持する設計、`FundamentalIndicatorMapper::averageAnnualGrowth()`）。JP株限定（US株は常にnull）。`fundamental_indicators`カラム表を改訂 | ADR-0015（CHG-0017） |
 | 2026-09-19 | （Gate3レビュー待ち） | 提案（CR） | **買い増しシグナル共通前提の緩和とPER単体シグナルの追加（CHG-0018／ADR-0016、UC-010）**。利用者指摘（財務健全性・ROE・営業利益率・成長率が高水準でPEG/RSI/PERが低い銘柄が買い増し候補に一切現れない）を受けた実データ検証で判明した設計是正。`buy_signals`/`watchlist_buy_signals`の`signal_type`ENUMに`per_undervalued`を追加（**本CRの唯一のスキーマ変更・マイグレーション必要**、既存カラムのENUM拡張のため`.claude/rules/20-mysql.md`の「危険な操作」に該当）。共通前提(1)を「52週高値-15%以内到達」**または**「財務健全性`passed`」のOR条件に緩和（前提(2)相対力≥-5ptは変更なし）。新シグナル`per_undervalued`はPER≤15.0のみを条件とし、PBRは独立条件に含めない（会計恒等式`PBR≈PER×ROE`により、財務健全性フィルタのROE≥10%要件とAND条件にすると実データで恒久的に0件になることを検証済み、ADR-0016参照）。判定チェックリスト（`SignalCriteriaEvaluator::evaluateBuy()`）にPER（基準あり）・PBR（基準なし参考表示、新設ステータス`info`）を追加しテクニカル7→9項目。「買い増しシグナル8種の判定閾値」「買い増しシグナル共通の前提条件」「PER単体の買い増しシグナル判定閾値」「判定チェックリストのPER・PBR表示」「判定チェックリストのnearバッファ」の各行と`buy_signals`/`watchlist_buy_signals`カラム表を改訂。**2026-09-21マージ時にADR-0015との番号衝突が判明しADR-0016へ採番し直し**（`.claude/rules/06-branch-coordination.md`参照） |
+| 2026-09-27 | （Gate3レビュー待ち） | 提案（CR） | **シグナル結果の前向き記録（UC-014、F-014、ADR-0017、CHG-0020）**。新規テーブル3件: `weekly_prices`（`holding_id`×`week_date` unique、既存取得の週足104週をUPSERT）／`index_weekly_prices`（nikkei225/sp500の週足）／`signal_occurrences`（追記のみ、`(holding_id, source, signal_type, observed_week)` unique、発生時点の根拠値をJSONで保持）。**既存テーブルの変更なし**。新規の外部APIコールなし |
+| 2026-09-27 | minowaryo | 承認（Gate3） | **シグナル結果の前向き記録（CHG-0020、ADR-0017）**の新規テーブル3件（`weekly_prices`／`index_weekly_prices`／`signal_occurrences`）を同日の提案どおり承認。追加のみのマイグレーションで既存テーブルの変更なし。`weekly_prices.week_date`の週の基準日の揃い方はGate4 Cycle1で実測確認する |
 
 ## 変更履歴
 
@@ -652,3 +722,5 @@
 | 2026-09-21 | D4（対セクター相対力フォールバック、別セッションでbe0f00c/418172bとして実装・マージ済み）のレビューで、`SignalCriteriaEvaluator::evaluateLossReview()`（UC-011整理検討チェックリスト「相対力」行）が`BuySignalDeterminationService::preconditionsSatisfied()`の事前条件B改訂（対セクター優先・対市場フォールバック）に追従しておらず、`relative_strength_vs_market`のみで判定していたことが判明（対セクターでは基準以上でも対市場のみ見ると誤って「基準割れ」表示になりうる表示層の不整合）。DBスキーマ変更なし。`ShowLossReviewListAction`が`relative_strength_vs_sector`を`$metrics`に追加で渡し、`SignalCriteriaEvaluator`側で対セクター優先の判定・ラベル動的切替（`相対力(対セクター)`/`相対力(対市場)`）に対応。「全シグナル共通の前提条件」注記と平仄を合わせた | ADR-0015（CHG-0017） |
 | 2026-09-21 | D5（週足MA75中期トレンド確認）をGate4実装。`technical_indicators`に`ma75_trend_rising` boolean nullableを1列追加するマイグレーション（Gate3で計画済みのカラム定義どおり）。`TechnicalIndicatorCalculator::calculate()`が直近のMA75（既存の`simpleMovingAverage()`流用）と13週前時点のMA75（週足終値系列を13週分余分に遡って同じ関数を再利用、新規の外部データ取得は不要）を比較して算出（88週未満はnull）。`BuySignalDeterminationService::preconditionsSatisfied()`に事前条件C（`ma75_trend_rising`が`false`ではないこと）を追加。**null（データ不足）ではブロックしない設計を採用**（既存の事前条件A/Bはnullで即ブロックするが、Cは88週という高いデータ要件のため同方針だと直近上場銘柄等で押し目買いシグナルが一律に出なくなる回帰リスクがあり、本人確認の上「明確に下向き（false）の場合のみブロック」に決定）。「全シグナル共通の前提条件」注記を3条件に更新。フルスイート687→702 passed（0 failed）、pintクリーン | ADR-0015（CHG-0017） |
 | 2026-09-23 | 売買シグナル画面のPER/PBR表示を利確検討（UC-004）・整理検討（UC-011）にも拡張（CHG-0019）。`SignalCriteriaEvaluator::evaluateTakeProfit()`/`evaluateLossReview()`のテクニカル配列に、UC-010で新設済みの中立ステータス`info`（`direction`＝`'none'`）を流用してPER・PBRを追加（各7→9項目）。UC-010のPERと異なりmet/near/unmet閾値・`near`バッファは持たせない。DBスキーマ変更なし。「判定チェックリストのPER・PBR表示」「整理検討の財務健全性」の2行を改訂・追加、`signal-list.blade.php`のテーブル固定幅を更新（利確検討1478→1622px・整理検討1512→1656px）。フルスイート745 passed（0 failed）、pintクリーン | ADR-0016（CHG-0019） |
+| 2026-09-27 | シグナル結果の前向き記録（CHG-0020）のGate3叩き台として`weekly_prices`／`index_weekly_prices`／`signal_occurrences`のテーブル定義・ER図・設計方針（上書き型の時系列）を追記。Gate3レビュー待ち | ADR-0017 |
+| 2026-09-27 | CHG-0020の3テーブルをGate3承認 | ADR-0017 |

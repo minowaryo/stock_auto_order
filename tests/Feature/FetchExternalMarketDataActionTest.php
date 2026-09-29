@@ -16,10 +16,13 @@ use App\Services\Analysis\TechnicalIndicatorCalculator;
 use App\Services\Analysis\UsFundamentalIndicatorMapper;
 use App\Services\MarketData\FinnhubClientInterface;
 use App\Services\MarketData\JpStockPriceClientInterface;
+use App\Services\MarketData\JQuantsClient;
 use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\MarketData\MarketIndexClientInterface;
 use App\Services\MarketData\UsStockPriceClientInterface;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Tests\Support\Fakes\FakeFinnhubClient;
 use Tests\Support\Fakes\FakeJpStockPriceClient;
 use Tests\Support\Fakes\FakeJQuantsClient;
@@ -404,7 +407,7 @@ function femdAction(
     FakeJpStockPriceClient $jpStockPriceClient,
     FakeUsStockPriceClient $usStockPriceClient,
     FakeMarketIndexClient $marketIndexClient,
-    FakeJQuantsClient $jQuantsClient,
+    JQuantsClientInterface $jQuantsClient,
     ?FakeFinnhubClient $finnhubClient = null,
 ): FetchExternalMarketDataAction {
     app()->instance(JpStockPriceClientInterface::class, $jpStockPriceClient);
@@ -844,6 +847,51 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
     });
 
     describe('個別銘柄の失敗が全体を止めない', function () {
+        test('UC-001・UC-005 セクターマスターが429でもJP銘柄の価格由来テクニカル指標を更新し他銘柄の処理を継続する', function () {
+            [$batch, $snapshot] = femdImportBatch();
+
+            $affectedHolding = femdHolding([
+                'symbol_code' => '7203',
+                'symbol_name' => 'トヨタ自動車',
+            ]);
+            femdHoldingSnapshot($snapshot, $affectedHolding, ['unrealized_gain_rate' => 5.0]);
+
+            $otherHolding = femdHolding([
+                'symbol_code' => '6758',
+                'symbol_name' => 'ソニーグループ',
+            ]);
+            femdHoldingSnapshot($snapshot, $otherHolding, ['unrealized_gain_rate' => 10.0]);
+
+            Http::preventStrayRequests();
+            Http::fake([
+                'api.jquants.com/v2/equities/master*' => Http::response([
+                    'message' => 'Too Many Requests',
+                ], 429),
+                'api.jquants.com/v2/fins/summary*' => Http::response(['data' => []], 200),
+            ]);
+
+            $action = femdAction(
+                new FakeJpStockPriceClient([
+                    '7203' => femdPriceHistory(femdCloses(2000.0, 5.0, 20)),
+                    '6758' => femdPriceHistory(femdCloses(1000.0, 3.0, 20)),
+                ]),
+                new FakeUsStockPriceClient,
+                new FakeMarketIndexClient([
+                    'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 20)),
+                    'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20)),
+                ]),
+                new JQuantsClient,
+            );
+
+            $action->execute($batch);
+
+            $this->assertDatabaseHas('technical_indicators', ['holding_id' => $affectedHolding->id]);
+            $this->assertDatabaseHas('technical_indicators', ['holding_id' => $otherHolding->id]);
+            expect($affectedHolding->refresh()->sector_classification_id)->toBeNull()
+                ->and($otherHolding->refresh()->sector_classification_id)->toBeNull();
+            expect(Http::recorded(fn ($request) => str_contains($request->url(), '/v2/equities/master')))->toHaveCount(1);
+        });
+
         test('価格取得に失敗した銘柄はスキップされ、他の銘柄の処理は正常に完了する', function () {
             [$batch, $snapshot] = femdImportBatch();
 
@@ -1947,6 +1995,154 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
 
             $signalTypes = Signal::where('holding_snapshot_id', $holdingSnapshot->id)->pluck('signal_type')->all();
             expect($signalTypes)->not->toContain('peg_overvalued');
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    // 再発防止（Red phase）: JQuantsClient::fetchStatements() /
+    // fetchSectorInfo() の例外がホールディング単位の処理を不必要に巻き込む
+    // バグの回帰テスト。
+    //
+    // 背景（コードレビューで確認済み、未修正）:
+    //   - JQuantsClient::fetchStatements()（app/Services/MarketData/
+    //     JQuantsClient.php）は ->throw() が付いているが、fetchSectorInfo()
+    //     と異なり、この例外を捕まえるcatchがどの呼び出し元にもない。
+    //     FetchExternalMarketDataAction::execute()内での呼び出し箇所
+    //     （TechnicalIndicator::updateOrCreate()の直後、同一
+    //     DB::transaction内）で例外が飛ぶと、そのトランザクション全体が
+    //     ロールバックされ、直前に計算済みのtechnical_indicatorsまで
+    //     消えてしまう。
+    //   - 加えて、FetchExternalMarketDataActionのセクターマスター取得は
+    //     RequestExceptionのみをcatchしており、その姉妹クラスである
+    //     ConnectionException（Illuminate\Http\Client\HttpClientExceptionの
+    //     兄弟、タイムアウト/DNS失敗等のトランスポート層エラー）を
+    //     キャッチしない。この場合、例外は価格/セクター取得ループの外側の
+    //     catch(Throwable)まで伝播し、保有銘柄全体（technical_indicators
+    //     計算にすら到達しない）がスキップされてしまう。
+    //
+    // 期待する修正後の振る舞い: どちらの経路でも該当保有銘柄の
+    // technical_indicatorsは更新され、保有銘柄全体がスキップされない
+    // （fetchSectorInfo()の429フォールバックと同じ「劣化して継続する」
+    // 挙動に揃える）。
+    //
+    // 現在のRed状態: 下記2テストはいずれも、technical_indicatorsが
+    // 保存されない（=保有銘柄が丸ごとスキップされる）ことでassertion
+    // failureになる想定（構文エラー・フィクスチャ起因のエラーではない）。
+    // -----------------------------------------------------------------------
+    describe('再発防止: fetchStatements()/fetchSectorInfo()の未捕捉例外がホールディング処理を不必要にスキップさせない', function () {
+        test('JP銘柄の/fins/summaryが429でも、technical_indicatorsは更新され他銘柄の処理も継続する', function () {
+            [$batch, $snapshot] = femdImportBatch();
+
+            $affectedHolding = femdHolding([
+                'symbol_code' => '7203',
+                'symbol_name' => 'トヨタ自動車',
+            ]);
+            femdHoldingSnapshot($snapshot, $affectedHolding, ['unrealized_gain_rate' => 5.0]);
+
+            $otherHolding = femdHolding([
+                'symbol_code' => '6758',
+                'symbol_name' => 'ソニーグループ',
+            ]);
+            femdHoldingSnapshot($snapshot, $otherHolding, ['unrealized_gain_rate' => 10.0]);
+
+            Http::preventStrayRequests();
+            Http::fake([
+                'api.jquants.com/v2/equities/master*' => Http::response(['data' => []], 200),
+                // 7203のみ429、他銘柄(6758)は正常応答 -> 「1銘柄の429が他銘柄
+                // の処理を妨げない」ことも同時に確認できる。
+                'api.jquants.com/v2/fins/summary*' => function ($request) {
+                    return str_contains($request->url(), 'code=7203')
+                        ? Http::response(['message' => 'Too Many Requests'], 429)
+                        : Http::response(['data' => []], 200);
+                },
+            ]);
+
+            $action = femdAction(
+                new FakeJpStockPriceClient([
+                    '7203' => femdPriceHistory(femdCloses(2000.0, 5.0, 20)),
+                    '6758' => femdPriceHistory(femdCloses(1000.0, 3.0, 20)),
+                ]),
+                new FakeUsStockPriceClient,
+                new FakeMarketIndexClient([
+                    'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 20)),
+                    'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20)),
+                ]),
+                new JQuantsClient,
+            );
+
+            $action->execute($batch);
+
+            // 429を捕まえて劣化継続すれば、TechnicalIndicator::updateOrCreate()
+            // 済みの行はロールバックされずに残るはず（現状はtransactionが
+            // ロールバックされ、この行が消える）。
+            $this->assertDatabaseHas('technical_indicators', ['holding_id' => $affectedHolding->id]);
+            $this->assertDatabaseHas('technical_indicators', ['holding_id' => $otherHolding->id]);
+
+            // fetchStatements()の429を握りつぶした結果、statements=[]相当の
+            // 「劣化した」fundamental_indicators行が保存されるはず
+            // （FundamentalIndicatorMapper::map([], null) /
+            // averageAnnualGrowth([], ...)は全項目null、既存の
+            // 「セクターマスターが429でも…」テストと同じ考え方）。
+            femdAssertFundamentalIndicatorMatches($affectedHolding->id, [
+                'per' => null,
+                'pbr' => null,
+                'roe' => null,
+                'revenue_growth' => null,
+                'operating_income_growth' => null,
+                'avg_revenue_growth' => null,
+                'avg_operating_income_growth' => null,
+                'equity_ratio' => null,
+                'operating_margin' => null,
+                'dividend_yield' => null,
+                'eps_growth' => null,
+                'peg_ratio' => null,
+            ]);
+
+            // 429の影響を受けていない他銘柄は通常どおりfundamental_indicators
+            // が保存される（こちらは現状でもパスするはずの対照確認）。
+            $this->assertDatabaseHas('fundamental_indicators', ['holding_id' => $otherHolding->id]);
+        });
+
+        test('セクターマスター取得が接続エラー（タイムアウト等）で失敗しても、technical_indicatorsは更新され保有銘柄はスキップされない', function () {
+            [$batch, $snapshot] = femdImportBatch();
+
+            $holding = femdHolding([
+                'symbol_code' => '7203',
+                'symbol_name' => 'トヨタ自動車',
+            ]);
+            femdHoldingSnapshot($snapshot, $holding, ['unrealized_gain_rate' => 5.0]);
+
+            Http::preventStrayRequests();
+            Http::fake([
+                // RequestException（HTTPエラーレスポンス）ではなく、
+                // トランスポート層の接続失敗（DNS/タイムアウト等）を模した
+                // ConnectionExceptionを発生させる。既存の
+                // fetchSectorInfo()内catch(RequestException)にも、
+                // FetchExternalMarketDataAction側のcatch(RequestException)
+                // にも型が一致しないため、現状はどちらにも捕まらず伝播する。
+                'api.jquants.com/v2/equities/master*' => function () {
+                    throw new ConnectionException('Connection failed');
+                },
+                'api.jquants.com/v2/fins/summary*' => Http::response(['data' => []], 200),
+            ]);
+
+            $action = femdAction(
+                new FakeJpStockPriceClient(['7203' => femdPriceHistory(femdCloses(2000.0, 5.0, 20))]),
+                new FakeUsStockPriceClient,
+                new FakeMarketIndexClient([
+                    'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 20)),
+                    'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20)),
+                ]),
+                new JQuantsClient,
+            );
+
+            $action->execute($batch);
+
+            // 現状は価格/セクター取得ループのcatch(Throwable)まで例外が
+            // 伝播し、この保有銘柄がeligibleに載らずtechnical_indicatorsの
+            // 計算自体に到達しない（丸ごとスキップされる）はず。
+            $this->assertDatabaseHas('technical_indicators', ['holding_id' => $holding->id]);
+            expect($holding->refresh()->sector_classification_id)->toBeNull();
         });
     });
 });

@@ -4,6 +4,7 @@ namespace Tests\Unit\Services\MarketData;
 
 use App\Services\MarketData\JQuantsClient;
 use App\Services\MarketData\JQuantsClientInterface;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -50,7 +51,7 @@ use Tests\TestCase;
 |   - Constructor signature: `new JQuantsClient()` (no constructor args;
 |     the API key is read internally from config('services.jquants.api_key')
 |     per the task description).
-|   - GET /v2/equities/master?code={symbolCode} and
+|   - GET /v2/equities/master (without a code query) and
 |     GET /v2/fins/summary?code={symbolCode} both carry the API key via an
 |     `x-api-key` request header (not Authorization/Bearer, per ADR-0005).
 |   - Interface method signatures on JQuantsClientInterface mirror the
@@ -67,27 +68,20 @@ beforeEach(function () {
     ]);
 });
 
-test('fetchSectorInfo呼び出し時にx-api-keyヘッダーが設定値で付与される', function () {
-    // Arrange
+test('fetchSectorInfoは全銘柄マスターをcodeクエリなしでx-api-keyヘッダー付きで取得する', function () {
     Http::fake([
         'api.jquants.com/v2/equities/master*' => Http::response([
             'data' => [
-                ['Date' => '2022-11-11', 'Code' => '86970', 'CoName' => '日本取引所グループ', 'CoNameEn' => 'Japan Exchange Group,Inc.', 'S17' => '16', 'S17Nm' => '金融（除く銀行）', 'S33' => '7200', 'S33Nm' => 'その他金融業', 'ScaleCat' => 'TOPIX Large70', 'Mkt' => '0111', 'MktNm' => 'プライム'],
+                ['Code' => '86970', 'S17' => '16', 'S17Nm' => '金融（除く銀行）'],
             ],
         ], 200),
     ]);
 
-    $client = new JQuantsClient;
+    (new JQuantsClient)->fetchSectorInfo('8697');
 
-    // Act
-    $client->fetchSectorInfo('86970');
-
-    // Assert
-    Http::assertSent(function ($request) {
-        return str_contains($request->url(), 'api.jquants.com/v2/equities/master')
-            && str_contains($request->url(), 'code=86970')
-            && $request->hasHeader('x-api-key', 'dummy-api-key');
-    });
+    Http::assertSent(fn ($request) => $request->url() === 'https://api.jquants.com/v2/equities/master'
+        && $request->hasHeader('x-api-key', 'dummy-api-key'));
+    Http::assertSentCount(1);
 });
 
 test('fetchStatements呼び出し時にx-api-keyヘッダーが設定値で付与される', function () {
@@ -113,26 +107,39 @@ test('fetchStatements呼び出し時にx-api-keyヘッダーが設定値で付�
     });
 });
 
-test('fetchSectorInfoはdata[0]からcode/nameをS17/S17Nmから正しくマッピングして返す', function () {
-    // Arrange
+test('UC-005 fetchSectorInfoは4桁コードを5桁Codeに照合して複数銘柄を正しく返しマスターを再利用する', function () {
     Http::fake([
         'api.jquants.com/v2/equities/master*' => Http::response([
             'data' => [
-                ['Date' => '2022-11-11', 'Code' => '86970', 'CoName' => '日本取引所グループ', 'CoNameEn' => 'Japan Exchange Group,Inc.', 'S17' => '16', 'S17Nm' => '金融（除く銀行）', 'S33' => '7200', 'S33Nm' => 'その他金融業', 'ScaleCat' => 'TOPIX Large70', 'Mkt' => '0111', 'MktNm' => 'プライム'],
+                ['Code' => '86970', 'S17' => '16', 'S17Nm' => '金融（除く銀行）'],
+                ['Code' => '26440', 'S17' => '10', 'S17Nm' => '情報通信・サービスその他'],
             ],
         ], 200),
     ]);
 
     $client = new JQuantsClient;
 
-    // Act
-    $result = $client->fetchSectorInfo('86970');
-
-    // Assert
-    expect($result)->toBe([
+    expect($client->fetchSectorInfo('2644'))->toBe([
+        'code' => '10',
+        'name' => '情報通信・サービスその他',
+    ])->and($client->fetchSectorInfo('8697'))->toBe([
         'code' => '16',
         'name' => '金融（除く銀行）',
     ]);
+
+    Http::assertSentCount(1);
+});
+
+test('UC-005 fetchSectorInfoは非空の全銘柄マスターに対象コードがなければnullを返す', function () {
+    Http::fake([
+        'api.jquants.com/v2/equities/master*' => Http::response([
+            'data' => [
+                ['Code' => '86970', 'S17' => '16', 'S17Nm' => '金融（除く銀行）'],
+            ],
+        ], 200),
+    ]);
+
+    expect((new JQuantsClient)->fetchSectorInfo('2644'))->toBeNull();
 });
 
 test('fetchSectorInfoはdataが空配列の場合nullを返す', function () {
@@ -149,6 +156,23 @@ test('fetchSectorInfoはdataが空配列の場合nullを返す', function () {
     // Assert
     expect($result)->toBeNull();
 });
+
+test('UC-005 セクター取得のHTTP失敗は未分類と混同せず呼び出し元が表示継続を判断できる例外を投げる', function (int $status) {
+    Http::fake([
+        'api.jquants.com/v2/equities/master*' => Http::response([
+            'message' => 'J-Quants request failed',
+        ], $status),
+    ]);
+
+    $client = new JQuantsClient;
+
+    expect(fn () => $client->fetchSectorInfo('86970'))
+        ->toThrow(RequestException::class);
+})->with([
+    '401 Unauthorized' => 401,
+    '429 Too Many Requests' => 429,
+    '500 Internal Server Error' => 500,
+]);
 
 test('fetchStatementsはDiscDate降順に並べ替え、指定件数に絞り込み、roeを含む数値項目を文字列からfloatへ変換する', function () {
     // Arrange: three fiscal periods returned out of order; only the two most
@@ -270,6 +294,23 @@ test('fetchStatementsはdataが空配列の場合例外を投げず空配列を�
     // Assert
     expect($result)->toBe([]);
 });
+
+test('UC-001 財務諸表取得のHTTP失敗はデータ欠損と混同せず銘柄単位で取得失敗を扱える例外を投げる', function (int $status) {
+    Http::fake([
+        'api.jquants.com/v2/fins/summary*' => Http::response([
+            'message' => 'J-Quants request failed',
+        ], $status),
+    ]);
+
+    $client = new JQuantsClient;
+
+    expect(fn () => $client->fetchStatements('72030'))
+        ->toThrow(RequestException::class);
+})->with([
+    '401 Unauthorized' => 401,
+    '429 Too Many Requests' => 429,
+    '500 Internal Server Error' => 500,
+]);
 
 test('JQuantsClientはJQuantsClientInterfaceを実装している', function () {
     // Arrange

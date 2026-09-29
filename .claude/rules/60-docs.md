@@ -23,12 +23,16 @@
 | 権限・ロールのビジネス方針変更 | `docs/product/org-permission-philosophy.md` + `docs/architecture/authz-authn.md` |
 | ユーザー向け機能・操作方法の変更 | `docs/product/user-guide.md` |
 | UATシナリオ・結果の追加（任意） | `docs/product/uat-scenarios.md` / `docs/product/uat-results/`（`.claude/rules/00-global.md` のUAT節を参照。非ブロッキング） |
-| ライブラリ/フレームワーク固有のハマりどころを解決した | `docs/ai-context/known-pitfalls.md`（常時読込ではないため、コード変更と同一PRである必要はない。解決した都度追記） |
+| ライブラリ/フレームワーク固有のハマりどころを解決した | `docs/ai-context/known-pitfalls.md`（常時読込ではないため、コード変更と同一コミットである必要はない。解決した都度追記） |
+| 新しいデータモデル追加（CRUD網羅） | `.claude/rules/30-testing.md`（CRUD網羅ルール）参照 |
+| 開発/テスト用credentialやAPIキーの保管場所を新たに記録した | `docs/credentials/README.md`（実際のsecret値はコミットしない） |
+| エラーハンドリング・レスポンス形式の規約変更 | `docs/development/coding-standards.md` |
 | Gate条件・品質ゲート運用の変更 | `.claude/rules/00-global.md`（詳細表・絶対禁止）+ `CLAUDE.md`（Step手順）+ `AGENTS.md`（Codex用。Gate定義を複製しているため3ファイル同期が必要） |
+| Gitワークフローの変更（ブランチ・コミット・push・マージ・マージ前チェック） | `.claude/rules/70-git.md` のみ——他のファイルは1行のポインタまで（ポリシーレベルの変更なら ADR も。`meta/adr/ADR-0016-git-workflow.md` 参照） |
 
 ## ドキュメント更新の原則
 
-1. **コード変更と同じPRでドキュメントも更新する**
+1. **コード変更と同じコミットでドキュメントも更新する**
 2. 仕様変更はドキュメント先行（コード前に文書化）
 3. ADRは「なぜそう決めたか」を必ず書く（Whatだけでなく Why）
 4. `docs/ai-context/` は短く・正確に保つ（AIが読む要約層）
@@ -66,7 +70,7 @@
 # ADR-XXXX: [タイトル]
 
 ## Status
-[Proposed / Accepted / Deprecated / Superseded by ADR-XXXX]
+[Proposed / Accepted / Deprecated / Superseded by ADR-XXXX / Trial — 「まとめてTrial導入し項目ごとにロールバックする」パターンは `meta/adr/ADR-0014-third-party-skill-adoption-trial.md` 参照]
 
 ## Date
 YYYY-MM-DD
@@ -83,3 +87,5 @@ YYYY-MM-DD
 ## Consequences
 [この決定による影響・トレードオフ]
 ```
+
+「検討したが今は採用しない（見送り）」という結論を記録する場合のタイトル・Status・Decisionの書き方は `.claude/commands/adr.md` の「見送り（不採用）を記録する場合のバリエーション」を参照する。

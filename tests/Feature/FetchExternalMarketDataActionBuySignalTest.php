@@ -476,81 +476,216 @@ describe('FetchExternalMarketDataAction: buy_signals永続化（UC-010）', func
         // passedであるためOR緩和により前提条件が成立し、per_undervalued
         // （PER≤15.0）が発生する（ADR-0016 D1・D2）。
         expect($signalTypes)->toContain('per_undervalued');
+    });
+});
 
-        describe('ADR-0015 D3 (Cycle4b): 低成長銘柄でのPEG除外配線 — 買い側buy_signals', function () {
-            /*
-            |----------------------------------------------------------------
-            | Source of truth: docs/adr/ADR-0015-value-cyclical-stock-judgment-branching.md
-            | D3。BuySignalDeterminationService::determine()自体は既にGreenで
-            | revenueGrowth/operatingIncomeGrowth/per/dividendYield引数を受け
-            | 付けるが（低成長銘柄ではPEGレシオの代わりにPER<=15かつ配当利回り>=3%
-            | で割安判定する）、このCycle4b着手前時点ではFetchExternalMarketDataAction
-            | ::execute()の呼び出し側がこの4引数を一切渡していない。
-            |
-            | 価格推移フィクスチャは fmbCalmPriceHistory()（range(100,151)相当、
-            | 52週）+ fmbNikkeiHistory()（13週騰落率-35.0%）の組み合わせを再利用
-            | する。この組み合わせは本ファイル「再実行」テストの2回目実行で
-            | 既に「buy_signals全シグナル共通の前提条件(A・B)は満たすが、7種の
-            | いずれの個別条件も単独では成立しない」フィクスチャとして確認済み
-            | （そのテストではpegRatioがnull=fetchStatementsが空配列だったため
-            | PEG系も発生していない）。今回は統計情報(JQuantsClient::
-            | fetchStatements)を与えてfundamental_indicatorsを非nullにし、
-            | PEG割安条件(<=1.0)自体は満たさない（PEG=2.0）が、低成長銘柄向けの
-            | PER/配当利回り絶対閾値（PER=9.52<=15、配当利回り3.33%>=3%）は
-            | 満たす組み合わせにしている。
-            |
-            | Expected Red cause: 現状の呼び出しは
-            | $this->buySignalDeterminationService->determine($priceHistory,
-            | $marketReturn13w, $sectorReturn13w, $pegRatio) の4引数のみで、
-            | revenueGrowth/operatingIncomeGrowth/per/dividendYieldを渡して
-            | いない。そのためdetermine()内部でisLowGrowth(null, null)=false
-            | となり、PER/配当利回り絶対閾値の分岐に到達せず、かつPEGレシオ
-            | 2.0は<=1.0を満たさないため、peg_undervaluedはどちらの経路でも
-            | 発生しない。Green化（配線）後は低成長(3.0%<=5.0%)と判定され、
-            | PER=9.52<=15・配当利回り3.33%>=3%の条件でpeg_undervaluedが発生
-            | する想定。このテストは「現状は発生しない（Red）」を、
-            | 「発生するはず」というアサーションで捕捉する。
-            |----------------------------------------------------------------
-            */
-            test('成長率が低い（5%以下）JP株は、PEGレシオが割安基準(<=1.0)を満たさなくてもPER/配当利回りの絶対閾値を満たせばpeg_undervaluedがbuy_signalsに保存される', function () {
-                [$batch, $snapshot] = fmbImportBatch();
-                $holding = fmbHolding(['symbol_code' => '7203', 'market' => 'jp', 'symbol_name' => 'トヨタ自動車']);
-                $holdingSnapshot = fmbHoldingSnapshot($snapshot, $holding, [
-                    'current_price' => 1000.0, // PER = 1000/105 ≈ 9.52 (<=15)
-                    'unrealized_gain_rate' => 5.0,
-                ]);
+describe('ADR-0015 D3 (Cycle4b): 低成長銘柄でのPEG除外配線 — 買い側buy_signals', function () {
+    /*
+    |----------------------------------------------------------------
+    | Source of truth: docs/adr/ADR-0015-value-cyclical-stock-judgment-branching.md
+    | D3。BuySignalDeterminationService::determine()自体は既にGreenで
+    | revenueGrowth/operatingIncomeGrowth/per/dividendYield引数を受け
+    | 付けるが（低成長銘柄ではPEGレシオの代わりにPER<=15かつ配当利回り>=3%
+    | で割安判定する）、このCycle4b着手前時点ではFetchExternalMarketDataAction
+    | ::execute()の呼び出し側がこの4引数を一切渡していない。
+    |
+    | 価格推移フィクスチャは fmbCalmPriceHistory()（range(100,151)相当、
+    | 52週）+ fmbNikkeiHistory()（13週騰落率-35.0%）の組み合わせを再利用
+    | する。この組み合わせは本ファイル「再実行」テストの2回目実行で
+    | 既に「buy_signals全シグナル共通の前提条件(A・B)は満たすが、7種の
+    | いずれの個別条件も単独では成立しない」フィクスチャとして確認済み
+    | （そのテストではpegRatioがnull=fetchStatementsが空配列だったため
+    | PEG系も発生していない）。今回は統計情報(JQuantsClient::
+    | fetchStatements)を与えてfundamental_indicatorsを非nullにし、
+    | PEG割安条件(<=1.0)自体は満たさない（PEG=2.0）が、低成長銘柄向けの
+    | PER/配当利回り絶対閾値（PER=9.52<=15、配当利回り3.33%>=3%）は
+    | 満たす組み合わせにしている。
+    |
+    | Expected Red cause: 現状の呼び出しは
+    | $this->buySignalDeterminationService->determine($priceHistory,
+    | $marketReturn13w, $sectorReturn13w, $pegRatio) の4引数のみで、
+    | revenueGrowth/operatingIncomeGrowth/per/dividendYieldを渡して
+    | いない。そのためdetermine()内部でisLowGrowth(null, null)=false
+    | となり、PER/配当利回り絶対閾値の分岐に到達せず、かつPEGレシオ
+    | 2.0は<=1.0を満たさないため、peg_undervaluedはどちらの経路でも
+    | 発生しない。Green化（配線）後は低成長(3.0%<=5.0%)と判定され、
+    | PER=9.52<=15・配当利回り3.33%>=3%の条件でpeg_undervaluedが発生
+    | する想定。このテストは「現状は発生しない（Red）」を、
+    | 「発生するはず」というアサーションで捕捉する。
+    |----------------------------------------------------------------
+    */
+    test('成長率が低い（5%以下）JP株は、PEGレシオが割安基準(<=1.0)を満たさなくてもPER/配当利回りの絶対閾値を満たせばpeg_undervaluedがbuy_signalsに保存される', function () {
+        [$batch, $snapshot] = fmbImportBatch();
+        $holding = fmbHolding(['symbol_code' => '7203', 'market' => 'jp', 'symbol_name' => 'トヨタ自動車']);
+        $holdingSnapshot = fmbHoldingSnapshot($snapshot, $holding, [
+            'current_price' => 1000.0, // PER = 1000/105 ≈ 9.52 (<=15)
+            'unrealized_gain_rate' => 5.0,
+        ]);
 
-                // 低成長フィクスチャ: revenue_growth=3.0% / operating_income_growth=3.0%
-                // （いずれも5.0%以下 -> 低成長） / eps_growth=5.0% -> PER≈9.52 / PEG≈1.904（>1.0、
-                // 従来のPEG割安条件(<=1.0)は満たさない）。配当利回り = 35/1000*100 = 3.5%（>=3.0%）。
-                $statements = [
-                    [
-                        'disclosed_date' => '2026-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2026-03-31',
-                        'net_sales' => 103000.0, 'operating_profit' => 10300.0, 'profit' => 8000.0, 'eps' => 105.0,
-                        'book_value_per_share' => 800.0, 'equity_to_asset_ratio' => 0.55, 'roe' => 0.125,
-                        'dividend_per_share_annual' => 35.0, 'payout_ratio_annual' => 0.30,
-                    ],
-                    [
-                        'disclosed_date' => '2025-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2025-03-31',
-                        'net_sales' => 100000.0, 'operating_profit' => 10000.0, 'profit' => 7800.0, 'eps' => 100.0,
-                        'book_value_per_share' => 780.0, 'equity_to_asset_ratio' => 0.55, 'roe' => 0.125,
-                        'dividend_per_share_annual' => 32.0, 'payout_ratio_annual' => 0.30,
-                    ],
-                ];
+        // 低成長フィクスチャ: revenue_growth=3.0% / operating_income_growth=3.0%
+        // （いずれも5.0%以下 -> 低成長） / eps_growth=5.0% -> PER≈9.52 / PEG≈1.904（>1.0、
+        // 従来のPEG割安条件(<=1.0)は満たさない）。配当利回り = 35/1000*100 = 3.5%（>=3.0%）。
+        $statements = [
+            [
+                'disclosed_date' => '2026-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2026-03-31',
+                'net_sales' => 103000.0, 'operating_profit' => 10300.0, 'profit' => 8000.0, 'eps' => 105.0,
+                'book_value_per_share' => 800.0, 'equity_to_asset_ratio' => 0.55, 'roe' => 0.125,
+                'dividend_per_share_annual' => 35.0, 'payout_ratio_annual' => 0.30,
+            ],
+            [
+                'disclosed_date' => '2025-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2025-03-31',
+                'net_sales' => 100000.0, 'operating_profit' => 10000.0, 'profit' => 7800.0, 'eps' => 100.0,
+                'book_value_per_share' => 780.0, 'equity_to_asset_ratio' => 0.55, 'roe' => 0.125,
+                'dividend_per_share_annual' => 32.0, 'payout_ratio_annual' => 0.30,
+            ],
+        ];
 
-                $action = fmbAction(
-                    new FakeJpStockPriceClient(['7203' => fmbCalmPriceHistory()]),
-                    new FakeUsStockPriceClient,
-                    new FakeMarketIndexClient(['nikkei225' => fmbNikkeiHistory(), 'sp500' => fmbSp500History()]),
-                    new FakeJQuantsClient(statementsResponses: ['7203' => $statements]),
-                );
+        $action = fmbAction(
+            new FakeJpStockPriceClient(['7203' => fmbCalmPriceHistory()]),
+            new FakeUsStockPriceClient,
+            new FakeMarketIndexClient(['nikkei225' => fmbNikkeiHistory(), 'sp500' => fmbSp500History()]),
+            new FakeJQuantsClient(statementsResponses: ['7203' => $statements]),
+        );
 
-                $action->execute($batch);
+        $action->execute($batch);
 
-                $rows = fmbBuySignalRows($holdingSnapshot->id);
-                $signalTypes = array_map(fn ($row) => $row->signal_type, $rows);
-                expect($signalTypes)->toContain('peg_undervalued');
-            });
-        });
+        $rows = fmbBuySignalRows($holdingSnapshot->id);
+        $signalTypes = array_map(fn ($row) => $row->signal_type, $rows);
+        expect($signalTypes)->toContain('peg_undervalued');
+    });
+});
+
+/*
+|--------------------------------------------------------------------------
+| CHG-0025 (bug fix, Red): 保有JP株のbuy判定に直近3期平均成長率が渡らない
+|--------------------------------------------------------------------------
+|
+| Source of truth:
+|   - docs/adr/ADR-0015-value-cyclical-stock-judgment-branching.md D2
+|     (直近3期平均成長率を財務健全性の成長率OR判定に含める)
+|   - docs/adr/ADR-0016 D1 (前提条件A = 価格面 OR 財務健全性passed)
+|   - tests/Feature/UC012WatchlistRefreshTest.php (watchlist側は正しく配線済み)
+|
+| Bug: FetchExternalMarketDataAction::execute() computes $avgGrowth and saves
+| it to fundamental_indicators, but calls BuySignalDeterminationService::
+| determine(avgRevenueGrowth: $fundamental['avg_revenue_growth'] ?? null, ...)
+| where $fundamental (FundamentalIndicatorMapper::map()) never contains those
+| keys → always null. FundamentalHealthEvaluator::evaluate() therefore never
+| applies the D2 rescue for held JP stocks.
+|
+| Fixture design (isolates the D2 path):
+|   - 4 FY statements so averageAnnualGrowth(periods=3) is non-null.
+|   - latest FY: net_sales/operating_profit both -6.67% YoY (single-year
+|     growth <= 0) while the 3-period average is positive (≈+12.9%).
+|   - ROE 12.5% (>=10 base, <15 D1-rescue threshold), equity 55% (>=40),
+|     operating margin 15% (>=10) → only the growth criterion decides.
+|   - fmbLongDeclinePriceHistory(): precondition A fails on the price side
+|     (week52_high=300, recent max 134 < 255), precondition B holds
+|     (RS≈+3.84 vs nikkei -35%), 52 weeks → ma75_trend_rising=null (not
+|     blocking). So precondition A holds ONLY if health == 'passed', which
+|     requires D2.
+|   - eps 120, current_price 950 → PER≈7.92 (<=15) → per_undervalued fires
+|     once preconditions hold.
+|
+*/
+
+/**
+ * @param  array<int, array{0: float, 1: float}>  $salesAndOperatingProfitByFy  Keyed newest-first: [[net_sales, operating_profit], ...] for FY2026, FY2025, FY2024, FY2023.
+ * @return array<int, array<string, mixed>>
+ */
+function fmbFourFyStatements(array $salesAndOperatingProfitByFy): array
+{
+    $statements = [];
+
+    foreach ($salesAndOperatingProfitByFy as $i => [$netSales, $operatingProfit]) {
+        $year = 2026 - $i;
+
+        $statements[] = [
+            'disclosed_date' => "{$year}-05-15",
+            'period_type' => 'FY',
+            'fiscal_year_end' => "{$year}-03-31",
+            'net_sales' => $netSales,
+            'operating_profit' => $operatingProfit,
+            'profit' => $operatingProfit * 0.7,
+            'eps' => 120.0,
+            'book_value_per_share' => 800.0,
+            'equity_to_asset_ratio' => 0.55,
+            'roe' => 0.125,
+            'dividend_per_share_annual' => 30.0,
+            'payout_ratio_annual' => 0.30,
+        ];
+    }
+
+    return $statements;
+}
+
+function fmbRunLongDeclineWithStatements(array $statements): HoldingSnapshot
+{
+    [$batch, $snapshot] = fmbImportBatch();
+    $holding = fmbHolding(['symbol_code' => '7203', 'market' => 'jp', 'symbol_name' => 'トヨタ自動車']);
+    // current_price=950, eps=120 → PER≈7.92 (<=15.0)
+    $holdingSnapshot = fmbHoldingSnapshot($snapshot, $holding, ['current_price' => 950, 'unrealized_gain_rate' => 10.0]);
+
+    $action = fmbAction(
+        new FakeJpStockPriceClient(['7203' => fmbLongDeclinePriceHistory()]),
+        new FakeUsStockPriceClient,
+        new FakeMarketIndexClient(['nikkei225' => fmbNikkeiHistory(), 'sp500' => fmbSp500History()]),
+        new FakeJQuantsClient(
+            sectorResponses: ['7203' => null],
+            statementsResponses: ['7203' => $statements],
+        ),
+    );
+
+    $action->execute($batch);
+
+    return $holdingSnapshot;
+}
+
+describe('CHG-0025: 保有JP株の買いシグナル判定に直近3期平均成長率（ADR-0015 D2）を渡す', function () {
+    test('単年度の売上・営業利益成長率はマイナスでも直近3期平均成長率がプラスの保有JP株は、財務健全性passedとして前提条件AのOR緩和が成立しper_undervaluedがbuy_signalsに保存される', function () {
+        // Arrange: FY2026→FY2025 は -6.67%、3期平均は (-6.67 + 15.38 + 30.0)/3 ≈ +12.9%
+        $statements = fmbFourFyStatements([
+            [140000.0, 21000.0], // FY2026 (営業利益率15%)
+            [150000.0, 22500.0], // FY2025
+            [130000.0, 19500.0], // FY2024
+            [100000.0, 15000.0], // FY2023
+        ]);
+
+        // Act
+        $holdingSnapshot = fmbRunLongDeclineWithStatements($statements);
+
+        // Assert (fixture sanity): 単年度成長率<=0・3期平均>0・D1救済閾値未満であることを
+        // 保存済みfundamental_indicatorsで確認し、D2経路のみが財務健全性を左右することを保証する。
+        $indicator = DB::table('fundamental_indicators')->where('holding_id', $holdingSnapshot->holding_id)->first();
+        expect($indicator)->not->toBeNull();
+        expect((float) $indicator->revenue_growth)->toBeLessThanOrEqual(0.0);
+        expect((float) $indicator->operating_income_growth)->toBeLessThanOrEqual(0.0);
+        expect((float) $indicator->avg_revenue_growth)->toBeGreaterThan(0.0);
+        expect((float) $indicator->avg_operating_income_growth)->toBeGreaterThan(0.0);
+        expect((float) $indicator->roe)->toBeLessThan(15.0);
+        expect((float) $indicator->operating_margin)->toBeGreaterThanOrEqual(10.0);
+
+        // Assert (bug): D2救済で財務健全性passed → 前提条件A成立 → PER≈7.92でper_undervalued
+        $signalTypes = array_map(fn ($row) => $row->signal_type, fmbBuySignalRows($holdingSnapshot->id));
+        expect($signalTypes)->toContain('per_undervalued');
+    });
+
+    test('単年度成長率も直近3期平均成長率もマイナスの保有JP株は、財務健全性failedで前提条件Aが成立せずbuy_signalsは保存されない', function () {
+        // Arrange: 毎期減収減益（単年度・3期平均ともにマイナス）、他条件は上のテストと同一
+        $statements = fmbFourFyStatements([
+            [120000.0, 18000.0], // FY2026 (営業利益率15%)
+            [130000.0, 19500.0], // FY2025
+            [140000.0, 21000.0], // FY2024
+            [150000.0, 22500.0], // FY2023
+        ]);
+
+        // Act
+        $holdingSnapshot = fmbRunLongDeclineWithStatements($statements);
+
+        // Assert
+        $indicator = DB::table('fundamental_indicators')->where('holding_id', $holdingSnapshot->holding_id)->first();
+        expect((float) $indicator->avg_revenue_growth)->toBeLessThanOrEqual(0.0);
+        expect((float) $indicator->avg_operating_income_growth)->toBeLessThanOrEqual(0.0);
+        expect(fmbBuySignalRows($holdingSnapshot->id))->toBeEmpty();
     });
 });

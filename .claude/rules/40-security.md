@@ -49,6 +49,24 @@
 - 操作の種類・タイムスタンプ
 - エラーの種類・スタックトレース（本番では最小限）
 
+### 監査ログチャンネル
+
+特権操作・破壊的操作の監査エントリは、通常のアプリケーションログではなく**専用の `audit` チャンネル**に記録する。グローバル設定の「監査ログは JSONL 形式で `logs/audit.jsonl` に記録」（`~/.claude/CLAUDE.md`）に従い、本プロジェクトではこのチャンネルの出力形式をJSONLとする。
+
+- `config/logging.php` に `audit` チャンネルを定義する（driver `single` または `daily`、`path` は `storage/logs/audit.jsonl`、daily rotationの場合は保持期間を `LOG_AUDIT_DAYS` 環境変数で制御。`.env.example` にキーを追加する）。1行1JSONオブジェクトになるよう `formatter` に `Monolog\Formatter\JsonFormatter`（`includeStacktraces: false`）を指定する
+- チャンネルの `level` は `LOG_LEVEL` から**独立して** `info` に固定する。本番でアプリケーションログレベルを引き上げても監査証跡が消えないようにするため
+- エントリは常に以下の固定最小スキーマで書き込む。自由形式のメッセージにせず、機械可読性を保つ:
+
+| フィールド | 内容 |
+|---|---|
+| `action` | 操作名（例: `holding.deleted`） |
+| `actor_id` | 実行ユーザーのID（IDのみ。氏名・メールは含めない） |
+| `subject_type` | 対象レコードのクラス名/テーブル名 |
+| `subject_id` | 対象レコードのID |
+
+- PII（氏名・メール・住所等）や変更後の値そのものを監査エントリに含めない。`subject_type` + `subject_id` があればレコードを特定できる
+- レコード上のActor Stampカラム（`.claude/rules/10-laravel.md` 参照）と本チャンネルは相補的な関係にある: カラムは最新状態、チャンネルは履歴を保持する
+
 ## 依存パッケージ
 
 - `composer audit` を定期実行して脆弱性チェック

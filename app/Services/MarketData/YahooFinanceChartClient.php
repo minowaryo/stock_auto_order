@@ -8,11 +8,23 @@ use Illuminate\Support\Facades\Http;
  * Fetches weekly price history from the unofficial Yahoo Finance chart API
  * (v8, range=2y&interval=1wk).
  *
+ * Two rules are applied before the $weeks slicing so that no week is ever
+ * counted twice:
+ *   1. A trailing volume=0 placeholder whose close equals the previous close
+ *      (in-progress current week) is dropped.
+ *   2. Rows falling in the same week (Yahoo's last-trading-day bar, which can
+ *      appear anywhere in the series, CHG-0022) are folded into the first row
+ *      of that week via WeekDateNormalizer::foldByWeek() (ADR-0017 D2).
+ *
  * docs/adr/ADR-0004-analysis-engine-indicator-expansion.md (§1)
  */
 final class YahooFinanceChartClient
 {
     private const BASE_URL = 'https://query1.finance.yahoo.com/v8/finance/chart/';
+
+    public function __construct(
+        private readonly WeekDateNormalizer $weekDateNormalizer = new WeekDateNormalizer,
+    ) {}
 
     /**
      * @return array<int, array{date: string, close: float, volume: int}>
@@ -66,6 +78,11 @@ final class YahooFinanceChartClient
         ) {
             array_pop($history);
         }
+
+        // Yahoo can also emit a last-trading-day bar (nonzero volume) dated
+        // inside the same week as a weekly bar, not only at the tail. Keep
+        // the first row of each week (shared rule with WeeklyPriceRecorder).
+        $history = $this->weekDateNormalizer->foldByWeek($history);
 
         if (count($history) > $weeks) {
             $history = array_slice($history, -$weeks);

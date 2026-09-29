@@ -56,7 +56,7 @@
                 <tbody>
                     @foreach ($recentBatches as $batch)
                         <tr class="border-b border-app-border last:border-b-0">
-                            <td class="py-2 pr-4">{{ $batch->imported_at?->format('Y-m-d H:i') }}</td>
+                            <td class="py-2 pr-4">{{ \App\Support\DisplayTime::dateTime($batch->imported_at) }}</td>
                             <td class="py-2 pr-4">{{ $batch->jp_stock_filename }}</td>
                             <td class="py-2 pr-4">{{ $batch->us_stock_filename }}</td>
                             <td class="py-2 pr-4">{{ $batch->mutual_fund_filename ?? '-' }}</td>

@@ -111,6 +111,12 @@
 
 ---
 
+## 日時・日付の表示（2026-09-27、ADR-0018 / CHG-0024）
+
+- 画面に出す日時・日付は、すべて `app.display_timezone`（既定 Asia/Manila）に変換してから表示する。DBの保存はUTCのまま
+- 変換は `App\Support\DisplayTime` を通す（画面・Actionごとに `->timezone()` を個別に書かない）
+- 書式は日時 `Y-m-d H:i`、日付 `Y-m-d` を基本とする。タイムゾーン名は画面に表示しない（全画面で統一されているため）
+
 ## アイコン
 
 - ライブラリ: Heroicons（Livewire/Tailwindエコシステムとの親和性が高いため採用）
