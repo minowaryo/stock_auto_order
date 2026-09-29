@@ -16,10 +16,12 @@ use App\Services\Analysis\TechnicalIndicatorCalculator;
 use App\Services\Analysis\UsFundamentalIndicatorMapper;
 use App\Services\MarketData\FinnhubClientInterface;
 use App\Services\MarketData\JpStockPriceClientInterface;
+use App\Services\MarketData\JQuantsClient;
 use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\MarketData\MarketIndexClientInterface;
 use App\Services\MarketData\UsStockPriceClientInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Tests\Support\Fakes\FakeFinnhubClient;
 use Tests\Support\Fakes\FakeJpStockPriceClient;
 use Tests\Support\Fakes\FakeJQuantsClient;
@@ -404,7 +406,7 @@ function femdAction(
     FakeJpStockPriceClient $jpStockPriceClient,
     FakeUsStockPriceClient $usStockPriceClient,
     FakeMarketIndexClient $marketIndexClient,
-    FakeJQuantsClient $jQuantsClient,
+    JQuantsClientInterface $jQuantsClient,
     ?FakeFinnhubClient $finnhubClient = null,
 ): FetchExternalMarketDataAction {
     app()->instance(JpStockPriceClientInterface::class, $jpStockPriceClient);
@@ -844,6 +846,51 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
     });
 
     describe('個別銘柄の失敗が全体を止めない', function () {
+        test('UC-001・UC-005 セクターマスターが429でもJP銘柄の価格由来テクニカル指標を更新し他銘柄の処理を継続する', function () {
+            [$batch, $snapshot] = femdImportBatch();
+
+            $affectedHolding = femdHolding([
+                'symbol_code' => '7203',
+                'symbol_name' => 'トヨタ自動車',
+            ]);
+            femdHoldingSnapshot($snapshot, $affectedHolding, ['unrealized_gain_rate' => 5.0]);
+
+            $otherHolding = femdHolding([
+                'symbol_code' => '6758',
+                'symbol_name' => 'ソニーグループ',
+            ]);
+            femdHoldingSnapshot($snapshot, $otherHolding, ['unrealized_gain_rate' => 10.0]);
+
+            Http::preventStrayRequests();
+            Http::fake([
+                'api.jquants.com/v2/equities/master*' => Http::response([
+                    'message' => 'Too Many Requests',
+                ], 429),
+                'api.jquants.com/v2/fins/summary*' => Http::response(['data' => []], 200),
+            ]);
+
+            $action = femdAction(
+                new FakeJpStockPriceClient([
+                    '7203' => femdPriceHistory(femdCloses(2000.0, 5.0, 20)),
+                    '6758' => femdPriceHistory(femdCloses(1000.0, 3.0, 20)),
+                ]),
+                new FakeUsStockPriceClient,
+                new FakeMarketIndexClient([
+                    'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 20)),
+                    'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20)),
+                ]),
+                new JQuantsClient,
+            );
+
+            $action->execute($batch);
+
+            $this->assertDatabaseHas('technical_indicators', ['holding_id' => $affectedHolding->id]);
+            $this->assertDatabaseHas('technical_indicators', ['holding_id' => $otherHolding->id]);
+            expect($affectedHolding->refresh()->sector_classification_id)->toBeNull()
+                ->and($otherHolding->refresh()->sector_classification_id)->toBeNull();
+            expect(Http::recorded(fn ($request) => str_contains($request->url(), '/v2/equities/master')))->toHaveCount(1);
+        });
+
         test('価格取得に失敗した銘柄はスキップされ、他の銘柄の処理は正常に完了する', function () {
             [$batch, $snapshot] = femdImportBatch();
 

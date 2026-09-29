@@ -26,6 +26,7 @@ use App\Services\MarketData\UsStockPriceClientInterface;
 use App\Services\SignalOutcome\SignalOccurrenceMetricsBuilder;
 use App\Services\SignalOutcome\SignalOccurrenceRecorder;
 use App\Services\SignalOutcome\WeeklyPriceRecorder;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -124,7 +125,17 @@ class FetchExternalMarketDataAction
                 $sectorClassificationId = $holding->sector_classification_id;
 
                 if ($holding->market === 'jp') {
-                    $sectorInfo = $this->jQuantsClient->fetchSectorInfo($holding->symbol_code);
+                    try {
+                        $sectorInfo = $this->jQuantsClient->fetchSectorInfo($holding->symbol_code);
+                    } catch (RequestException $exception) {
+                        Log::warning('FetchExternalMarketDataAction: J-Quants sector fetch failed', [
+                            'holding_id' => $holding->id,
+                            'symbol_code' => $holding->symbol_code,
+                            'http_status' => $exception->response->status(),
+                        ]);
+
+                        $sectorInfo = null;
+                    }
 
                     if ($sectorInfo !== null) {
                         $sector = SectorClassification::firstOrCreate(
