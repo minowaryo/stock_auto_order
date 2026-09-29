@@ -22,6 +22,8 @@ use App\Services\MarketData\UsStockPriceClientInterface;
 use App\Services\SignalOutcome\SignalOccurrenceMetricsBuilder;
 use App\Services\SignalOutcome\SignalOccurrenceRecorder;
 use App\Services\SignalOutcome\WeeklyPriceRecorder;
+use Illuminate\Http\Client\HttpClientException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -175,7 +177,21 @@ class RefreshWatchlistMarketDataAction
             : null;
 
         if ($holding->market === 'jp') {
-            $statements = $this->jQuantsClient->fetchStatements($holding->symbol_code);
+            try {
+                $statements = $this->jQuantsClient->fetchStatements($holding->symbol_code);
+            } catch (HttpClientException $exception) {
+                Log::warning('RefreshWatchlistMarketDataAction: J-Quants statements fetch failed', [
+                    'holding_id' => $holding->id,
+                    'symbol_code' => $holding->symbol_code,
+                    'exception' => $exception->getMessage(),
+                    ...($exception instanceof RequestException
+                        ? ['http_status' => $exception->response->status()]
+                        : []),
+                ]);
+
+                $statements = [];
+            }
+
             $fundamental = $this->fundamentalIndicatorMapper->map($statements, $currentPrice);
 
             // ADR-0015 D2（2回目の/review・Cycle4d）: 保有銘柄パイプライン

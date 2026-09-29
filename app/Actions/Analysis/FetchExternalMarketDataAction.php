@@ -26,6 +26,7 @@ use App\Services\MarketData\UsStockPriceClientInterface;
 use App\Services\SignalOutcome\SignalOccurrenceMetricsBuilder;
 use App\Services\SignalOutcome\SignalOccurrenceRecorder;
 use App\Services\SignalOutcome\WeeklyPriceRecorder;
+use Illuminate\Http\Client\HttpClientException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -127,11 +128,13 @@ class FetchExternalMarketDataAction
                 if ($holding->market === 'jp') {
                     try {
                         $sectorInfo = $this->jQuantsClient->fetchSectorInfo($holding->symbol_code);
-                    } catch (RequestException $exception) {
+                    } catch (HttpClientException $exception) {
                         Log::warning('FetchExternalMarketDataAction: J-Quants sector fetch failed', [
                             'holding_id' => $holding->id,
                             'symbol_code' => $holding->symbol_code,
-                            'http_status' => $exception->response->status(),
+                            ...($exception instanceof RequestException
+                                ? ['http_status' => $exception->response->status()]
+                                : ['connection_error' => true]),
                         ]);
 
                         $sectorInfo = null;
@@ -219,7 +222,21 @@ class FetchExternalMarketDataAction
                     // Fundamentals/sector are JP個別株限定 (UC-002業務ルール
                     // "指標計算はJP株・US株の個別株のみ対象" + fundamentals自体はJP限定).
                     if ($holding->market === 'jp') {
-                        $statements = $this->jQuantsClient->fetchStatements($holding->symbol_code);
+                        try {
+                            $statements = $this->jQuantsClient->fetchStatements($holding->symbol_code);
+                        } catch (HttpClientException $exception) {
+                            Log::warning('FetchExternalMarketDataAction: J-Quants statements fetch failed', [
+                                'holding_id' => $holding->id,
+                                'symbol_code' => $holding->symbol_code,
+                                'exception' => $exception->getMessage(),
+                                ...($exception instanceof RequestException
+                                    ? ['http_status' => $exception->response->status()]
+                                    : []),
+                            ]);
+
+                            $statements = [];
+                        }
+
                         $currentPrice = $holdingSnapshot->current_price !== null
                             ? (float) $holdingSnapshot->current_price
                             : null;
