@@ -94,6 +94,13 @@ git の自動マージが誤って片方を消す・順序を壊すことがあ�
   （ローカルの`refs/heads/main`自体は動かさないため、他ワークツリーのcheckout状態に影響しない）。
   ローカル`main`参照の追従（`git branch -f main ...`等）は、該当ワークツリーがclean化されてから
   改めて行う。
+- **`git worktree add`で切ったつもりのworktreeが、実は同じコンテナ・DBを共有していることがある**
+  （実例: 2026-09-30、`docker inspect`で確認したところ稼働中のSailコンテナは1つだけで、ホスト側バインド先が
+  メインworktree固定だった。`.env`はgitignore対象で新規worktreeにはコピーされないが、`COMPOSE_PROJECT_NAME`
+  が一致していれば別worktreeから`sail exec`してもこのコンテナに繋がる）。この状態で複数セッションが並行して
+  `php artisan test`（`RefreshDatabase`）を実行すると、testing DBのテーブルが一時的に欠落し無関係なテストが
+  広範囲に失敗する。詳細・見分け方・対処は`docs/ai-context/known-pitfalls.md`「共有Sailコンテナ・testing DB」
+  を参照。DB状態を変える操作（テスト実行・migrate系・シード等）の前に他セッションへ一声かける
 
 ## PLAN.md等のステータス記述はコミット履歴で裏取りする
 
