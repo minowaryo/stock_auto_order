@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Signal;
 
+use App\Actions\Portfolio\ShowHoldListAction;
 use App\Actions\Signal\ShowBuySignalListAction;
 use App\Actions\Signal\ShowLossReviewListAction;
 use App\Actions\Signal\ShowSignalListAction;
@@ -39,10 +40,13 @@ class SignalList extends Component
         $buySignals = app(ShowBuySignalListAction::class)->execute($sort);
         $lossReviews = app(ShowLossReviewListAction::class)->execute($sort);
 
+        $holdings = app(ShowHoldListAction::class)->execute($sort);
+
         return view('livewire.signal.signal-list', [
             'signals' => $signals,
             'buySignals' => $buySignals,
             'lossReviews' => $lossReviews,
+            'holdings' => $holdings,
             'activeSort' => $sort,
         ]);
     }

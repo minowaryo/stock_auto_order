@@ -225,4 +225,55 @@
             </div>
         @endif
     </x-card>
+
+    {{-- CHG-0028: キープ（hold）バケツ銘柄の一覧。列は固定（基準別セルなし）のため colgroup を直書きする。 --}}
+    <x-card>
+        <h2 class="text-lg font-semibold mb-1">キープ（ホールド）</h2>
+        <p class="text-[13px] text-text-secondary mb-3">いずれのシグナルにも該当しない保有銘柄です（積立・インデックスコアは除く）。</p>
+
+        @if (empty($holdings))
+            <x-empty-state>キープ対象の銘柄はありません</x-empty-state>
+        @else
+            <div id="hold-header-scroll" class="overflow-x-auto sticky top-0 z-20 bg-surface [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <table class="table-fixed w-[1000px] text-[11px] border border-app-border border-b-0 [&_th]:border [&_th]:border-app-border">
+                    <colgroup>
+                        <col style="width: 200px"><col style="width: 110px"><col style="width: 100px"><col style="width: 90px"><col style="width: 360px"><col style="width: 140px">
+                    </colgroup>
+                    <thead>
+                        <tr class="bg-surface">
+                            <th class="py-1.5 px-1.5 text-left">銘柄</th>
+                            <th class="py-1.5 px-1.5 text-left">評価額</th>
+                            <th class="py-1.5 px-1.5 text-left">含み損益率</th>
+                            <th class="py-1.5 px-1.5 text-left">要観察</th>
+                            <th class="py-1.5 px-1.5 text-left">ヘルスライン</th>
+                            <th class="py-1.5 px-1.5 text-left">セクター</th>
+                        </tr>
+                    </thead>
+                </table>
+            </div>
+            <div class="overflow-x-auto" data-scroll-sync-with="hold-header-scroll">
+                <table class="table-fixed w-[1000px] text-[11px] border border-app-border [&_td]:border [&_td]:border-app-border [&_td]:align-top [&_td]:break-words">
+                    <colgroup>
+                        <col style="width: 200px"><col style="width: 110px"><col style="width: 100px"><col style="width: 90px"><col style="width: 360px"><col style="width: 140px">
+                    </colgroup>
+                    <tbody>
+                        @foreach ($holdings as $row)
+                            <tr class="border-b border-app-border last:border-b-0">
+                                <td class="py-1.5 px-1.5 sticky left-0 z-10 bg-surface">{{ $row['symbol_name'] }} {{ $row['symbol_code'] }}</td>
+                                <td class="py-1.5 px-1.5 text-right">{{ number_format($row['market_value']) }}円</td>
+                                <td class="py-1.5 px-1.5">{{ $row['unrealized_gain_rate'] === null ? '-' : sprintf('%+.1f%%', $row['unrealized_gain_rate']) }}</td>
+                                <td class="py-1.5 px-1.5">
+                                    @if ($row['hold_watch'])
+                                        <x-badge variant="warning">要観察</x-badge>
+                                    @endif
+                                </td>
+                                <td class="py-1.5 px-1.5">{{ $row['health_line'] }}</td>
+                                <td class="py-1.5 px-1.5">{{ $row['sector_name'] }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+    </x-card>
 </div>
