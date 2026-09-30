@@ -94,6 +94,16 @@ class FetchExternalMarketDataAction
         $this->weeklyPriceRecorder->recordIndex('nikkei225', $nikkeiHistory);
         $this->weeklyPriceRecorder->recordIndex('sp500', $sp500History);
 
+        // UC-015 (ADR-0019 D2): a SOX fetch failure must not stop the analysis.
+        try {
+            $this->weeklyPriceRecorder->recordIndex('sox', $this->marketIndexClient->fetchWeeklyHistory('sox'));
+        } catch (Throwable $exception) {
+            Log::warning('FetchExternalMarketDataAction: sox index fetch failed', [
+                'index_name' => 'sox',
+                'error' => $exception->getMessage(),
+            ]);
+        }
+
         $this->saveMarketIndicatorSnapshot($snapshot, 'nikkei225', $nikkeiHistory);
         $this->saveMarketIndicatorSnapshot($snapshot, 'sp500', $sp500History);
 

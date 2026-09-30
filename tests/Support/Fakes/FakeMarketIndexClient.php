@@ -3,6 +3,7 @@
 namespace Tests\Support\Fakes;
 
 use App\Services\MarketData\MarketIndexClientInterface;
+use RuntimeException;
 
 /**
  * Deterministic Fake for MarketIndexClientInterface used by Feature Tests
@@ -13,10 +14,20 @@ use App\Services\MarketData\MarketIndexClientInterface;
 class FakeMarketIndexClient implements MarketIndexClientInterface
 {
     /**
-     * @param  array<string, array<int, array{date: string, close: float, volume: int}>>  $responses  Weekly index history keyed by index_name ('nikkei225'/'sp500').
+     * Every index_name passed to fetchWeeklyHistory(), in call order
+     * (including calls that threw).
+     *
+     * @var array<int, string>
+     */
+    public array $requestedIndexNames = [];
+
+    /**
+     * @param  array<string, array<int, array{date: string, close: float, volume: int}>>  $responses  Weekly index history keyed by index_name ('nikkei225'/'sp500'/'sox').
+     * @param  array<int, string>  $throwsFor  index_names for which fetchWeeklyHistory() throws a RuntimeException (simulated fetch failure).
      */
     public function __construct(
         private readonly array $responses = [],
+        private readonly array $throwsFor = [],
     ) {}
 
     /**
@@ -24,6 +35,12 @@ class FakeMarketIndexClient implements MarketIndexClientInterface
      */
     public function fetchWeeklyHistory(string $indexName): array
     {
+        $this->requestedIndexNames[] = $indexName;
+
+        if (in_array($indexName, $this->throwsFor, true)) {
+            throw new RuntimeException("Fake market index fetch failure for {$indexName}");
+        }
+
         return $this->responses[$indexName] ?? [];
     }
 }

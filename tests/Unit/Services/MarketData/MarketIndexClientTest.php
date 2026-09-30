@@ -158,3 +158,67 @@ test('MarketIndexClientはMarketIndexClientInterfaceを実装する', function (
     // Assert
     expect($client)->toBeInstanceOf(MarketIndexClientInterface::class);
 });
+
+/*
+|--------------------------------------------------------------------------
+| UC-015 / ADR-0019 D2 (CHG-0026 Cycle1, Red phase): SOX指数の追加
+|--------------------------------------------------------------------------
+|
+| 'sox' → Yahoo symbol '^SOX', delegated with the default 104 weeks.
+| Expected Red: InvalidArgumentException "Unsupported index_name: sox".
+|
+*/
+
+test('UC-015: soxはYahooシンボル^SOXにマッピングされ、104週分でYahooFinanceChartClientへ委譲される', function () {
+    // Arrange: 106 weekly bars (Mon 2024-01-01 onwards), all with volume 0 like ^SOX
+    $start = 1704067200; // 2024-01-01 00:00:00 UTC (Monday)
+    $timestamps = array_map(fn (int $i) => $start + $i * 7 * 86400, range(0, 105));
+    $closes = array_map(fn (int $i) => 4000.0 + $i * 10.0, range(0, 105));
+
+    Http::fake([
+        'query1.finance.yahoo.com/*' => Http::response([
+            'chart' => [
+                'result' => [
+                    [
+                        'timestamp' => $timestamps,
+                        'indicators' => [
+                            'quote' => [
+                                ['close' => $closes, 'volume' => array_fill(0, 106, 0)],
+                            ],
+                        ],
+                    ],
+                ],
+                'error' => null,
+            ],
+        ], 200),
+    ]);
+
+    $client = new MarketIndexClient(new YahooFinanceChartClient);
+
+    // Act
+    $result = $client->fetchWeeklyHistory('sox');
+
+    // Assert: requested symbol
+    Http::assertSent(function ($request) {
+        $url = $request->url();
+
+        return str_contains($url, '/v8/finance/chart/%5ESOX?')
+            || str_contains($url, '/v8/finance/chart/^SOX?');
+    });
+
+    // Assert: sliced to the latest 104 weeks (default weeks), rows are kept despite volume 0
+    expect($result)->toHaveCount(104);
+    expect($result[0])->toBe(['date' => '2024-01-15', 'close' => 4020.0, 'volume' => 0]);
+    expect($result[103]['close'])->toBe(5050.0);
+});
+
+test('UC-015: sox追加後もnikkei225/sp500/sox以外（vix）はInvalidArgumentExceptionが投げられる', function () {
+    // Arrange
+    Http::fake();
+    $client = new MarketIndexClient(new YahooFinanceChartClient);
+
+    // Act / Assert
+    expect(fn () => $client->fetchWeeklyHistory('vix'))
+        ->toThrow(InvalidArgumentException::class);
+    Http::assertNothingSent();
+});
