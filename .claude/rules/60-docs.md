@@ -27,6 +27,7 @@
 | 新しいデータモデル追加（CRUD網羅） | `.claude/rules/30-testing.md`（CRUD網羅ルール）参照 |
 | 開発/テスト用credentialやAPIキーの保管場所を新たに記録した | `docs/credentials/README.md`（実際のsecret値はコミットしない） |
 | エラーハンドリング・レスポンス形式の規約変更 | `docs/development/coding-standards.md` |
+| 新しいAIエントリポイントの追加（スキルまたはコマンド） | `docs/ai-context/common-commands.md`（エントリポイント表）+ `README.md`（ディレクトリツリー）。`.claude/skills/` か `.claude/commands/` かは `meta/adr/ADR-0013-skills-vs-commands.md` の基準（実行し忘れる失敗モードならスキル、タイミングを誤る失敗モードならコマンド）で判断する |
 | Gate条件・品質ゲート運用の変更 | `.claude/rules/00-global.md`（詳細表・絶対禁止）+ `CLAUDE.md`（Step手順）+ `AGENTS.md`（Codex用。Gate定義を複製しているため3ファイル同期が必要） |
 | Gitワークフローの変更（ブランチ・コミット・push・マージ・マージ前チェック） | `.claude/rules/70-git.md` のみ——他のファイルは1行のポインタまで（ポリシーレベルの変更なら ADR も。`meta/adr/ADR-0016-git-workflow.md` 参照） |
 

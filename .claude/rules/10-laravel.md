@@ -29,7 +29,7 @@ Controllerは**以下を行ってはならない**:
 
 - `DB::` の呼び出し、またはデータベースコンテナの解決（`app('db')`）——トランザクションはServiceレイヤーの責務
 - Eloquentの書き込みメソッドを直接呼び出す——`save` / `fill` / `update` / `updateOrCreate` / `firstOrCreate` / `create` / `insert` / `upsert` / `delete` / `forceDelete` / `restore` / `increment` / `decrement` / `attach` / `detach` / `sync` / `associate`
-- ロールのインラインチェック（`$user->role === 'admin'`、`$user->isAdmin()` など）——認可はPolicyを経由する
+- ロールのインラインチェック（`$user->role === 'admin'`、`$user->isAdmin()` など）——認可は `meta/adr/ADR-0003-auth-strategy.md` に従いPolicyを経由する
 - **複数のエンティティ**にまたがる判断を行う（例: 注文の数量と商品の在庫を比較する）——これはクロスエンティティな不変条件であり、Service / Actionの責務
 
 **これは下記の「Modelにビジネスロジックを書かない」と矛盾しない。** 実施（enforcement）はService/Actionレイヤーが担い、Modelはスキーマとリレーションのみを保持する。ここで意図的に「Model層」という語を避けているのは、フレームワークによって意味が異なるためである。
