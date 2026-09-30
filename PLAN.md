@@ -3,6 +3,24 @@
 > 2026-08-27（フロントエンド実装Phase5完了時点。UC-010 Gate4完了・コミット`ba239fe`分も含む）以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、Phase2 UC-008（Cycle1・Cycle2）完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査完了、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了、利確・リバランス閾値の動的分岐ロジック検討〔検討事項の記録のみ、実装はCHG-0006として2026-08-28〜29に別途完了〕、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、フロントエンド実装Phase4（UC-003銘柄詳細画面）完了、UC-010 Gate2/Gate3正式承認（買いシグナル7種の前提条件追加）完了、UC-010 Gate4完了・コミット（`ba239fe`）、フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了、およびフロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了〔2026-09-05、CHG-0011作業時に退避〕等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
 > **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。300行超過に伴い「数値表示フォーマット修正完了（2026-08-28）」「UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0012 Phase 0作業時）。約298行に達したため「利確検討ラインの動的分岐 CHG-0006（2026-08-28〜29）」「売買シグナル画面の可読性改善（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0013／ADR-0012作業時）。300行超過に伴い「取込後サマリーレポートのグローバルナビタブ化 CHG-0008（2026-09-05）」の1エントリを退避済み（2026-09-12、F-012・CHG-0012のステータス記述を実態〔mainマージ済み〕に修正した際に発生した増分に対応）。300行超過に伴い「売買シグナル画面 判定チェックリスト表示 CHG-0007（2026-08-29〜09-05）」の1エントリを退避済み（2026-09-12、CHG-0016〔新規投資候補テーブルの固定ヘッダー化〕作業時）。300行超過に伴い「整理検討（含み損）候補一覧の新設 F-011（2026-09-05〜06）」の1エントリを退避済み（2026-09-21、CHG-0017/CHG-0018マージ後の最終`/review`・コミット・push前整理時）。300行超過見込みに伴い「財務健全性フィルタに営業利益率を追加 CHG-0012（2026-09-06〜07）」の1エントリを退避済み（2026-09-27、エビデンス提言取込・CHG-0020 Phase 0作業時）。
 
+> 2026-10-01: CHG-0027作業時に「成長率算出バグの是正（CHG-0013・ADR-0012）＋押し目買いPEG下限バグ」エントリを`docs/history/plan-archive.md`へ退避（mainマージ済み確認）。
+
+## 売買シグナル画面の評価額ソート・整理検討の評価額列/列順統一（CHG-0027）Green完了（2026-10-01）
+
+### Decision
+
+- 本人要望: 整理検討にも評価額を出す／全テーブルのソート順を確認し評価額で並べたい（何がインパクト大かを知りたい）。本人判断: (1) 整理検討の列順を利確・買い増しと統一（銘柄→評価額→含み損益率）、(2) 既定の並びを評価額順に変更、従来の透明マルチキー（財務健全性等）は「おすすめ順」として選択可、(3) それ以外は提案どおり
+- Actionは`execute(string $sort = 'recommended')`（`App\Support\SignalListSort`）。既定を従来のまま残すのは、JSON APIとUC-013（`ClassifyHoldingsAction`のバケツ内並び）が依存するため。画面（`SignalList`）だけが`market_value`（既定）/`recommended`を切替（ボタン・URL `?sort=`）。同額は従来の並びで決着
+- **スコープ外（本人の「提案どおり」に含まれるが今回は未着手）**: 保有銘柄一覧・サマリレポートのバケツ別表への評価額列追加は、別途判断待ち
+
+### Files touched
+
+`docs/product/use-cases.md`（UC-004/010/011・承認記録）、`docs/rcid/traceability-matrix.md`、`app/Support/SignalListSort.php`（新規）、`app/Actions/Signal/Show{SignalList,BuySignalList,LossReviewList}Action.php`、`app/Livewire/Signal/SignalList.php`、`resources/views/livewire/signal/signal-list.blade.php`、`resources/views/components/loss-review-table-colgroup.blade.php`、`tests/Feature/CHG0027SignalSortTest.php`（新規13件）
+
+### Status
+
+Red 9件→Gate4承認→Green。フルスイート845 passed・pint適用済み。実画面確認・`/review`・コミットは未実施。
+
 ## エビデンス提言の取込とシグナル検証基盤（CHG-0020・ADR-0017・F-014・UC-014）Phase 0 完了・Gate1〜3叩き台作成中（2026-09-27〜）
 
 ### Decision
@@ -261,27 +279,6 @@
 実データ確認（2026-09-07、本番相当）: 楽天のお気に入り銘柄CSV（216銘柄）を実際にアップロードし`watchlist_items`へ取込済み（`source=rakuten_favorites_csv`）。一括更新も複数回実行（`watchlist_refresh_runs` id 1〜7、いずれも`completed`・未保有対象90銘柄を処理・failed 0）、`watchlist_buy_signals`16件検出、対象216銘柄すべてに`technical_indicators`が格納済み。**候補CSVの取込・一括更新は既に実施済みであり、改めて試す必要はない状態**。
 
 > 注: 本ブランチの作業ツリーには別セッションの ADR-0012（成長率修正）作業が混在していたため、F-012 分の `data-model.md`／`traceability-matrix.md`／`PLAN.md` は当初コミットを保留していた。2026-09-12、他セッションが手を止めているタイミングで内容を行単位に再構成し分離コミット（詳細は上記「並行作業」参照）。
-
-## 成長率算出バグの是正（CHG-0013・ADR-0012）＋押し目買いPEG下限バグ（2026-09-06〜）
-
-### Decision
-
-- 発端: `/signals` 画面で商社（8001等）の財務指標・PEGレシオが「—」表示になる理由の調査。DB内訳を実測（`fundamental_indicators` 128件）した結果、"—" の約半分は減益（設計どおりのN/A）だが、もう半分は**取得が更新されていない古いデータ**（次回CSV取込で `FetchExternalMarketDataAction` が再フェッチされ復旧する見込み。要対応なし）と判明。加えて調査中に2件の内部ロジックバグを発見
-- **バグA（ADR-0012）**: `FundamentalIndicatorMapper::calculateGrowth()`（＋`FetchExternalMarketDataAction::calculateStatementGrowth()` の複製）が成長率を「`fetchStatements()` の配列 index 0 と index 4 の比較」で算出。J-Quants `/v2/fins/summary` が (a) 同一決算を重複開示（8001の3Q決算が `DiscDate` 違いで2行）、(b) 1Q/2Q/3Q/FY を時系列混在で返すため、「通期売上 ÷ 1Q売上 → +316%」のような無意味な値が `financial_statements.revenue_yoy_change` に永続化されていた。data-model.md の定義は「前年同期比」。下流の `FundamentalHealthEvaluator`（passed/failed）→`TakeProfitThresholdEvaluator`（+150%ライン）→UC-004/005/008/009/010/011 に波及
-- **修正方針（本人がAskUserQuestionで選択）**: 「最新の本決算（FY）とその前期の本決算の比較（前期通期比）」に変更。`CurPerType==='FY'` で絞り `CurFYEn`（会計年度末）で重複排除して2期比較。四半期ベースの鮮度は捨てる（本人の目的は中長期評価）。代替案（`CurPerType` を年跨ぎで突合／重複排除だけ／FY限定fetch）は却下（ADR-0012 Rationale）
-- **バグB**: `BuySignalDeterminationService::determinePegUndervalued()` が `if ($pegRatio <= 1.0)` で下限なし。**US株の Finnhub `pegTTM` は負値をそのまま返す**（DB実データに WIT -34.7 / RGTI -0.98 等）ため、減益・赤字成長株を「割安」と誤判定して `peg_undervalued` シグナルを出していた。JP株は Mapper が `eps_growth<=0` で null 化するため無傷。`SignalCriteriaEvaluator` の買いチェックリスト PEG 行も同様。→ `0 < peg <= 1.0` に修正（`classify()` に `lte_positive` 方向を追加）
-- **低優先（今回スコープ外・`accuracy-improvement-backlog.md` へ記録予定）**: (C) `calculateGrowth`/`calculateOperatingIncomeGrowth` は前期がマイナスだと成長率の符号が反転（黒字転換が「減益」に見える）、(D) `FinnhubClient::fetchReportedFinancials` が並べ替えなしで `[0]`=当期前提、(E) `findConceptValue` が XBRL の先頭一致で前期比較値を拾うリスク、(F) セクター平均相対力に自銘柄を含む、(G) week52 高安が週足終値ベース
-- 問題なしを確認: RSI/MACD/ボリンジャー/13週リターン窓/通貨整合（`SignalDeterminationService` ネイティブ vs `SignalCriteriaEvaluator` fx換算）/`FundamentalHealthEvaluator` の判定順序/`higherGrowthRate` の `max()`
-
-### Files touched
-
-**ドキュメント（先行）**: `docs/adr/ADR-0012-growth-rate-fy-comparison.md`（新規、Accepted）、`docs/architecture/data-model.md`（成長率3列＋`peg_ratio`＋`financial_statements.*_yoy_change` の説明・UC-006注記・変更ログ）、`docs/ai-context/known-pitfalls.md`（`/fins/summary` の重複開示・累計期混在）、`docs/rcid/traceability-matrix.md`（CHG-0013 行）、`PLAN.md`（本エントリ）
-
-**コード（Red→Gate4承認→Green→Refactor 完了）**: `app/Services/MarketData/JQuantsClient.php`（`period_type`/`fiscal_year_end` 追加・既定16期）、`app/Services/MarketData/JQuantsClientInterface.php`、`app/Services/Analysis/FundamentalIndicatorMapper.php`（`annualGrowth()` public 新設、`calculateGrowth()` 廃止）、`app/Actions/Analysis/FetchExternalMarketDataAction.php`（`calculateStatementGrowth()` 廃止し `annualGrowth()` 共有）、`app/Services/Analysis/BuySignalDeterminationService.php`（PEG下限）、`app/Services/Analysis/SignalCriteriaEvaluator.php`（`lte_positive` 方向）、`tests/Support/Fakes/FakeJQuantsClient.php`、テスト5ファイル（`FundamentalIndicatorMapperTest`/`JQuantsClientTest`/`FetchExternalMarketDataActionTest`/`BuySignalDeterminationServiceTest`/`SignalCriteriaEvaluatorTest`、新規10件）
-
-### Status
-
-Green実装・Refactor完了。フルスイート582件Green（13 deprecated は既存・無関係）、pint適用済み。実データ（live J-Quants）で 8001/8058/1605/7203 の成長率が妥当な通期比になることを確認（8001 revenue_growth: +316% → +0.67%）。C〜G の低優先課題は `docs/product/accuracy-improvement-backlog.md`「内部計算ロジックの精度課題」節に記録済み。当初 `feat/chg0012-operating-margin-criterion` 上で未コミットのまま作業していたが、CHG-0012（営業利益率、無関係）とは別件のため独立ブランチ `feat/chg0013-growth-rate-fy-comparison` に分離してコミット、`/review`（コメント英訳・data-model.mdのindex 0記述誤りの訂正・backlog H〜K追加）を経て**mainマージ済み**（`f2a73a7`／`2a7bceb`。2026-09-12、`feat/f012-favorites-watchlist` 経由でmainへ統合後、この独立ブランチとの内容差分を突き合わせ`/review`分の差分を追加反映）。`feat/chg0013-growth-rate-fy-comparison` ブランチは以後削除可
 
 ## 今後の対応（未着手）（2026-08-27追記、Phase5の実ブラウザ確認時に発見）
 

@@ -8,6 +8,7 @@ use App\Services\Analysis\BuySignalDeterminationService;
 use App\Services\Analysis\LowGrowthDeterminer;
 use App\Services\Analysis\SignalCriteriaEvaluator;
 use App\Services\Analysis\TakeProfitThresholdEvaluator;
+use App\Support\SignalListSort;
 
 /**
  * UC-004 (利確シグナル一覧): lists holdings from the most recent weekly
@@ -30,7 +31,7 @@ class ShowSignalListAction
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function execute(): array
+    public function execute(string $sort = SignalListSort::RECOMMENDED): array
     {
         // docs/architecture/data-model.md#snapshots: "直近" is determined by
         // snapshotted_at, with id as a tiebreaker for same-second snapshots
@@ -75,7 +76,7 @@ class ShowSignalListAction
             ->values()
             ->all();
 
-        usort($rows, fn (array $a, array $b) => $this->compareRows($a, $b));
+        usort($rows, SignalListSort::comparator($sort, fn (array $a, array $b) => $this->compareRows($a, $b)));
 
         return array_map(function (array $row) {
             unset($row['_signal_count'], $row['_technical_met']);
