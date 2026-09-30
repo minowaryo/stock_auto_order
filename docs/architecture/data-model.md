@@ -679,6 +679,7 @@
 | 2026-09-27 | （Gate3レビュー待ち） | 提案（CR） | **シグナル結果の前向き記録（UC-014、F-014、ADR-0017、CHG-0020）**。新規テーブル3件: `weekly_prices`（`holding_id`×`week_date` unique、既存取得の週足104週をUPSERT）／`index_weekly_prices`（nikkei225/sp500の週足）／`signal_occurrences`（追記のみ、`(holding_id, source, signal_type, observed_week)` unique、発生時点の根拠値をJSONで保持）。**既存テーブルの変更なし**。新規の外部APIコールなし |
 | 2026-09-27 | minowaryo | 承認（Gate3） | **シグナル結果の前向き記録（CHG-0020、ADR-0017）**の新規テーブル3件（`weekly_prices`／`index_weekly_prices`／`signal_occurrences`）を同日の提案どおり承認。追加のみのマイグレーションで既存テーブルの変更なし。`weekly_prices.week_date`の週の基準日の揃い方はGate4 Cycle1で実測確認する |
 | 2026-09-30 | （Gate3レビュー待ち） | 提案（CR） | **集中度ダッシュボード（UC-015、F-015、ADR-0019、CHG-0026）**。スキーマ変更は`index_weekly_prices.index_name`のenumに`sox`を追加する1点のみ（新規テーブルなし）。既存値の後ろへの追加で後方互換、既存行の変換なし。対象は約200行の小さな表。`20-mysql.md`の「カラム型変更」に該当するためADR-0019 Consequencesに記載。Laravel 13ネイティブの`->change()`で書き、生SQLは使わない。集中度の指標値は保存せずアクセスのたびに算出する |
+| 2026-09-30 | minowaryo | 承認（Gate3） | **集中度ダッシュボード（CHG-0026、ADR-0019）**の`index_weekly_prices.index_name`への`sox`追加を同日の提案どおり承認。新規テーブルなし。`^SOX`の出来高がnullで全行が除外されないかはGate4 Cycle1で実データ確認する |
 
 ## 変更履歴
 
@@ -726,3 +727,4 @@
 | 2026-09-27 | シグナル結果の前向き記録（CHG-0020）のGate3叩き台として`weekly_prices`／`index_weekly_prices`／`signal_occurrences`のテーブル定義・ER図・設計方針（上書き型の時系列）を追記。Gate3レビュー待ち | ADR-0017 |
 | 2026-09-27 | CHG-0020の3テーブルをGate3承認 | ADR-0017 |
 | 2026-09-30 | 集中度ダッシュボード（CHG-0026）のGate3叩き台として`index_weekly_prices.index_name`のenumへの`sox`追加を記載。新規テーブルなし。Gate3レビュー待ち | ADR-0019 |
+| 2026-09-30 | CHG-0026の`sox`追加をGate3承認 | ADR-0019 |
