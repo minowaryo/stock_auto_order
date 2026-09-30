@@ -360,6 +360,7 @@ class ClassifyHoldingsAction
             'overweight_sector' => $overweightSector,
             'hold_watch' => $holdWatch,
             'health_line' => $healthLine,
+            'sector_name' => $sectorName,
         ];
     }
 

@@ -2,10 +2,13 @@
 
 namespace App\Livewire\Signal;
 
+use App\Actions\Portfolio\ShowHoldListAction;
 use App\Actions\Signal\ShowBuySignalListAction;
 use App\Actions\Signal\ShowLossReviewListAction;
 use App\Actions\Signal\ShowSignalListAction;
+use App\Support\SignalListSort;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 /**
@@ -18,16 +21,33 @@ use Livewire\Component;
 #[Layout('components.layouts.app', ['title' => '売買シグナル'])]
 class SignalList extends Component
 {
+    /** CHG-0027: 3テーブル共通の並び順。既定は評価額順、おすすめ順（従来の透明マルチキー）に切替可。 */
+    #[Url(as: 'sort')]
+    public string $sort = SignalListSort::MARKET_VALUE;
+
+    public function setSort(string $sort): void
+    {
+        if (SignalListSort::isValid($sort)) {
+            $this->sort = $sort;
+        }
+    }
+
     public function render()
     {
-        $signals = app(ShowSignalListAction::class)->execute();
-        $buySignals = app(ShowBuySignalListAction::class)->execute();
-        $lossReviews = app(ShowLossReviewListAction::class)->execute();
+        $sort = SignalListSort::isValid($this->sort) ? $this->sort : SignalListSort::MARKET_VALUE;
+
+        $signals = app(ShowSignalListAction::class)->execute($sort);
+        $buySignals = app(ShowBuySignalListAction::class)->execute($sort);
+        $lossReviews = app(ShowLossReviewListAction::class)->execute($sort);
+
+        $holdings = app(ShowHoldListAction::class)->execute($sort);
 
         return view('livewire.signal.signal-list', [
             'signals' => $signals,
             'buySignals' => $buySignals,
             'lossReviews' => $lossReviews,
+            'holdings' => $holdings,
+            'activeSort' => $sort,
         ]);
     }
 }
