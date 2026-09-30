@@ -5,9 +5,9 @@
     <div class="flex items-center gap-2 mb-3 text-[13px]">
         <span class="text-text-secondary">並び順:</span>
         <button type="button" wire:click="setSort('market_value')"
-            class="px-2.5 py-1 rounded border {{ $sort === 'market_value' ? 'bg-primary text-white border-primary' : 'border-app-border text-text-secondary hover:text-text' }}">評価額順</button>
+            class="px-2.5 py-1 rounded border {{ $activeSort === 'market_value' ? 'bg-primary text-white border-primary' : 'border-app-border text-text-secondary hover:text-text' }}">評価額順</button>
         <button type="button" wire:click="setSort('recommended')"
-            class="px-2.5 py-1 rounded border {{ $sort === 'recommended' ? 'bg-primary text-white border-primary' : 'border-app-border text-text-secondary hover:text-text' }}">おすすめ順</button>
+            class="px-2.5 py-1 rounded border {{ $activeSort === 'recommended' ? 'bg-primary text-white border-primary' : 'border-app-border text-text-secondary hover:text-text' }}">おすすめ順</button>
         <span class="text-text-secondary">（おすすめ順: 各表の判定優先度。財務健全性・シグナル数など）</span>
     </div>
 

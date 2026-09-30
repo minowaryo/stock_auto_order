@@ -292,6 +292,14 @@ describe('CHG-0027: 売買シグナル画面（Livewire）', function () {
         $component->assertSet('sort', 'market_value');
     });
 
+    test('URLに不正な並び順が指定されても評価額順として描画され、評価額順ボタンが選択状態になる', function () {
+        $user = User::factory()->create();
+
+        $component = Livewire::actingAs($user)->withQueryParams(['sort' => 'bogus'])->test(SignalList::class);
+
+        $component->assertSeeHtml('bg-primary text-white border-primary">評価額順');
+    });
+
     test('整理検討テーブルに評価額が桁区切りで表示され、列は 銘柄→評価額→含み損率→損失の実額 の順になる', function () {
         $user = User::factory()->create();
         chg27TestSeedLossReview();

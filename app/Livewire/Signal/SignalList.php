@@ -43,6 +43,7 @@ class SignalList extends Component
             'signals' => $signals,
             'buySignals' => $buySignals,
             'lossReviews' => $lossReviews,
+            'activeSort' => $sort,
         ]);
     }
 }
