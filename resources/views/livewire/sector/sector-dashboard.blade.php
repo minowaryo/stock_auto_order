@@ -4,28 +4,42 @@
     <x-card>
         <h2 class="text-lg font-semibold mb-4">セクター配分</h2>
 
-        @foreach ($sectors as $sector)
-            <div class="mb-4 last:mb-0">
-                <div class="flex items-center justify-between mb-1">
-                    <span class="font-medium">{{ $sector['sector_name'] }}</span>
-                    <span class="text-text-secondary text-[13px]">{{ $sector['allocation_rate'] }}%</span>
-                    @if ($sector['allocation_status'] === '偏り警告')
-                        <x-badge variant="danger">偏り警告</x-badge>
-                    @elseif ($sector['allocation_status'] === 'やや偏り')
-                        <x-badge variant="warning">やや偏り</x-badge>
-                    @endif
-                </div>
-                <div class="w-full bg-slate-100 rounded h-2">
-                    <div class="bg-primary rounded h-2" style="width: {{ $sector['allocation_rate'] }}%"></div>
+        @foreach ($marketGroups as $group)
+            <div class="mb-6 last:mb-0">
+                <div class="flex items-center justify-between border-b border-app-border pb-1 mb-3">
+                    <h3 class="font-semibold">{{ $group['label'] }}</h3>
+                    <span class="text-[13px] text-text-secondary">小計 ¥{{ number_format($group['subtotal']) }}</span>
                 </div>
 
-                @if ($sector['is_overweight'])
-                    <div class="text-[13px] text-text-secondary mt-1">
-                        売却提案: ¥{{ number_format($sector['suggested_sell_amount']) }} / {{ $sector['suggested_sell_quantity'] }}株
+            @foreach ($group['sectors'] as $sector)
+                <div class="mb-4 last:mb-0">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="font-medium">{{ $sector['sector_name'] }}</span>
+                        <span class="text-text-secondary text-[13px]">¥{{ number_format($sector['allocation_amount']) }} / {{ number_format($sector['allocation_rate'], 1) }}%</span>
+                        @if ($sector['allocation_status'] === '偏り警告')
+                            <x-badge variant="danger">偏り警告</x-badge>
+                        @elseif ($sector['allocation_status'] === 'やや偏り')
+                            <x-badge variant="warning">やや偏り</x-badge>
+                        @endif
                     </div>
-                @endif
+                    <div class="w-full bg-slate-100 rounded h-2">
+                        <div class="bg-primary rounded h-2" style="width: {{ round($sector['allocation_rate'], 1) }}%"></div>
+                    </div>
+
+                    @if ($sector['is_overweight'])
+                        <div class="text-[13px] text-text-secondary mt-1">
+                            売却提案: ¥{{ number_format($sector['suggested_sell_amount']) }} / {{ number_format($sector['suggested_sell_quantity'], 1) }}株
+                        </div>
+                    @endif
+                </div>
+            @endforeach
             </div>
         @endforeach
+
+        <div class="flex items-center justify-between border-t border-app-border pt-2 font-semibold">
+            <span>合計</span>
+            <span>¥{{ number_format($grandTotal) }}</span>
+        </div>
     </x-card>
 
     <x-card>

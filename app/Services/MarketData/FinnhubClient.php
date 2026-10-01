@@ -15,6 +15,8 @@ final class FinnhubClient implements FinnhubClientInterface
 {
     private const METRIC_URL = 'https://finnhub.io/api/v1/stock/metric';
 
+    private const PROFILE_URL = 'https://finnhub.io/api/v1/stock/profile2';
+
     private const FINANCIALS_URL = 'https://finnhub.io/api/v1/stock/financials-reported';
 
     /**
@@ -59,6 +61,18 @@ final class FinnhubClient implements FinnhubClientInterface
         }
 
         return $response->json('metric');
+    }
+
+    public function fetchIndustry(string $symbolCode): ?string
+    {
+        $response = $this->requestWithRetry(self::PROFILE_URL, [
+            'symbol' => $symbolCode,
+            'token' => config('services.finnhub.key'),
+        ]);
+
+        $industry = $response?->json('finnhubIndustry');
+
+        return is_string($industry) && trim($industry) !== '' ? trim($industry) : null;
     }
 
     public function fetchReportedFinancials(string $symbolCode, int $periods = 2): array
