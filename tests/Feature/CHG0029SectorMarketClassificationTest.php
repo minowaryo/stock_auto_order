@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Analysis\FetchExternalMarketDataAction;
+use App\Actions\Watchlist\ShowWatchlistAction;
 use App\Livewire\Sector\SectorDashboard;
 use App\Models\Holding;
 use App\Models\HoldingSnapshot;
@@ -8,11 +9,14 @@ use App\Models\ImportBatch;
 use App\Models\SectorClassification;
 use App\Models\Snapshot;
 use App\Models\User;
+use App\Models\WatchlistItem;
+use App\Services\Candidate\CandidateOverlapCalculator;
 use App\Services\MarketData\FinnhubClientInterface;
 use App\Services\MarketData\JpStockPriceClientInterface;
 use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\MarketData\MarketIndexClientInterface;
 use App\Services\MarketData\UsStockPriceClientInterface;
+use App\Services\Sector\SectorAllocationCalculator;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
@@ -395,5 +399,45 @@ describe('CHG-0029 sectors:backfill コマンド', function () {
 
         expect($failing->fresh()->sector_classification_id)->toBeNull();
         expect($ok->fresh()->sectorClassification?->name)->toBe('Technology');
+    });
+});
+
+describe('CHG-0029 /review指摘: 重複率の照会は市場を区別する', function () {
+    test('米国株の未分類候補は、日本株の未分類行の偏りではなく米国株内の保有で判定される', function () {
+        $snapshot = chg29Snapshot();
+        // 日本株の未分類が全体の大半（偏り警告）、米国株の未分類の保有は無い
+        chg29Holding($snapshot, ['symbol_code' => '1111', 'market' => 'jp'], ['quantity' => 100, 'current_price' => 9000]);
+        chg29Holding($snapshot, ['symbol_code' => 'AAPL', 'market' => 'us', 'sector_classification_id' => chg29Sector('us', 'Technology')->id], ['quantity' => 1, 'current_price' => 1000]);
+        $candidate = Holding::create([
+            'symbol_code' => 'ZZZZ', 'market' => 'us', 'instrument_type' => 'stock',
+            'symbol_name' => '候補', 'sector_classification_id' => null, 'first_detected_at' => now(),
+        ]);
+
+        $result = app(CandidateOverlapCalculator::class)
+            ->calculate($candidate, app(SectorAllocationCalculator::class));
+
+        expect($result['overlap_rate'])->toBe(0.0);
+        expect($result['diversification_comment'])->toContain('保有はありません');
+    });
+
+    test('ウォッチリストの重複率も、同名セクターを市場ごとに別々に参照する（日本株の候補は日本株の行を使う）', function () {
+        $snapshot = chg29Snapshot();
+        // 日本株Technology 90%（偏り警告）／米国株Technology 10%（健全）
+        chg29Holding($snapshot, ['symbol_code' => '1111', 'market' => 'jp', 'sector_classification_id' => chg29Sector('jp', 'Technology')->id], ['quantity' => 90, 'current_price' => 1000]);
+        chg29Holding($snapshot, ['symbol_code' => 'AAPL', 'market' => 'us', 'sector_classification_id' => chg29Sector('us', 'Technology')->id], ['quantity' => 10, 'current_price' => 1000]);
+        $candidate = Holding::create([
+            'symbol_code' => '2222', 'market' => 'jp', 'instrument_type' => 'stock',
+            'symbol_name' => '日本候補', 'sector_classification_id' => SectorClassification::where('market', 'jp')->value('id'), 'first_detected_at' => now(),
+        ]);
+        WatchlistItem::create([
+            'holding_id' => $candidate->id, 'folder_name' => 'テーマ', 'exchange_label' => '東Ｐ',
+            'source' => 'rakuten_favorites_csv', 'last_seen_in_csv_at' => now(), 'registered_at' => now(),
+        ]);
+
+        $rows = app(ShowWatchlistAction::class)->execute();
+        $row = collect($rows['items'] ?? $rows)->firstWhere('symbol_code', '2222');
+
+        // 日本株の候補は日本株Technology（90%）を参照する（米国株Technologyの10%ではない）
+        expect($row['overlap_rate'])->toEqualWithDelta(90.0, 0.01);
     });
 });

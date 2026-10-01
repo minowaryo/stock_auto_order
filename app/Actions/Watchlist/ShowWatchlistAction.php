@@ -65,7 +65,7 @@ class ShowWatchlistAction
 
         // Sector allocations computed once (avoids an N+1 of
         // SectorAllocationCalculator::calculate() per row).
-        $sectorAllocations = collect($this->sectorAllocationCalculator->calculate())->keyBy('sector_name');
+        $sectorAllocations = collect($this->sectorAllocationCalculator->calculate())->keyBy(fn (array $row) => $row['market'].'|'.$row['sector_name']);
 
         $items = WatchlistItem::query()
             ->whereNotIn('holding_id', $heldHoldingIds)
@@ -104,7 +104,7 @@ class ShowWatchlistAction
         $week52Low = $technical?->week52_low !== null ? (float) $technical->week52_low : null;
         $rangePosition = $this->week52RangePosition($currentPrice, $week52High, $week52Low);
 
-        [$overlapRate, $diversificationComment] = $this->overlap($holding->sectorClassification?->name ?? self::UNCLASSIFIED_NAME, $sectorAllocations);
+        [$overlapRate, $diversificationComment] = $this->overlap($holding->market.'|'.($holding->sectorClassification?->name ?? self::UNCLASSIFIED_NAME), $sectorAllocations);
 
         $nisaRecommended = $equityRatio !== null && $roe !== null
             && $equityRatio >= self::NISA_MIN_EQUITY_RATIO && $roe >= self::NISA_MIN_ROE;
@@ -176,9 +176,9 @@ class ShowWatchlistAction
      * @param  Collection<string, array<string, mixed>>  $sectorAllocations
      * @return array{0: float, 1: string}
      */
-    private function overlap(string $sectorName, $sectorAllocations): array
+    private function overlap(string $marketAndSectorName, $sectorAllocations): array
     {
-        $row = $sectorAllocations->get($sectorName);
+        $row = $sectorAllocations->get($marketAndSectorName);
 
         if ($row === null) {
             return [0.0, '現在このセクターの保有はありません。新規投資は分散に貢献します'];

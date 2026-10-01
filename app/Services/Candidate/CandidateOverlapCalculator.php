@@ -22,7 +22,8 @@ class CandidateOverlapCalculator
         $sectorName = $holding->sectorClassification?->name ?? self::UNCLASSIFIED_NAME;
 
         $row = collect($calculator->calculate())
-            ->first(fn (array $row) => $row['sector_name'] === $sectorName);
+            // CHG-0029 / ADR-0020: sector rows are per market, so match on both.
+            ->first(fn (array $row) => $row['market'] === $holding->market && $row['sector_name'] === $sectorName);
 
         if ($row === null) {
             return [
