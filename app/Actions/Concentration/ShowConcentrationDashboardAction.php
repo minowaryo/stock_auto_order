@@ -6,6 +6,7 @@ use App\Models\HoldingSnapshot;
 use App\Models\IndexWeeklyPrice;
 use App\Models\Snapshot;
 use App\Models\WeeklyPrice;
+use App\Services\Concentration\ConcentrationVerdictEvaluator;
 use App\Services\Concentration\CorrelationMatrixCalculator;
 use App\Services\Concentration\EffectiveBetCalculator;
 use App\Services\Concentration\HoldingWeightCalculator;
@@ -33,6 +34,7 @@ class ShowConcentrationDashboardAction
         private readonly EffectiveBetCalculator $effectiveBetCalculator,
         private readonly SoxBetaCalculator $soxBetaCalculator,
         private readonly TopHoldingsConcentrationCalculator $topHoldingsCalculator,
+        private readonly ConcentrationVerdictEvaluator $verdictEvaluator,
     ) {}
 
     /**
@@ -89,6 +91,18 @@ class ShowConcentrationDashboardAction
         $includedValue = array_sum(array_intersect_key($marketValues, array_flip($included)));
         $pc1 = $enough ? $this->principalComponentAnalyzer->firstComponentShare($returns) : null;
         $top5 = $this->topHoldingsCalculator->topWeight($marketValues, 5);
+        $pc1Percent = $pc1 === null ? null : $pc1 * 100;
+        $top5Percent = $top5 === null ? null : $top5 * 100;
+        $enb = $enough ? $this->effectiveBetCalculator->calculate($returns, $weights) : null;
+        $portfolioBeta = $enough && $built['sox_returns'] !== null
+            ? $this->soxBetaCalculator->portfolioBeta($betas, $weights)
+            : null;
+        $matrix = array_map(fn (int $id) => [
+            'holding_id' => $id,
+            'symbol_code' => $holdingsById[$id]->symbol_code,
+            'symbol_name' => $holdingsById[$id]->symbol_name,
+            'correlations' => array_map(fn (int $other) => $correlations[$id][$other], $matrixIds),
+        ], $matrixIds);
 
         return [
             'has_snapshot' => true,
@@ -96,18 +110,11 @@ class ShowConcentrationDashboardAction
             'window_end_week' => $built['window_end'],
             'included_count' => count($included),
             'coverage_rate' => $totalValue > 0 ? $includedValue / $totalValue * 100 : null,
-            'pc1_share' => $pc1 === null ? null : $pc1 * 100,
-            'effective_number_of_bets' => $enough ? $this->effectiveBetCalculator->calculate($returns, $weights) : null,
-            'portfolio_sox_beta' => $enough && $built['sox_returns'] !== null
-                ? $this->soxBetaCalculator->portfolioBeta($betas, $weights)
-                : null,
-            'top5_weight' => $top5 === null ? null : $top5 * 100,
-            'correlation_matrix' => array_map(fn (int $id) => [
-                'holding_id' => $id,
-                'symbol_code' => $holdingsById[$id]->symbol_code,
-                'symbol_name' => $holdingsById[$id]->symbol_name,
-                'correlations' => array_map(fn (int $other) => $correlations[$id][$other], $matrixIds),
-            ], $matrixIds),
+            'pc1_share' => $pc1Percent,
+            'effective_number_of_bets' => $enb,
+            'portfolio_sox_beta' => $portfolioBeta,
+            'top5_weight' => $top5Percent,
+            'correlation_matrix' => $matrix,
             'hidden_count' => $enough ? count($included) - count($matrixIds) : 0,
             'sox_betas' => array_map(fn (int $id) => [
                 'symbol_code' => $holdingsById[$id]->symbol_code,
@@ -120,6 +127,22 @@ class ShowConcentrationDashboardAction
                 'symbol_name' => $holdingsById[$id]->symbol_name,
                 'reason' => $reason,
             ], array_keys($built['excluded']), array_values($built['excluded'])),
+            'correlation_bands' => array_map(
+                fn (array $row) => array_map(
+                    fn (?float $value, int $j) => $row['holding_id'] === $matrixIds[$j]
+                        ? null
+                        : $this->verdictEvaluator->correlationBand($value),
+                    $row['correlations'],
+                    array_keys($row['correlations']),
+                ),
+                $matrix,
+            ),
+            'verdicts' => [
+                'pc1_share' => $this->verdictEvaluator->pc1($pc1Percent),
+                'effective_number_of_bets' => $this->verdictEvaluator->effectiveBets($enb),
+                'top5_weight' => $this->verdictEvaluator->top5($top5Percent),
+                'portfolio_sox_beta' => $this->verdictEvaluator->soxBeta($portfolioBeta),
+            ],
         ];
     }
 
@@ -173,6 +196,13 @@ class ShowConcentrationDashboardAction
             'hidden_count' => 0,
             'sox_betas' => [],
             'excluded' => [],
+            'correlation_bands' => [],
+            'verdicts' => [
+                'pc1_share' => null,
+                'effective_number_of_bets' => null,
+                'top5_weight' => null,
+                'portfolio_sox_beta' => null,
+            ],
         ];
     }
 }

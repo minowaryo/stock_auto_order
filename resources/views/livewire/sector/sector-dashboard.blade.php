@@ -1,9 +1,7 @@
 <div>
     <x-page-header title="セクター配分" />
 
-    <div class="mb-4 text-[13px]">
-        <a href="/concentration-dashboard" wire:navigate class="text-primary hover:underline">集中度ダッシュボード（相関・実効ベット数・対SOXベータ）→</a>
-    </div>
+    <x-sector-concentration-tabs current="sector" />
 
     <x-card>
         <h2 class="text-lg font-semibold mb-4">セクター配分</h2>
