@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['code', 'name'])]
+#[Fillable(['market', 'code', 'name'])]
 class SectorClassification extends Model
 {
     public function holdings(): HasMany

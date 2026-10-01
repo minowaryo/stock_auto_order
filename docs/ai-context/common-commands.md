@@ -141,6 +141,13 @@ docker compose exec laravel.test php artisan schedule:work
 docker compose exec laravel.test php artisan market-data:refetch-us-fundamentals
 ```
 
+```bash
+# 未分類の保有へのセクター一括反映（CHG-0029 / ADR-0020）
+# 最新スナップショットの未分類の保有に、日本株=J-Quants / 米国株=Finnhub業種 / 投信=「投資信託」を反映する。
+# 既存の分類は上書きしない（冪等）。米国株の保有数だけFinnhubを呼ぶ。
+docker compose exec laravel.test php artisan sectors:backfill
+```
+
 ## コード生成（Artisan）
 
 ```bash

@@ -306,12 +306,13 @@
 | カラム | 型 | Nullable | デフォルト | 説明 |
 |---|---|---|---|---|
 | id | bigint | NO | auto | 主キー |
+| market | varchar(12) | NO | 'jp' | 市場区分（`jp`/`us`/`mutual_fund`。`holdings.market`と同じ語彙。ADR-0020、2026-10-01追加提案） |
 | code | varchar(10) | YES | null | J-Quants 17業種コード（`Sector17Code`）。US株等コードが存在しない場合はnull |
-| name | varchar(100) | NO | - | セクター名 |
+| name | varchar(100) | NO | - | セクター名（米国株はFinnhubの`finnhubIndustry`、投信は固定の「投資信託」） |
 | created_at | timestamp | NO | now() | 作成日時 |
 | updated_at | timestamp | NO | now() | 更新日時 |
 
-**Index**: `code`、`name` unique（`watched_themes`等の他マスタ系テーブルと制約の厳密さを揃えるため）
+**Index**: `code`、`(market, name)` unique（ADR-0020で`name`単独uniqueから変更〔提案、Gate 3承認待ち〕。既存行は`market='jp'`）
 
 > 「未分類」は`holdings.sector_classification_id = null`で表現し、本テーブルに「未分類」レコードは作らない。
 > **粒度は17業種で確定**（33業種は粒度が細かすぎ、UC-005の偏り検出用途では不利と判断。2026-08-15ユーザー確認）。J-Quants APIからは`Sector17Code`/`Sector17CodeName`を取得して`code`/`name`に格納する。
