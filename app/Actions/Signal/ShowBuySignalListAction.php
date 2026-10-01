@@ -7,6 +7,7 @@ use App\Models\Snapshot;
 use App\Services\Analysis\FundamentalHealthEvaluator;
 use App\Services\Analysis\SignalCriteriaEvaluator;
 use App\Services\Portfolio\PortfolioEvaluationCalculator;
+use App\Support\SignalListSort;
 
 /**
  * UC-010 (既存保有株の買い増しタイミングレコメンド): lists holdings from the
@@ -46,7 +47,7 @@ class ShowBuySignalListAction
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function execute(): array
+    public function execute(string $sort = SignalListSort::RECOMMENDED): array
     {
         $latestSnapshot = Snapshot::query()
             ->orderByDesc('snapshotted_at')
@@ -72,7 +73,7 @@ class ShowBuySignalListAction
             ->values()
             ->all();
 
-        usort($rows, fn (array $a, array $b) => $this->compareRows($a, $b));
+        usort($rows, SignalListSort::comparator($sort, fn (array $a, array $b) => $this->compareRows($a, $b)));
 
         return array_map(function (array $row) {
             unset($row['_buy_signal_count']);

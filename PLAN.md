@@ -1,7 +1,7 @@
 # PLAN.md
 
 > 2026-08-27（フロントエンド実装Phase5完了時点。UC-010 Gate4完了・コミット`ba239fe`分も含む）以前（Gate0セットアップ〜Phase1 Gate4サイクル完了・ADR-0002 NISA区分CR・ADR-0004分析エンジン実装〔設計確定〜各TDDサイクル、UC-001配線・UC-004画面・UC-003/UC-009新指標反映を含む〕完了・関連review指摘修正2件・UC-009サンプルレポート生成、F-010（UC-010）Gate1〜3ドキュメント叩き台整備完了、NISA区分内訳の書き込み・UC-004消費完了、未知の口座区分ラベルの扱いに関する`/review`指摘修正、Phase2 UC-008（Cycle1・Cycle2）完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査完了、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase1+2（CSV取込画面・サマリーレポート画面）完了、利確・リバランス閾値の動的分岐ロジック検討〔検討事項の記録のみ、実装はCHG-0006として2026-08-28〜29に別途完了〕、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、フロントエンド実装Phase4（UC-003銘柄詳細画面）完了、UC-010 Gate2/Gate3正式承認（買いシグナル7種の前提条件追加）完了、UC-010 Gate4完了・コミット（`ba239fe`）、フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了、およびフロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了〔2026-09-05、CHG-0011作業時に退避〕等）の完了済みエントリは `docs/history/plan-archive.md` に退避済み。
-> **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。300行超過に伴い「数値表示フォーマット修正完了（2026-08-28）」「UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0012 Phase 0作業時）。約298行に達したため「利確検討ラインの動的分岐 CHG-0006（2026-08-28〜29）」「売買シグナル画面の可読性改善（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0013／ADR-0012作業時）。300行超過に伴い「取込後サマリーレポートのグローバルナビタブ化 CHG-0008（2026-09-05）」の1エントリを退避済み（2026-09-12、F-012・CHG-0012のステータス記述を実態〔mainマージ済み〕に修正した際に発生した増分に対応）。300行超過に伴い「売買シグナル画面 判定チェックリスト表示 CHG-0007（2026-08-29〜09-05）」の1エントリを退避済み（2026-09-12、CHG-0016〔新規投資候補テーブルの固定ヘッダー化〕作業時）。300行超過に伴い「整理検討（含み損）候補一覧の新設 F-011（2026-09-05〜06）」の1エントリを退避済み（2026-09-21、CHG-0017/CHG-0018マージ後の最終`/review`・コミット・push前整理時）。300行超過見込みに伴い「財務健全性フィルタに営業利益率を追加 CHG-0012（2026-09-06〜07）」の1エントリを退避済み（2026-09-27、エビデンス提言取込・CHG-0020 Phase 0作業時）。300行超過見込みに伴い「成長率算出バグの是正 CHG-0013（2026-09-06〜12）」の1エントリを退避済み（2026-09-30、集中度ダッシュボード・CHG-0026 Phase 0作業時）。300行到達に伴い「お気に入り未保有銘柄ウォッチリスト／新規投資候補画面の刷新 F-012・CHG-0014（2026-09-06〜12）」の1エントリを退避済み（2026-10-01、CHG-0026 Cycle3作業時）。
+> **運用ルール**: PLAN.mdは300行を超えないよう保つ。300行に近づいたら、Statusが「完了」相当（Green確認完了・マージ済み等）の最も古いエントリから`docs/history/plan-archive.md`へ退避し、本ファイル冒頭のこの注記を更新する（詳細は `.claude/rules/60-docs.md` 参照）。300行超過に伴い「数値表示フォーマット修正完了（2026-08-28）」「UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0012 Phase 0作業時）。約298行に達したため「利確検討ラインの動的分岐 CHG-0006（2026-08-28〜29）」「売買シグナル画面の可読性改善（2026-08-28）」の2エントリを退避済み（2026-09-06、CHG-0013／ADR-0012作業時）。300行超過に伴い「取込後サマリーレポートのグローバルナビタブ化 CHG-0008（2026-09-05）」の1エントリを退避済み（2026-09-12、F-012・CHG-0012のステータス記述を実態〔mainマージ済み〕に修正した際に発生した増分に対応）。300行超過に伴い「売買シグナル画面 判定チェックリスト表示 CHG-0007（2026-08-29〜09-05）」の1エントリを退避済み（2026-09-12、CHG-0016〔新規投資候補テーブルの固定ヘッダー化〕作業時）。300行超過に伴い「整理検討（含み損）候補一覧の新設 F-011（2026-09-05〜06）」の1エントリを退避済み（2026-09-21、CHG-0017/CHG-0018マージ後の最終`/review`・コミット・push前整理時）。300行超過見込みに伴い「財務健全性フィルタに営業利益率を追加 CHG-0012（2026-09-06〜07）」の1エントリを退避済み（2026-09-27、エビデンス提言取込・CHG-0020 Phase 0作業時）。300行超過見込みに伴い「成長率算出バグの是正 CHG-0013（2026-09-06〜12）」の1エントリを退避済み（2026-09-30、集中度ダッシュボード・CHG-0026 Phase 0作業時）。300行到達に伴い「お気に入り未保有銘柄ウォッチリスト／新規投資候補画面の刷新 F-012・CHG-0014（2026-09-06〜12）」の1エントリを退避済み（2026-10-01、CHG-0026 Cycle3作業時）。300行超過に伴い「新規投資候補テーブルの固定ヘッダー化・重複列マージ CHG-0016（2026-09-12）」の1エントリを退避済み（2026-10-01、CHG-0026のmain取り込み時）。
 
 ## 集中度ダッシュボード（CHG-0026・ADR-0019・F-015・UC-015）Gate1〜3承認済み・Cycle4 Green完了（2026-09-30〜）
 
@@ -30,6 +30,40 @@
 - **未反映の論点（Cycle4のRedで本人確認）**: 開発DBの保有株の週足は次回CSV取込まで0件（最後の取込が週足保存機能の前だったため）。取込前に画面を開くと全銘柄が「週足不足」で算出不可になるため、空状態の文言（「次回のCSV取込後に算出できます」等）をUC-015のエラーケースに足すか決める。- **SOXの開発DBへの投入方針（2026-10-01、本人「おすすめで」）**: 開発DBにはまだ`sox`のマイグレーションもSOX行も無く（取込は別ブランチのコードで動いているため）、いまは何もしない。mainマージ時に`php artisan migrate`を流し、次回のCSV取込から自動で入る。Cycle4の`run`での実画面確認の直前だけ、先に投入が必要になる（worktreeからマイグレーション適用＋`^SOX`1回取得）ので、その時に改めて本人に確認する
 
 - **Cycle4 Green完了（2026-10-01）**: `ShowConcentrationDashboardAction`（読み取り専用、13キー）、`ConcentrationDashboard`（Livewire、`/concentration-dashboard`、ナビのアクティブはセクター配分）、ビュー、`/sector-dashboard`上部のリンクを追加。Red 23件→Gate4承認→Green、フルスイート937 passed・pintクリーン。新しいTailwindクラスなし。空状態の文言「週足がそろった銘柄がありません。次回のCSV取込後に算出できます」はGate4で本人承認。ユーザーガイドにUC-015の見方を追加。- **実画面確認（`run`、2026-10-01）**: worktreeのコードをコンテナ内の`artisan serve`（8001番）で起動し、Playwright（コンテナ内、使い捨て）でログイン→`/sector-dashboard`のリンク→`/concentration-dashboard`を実データ（開発DB／複製DB）で確認。コンソールエラー0、ナビは6タブのまま。**テストで検出できない表示不具合を2点発見して修正**: ①相関行列の左端列が狭く銘柄名が1文字ずつ折り返され表が約1,800pxに伸びた→`whitespace-nowrap`＋左端固定（`sticky left-0`）で746pxに、②投資信託は銘柄コードと銘柄名が同一文字列で除外一覧に二重表示→同一なら1回だけ表示（新規Tailwindクラスなし、テスト23件は変更なしで通過）。SOXあり（複製DBに`^SOX`を投入）の状態も確認: ポートフォリオの対SOXベータ0.39、銘柄別MU 1.45・INPEX -0.33・AAPL 0.10。SOXなし（開発DB）は「取得不可（—）」表示。**注意**: `artisan serve`は環境変数`DB_DATABASE`ではなく`.env`を読むため、複製DBに向けるにはworktreeの`.env`を一時的に書き換える必要があった（確認後に復元）。開発DBの`sessions`に私のログインで5行入ったが削除済み。後片付け済み（8001のサーバー停止・Playwright一時ファイル・複製DB削除）。他セッション（CHG-0029）が`sector-dashboard.blade.php`の書式を変更中だが別の行で、マージは自動統合の見込み（マージ時に目視確認）。次は`prepare-merge`想定Cycle: ①enum拡張マイグレーション（単独コミット）＋SOXの取得・保存（失敗時の継続・`^SOX`の出来高を実データで確認）、②ウェイト・リターン行列（窓・除外、除外件数を実データで確認）・Jacobi法、③相関・PC1・ENB・ベータ・上位5銘柄（手計算できる小行列で固定、双対形とN×N直接計算の一致を回帰テスト）、④Action・Livewire・ビュー・ルート・リンク（Feature Test、`run`スキルで実画面確認）
+
+> 2026-10-01: CHG-0028作業時に「お気に入り未保有銘柄ウォッチリスト／新規投資候補画面の刷新（F-012・UC-012・ADR-0013・CHG-0014）」エントリを`docs/history/plan-archive.md`へ退避（実装完了・mainマージ済みと記載済み）。
+> 2026-10-01: CHG-0027作業時に「成長率算出バグの是正（CHG-0013・ADR-0012）＋押し目買いPEG下限バグ」エントリを`docs/history/plan-archive.md`へ退避（mainマージ済み確認）。
+
+## 売買シグナル画面へのキープ（hold）表の追加（CHG-0028）Green完了（2026-10-01）
+
+### Decision
+
+- 本人要望: 売買シグナルにホールドも出す／既存3テーブルと同じ表形式で。`hold`はUC-013（F-013）の既存バケツで、現状はサマリーレポートの簡易表にしか出ていない
+- 本人判断（すべて推奨案）: `hold`のみ（`core_accumulation`除外）／列=銘柄・評価額・含み損益率・要観察・ヘルスライン・セクター／並びはCHG-0027の共通切替／`feat/chg0027-...`から`feat/chg0028-signal-hold-table`を分岐
+
+### Files touched
+
+`docs/product/use-cases.md`（UC-013業務ルール・承認記録）、`docs/rcid/traceability-matrix.md`、`docs/ai-context/module-map.md`、`app/Actions/Portfolio/ShowHoldListAction.php`（新規）、`ClassifyHoldingsAction`（`sector_name`追加）、`SignalList`、`signal-list.blade.php`、`tests/Feature/CHG0028SignalHoldTableTest.php`
+
+### Status
+
+Red 12件→Gate4承認→Green。フルスイート858 passed・pint適用済み・`/review`実施済み（HIGHなし）。既知の懸念（別CR候補）: 描画ごとに`ClassifyHoldingsAction`が3 Actionを二重実行する。実画面確認は未実施。
+
+## 売買シグナル画面の評価額ソート・整理検討の評価額列/列順統一（CHG-0027）Green完了（2026-10-01）
+
+### Decision
+
+- 本人要望: 整理検討にも評価額を出す／全テーブルのソート順を確認し評価額で並べたい（何がインパクト大かを知りたい）。本人判断: (1) 整理検討の列順を利確・買い増しと統一（銘柄→評価額→含み損益率）、(2) 既定の並びを評価額順に変更、従来の透明マルチキー（財務健全性等）は「おすすめ順」として選択可、(3) それ以外は提案どおり
+- Actionは`execute(string $sort = 'recommended')`（`App\Support\SignalListSort`）。既定を従来のまま残すのは、JSON APIとUC-013（`ClassifyHoldingsAction`のバケツ内並び）が依存するため。画面（`SignalList`）だけが`market_value`（既定）/`recommended`を切替（ボタン・URL `?sort=`）。同額は従来の並びで決着
+- **スコープ外（本人の「提案どおり」に含まれるが今回は未着手）**: 保有銘柄一覧・サマリレポートのバケツ別表への評価額列追加は、別途判断待ち
+
+### Files touched
+
+`docs/product/use-cases.md`（UC-004/010/011・承認記録）、`docs/rcid/traceability-matrix.md`、`app/Support/SignalListSort.php`（新規）、`app/Actions/Signal/Show{SignalList,BuySignalList,LossReviewList}Action.php`、`app/Livewire/Signal/SignalList.php`、`resources/views/livewire/signal/signal-list.blade.php`、`resources/views/components/loss-review-table-colgroup.blade.php`、`tests/Feature/CHG0027SignalSortTest.php`（新規13件）
+
+### Status
+
+Red 9件→Gate4承認→Green。フルスイート845 passed・pint適用済み。実画面確認・`/review`・コミットは未実施。
 
 ## エビデンス提言の取込とシグナル検証基盤（CHG-0020・ADR-0017・F-014・UC-014）Phase 0 完了・Gate1〜3叩き台作成中（2026-09-27〜）
 
@@ -143,36 +177,6 @@
 ### Status
 
 **Green実装・`/review`修正完了、2026-09-21にmainへマージ**。マージ時にCHG-0016との重複列（UC-012の生PER/PBR列）を追随除去し、影響を受ける`tests/Feature/UC012WatchlistScreenTest.php`の固定列数アサーションを更新済み（詳細は下記CHG-0016エントリのマージ後追記を参照）。
-
-## 新規投資候補テーブルの固定ヘッダー化・重複列マージ・判定チェックリスト1項目=1列化（CHG-0016）実装完了（2026-09-12）
-
-### Decision
-
-- ユーザー要望: `/candidate-check`（新規投資候補、UC-012）のテーブルでヘッダーが縦・横スクロールで固定されない、判定チェックリストが1つの`<td>`内で`grid grid-cols-4`により複数列に折り返され読みづらい。「シグナルの画面（`/signals`、CHG-0007）で同様の変更を行っているはずなのでそのピットフォールも踏まえて」との指示
-- 調査の結果、シグナル画面と同じ課題に加え、この画面固有の問題として**左側の素の数値列（RSI・ROE・自己資本比率・営業利益率）と判定チェックリストのチップが同じ指標を二重表示**していることが判明（チップは実測値・基準・達成色を持つ上位互換の表示）。レビューフィードバックで「重複する情報はチップ側にマージする」方針に確定
-- 設計（プランファイル: `~/.claude/plans/stock_auto_order-implementation-phase.md`。実体は `/root/.claude/plans/hidden-splashing-scone.md`）:
-  - CHG-0007と同じ「ヘッダー用/本文用`<table>`2分割＋ヘッダー側divに`overflow-x-auto sticky top-0`＋横スクロール同期」を適用（`x-watchlist-table-colgroup`/`x-watchlist-table-head`、新規）
-  - 判定チェックリストは`x-signal-criteria-cells`をそのまま流用し、チップ1項目=テーブル1列に分解
-  - 重複列（RSI・ROE・自己資本比率・営業利益率の単独列、財務健全性の内訳サマリ文）を削除。財務健全性の総合判定バッジ（健全／基準割れ／取得不可）は維持。PER・PBRはチップに対応項目が無いため残す
-  - ★列を`w-8`→`w-10`に拡大（padding+border控除後に★グリフが収まらない不具合を事前修正）、★・銘柄の2列を横方向に固定（`sticky left-0`/`left-10`）
-  - `resources/js/app.js`: `wire:poll`・フィルタの`wire:model.live`によるLivewire再描画で片方のスクロールコンテナだけ`scrollLeft`がずれる懸念に対処するため、`livewire:navigated`に加えLivewireのJSフック`morphed`（`livewire:updated`というDOMイベントはv3+に存在しないため不採用）でも再同期。リスナー重複登録を避けるため対象要素を`WeakSet`で管理する形に拡張
-  - `$visibleRows`が0件になるケースの添字エラー（`<colgroup>`/`<thead>`が`$visibleRows[0]['criteria']`に依存）をガードし空状態「該当する銘柄はありません」を表示
-- Gate 4（テストケース承認）を経てGreen実装（TDD Red→Green）
-
-### Files touched
-
-`resources/views/livewire/candidate/candidate-check.blade.php`、`resources/views/components/watchlist-table-colgroup.blade.php`（新規）、`resources/views/components/watchlist-table-head.blade.php`（新規）、`resources/js/app.js`、`tests/Feature/UC012WatchlistScreenTest.php`（Red 4件追加）、`docs/product/use-cases.md`（UC-012の表示項目・業務ルール改訂）、`docs/product/ui-guidelines.md`（テーブル節に本CRの統一・重複回避の原則を追記）、`docs/rcid/traceability-matrix.md`（F-012行にCHG-0016追記）、`docs/history/plan-archive.md`（CHG-0007退避）、`PLAN.md`（本エントリ）
-
-### Status
-
-**Green実装完了**。Redテスト4件（判定チェックリストの2段ヘッダー構造・重複列マージの実測値重複排除・0件ガード・展開行colspan整合）を追加しGate4承認を得た上でGreen実装、フルスイート610件Green（pint適用済み、1件のインポート整理を自動修正）。`npm run build`でTailwind CSS再ビルド後、Sailコンテナ内Playwright（実データ216件・90未保有銘柄）で実ブラウザ検証: 縦スクロールでヘッダーが`top:0`に固定、横スクロールで★・銘柄列が固定されヘッダーと本文の`scrollLeft`が一致（443px同期）、チップ・バッジのはみ出しなし、固定列の罫線消失なし、0件時の空状態表示も確認。検証用`storage/app/pw-scratch/`は削除済み
-
-**`/code-review`（medium）で1件判明・修正**（2026-09-13）:
-- **確定バグ**: `resources/js/app.js`に追加した`document.addEventListener('livewire:updated', bindScrollSync)`が、実際にはLivewire 4.x（v3以降）に存在しないDOM CustomEventを購読しており、フィルタ変更（`wire:model.live`）・`wire:poll`での再描画時に一切発火しない死んだコードだった。reviewが`vendor/livewire/livewire/dist/livewire.js`を実際にgrepして裏付け（実際にdispatchされる`livewire:*`イベントは`init`/`navigate`系のみ）。前回の実ブラウザ検証（上記）は「フィルタ変更後もスクロール位置ずれなし」を確認済みとしていたが、これはたまたま列幅が変わらない操作だったため実害が顕在化しなかっただけで、修正の有効性自体は検証できていなかった
-- 対処: `Livewire.hook('morphed', callback)`（DOM差分適用完了後に発火するLivewire公式JSフック）に置き換え。修正直後、Tailwindと同様`resources/js/`の変更も`npm run build`しないと反映されないことを失念し一度誤った「動作せず」という診断をしかけたが、再ビルド後に解消（`docs/ai-context/known-pitfalls.md`に両方追記: Vite JSビルド漏れ／Livewire `livewire:updated`不存在）
-- 再検証（Playwright、強制デシンク手法）: 本文側を横スクロール後、ヘッダー側の`scrollLeft`のみ手動で0に戻し、フォルダフィルタを変更→`morphed`フック発火→ヘッダーが本文と同じ`scrollLeft`（443px）に正しく再同期されることを実測確認（`header=443 body=443`）。フルスイート610件Green再確認・pint適用済み。検証用`storage/app/pw-scratch/`は削除済み
-- 次: コミット（push禁止）
-- **本CRのスコープ外（CHG-0017として後続）**: 「財務健全性が大半`passed`になり選びきれない」課題への対応として、対市場13週相対リターン（`relative_strength_vs_market`、既に算出・保存済みで未表示）・基準からの余裕度スコア・判定チェックリスト達成数・ユニバース内パーセンタイル順位の4軸を序列づけに追加し、列ヘッダークリックでのソート切替、フォルダ別グループ表示を行う方針で本人と合意済み（2026-09-12）。今回のレイアウトはこれらと前方互換（2段ヘッダー・列定義とも拡張余地を残す設計）
 
 ## バリュー/景気敏感銘柄向け判定ロジック分岐（CHG-0017・ADR-0015）Gate1〜4承認・Cycle1 Green完了（2026-09-19）
 

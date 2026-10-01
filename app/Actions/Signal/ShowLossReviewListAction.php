@@ -9,6 +9,7 @@ use App\Services\Analysis\LossReviewThresholds;
 use App\Services\Analysis\SignalCriteriaEvaluator;
 use App\Services\Portfolio\ContinuousHoldingWeeksCalculator;
 use App\Services\Portfolio\PortfolioEvaluationCalculator;
+use App\Support\SignalListSort;
 
 /**
  * UC-011 / F-011 (整理検討〔含み損〕候補一覧, CHG-0010 / ADR-0010): lists
@@ -34,7 +35,7 @@ class ShowLossReviewListAction
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function execute(): array
+    public function execute(string $sort = SignalListSort::RECOMMENDED): array
     {
         $latestSnapshot = Snapshot::query()
             ->orderByDesc('snapshotted_at')
@@ -81,7 +82,7 @@ class ShowLossReviewListAction
             ))
             ->all();
 
-        usort($rows, fn (array $a, array $b) => $this->compareRows($a, $b));
+        usort($rows, SignalListSort::comparator($sort, fn (array $a, array $b) => $this->compareRows($a, $b)));
 
         return array_map(function (array $row) {
             unset($row['_fundamental_rank'], $row['_technical_met']);
@@ -178,6 +179,8 @@ class ShowLossReviewListAction
             'symbol_code' => $holding->symbol_code,
             'symbol_name' => $holding->symbol_name,
             'unrealized_gain_rate' => $unrealizedGainRate,
+            // CHG-0027: 評価額（保有数量 × 現在値）。UC-004/UC-010 と同じ算出。
+            'market_value' => (float) $holdingSnapshot->quantity * (float) $holdingSnapshot->current_price,
             'unrealized_gain_amount' => $unrealizedGainAmount,
             'recovery_required_rate' => $recoveryRequiredRate,
             'portfolio_loss_share' => $portfolioLossShare,
