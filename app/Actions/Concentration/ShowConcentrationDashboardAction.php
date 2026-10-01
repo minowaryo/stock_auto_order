@@ -108,7 +108,7 @@ class ShowConcentrationDashboardAction
                 'symbol_name' => $holdingsById[$id]->symbol_name,
                 'correlations' => array_map(fn (int $other) => $correlations[$id][$other], $matrixIds),
             ], $matrixIds),
-            'hidden_count' => count($included) - count($matrixIds),
+            'hidden_count' => $enough ? count($included) - count($matrixIds) : 0,
             'sox_betas' => array_map(fn (int $id) => [
                 'symbol_code' => $holdingsById[$id]->symbol_code,
                 'symbol_name' => $holdingsById[$id]->symbol_name,

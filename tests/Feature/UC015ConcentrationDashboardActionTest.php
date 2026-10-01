@@ -452,7 +452,7 @@ describe('UC-015: 集中度ダッシュボード（ShowConcentrationDashboardAct
         expect($result['effective_number_of_bets'])->toBeNull();
         expect($result['portfolio_sox_beta'])->toBeNull();
         expect($result['correlation_matrix'])->toBe([]);
-        expect($result['hidden_count'])->toBe(1);
+        expect($result['hidden_count'])->toBe(0); // no matrix exists, so nothing is hidden from it
         expect($result['sox_betas'])->toHaveCount(1);
         expect($result['sox_betas'][0]['symbol_code'])->toBe('A001');
         expect($result['sox_betas'][0]['weight'])->toEqualWithDelta(100.0, 1e-9);
