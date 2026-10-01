@@ -13,6 +13,7 @@ use App\Http\Controllers\SignalListController;
 use App\Http\Controllers\WatchedThemeController;
 use App\Livewire\Auth\Login;
 use App\Livewire\Candidate\CandidateCheck;
+use App\Livewire\Concentration\ConcentrationDashboard;
 use App\Livewire\CsvImport\Upload;
 use App\Livewire\Holding\HoldingDetail;
 use App\Livewire\Holding\HoldingList;
@@ -38,6 +39,7 @@ Route::post('/logout', function () {
 
 Route::middleware('auth')->group(function () {
     Route::get('/candidate-check', CandidateCheck::class);
+    Route::get('/concentration-dashboard', ConcentrationDashboard::class);
     Route::get('/csv-import', Upload::class);
     Route::get('/holdings', HoldingList::class);
     Route::get('/holdings/{holding}', HoldingDetail::class);

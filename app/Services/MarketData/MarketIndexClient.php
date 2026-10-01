@@ -8,9 +8,9 @@ use InvalidArgumentException;
  * Fetches weekly price history for market indices by mapping index_name to
  * a Yahoo Finance symbol and delegating to YahooFinanceChartClient.
  *
- * Phase1 only supports nikkei225/sp500. Other index_name values defined in
- * data-model.md (us10y, vix, usdjpy) are reserved for Phase2 (UC-007) and
- * throw InvalidArgumentException until implemented.
+ * Supports nikkei225/sp500, plus sox (UC-015, ADR-0019 D2). Other index_name
+ * values defined in data-model.md (us10y, vix, usdjpy) are reserved for
+ * Phase2 (UC-007) and throw InvalidArgumentException until implemented.
  *
  * docs/adr/ADR-0004-analysis-engine-indicator-expansion.md (§4)
  */
@@ -21,6 +21,7 @@ final class MarketIndexClient implements MarketIndexClientInterface
     private const SYMBOL_MAP = [
         'nikkei225' => '^N225',
         'sp500' => '^GSPC',
+        'sox' => '^SOX',
     ];
 
     public function __construct(private readonly YahooFinanceChartClient $client) {}

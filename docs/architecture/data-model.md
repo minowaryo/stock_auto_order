@@ -464,14 +464,14 @@
 
 ---
 
-### index_weekly_prices（指数の週次価格履歴・UC-014、ADR-0017）
+### index_weekly_prices（指数の週次価格履歴・UC-014／UC-015、ADR-0017／ADR-0019）
 
-`MarketIndexClient`が相対力（対市場）算出のために毎回取得している指数の週足を保存する。`market_indicator_snapshots`（スナップショットごとの直近1点）とは用途が異なる（こちらは超過リターン算出用の系列）。
+`MarketIndexClient`が相対力（対市場）算出のために毎回取得している指数の週足を保存する。`market_indicator_snapshots`（スナップショットごとの直近1点）とは用途が異なる（こちらは超過リターン算出用の系列）。**2026-09-30（CHG-0026、ADR-0019 D2）、集中度ダッシュボード（UC-015）の対SOXベータ算出のためSOX指数（Yahoo `^SOX`）を追加する**。SOXは`FetchExternalMarketDataAction`（CSV取込）でのみ取得・保存し（ウォッチリスト一括更新では取得しない）、取得失敗は警告ログのみで分析処理を止めない（nikkei225／sp500 の取得とは例外処理が異なる）。
 
 | カラム | 型 | Nullable | デフォルト | 説明 |
 |---|---|---|---|---|
 | id | bigint | NO | auto | 主キー |
-| index_name | enum('nikkei225','sp500') | NO | - | 指数名（`MarketIndexClient`の対応表と同一。価格指数で配当を含まない）。**将来VIX・米10年債等を記録対象に加える場合は、先にこのenumを拡張するマイグレーションが必要**（`WeeklyPriceRecorder`は例外を握りつぶして警告ログのみ出すため、拡張漏れは保存されないまま気づきにくい） |
+| index_name | enum('nikkei225','sp500','sox') | NO | - | 指数名（`MarketIndexClient`の対応表と同一。いずれも価格指数で配当を含まない。`sox`はUSD建て）。**`sox`は2026-09-30追加（ADR-0019）。既存の2値の後ろに足すだけの後方互換な変更で、既存行の変換は発生しない**。`market_indicator_snapshots.index_name`（UC-007用の別enum）には`sox`を追加しない。**将来VIX・米10年債等を記録対象に加える場合は、先にこのenumを拡張するマイグレーションが必要**（`WeeklyPriceRecorder`は例外を握りつぶして警告ログのみ出すため、拡張漏れは保存されないまま気づきにくい） |
 | week_date | date | NO | - | 週足の日付 |
 | close | decimal(15,4) | NO | - | 週足終値 |
 | created_at | timestamp | NO | now() | 作成日時 |
@@ -679,6 +679,8 @@
 | 2026-09-19 | （Gate3レビュー待ち） | 提案（CR） | **買い増しシグナル共通前提の緩和とPER単体シグナルの追加（CHG-0018／ADR-0016、UC-010）**。利用者指摘（財務健全性・ROE・営業利益率・成長率が高水準でPEG/RSI/PERが低い銘柄が買い増し候補に一切現れない）を受けた実データ検証で判明した設計是正。`buy_signals`/`watchlist_buy_signals`の`signal_type`ENUMに`per_undervalued`を追加（**本CRの唯一のスキーマ変更・マイグレーション必要**、既存カラムのENUM拡張のため`.claude/rules/20-mysql.md`の「危険な操作」に該当）。共通前提(1)を「52週高値-15%以内到達」**または**「財務健全性`passed`」のOR条件に緩和（前提(2)相対力≥-5ptは変更なし）。新シグナル`per_undervalued`はPER≤15.0のみを条件とし、PBRは独立条件に含めない（会計恒等式`PBR≈PER×ROE`により、財務健全性フィルタのROE≥10%要件とAND条件にすると実データで恒久的に0件になることを検証済み、ADR-0016参照）。判定チェックリスト（`SignalCriteriaEvaluator::evaluateBuy()`）にPER（基準あり）・PBR（基準なし参考表示、新設ステータス`info`）を追加しテクニカル7→9項目。「買い増しシグナル8種の判定閾値」「買い増しシグナル共通の前提条件」「PER単体の買い増しシグナル判定閾値」「判定チェックリストのPER・PBR表示」「判定チェックリストのnearバッファ」の各行と`buy_signals`/`watchlist_buy_signals`カラム表を改訂。**2026-09-21マージ時にADR-0015との番号衝突が判明しADR-0016へ採番し直し**（`.claude/rules/06-branch-coordination.md`参照） |
 | 2026-09-27 | （Gate3レビュー待ち） | 提案（CR） | **シグナル結果の前向き記録（UC-014、F-014、ADR-0017、CHG-0020）**。新規テーブル3件: `weekly_prices`（`holding_id`×`week_date` unique、既存取得の週足104週をUPSERT）／`index_weekly_prices`（nikkei225/sp500の週足）／`signal_occurrences`（追記のみ、`(holding_id, source, signal_type, observed_week)` unique、発生時点の根拠値をJSONで保持）。**既存テーブルの変更なし**。新規の外部APIコールなし |
 | 2026-09-27 | minowaryo | 承認（Gate3） | **シグナル結果の前向き記録（CHG-0020、ADR-0017）**の新規テーブル3件（`weekly_prices`／`index_weekly_prices`／`signal_occurrences`）を同日の提案どおり承認。追加のみのマイグレーションで既存テーブルの変更なし。`weekly_prices.week_date`の週の基準日の揃い方はGate4 Cycle1で実測確認する |
+| 2026-09-30 | （Gate3レビュー待ち） | 提案（CR） | **集中度ダッシュボード（UC-015、F-015、ADR-0019、CHG-0026）**。スキーマ変更は`index_weekly_prices.index_name`のenumに`sox`を追加する1点のみ（新規テーブルなし）。既存値の後ろへの追加で後方互換、既存行の変換なし。対象は約200行の小さな表。`20-mysql.md`の「カラム型変更」に該当するためADR-0019 Consequencesに記載。Laravel 13ネイティブの`->change()`で書き、生SQLは使わない。集中度の指標値は保存せずアクセスのたびに算出する |
+| 2026-09-30 | minowaryo | 承認（Gate3） | **集中度ダッシュボード（CHG-0026、ADR-0019）**の`index_weekly_prices.index_name`への`sox`追加を同日の提案どおり承認。新規テーブルなし。`^SOX`の出来高がnullで全行が除外されないかはGate4 Cycle1で実データ確認する |
 
 ## 変更履歴
 
@@ -725,3 +727,5 @@
 | 2026-09-23 | 売買シグナル画面のPER/PBR表示を利確検討（UC-004）・整理検討（UC-011）にも拡張（CHG-0019）。`SignalCriteriaEvaluator::evaluateTakeProfit()`/`evaluateLossReview()`のテクニカル配列に、UC-010で新設済みの中立ステータス`info`（`direction`＝`'none'`）を流用してPER・PBRを追加（各7→9項目）。UC-010のPERと異なりmet/near/unmet閾値・`near`バッファは持たせない。DBスキーマ変更なし。「判定チェックリストのPER・PBR表示」「整理検討の財務健全性」の2行を改訂・追加、`signal-list.blade.php`のテーブル固定幅を更新（利確検討1478→1622px・整理検討1512→1656px）。フルスイート745 passed（0 failed）、pintクリーン | ADR-0016（CHG-0019） |
 | 2026-09-27 | シグナル結果の前向き記録（CHG-0020）のGate3叩き台として`weekly_prices`／`index_weekly_prices`／`signal_occurrences`のテーブル定義・ER図・設計方針（上書き型の時系列）を追記。Gate3レビュー待ち | ADR-0017 |
 | 2026-09-27 | CHG-0020の3テーブルをGate3承認 | ADR-0017 |
+| 2026-09-30 | 集中度ダッシュボード（CHG-0026）のGate3叩き台として`index_weekly_prices.index_name`のenumへの`sox`追加を記載。新規テーブルなし。Gate3レビュー待ち | ADR-0019 |
+| 2026-09-30 | CHG-0026の`sox`追加をGate3承認 | ADR-0019 |
