@@ -24,6 +24,9 @@ class SectorAllocationCalculator
 
     private const UNCLASSIFIED_NAME = '未分類';
 
+    /** Display order of markets (ADR-0020). */
+    private const MARKET_ORDER = ['jp', 'us', 'mutual_fund'];
+
     /**
      * @return array<int, array<string, mixed>>
      */
@@ -47,11 +50,14 @@ class SectorAllocationCalculator
 
         $portfolioTotal = $this->evaluationTotal($holdingSnapshots);
 
+        // CHG-0029 / ADR-0020: JP / US / mutual-fund rows never merge, even
+        // when the sector label is identical; unclassified is per market too.
         $groups = $holdingSnapshots->groupBy(
-            fn (HoldingSnapshot $holdingSnapshot) => $holdingSnapshot->holding->sector_classification_id ?? 'unclassified'
+            fn (HoldingSnapshot $holdingSnapshot) => $holdingSnapshot->holding->market.'|'.($holdingSnapshot->holding->sector_classification_id ?? 'unclassified')
         );
 
         return $groups
+            ->sortBy(fn (Collection $group) => array_search($group->first()->holding->market, self::MARKET_ORDER, true) ?: 0)
             ->map(fn (Collection $group) => $this->toSectorRow($group, $portfolioTotal))
             ->values()
             ->all();
@@ -88,8 +94,10 @@ class SectorAllocationCalculator
         }
 
         return [
+            'market' => $group->first()->holding->market,
             'sector_name' => $sectorName,
             'allocation_rate' => $allocationRate,
+            'allocation_amount' => $sectorTotal,
             'allocation_status' => $status,
             'is_overweight' => $isOverweight,
             'suggested_sell_amount' => $suggestedSellAmount,

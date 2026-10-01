@@ -34,6 +34,22 @@
 > 2026-10-01: CHG-0028作業時に「お気に入り未保有銘柄ウォッチリスト／新規投資候補画面の刷新（F-012・UC-012・ADR-0013・CHG-0014）」エントリを`docs/history/plan-archive.md`へ退避（実装完了・mainマージ済みと記載済み）。
 > 2026-10-01: CHG-0027作業時に「成長率算出バグの是正（CHG-0013・ADR-0012）＋押し目買いPEG下限バグ」エントリを`docs/history/plan-archive.md`へ退避（mainマージ済み確認）。
 
+## 米国株・投資信託のセクター分類と市場別・金額付き表示（CHG-0029・ADR-0020）Green完了（2026-10-01）
+
+### Decision
+
+- 発端: セクター配分の「未分類」が評価額の約73%（米国株約978万円・投信約157万円。日本株は最新スナップショットで全件分類済み）で常時「偏り警告」。米国株・投信にはセクター取得処理が存在しない
+- 本人判断: 米国株=Finnhub業種／投信=専用カテゴリで進める。追加要望: 米国と日本株を区別／合計額も表示／構成比は小数1桁（最後の1つは実装済み・未コミット）
+- 設計（ADR-0020）: `sector_classifications.market`追加・一意制約を`(market,name)`へ、`FinnhubClient::fetchIndustry()`、表示は市場別＋評価額＋市場小計＋全体合計、既存分は`sectors:backfill`
+
+### Files touched
+
+`docs/adr/ADR-0020-*.md`（新規）、`docs/product/use-cases.md`（UC-005・承認記録=承認待ち）、`docs/architecture/data-model.md`（`sector_classifications`）、`resources/views/livewire/sector/sector-dashboard.blade.php`（小数1桁のみ）
+
+### Status
+
+Red 19件（通過3件は回帰ガード）→Gate4承認→Green。フルスイート877 passed・pint適用済み。追加: マイグレーション`2026_10_01_000000`、`SectorClassificationResolver`、`sectors:backfill`、`FinnhubClient::fetchIndustry`。**未実施**: 実画面確認、`sectors:backfill`の本番DB実行（実行すると米国株分の保有ごとにFinnhubを呼ぶ）、`/review`、コミット。
+
 ## 売買シグナル画面へのキープ（hold）表の追加（CHG-0028）Green完了（2026-10-01）
 
 ### Decision

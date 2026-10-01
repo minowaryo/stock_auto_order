@@ -9,7 +9,6 @@ use App\Models\Holding;
 use App\Models\HoldingSnapshot;
 use App\Models\ImportBatch;
 use App\Models\MarketIndicatorSnapshot;
-use App\Models\SectorClassification;
 use App\Models\Signal;
 use App\Models\Snapshot;
 use App\Models\TechnicalIndicator;
@@ -23,6 +22,7 @@ use App\Services\MarketData\JpStockPriceClientInterface;
 use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\MarketData\MarketIndexClientInterface;
 use App\Services\MarketData\UsStockPriceClientInterface;
+use App\Services\Sector\SectorClassificationResolver;
 use App\Services\SignalOutcome\SignalOccurrenceMetricsBuilder;
 use App\Services\SignalOutcome\SignalOccurrenceRecorder;
 use App\Services\SignalOutcome\WeeklyPriceRecorder;
@@ -77,6 +77,7 @@ class FetchExternalMarketDataAction
         private readonly WeeklyPriceRecorder $weeklyPriceRecorder,
         private readonly SignalOccurrenceRecorder $signalOccurrenceRecorder,
         private readonly SignalOccurrenceMetricsBuilder $signalOccurrenceMetricsBuilder,
+        private readonly SectorClassificationResolver $sectorResolver,
     ) {}
 
     public function execute(ImportBatch $batch): void
@@ -122,9 +123,21 @@ class FetchExternalMarketDataAction
         // of the batch.
         $eligible = [];
 
-        $holdingSnapshots = HoldingSnapshot::where('snapshot_id', $snapshot->id)
+        $allHoldingSnapshots = HoldingSnapshot::where('snapshot_id', $snapshot->id)
             ->with('holding')
-            ->get()
+            ->get();
+
+        // CHG-0029 / ADR-0020: mutual funds have no external sector source;
+        // they get the fixed 投資信託 category (no API call, cannot fail).
+        foreach ($allHoldingSnapshots as $fundHoldingSnapshot) {
+            $fundHolding = $fundHoldingSnapshot->holding;
+
+            if ($fundHolding->instrument_type === 'mutual_fund' && $fundHolding->sector_classification_id === null) {
+                $fundHolding->forceFill(['sector_classification_id' => $this->sectorResolver->forMutualFund()->id])->save();
+            }
+        }
+
+        $holdingSnapshots = $allHoldingSnapshots
             ->filter(fn (HoldingSnapshot $holdingSnapshot) => $holdingSnapshot->holding->instrument_type === 'stock');
 
         foreach ($holdingSnapshots as $holdingSnapshot) {
@@ -156,13 +169,27 @@ class FetchExternalMarketDataAction
                     }
 
                     if ($sectorInfo !== null) {
-                        $sector = SectorClassification::firstOrCreate(
-                            ['name' => $sectorInfo['name']],
-                            ['code' => $sectorInfo['code']],
-                        );
-
-                        $sectorClassificationId = $sector->id;
+                        $sectorClassificationId = $this->sectorResolver->forJpSector($sectorInfo)->id;
                         $holding->forceFill(['sector_classification_id' => $sectorClassificationId])->save();
+                    }
+                }
+
+                // CHG-0029 / ADR-0020: US industry from Finnhub. Failure or an
+                // unknown industry never blocks the holding (existing value kept).
+                if ($holding->market === 'us') {
+                    try {
+                        $industry = $this->finnhubClient->fetchIndustry($holding->symbol_code);
+                    } catch (Throwable) {
+                        Log::warning('FetchExternalMarketDataAction: Finnhub industry fetch failed', [
+                            'holding_id' => $holding->id,
+                            'symbol_code' => $holding->symbol_code,
+                        ]);
+
+                        $industry = null;
+                    }
+
+                    if ($industry !== null) {
+                        $holding->forceFill(['sector_classification_id' => $this->sectorResolver->forUsIndustry($industry)->id])->save();
                     }
                 }
 

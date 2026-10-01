@@ -51,6 +51,7 @@
 | CHG-0026 | 集中度ダッシュボード（ADR-0019、F-015・UC-015新設）。外部調査ベースの改善提言5を受け、保有個別株の直近52週の週次リターンから相関行列（評価額上位20銘柄）・PC1寄与率・実効ベット数（Meucci）・対SOXベータ・上位5銘柄ウェイトを算出して並べて表示する（判定・合成スコア・リバランス提案なし）。株価はCHG-0020で保存済みの`weekly_prices`を使い、SOX指数（Yahoo `^SOX`）の週足をCSV取込時に1本追加取得する（失敗しても取込は継続）。スキーマ変更は`index_weekly_prices.index_name`のenumに`sox`を追加するのみ。新ルート`/concentration-dashboard`、`/sector-dashboard`上部からリンク（タブ数6維持）。**Gate1〜3承認済み（2026-09-30）**。Cycle1〜4 Green完了・実画面確認済み、`/review`（強化レベル）の指摘対応中（2026-10-01） | F-015（新規）。F-005（UC-005画面にリンク追加のみ）、F-001（取込時のSOX取得の追加のみ、挙動不変） | 2026-09-30 | minowaryo（Gate1〜3承認、2026-09-30） |
 | CHG-0027 | 売買シグナル画面の評価額ソート（既定・おすすめ順へ切替可）と整理検討への評価額列追加・列順統一（UC-004/UC-010/UC-011、表示レイヤー完結）。`SignalListSort`・3 Actionの`execute($sort)`・`SignalList`・ビュー。テスト: `tests/Feature/CHG0027SignalSortTest.php` |
 | CHG-0028 | 売買シグナル画面へのキープ（`hold`）表の追加（UC-013の`hold`バケツを再利用、表示レイヤー完結）。`ShowHoldListAction`・`SignalList`・ビュー・`ClassifyHoldingsAction`の`sector_name`追加。テスト: `tests/Feature/CHG0028SignalHoldTableTest.php` |
+| CHG-0029 | 米国株・投資信託のセクター分類と市場別・金額付きセクター配分表示（UC-005、ADR-0020）。`sector_classifications.market`追加、`SectorClassificationResolver`、`FinnhubClient::fetchIndustry`、`sectors:backfill`、`SectorAllocationCalculator`（市場別・`allocation_amount`）、`SectorDashboard`ビュー。テスト: `tests/Feature/CHG0029SectorMarketClassificationTest.php` |
 
 ## RCID命名規則
 
