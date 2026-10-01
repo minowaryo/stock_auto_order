@@ -158,3 +158,36 @@ test('UC-015: 銘柄数>週数（N=8,T=5）のランク落ち共分散でも直�
         ->and($enb)->toEqualWithDelta(enbTestReference($returns, $w), 1e-9)
         ->and($enb)->toBeGreaterThanOrEqual(1.0 - 1e-9)->toBeLessThanOrEqual(min(8, 4) + 1e-9);
 });
+
+test('UC-015: 定数（分散ゼロ）系列が混在しても実効ベット数は有限で、定数行を含む共分散行列からの直接計算と一致する', function () {
+    // Arrange: 5 varying series + 1 constant series (weight 0.2), remaining weight split over the others
+    $returns = enbTestSeries(5, 10, 777);
+    $returns[6] = array_fill(0, 10, 0.5);
+    $weights = [1 => 0.1, 2 => 0.2, 3 => 0.25, 4 => 0.15, 5 => 0.1, 6 => 0.2];
+
+    // Act
+    $enb = (new EffectiveBetCalculator)->calculate($returns, $weights);
+
+    // Assert
+    expect($enb)->not->toBeNull();
+    expect(is_finite($enb))->toBeTrue();
+    expect($enb)->toEqualWithDelta(enbTestReference($returns, $weights), 1e-9);
+});
+
+test('UC-015: 銘柄数がサンプル数を超える場合（N=40, T=12）でも実効ベット数はN×Nの直接計算と一致する', function () {
+    // Arrange: non-uniform weights summing to 1
+    $returns = enbTestSeries(40, 12, 4242);
+    $raw = [];
+    for ($i = 1; $i <= 40; $i++) {
+        $raw[$i] = 1.0 + ($i % 7);
+    }
+    $total = array_sum($raw);
+    $weights = array_map(fn ($x) => $x / $total, $raw);
+
+    // Act
+    $enb = (new EffectiveBetCalculator)->calculate($returns, $weights);
+
+    // Assert
+    expect($enb)->not->toBeNull();
+    expect($enb)->toEqualWithDelta(enbTestReference($returns, $weights), 1e-9);
+});

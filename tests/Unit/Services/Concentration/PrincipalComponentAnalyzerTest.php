@@ -99,3 +99,29 @@ test('UC-015: 銘柄数>週数（N=8,T=5）でも直接N×N相関行列の固有
     expect($share)->toEqualWithDelta(pcaTestReference($returns), 1e-9)
         ->and($share)->toBeGreaterThan(0.0)->toBeLessThanOrEqual(1.0 + 1e-9);
 });
+
+test('UC-015: 定数系列が混在しても第1主成分寄与率は変動系列だけの相関行列からの直接計算と一致する', function () {
+    // Arrange: N=6 varying series (T=10) + 1 constant series
+    $varying = pcaTestSeries(6, 10, 99);
+    $mixed = $varying;
+    $mixed[7] = array_fill(0, 10, 1.5);
+
+    // Act
+    $share = (new PrincipalComponentAnalyzer)->firstComponentShare($mixed);
+
+    // Assert
+    expect($share)->not->toBeNull();
+    expect($share)->toEqualWithDelta(pcaTestReference($varying), 1e-9);
+});
+
+test('UC-015: 銘柄数がサンプル数を超える場合（N=40, T=12）でも第1主成分寄与率はN×Nの直接計算と一致する', function () {
+    // Arrange
+    $returns = pcaTestSeries(40, 12, 31337);
+
+    // Act
+    $share = (new PrincipalComponentAnalyzer)->firstComponentShare($returns);
+
+    // Assert
+    expect($share)->not->toBeNull();
+    expect($share)->toEqualWithDelta(pcaTestReference($returns), 1e-9);
+});

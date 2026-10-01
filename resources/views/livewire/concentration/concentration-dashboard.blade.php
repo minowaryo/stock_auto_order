@@ -58,9 +58,9 @@
                     <table data-testid="correlation-matrix" class="text-[13px]">
                         <thead>
                             <tr class="text-left text-text-secondary border-b border-app-border">
-                                <th class="py-2 pr-4 whitespace-nowrap sticky left-0 z-10 bg-surface">銘柄</th>
+                                <th scope="col" class="py-2 pr-4 whitespace-nowrap sticky left-0 z-10 bg-surface">銘柄</th>
                                 @foreach ($dashboard['correlation_matrix'] as $column)
-                                    <th class="py-2 px-2 text-right">{{ $column['symbol_code'] }}</th>
+                                    <th scope="col" class="py-2 px-2 text-right">{{ $column['symbol_code'] }}</th>
                                 @endforeach
                             </tr>
                         </thead>
@@ -90,9 +90,9 @@
                 <table class="w-full text-[13px]">
                     <thead>
                         <tr class="text-left text-text-secondary border-b border-app-border">
-                            <th class="py-2 pr-4">銘柄</th>
-                            <th class="py-2 pr-4 text-right">ウェイト（計算対象内）</th>
-                            <th class="py-2 pr-4 text-right">対SOXベータ</th>
+                            <th scope="col" class="py-2 pr-4">銘柄</th>
+                            <th scope="col" class="py-2 pr-4 text-right">ウェイト（計算対象内）</th>
+                            <th scope="col" class="py-2 pr-4 text-right">対SOXベータ</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -114,8 +114,8 @@
                 <table class="w-full text-[13px]">
                     <thead>
                         <tr class="text-left text-text-secondary border-b border-app-border">
-                            <th class="py-2 pr-4">銘柄</th>
-                            <th class="py-2 pr-4">理由</th>
+                            <th scope="col" class="py-2 pr-4">銘柄</th>
+                            <th scope="col" class="py-2 pr-4">理由</th>
                         </tr>
                     </thead>
                     <tbody>
