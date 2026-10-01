@@ -95,8 +95,13 @@ class FetchExternalMarketDataAction
         $this->weeklyPriceRecorder->recordIndex('sp500', $sp500History);
 
         // UC-015 (ADR-0019 D2): a SOX fetch failure must not stop the analysis.
+        // The Yahoo client returns [] (no exception) on HTTP errors, so log that too.
         try {
-            $this->weeklyPriceRecorder->recordIndex('sox', $this->marketIndexClient->fetchWeeklyHistory('sox'));
+            $soxHistory = $this->marketIndexClient->fetchWeeklyHistory('sox');
+            if ($soxHistory === []) {
+                Log::warning('FetchExternalMarketDataAction: sox index fetch returned no data', ['index_name' => 'sox']);
+            }
+            $this->weeklyPriceRecorder->recordIndex('sox', $soxHistory);
         } catch (Throwable $exception) {
             Log::warning('FetchExternalMarketDataAction: sox index fetch failed', [
                 'index_name' => 'sox',

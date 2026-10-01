@@ -167,9 +167,9 @@ function uc015IndexHistories(bool $withSox = true): array
  * @param  array<string, array<int, array{date: string, close: float, volume: int}>>  $jp
  * @param  array<int, string>  $indexThrowsFor
  */
-function uc015BindFakes(array $jp = [], array $indexThrowsFor = []): FakeMarketIndexClient
+function uc015BindFakes(array $jp = [], array $indexThrowsFor = [], array $indexEmptyFor = []): FakeMarketIndexClient
 {
-    $marketIndexClient = new FakeMarketIndexClient(uc015IndexHistories(), $indexThrowsFor);
+    $marketIndexClient = new FakeMarketIndexClient(uc015IndexHistories(), $indexThrowsFor, $indexEmptyFor);
 
     app()->instance(JpStockPriceClientInterface::class, new FakeJpStockPriceClient($jp));
     app()->instance(UsStockPriceClientInterface::class, new FakeUsStockPriceClient);
@@ -237,6 +237,40 @@ describe('UC-015 SOX指数の週足の記録（CSV取込の分析処理: FetchEx
         expect(IndexWeeklyPrice::where('index_name', 'sox')->count())->toBe(0);
 
         // Assert: the failure is logged as a warning that identifies SOX
+        Log::shouldHaveReceived('warning')
+            ->withArgs(fn (string $message, array $context = []) => str_contains(json_encode([$message, $context]), 'sox'))
+            ->atLeast()->once();
+
+        // Assert: nikkei225 / sp500 still recorded, market indicators still saved
+        expect(IndexWeeklyPrice::where('index_name', 'nikkei225')->count())->toBe(30);
+        expect(IndexWeeklyPrice::where('index_name', 'sp500')->count())->toBe(30);
+        expect(MarketIndicatorSnapshot::where('snapshot_id', $snapshot->id)->count())->toBe(2);
+
+        // Assert: holding analysis unaffected
+        expect(WeeklyPrice::where('holding_id', $jp->id)->count())->toBe(20);
+        expect(TechnicalIndicator::where('holding_id', $jp->id)->exists())->toBeTrue();
+        expect(Signal::where('holding_snapshot_id', $jpHoldingSnapshot->id)->where('signal_type', 'bollinger_overheat')->count())->toBe(1);
+    });
+
+    test('UC-015: SOX指数の取得結果が空（HTTPエラー・データ無し）でも取込の分析処理は継続し、警告ログに記録される', function () {
+        // Arrange: the real client returns [] (not an exception) on HTTP error / empty result
+        Log::spy();
+        [$batch, $snapshot] = uc015ImportBatch();
+        $jp = uc015Holding('7203', 'jp', 'トヨタ自動車');
+        $jpHoldingSnapshot = uc015HoldingSnapshot($snapshot, $jp, 25.0);
+        $marketIndexClient = uc015BindFakes(
+            jp: ['7203' => uc015Weekly('2026-09-20', uc015OverheatCloses(), 1000)],
+            indexEmptyFor: ['sox'],
+        );
+
+        // Act (reaching the assertions means no exception escaped)
+        app(FetchExternalMarketDataAction::class)->execute($batch);
+
+        // Assert: SOX was requested and nothing was saved for it
+        expect($marketIndexClient->requestedIndexNames)->toContain('sox');
+        expect(IndexWeeklyPrice::where('index_name', 'sox')->count())->toBe(0);
+
+        // Assert: the empty result is logged as a warning that identifies SOX
         Log::shouldHaveReceived('warning')
             ->withArgs(fn (string $message, array $context = []) => str_contains(json_encode([$message, $context]), 'sox'))
             ->atLeast()->once();

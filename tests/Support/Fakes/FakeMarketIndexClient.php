@@ -24,10 +24,12 @@ class FakeMarketIndexClient implements MarketIndexClientInterface
     /**
      * @param  array<string, array<int, array{date: string, close: float, volume: int}>>  $responses  Weekly index history keyed by index_name ('nikkei225'/'sp500'/'sox').
      * @param  array<int, string>  $throwsFor  index_names for which fetchWeeklyHistory() throws a RuntimeException (simulated fetch failure).
+     * @param  array<int, string>  $emptyFor  index_names for which fetchWeeklyHistory() returns [] (simulated HTTP error / no data, as YahooFinanceChartClient does).
      */
     public function __construct(
         private readonly array $responses = [],
         private readonly array $throwsFor = [],
+        private readonly array $emptyFor = [],
     ) {}
 
     /**
@@ -39,6 +41,10 @@ class FakeMarketIndexClient implements MarketIndexClientInterface
 
         if (in_array($indexName, $this->throwsFor, true)) {
             throw new RuntimeException("Fake market index fetch failure for {$indexName}");
+        }
+
+        if (in_array($indexName, $this->emptyFor, true)) {
+            return [];
         }
 
         return $this->responses[$indexName] ?? [];
