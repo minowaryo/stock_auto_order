@@ -6,6 +6,8 @@
     $percent = fn ($value) => number_format($value, 1).'%';
     $decimal2 = fn ($value) => number_format($value, 2);
     $reasonLabels = ['not_stock' => '株式以外', 'insufficient_history' => '週足不足'];
+    // 投資信託は銘柄コードと銘柄名が同じ文字列のため、重複して出さない
+    $label = fn ($row) => $row['symbol_code'] === $row['symbol_name'] ? $row['symbol_name'] : $row['symbol_code'].' '.$row['symbol_name'];
     $enoughIncluded = $dashboard['included_count'] >= 2;
 @endphp
 <div>
@@ -56,7 +58,7 @@
                     <table data-testid="correlation-matrix" class="text-[13px]">
                         <thead>
                             <tr class="text-left text-text-secondary border-b border-app-border">
-                                <th class="py-2 pr-4">銘柄</th>
+                                <th class="py-2 pr-4 whitespace-nowrap sticky left-0 z-10 bg-surface">銘柄</th>
                                 @foreach ($dashboard['correlation_matrix'] as $column)
                                     <th class="py-2 px-2 text-right">{{ $column['symbol_code'] }}</th>
                                 @endforeach
@@ -65,7 +67,7 @@
                         <tbody>
                             @foreach ($dashboard['correlation_matrix'] as $row)
                                 <tr class="border-b border-app-border last:border-b-0">
-                                    <td class="py-2 pr-4">{{ $row['symbol_code'] }} {{ $row['symbol_name'] }}</td>
+                                    <td class="py-2 pr-4 whitespace-nowrap sticky left-0 z-10 bg-surface">{{ $label($row) }}</td>
                                     @foreach ($row['correlations'] as $value)
                                         <td class="py-2 px-2 text-right">{{ $value !== null ? $decimal2($value) : '—' }}</td>
                                     @endforeach
@@ -96,7 +98,7 @@
                     <tbody>
                         @foreach ($dashboard['sox_betas'] as $row)
                             <tr class="border-b border-app-border last:border-b-0">
-                                <td class="py-2 pr-4">{{ $row['symbol_code'] }} {{ $row['symbol_name'] }}</td>
+                                <td class="py-2 pr-4">{{ $label($row) }}</td>
                                 <td class="py-2 pr-4 text-right">{{ $percent($row['weight']) }}</td>
                                 <td class="py-2 pr-4 text-right">{{ $row['sox_beta'] !== null ? $decimal2($row['sox_beta']) : '取得不可（—）' }}</td>
                             </tr>
@@ -119,7 +121,7 @@
                     <tbody>
                         @foreach ($dashboard['excluded'] as $row)
                             <tr class="border-b border-app-border last:border-b-0">
-                                <td class="py-2 pr-4">{{ $row['symbol_code'] }} {{ $row['symbol_name'] }}</td>
+                                <td class="py-2 pr-4">{{ $label($row) }}</td>
                                 <td class="py-2 pr-4">{{ $reasonLabels[$row['reason']] ?? $row['reason'] }}</td>
                             </tr>
                         @endforeach
