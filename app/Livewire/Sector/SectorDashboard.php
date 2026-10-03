@@ -11,7 +11,7 @@ use Livewire\Component;
  * リバランス提案画面。ShowSectorDashboardActionは副作用のない参照専用Action
  * のため、render()のたびに毎回呼び直す（HoldingList/SignalListと同じ規約）。
  */
-#[Layout('components.layouts.app', ['title' => 'セクター配分'])]
+#[Layout('components.layouts.app', ['title' => 'セクター配分', 'active' => 'sector-dashboard'])]
 class SectorDashboard extends Component
 {
     public function render()

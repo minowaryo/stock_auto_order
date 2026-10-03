@@ -9,6 +9,7 @@ use App\Models\ImportBatch;
 use App\Models\IndexWeeklyPrice;
 use App\Models\Snapshot;
 use App\Models\WeeklyPrice;
+use App\Services\Concentration\ConcentrationVerdictEvaluator;
 use App\Services\Concentration\CorrelationMatrixCalculator;
 use App\Services\Concentration\EffectiveBetCalculator;
 use App\Services\Concentration\HoldingWeightCalculator;
@@ -32,10 +33,11 @@ use Illuminate\Support\Facades\DB;
 |
 | Contract (flag at Gate 4 if a different shape is preferred):
 |   App\Actions\Concentration\ShowConcentrationDashboardAction::execute(): array
-|   (non-final, real DB, read-only). 返却キーは次の13個ちょうど:
+|   (non-final, real DB, read-only). 返却キーは次の15個ちょうど（CHG-0030でcorrelation_bands, verdictsを追加）:
 |   has_snapshot, window_start_week, window_end_week, included_count,
 |   coverage_rate, pc1_share, effective_number_of_bets, portfolio_sox_beta,
-|   top5_weight, correlation_matrix, hidden_count, sox_betas, excluded
+|   top5_weight, correlation_matrix, hidden_count, sox_betas, excluded,
+|   correlation_bands, verdicts
 |   （パーセント値は「%単位の数値」。例 14.7。0.147ではない）
 |
 | Expected Red: "Class App\Actions\Concentration\ShowConcentrationDashboardAction not found".
@@ -233,10 +235,25 @@ function concDashActionTestKeys(): array
         'has_snapshot', 'window_start_week', 'window_end_week', 'included_count', 'coverage_rate',
         'pc1_share', 'effective_number_of_bets', 'portfolio_sox_beta', 'top5_weight',
         'correlation_matrix', 'hidden_count', 'sox_betas', 'excluded',
+        'correlation_bands', 'verdicts',
     ];
     sort($keys);
 
     return $keys;
+}
+
+/**
+ * Seeds a snapshot whose holdings are stocks worth exactly the given market values
+ * (quantity 1, price = value) and NO weekly prices / SOX, so only top5_weight is computable.
+ *
+ * @param  list<int|float>  $values
+ */
+function concDashActionTestSeedValues(array $values): void
+{
+    [, $snapshot] = concDashActionTestSnapshot();
+    foreach ($values as $i => $value) {
+        concDashActionTestPosition($snapshot, sprintf('V%02d', $i + 1), 'stock', 1, (float) $value);
+    }
 }
 
 describe('UC-015: 集中度ダッシュボード（ShowConcentrationDashboardAction）', function () {
@@ -263,6 +280,13 @@ describe('UC-015: 集中度ダッシュボード（ShowConcentrationDashboardAct
         expect($result['hidden_count'])->toBe(0);
         expect($result['sox_betas'])->toBe([]);
         expect($result['excluded'])->toBe([]);
+        expect($result['correlation_bands'])->toBe([]);
+        expect($result['verdicts'])->toBe([
+            'pc1_share' => null,
+            'effective_number_of_bets' => null,
+            'top5_weight' => null,
+            'portfolio_sox_beta' => null,
+        ]);
     });
 
     test('UC-015: 個別株・週足不足株・ETF・投信の混在で5指標・窓・カバー率・除外一覧が算出される', function () {
@@ -341,6 +365,29 @@ describe('UC-015: 集中度ダッシュボード（ShowConcentrationDashboardAct
             expect($row['sox_beta'])->toEqualWithDelta($expected['betas'][$order[$i]], 1e-9);
         }
         expect($result['sox_betas'][0]['weight'])->toEqualWithDelta(400 / 900 * 100, 1e-9);
+
+        // Assert: verdicts computed by the evaluator from the same output values
+        $evaluator = new ConcentrationVerdictEvaluator;
+        expect($result['verdicts'])->toBe([
+            'pc1_share' => $evaluator->pc1($result['pc1_share']),
+            'effective_number_of_bets' => $evaluator->effectiveBets($result['effective_number_of_bets']),
+            'top5_weight' => 'concentrated', // 98.0 >= 50
+            'portfolio_sox_beta' => $evaluator->soxBeta($result['portfolio_sox_beta']),
+        ]);
+        expect(array_keys($result['verdicts']))->toBe(['pc1_share', 'effective_number_of_bets', 'top5_weight', 'portfolio_sox_beta']);
+        foreach ($result['verdicts'] as $level) {
+            expect($level)->toBeIn(['ok', 'caution', 'concentrated']);
+        }
+
+        // Assert: correlation bands aligned 1:1 with the matrix, diagonal null
+        expect($result['correlation_bands'])->toHaveCount(3);
+        foreach ($result['correlation_matrix'] as $i => $row) {
+            expect($result['correlation_bands'][$i])->toHaveCount(3);
+            foreach ($row['correlations'] as $j => $value) {
+                $expectedBand = $i === $j ? null : $evaluator->correlationBand($value);
+                expect($result['correlation_bands'][$i][$j])->toBe($expectedBand);
+            }
+        }
     });
 
     test('UC-015: 計算対象が22銘柄のとき相関行列は評価額上位20銘柄だけで、表示外2銘柄と全22銘柄のSOXベータ一覧が返る', function () {
@@ -363,6 +410,11 @@ describe('UC-015: 集中度ダッシュボード（ShowConcentrationDashboardAct
         expect(array_column($result['correlation_matrix'], 'symbol_code'))->toBe($expectedCodes);
         foreach ($result['correlation_matrix'] as $row) {
             expect($row['correlations'])->toHaveCount(20);
+        }
+        expect($result['correlation_bands'])->toHaveCount(20);
+        foreach ($result['correlation_bands'] as $i => $bandRow) {
+            expect($bandRow)->toHaveCount(20);
+            expect($bandRow[$i])->toBeNull();
         }
         expect($result['sox_betas'])->toHaveCount(22);
         expect(array_column($result['sox_betas'], 'symbol_code')[0])->toBe('S22');
@@ -413,6 +465,11 @@ describe('UC-015: 集中度ダッシュボード（ShowConcentrationDashboardAct
         expect($partial['pc1_share'])->not->toBeNull();
         expect($partial['effective_number_of_bets'])->not->toBeNull();
         expect($partial['correlation_matrix'])->toHaveCount(3);
+        expect($partial['verdicts']['portfolio_sox_beta'])->toBeNull();
+        expect($partial['verdicts']['pc1_share'])->toBe((new ConcentrationVerdictEvaluator)->pc1($partial['pc1_share']));
+        expect($partial['verdicts']['effective_number_of_bets'])->toBe((new ConcentrationVerdictEvaluator)->effectiveBets($partial['effective_number_of_bets']));
+        expect($partial['verdicts']['top5_weight'])->toBe((new ConcentrationVerdictEvaluator)->top5($partial['top5_weight']));
+        expect($partial['correlation_bands'])->toHaveCount(3);
 
         // Act: no SOX rows at all
         IndexWeeklyPrice::query()->delete();
@@ -420,6 +477,8 @@ describe('UC-015: 集中度ダッシュボード（ShowConcentrationDashboardAct
 
         // Assert
         expect($none['portfolio_sox_beta'])->toBeNull();
+        expect($none['verdicts']['portfolio_sox_beta'])->toBeNull();
+        expect($none['verdicts']['pc1_share'])->not->toBeNull();
         foreach ($none['sox_betas'] as $row) {
             expect($row['sox_beta'])->toBeNull();
         }
@@ -452,6 +511,13 @@ describe('UC-015: 集中度ダッシュボード（ShowConcentrationDashboardAct
         expect($result['effective_number_of_bets'])->toBeNull();
         expect($result['portfolio_sox_beta'])->toBeNull();
         expect($result['correlation_matrix'])->toBe([]);
+        expect($result['correlation_bands'])->toBe([]);
+        expect($result['verdicts'])->toBe([
+            'pc1_share' => null,
+            'effective_number_of_bets' => null,
+            'top5_weight' => 'concentrated', // 100.0 >= 50 (4 holdings <= 5)
+            'portfolio_sox_beta' => null,
+        ]);
         expect($result['hidden_count'])->toBe(0); // no matrix exists, so nothing is hidden from it
         expect($result['sox_betas'])->toHaveCount(1);
         expect($result['sox_betas'][0]['symbol_code'])->toBe('A001');
@@ -465,6 +531,59 @@ describe('UC-015: 集中度ダッシュボード（ShowConcentrationDashboardAct
             'F006' => 'not_stock',
             'D004' => 'insufficient_history',
         ]);
+    });
+
+    test('UC-015: 上位5銘柄ウェイトは表示精度（小数1桁）に丸めてから判定され、29.96%は表示どおり30.0%で「やや集中」になる', function () {
+        // Arrange: 5 x 5992 = 29960 of 100000 -> 29.96% (displayed 30.0%)
+        concDashActionTestSeedValues([...array_fill(0, 5, 5992), ...array_fill(0, 14, 4670), 4660]);
+
+        // Act
+        $result = app(ShowConcentrationDashboardAction::class)->execute();
+
+        // Assert
+        expect($result['top5_weight'])->toEqualWithDelta(29.96, 1e-9);
+        expect($result['verdicts']['top5_weight'])->toBe('caution');
+    });
+
+    test('UC-015: 上位5銘柄ウェイト29.94%は表示どおり29.9%で「分散OK」のまま', function () {
+        // Arrange: 5 x 5988 = 29940 of 100000 -> 29.94% (displayed 29.9%)
+        concDashActionTestSeedValues([...array_fill(0, 5, 5988), ...array_fill(0, 14, 4670), 4680]);
+
+        // Act
+        $result = app(ShowConcentrationDashboardAction::class)->execute();
+
+        // Assert
+        expect($result['top5_weight'])->toEqualWithDelta(29.94, 1e-9);
+        expect($result['verdicts']['top5_weight'])->toBe('ok');
+    });
+
+    test('UC-015: 判定の期待値を直書きで固定する（上位5ウェイト40%は「やや集中」、他3指標は算出不可で判定なし）', function () {
+        // Arrange: 5 x 8000 + 15 x 4000 = 100000 -> top5 40%
+        concDashActionTestSeedValues([...array_fill(0, 5, 8000), ...array_fill(0, 15, 4000)]);
+
+        // Act
+        $result = app(ShowConcentrationDashboardAction::class)->execute();
+
+        // Assert
+        expect($result['top5_weight'])->toEqualWithDelta(40.0, 1e-9);
+        expect($result['verdicts'])->toBe([
+            'pc1_share' => null,
+            'effective_number_of_bets' => null,
+            'top5_weight' => 'caution',
+            'portfolio_sox_beta' => null,
+        ]);
+    });
+
+    test('UC-015: 判定の期待値を直書きで固定する（上位5ウェイト20%は「分散OK」）', function () {
+        // Arrange: 25 x 4000 -> top5 20%
+        concDashActionTestSeedValues(array_fill(0, 25, 4000));
+
+        // Act
+        $result = app(ShowConcentrationDashboardAction::class)->execute();
+
+        // Assert
+        expect($result['top5_weight'])->toEqualWithDelta(20.0, 1e-9);
+        expect($result['verdicts']['top5_weight'])->toBe('ok');
     });
 
     test('UC-015: execute() は読み取り専用で、どのテーブルの行も増減・変更しない', function () {
