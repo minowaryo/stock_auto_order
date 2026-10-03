@@ -79,6 +79,7 @@
             @if (empty($dashboard['correlation_matrix']))
                 <x-empty-state>算出不可</x-empty-state>
             @else
+                <p class="text-[13px] text-text-secondary mb-3">色の見方: 赤＝同じ方向に動く（濃いほど強い）／緑＝逆方向に動く／色なし＝ほぼ無関係</p>
                 <div class="overflow-x-auto">
                     <table data-testid="correlation-matrix" class="text-[13px]">
                         <thead>

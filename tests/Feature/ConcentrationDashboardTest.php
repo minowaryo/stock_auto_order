@@ -580,6 +580,41 @@ describe('UC-015: 集中度ダッシュボード（Livewire）', function () {
         });
     });
 
+    describe('ヒートマップの凡例（UC-015 業務ルール / ADR-0021 D2）', function () {
+        test('UC-015: 相関行列があるときは「赤＝同じ方向に動く／緑＝逆方向に動く／色なし＝ほぼ無関係」の凡例が表示される', function () {
+            // Arrange
+            $user = User::factory()->create();
+            concDashScreenTestMock(concDashScreenTestPayload());
+
+            // Act
+            $component = Livewire::actingAs($user)->test(ConcentrationDashboard::class);
+
+            // Assert
+            $component->assertSee('赤＝同じ方向に動く');
+            $component->assertSee('緑＝逆方向に動く');
+            $component->assertSee('色なし＝ほぼ無関係');
+        });
+
+        test('UC-015: 相関行列が無い（算出不可・スナップショット無し）ときは凡例を表示しない', function () {
+            // Arrange
+            $user = User::factory()->create();
+            $noMatrix = ['correlation_matrix' => [], 'correlation_bands' => [], 'hidden_count' => 0];
+
+            // Act / Assert: 算出不可（行列なし）
+            concDashScreenTestMock(concDashScreenTestPayload($noMatrix));
+            Livewire::actingAs($user)->test(ConcentrationDashboard::class)
+                ->assertDontSee('赤＝同じ方向に動く')
+                ->assertDontSee('緑＝逆方向に動く')
+                ->assertDontSee('色なし＝ほぼ無関係');
+
+            // Act / Assert: スナップショット無し
+            concDashScreenTestMock(concDashScreenTestPayload($noMatrix + ['has_snapshot' => false]));
+            Livewire::actingAs($user)->test(ConcentrationDashboard::class)
+                ->assertDontSee('赤＝同じ方向に動く')
+                ->assertDontSee('色なし＝ほぼ無関係');
+        });
+    });
+
     describe('空状態・算出不可', function () {
         test('UC-015: スナップショットが無いときは「まだ保有データがありません。CSVを取り込むと表示されます」が表示される', function () {
             // Arrange
@@ -740,6 +775,27 @@ describe('UC-015: 集中度ダッシュボード（Livewire）', function () {
             $response->assertSee('実データ1');
             $response->assertDontSee('算出不可');
         });
+
+        test('UC-015: 実データ（3銘柄・SOX無し）のHTMLに、上位5ウェイト・PC1の判定バッジとヒートマップのdata-bandが出て、SOXベータの判定バッジは出ない', function () {
+            // Arrange
+            $user = User::factory()->create();
+            concDashScreenTestSeedRealData();
+
+            // Act
+            $response = $this->actingAs($user)->get('/concentration-dashboard');
+
+            // Assert: 3 holdings -> top5 = 100% -> concentrated; no SOX rows -> no beta verdict
+            $response->assertOk();
+            $html = $response->getContent();
+            $top5 = concDashScreenTestBadge($html, 'top5_weight');
+            expect($top5)->not->toBeNull();
+            expect($top5[0])->toContain('data-verdict="concentrated"');
+            $pc1 = concDashScreenTestBadge($html, 'pc1_share');
+            expect($pc1)->not->toBeNull();
+            expect($pc1[0])->toMatch('/data-verdict="(ok|caution|concentrated)"/');
+            expect($html)->toMatch('/data-band="(strong|high|mild|none|negative)"/');
+            $response->assertDontSeeHtml('data-testid="verdict-portfolio_sox_beta"');
+        });
     });
 
     describe('セクター配分との切替タブ（ADR-0021 D5 / UC-005 行き来）', function () {
@@ -818,6 +874,26 @@ describe('UC-015: 集中度ダッシュボード（Livewire）', function () {
             $response = $this->actingAs($user)->get('/concentration-dashboard');
 
             // Assert
+            $tabs = concDashScreenTestGlobalTabs($response->getContent());
+            expect(array_keys($tabs))->toBe(['保有一覧', '売買シグナル', 'セクター配分', '新規投資候補', 'CSV取込', 'サマリーレポート']);
+            foreach ($tabs as $label => $attributes) {
+                if ($label === 'セクター配分') {
+                    expect($attributes)->toContain('text-primary')->toContain('bg-blue-50');
+                } else {
+                    expect($attributes)->not->toContain('text-primary')->not->toContain('bg-blue-50');
+                }
+            }
+        });
+
+        test('UC-005: グローバルナビは6タブのままで、セクター配分画面でも「セクター配分」だけが選択中になる', function () {
+            // Arrange
+            $user = User::factory()->create();
+
+            // Act
+            $response = $this->actingAs($user)->get('/sector-dashboard');
+
+            // Assert
+            $response->assertOk();
             $tabs = concDashScreenTestGlobalTabs($response->getContent());
             expect(array_keys($tabs))->toBe(['保有一覧', '売買シグナル', 'セクター配分', '新規投資候補', 'CSV取込', 'サマリーレポート']);
             foreach ($tabs as $label => $attributes) {
