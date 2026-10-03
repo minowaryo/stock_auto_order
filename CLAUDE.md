@@ -105,6 +105,7 @@ Red → [Gate 4: テストケース承認 ★実装(Green)着手禁止] → Gree
 | 認証情報・APIキー等の作成 | `docs/credentials/`（`.claude/rules/40-security.md` の取り扱いルールに従う） |
 | Release / deployment | `docs/operations/deployment.md` |
 | Change request (CR) 発生時 | `docs/rcid/traceability-matrix.md` |
+| 本人の実際の売買・保有入れ替えの相談（アプリ開発作業では読まない） | `docs/product/megatrend-investment-thesis-2026-2028.md` |
 | ユーザー向け機能・操作方法の変更 | `docs/product/user-guide.md` |
 | UAT（受け入れテスト）実施時（任意） | `docs/product/uat-scenarios.md` + `docs/product/uat-results/`（`.claude/rules/00-global.md` のUAT節を参照。非ブロッキング） |
 | エラー・ライブラリ固有の詰まりに遭遇した時 | `docs/ai-context/known-pitfalls.md`（既知の事象がないか先に確認し、解決したら追記） |
