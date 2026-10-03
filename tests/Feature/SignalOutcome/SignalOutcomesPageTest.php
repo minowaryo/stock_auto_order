@@ -241,6 +241,7 @@ function ssopSeedRealData(): void
     WeeklyPrice::create(['holding_id' => $jp->id, 'week_date' => '2026-09-28', 'close' => 1100.0, 'volume' => 1]);
     IndexWeeklyPrice::create(['index_name' => 'nikkei225', 'week_date' => '2026-08-31', 'close' => 30000.0]);
     IndexWeeklyPrice::create(['index_name' => 'nikkei225', 'week_date' => '2026-09-28', 'close' => 31500.0]);
+    IndexWeeklyPrice::create(['index_name' => 'nikkei225', 'week_date' => '2026-10-05', 'close' => 31500.0]);
     SignalOccurrence::create(['holding_id' => $jp->id, 'source' => 'buy', 'signal_type' => 'pullback', 'observed_week' => '2026-08-31', 'snapshot_id' => null, 'metrics' => null]);
     SignalOccurrence::create(['holding_id' => $us->id, 'source' => 'take_profit', 'signal_type' => 'rsi_overbought', 'observed_week' => '2026-08-31', 'snapshot_id' => null, 'metrics' => null]);
 }
@@ -403,6 +404,20 @@ describe('UC-014: シグナル検証画面（Livewire）', function () {
 
             // Assert
             $component->assertSee('同じ週の発生は1件として判定');
+        });
+
+        // /review finding (CHG-0020): UC-014「残る限界（画面の注記に表示する）」 and the 30-result condition.
+        test('UC-014: 注記に、+13週・+26週は評価期間が重なるため控えめに読むことと、判定に結果到来30件以上が必要なことが表示される', function () {
+            // Arrange
+            $user = User::factory()->create();
+            ssopMock(ssopPayload());
+
+            // Act
+            $component = Livewire::actingAs($user)->test(SignalOutcomes::class);
+
+            // Assert
+            $component->assertSee('評価期間が重なるため、判定は控えめに読んでください');
+            $component->assertSee('結果到来30件以上');
         });
     });
 

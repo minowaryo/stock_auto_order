@@ -172,7 +172,7 @@ describe('UC-014: シグナル結果の集計（ShowSignalOutcomesAction）', fu
         // Arrange: stock +10%, nikkei225 +5% over 4 weeks ⇒ excess +5.0
         $holding = ssoaHolding('7203', 'jp');
         ssoaPrices($holding, ['2026-08-31' => 1000.0, '2026-09-28' => 1100.0]);
-        ssoaIndex('nikkei225', ['2026-08-31' => 30000.0, '2026-09-28' => 31500.0]);
+        ssoaIndex('nikkei225', ['2026-08-31' => 30000.0, '2026-09-28' => 31500.0, '2026-10-05' => 31500.0]);
         $metrics = ['close' => 1000.0, 'rsi' => 35.2];
         ssoaOccurrence($holding, 'buy', 'pullback', '2026-08-31', $metrics);
 
@@ -244,8 +244,8 @@ describe('UC-014: シグナル結果の集計（ShowSignalOutcomesAction）', fu
         // Arrange: stock +10%, sp500 +2% ⇒ +8.0 (nikkei225 +10% would give 0.0)
         $holding = ssoaHolding('MSFT', 'us');
         ssoaPrices($holding, ['2026-08-31' => 100.0, '2026-09-28' => 110.0]);
-        ssoaIndex('sp500', ['2026-08-31' => 5000.0, '2026-09-28' => 5100.0]);
-        ssoaIndex('nikkei225', ['2026-08-31' => 30000.0, '2026-09-28' => 33000.0]);
+        ssoaIndex('sp500', ['2026-08-31' => 5000.0, '2026-09-28' => 5100.0, '2026-10-05' => 5100.0]);
+        ssoaIndex('nikkei225', ['2026-08-31' => 30000.0, '2026-09-28' => 33000.0, '2026-10-05' => 33000.0]);
         ssoaOccurrence($holding, 'buy', 'pullback', '2026-08-31');
 
         // Act
@@ -265,7 +265,7 @@ describe('UC-014: シグナル結果の集計（ShowSignalOutcomesAction）', fu
         ssoaPrices($jp, ['2026-08-31' => 1000.0, '2026-09-28' => 1100.0]);
         $us = ssoaHolding('MSFT', 'us');
         ssoaPrices($us, ['2026-08-31' => 100.0, '2026-09-28' => 110.0]);
-        ssoaIndex('sp500', ['2026-08-31' => 5000.0, '2026-09-28' => 5100.0]);
+        ssoaIndex('sp500', ['2026-08-31' => 5000.0, '2026-09-28' => 5100.0, '2026-10-05' => 5100.0]);
         ssoaOccurrence($jp, 'buy', 'pullback', '2026-08-31');
         ssoaOccurrence($us, 'buy', 'pullback', '2026-08-31');
 
@@ -292,7 +292,7 @@ describe('UC-014: シグナル結果の集計（ShowSignalOutcomesAction）', fu
         // Arrange: stock has no 2026-09-28 row (e.g. delisted)
         $holding = ssoaHolding('7203', 'jp');
         ssoaPrices($holding, ['2026-08-31' => 1000.0]);
-        ssoaIndex('nikkei225', ['2026-08-31' => 30000.0, '2026-09-28' => 31500.0]);
+        ssoaIndex('nikkei225', ['2026-08-31' => 30000.0, '2026-09-28' => 31500.0, '2026-10-05' => 31500.0]);
         ssoaOccurrence($holding, 'buy', 'pullback', '2026-08-31');
 
         // Act
@@ -443,7 +443,8 @@ describe('UC-014: シグナル結果の集計（ShowSignalOutcomesAction）', fu
             $weeks[] = Carbon::parse('2026-05-18')->addWeeks($w)->format('Y-m-d');
         }
         $indexCloses = [];
-        for ($w = 0; $w < 20; $w++) {
+        // Through 2026-10-05 (the as-of week's import) so every +4w target up to 2026-09-28 is final.
+        for ($w = 0; $w < 21; $w++) {
             $indexCloses[Carbon::parse('2026-05-18')->addWeeks($w)->format('Y-m-d')] = 30000.0;
         }
         ssoaIndex('nikkei225', $indexCloses);
@@ -481,6 +482,7 @@ describe('UC-014: シグナル結果の集計（ShowSignalOutcomesAction）', fu
             '2026-08-31' => 30000.0,
             '2026-09-21' => 30000.0,
             '2026-09-28' => 30000.0,
+            '2026-10-05' => 30000.0,
         ]);
         $a = ssoaHolding('7203', 'jp');
         ssoaPrices($a, ['2026-08-24' => 1000.0, '2026-09-21' => 1100.0]);
@@ -509,7 +511,7 @@ describe('UC-014: シグナル結果の集計（ShowSignalOutcomesAction）', fu
     test('UC-014: 同じ週に出た30件の利確検討は、超過リターンが一貫してプラスでも発生週が1週のため判断保留になる（実データでの誤判定の再発防止）', function () {
         // Arrange: 30 take_profit occurrences all observed 2026-08-31, excess +3.0〜+7.0
         //   (per-occurrence t would be huge ⇒ formerly not_working).
-        ssoaIndex('nikkei225', ['2026-08-31' => 30000.0, '2026-09-28' => 30000.0]);
+        ssoaIndex('nikkei225', ['2026-08-31' => 30000.0, '2026-09-28' => 30000.0, '2026-10-05' => 30000.0]);
         for ($i = 0; $i < 30; $i++) {
             $holding = ssoaHolding((string) (2000 + $i), 'jp');
             $return = 3.0 + ($i % 5);
@@ -534,7 +536,7 @@ describe('UC-014: シグナル結果の集計（ShowSignalOutcomesAction）', fu
         // Arrange
         $holding = ssoaHolding('7203', 'jp');
         ssoaPrices($holding, ['2026-08-31' => 1000.0, '2026-09-28' => 1100.0]);
-        ssoaIndex('nikkei225', ['2026-08-31' => 30000.0, '2026-09-28' => 31500.0]);
+        ssoaIndex('nikkei225', ['2026-08-31' => 30000.0, '2026-09-28' => 31500.0, '2026-10-05' => 31500.0]);
         ssoaOccurrence($holding, 'buy', 'pullback', '2026-08-31');
         $before = [
             SignalOccurrence::count(),
@@ -556,5 +558,65 @@ describe('UC-014: シグナル結果の集計（ShowSignalOutcomesAction）', fu
             Holding::count(),
             SignalOccurrence::max('id'),
         ])->toBe($before);
+    });
+
+    // /review finding (CHG-0020, 2026-10-03): weekly_prices / index_weekly_prices are only
+    // UPSERTed on CSV import, so the latest imported week holds a mid-week close. A week counts
+    // as final only when it is before both the as-of week and the market index's latest week.
+    test('UC-014: 指数の週次価格履歴で最新の週（最後の取込週）は途中の終値のため、終点がその週の発生は結果待ちになる', function () {
+        // Arrange: as-of week 2026-10-05, but the last import was during 2026-09-28 (Thu),
+        //   so the 2026-09-28 rows are mid-week values.
+        $holding = ssoaHolding('7203', 'jp');
+        ssoaPrices($holding, ['2026-08-31' => 1000.0, '2026-09-28' => 1100.0]);
+        ssoaIndex('nikkei225', ['2026-08-31' => 30000.0, '2026-09-28' => 31500.0]);
+        ssoaOccurrence($holding, 'buy', 'pullback', '2026-08-31'); // +4w target 2026-09-28
+
+        // Act
+        $result = ssoaAction()->execute();
+
+        // Assert
+        $group = ssoaGroup($result, 'buy', 'pullback');
+        expect($group['occurrences'][0]['statuses'][4])->toBe('pending');
+        expect($group['occurrences'][0]['excess_returns'][4])->toBeNull();
+        expect($group['horizons'][4]['pending_count'])->toBe(1);
+        expect($group['horizons'][4]['matured_count'])->toBe(0);
+        expect($group['horizons'][4]['mean'])->toBeNull();
+    });
+
+    test('UC-014: 取込を飛ばして終点の週の価格がまだ無い発生は、算出不可ではなく結果待ちになる', function () {
+        // Arrange: imports stopped after 2026-09-14; +4w target 2026-09-21 is before the as-of week
+        //   (2026-10-05) but nothing has been fetched for it yet — a temporary gap, not a permanent one.
+        $holding = ssoaHolding('7203', 'jp');
+        ssoaPrices($holding, ['2026-08-24' => 1000.0, '2026-09-14' => 1050.0]);
+        ssoaIndex('nikkei225', ['2026-08-24' => 30000.0, '2026-09-14' => 30500.0]);
+        ssoaOccurrence($holding, 'buy', 'pullback', '2026-08-24'); // +4w target 2026-09-21
+
+        // Act
+        $result = ssoaAction()->execute();
+
+        // Assert
+        $h4 = ssoaGroup($result, 'buy', 'pullback')['horizons'][4];
+        expect($h4['pending_count'])->toBe(1);
+        expect($h4['unavailable_count'])->toBe(0);
+    });
+
+    test('UC-014: 確定の境は市場ごとに決まり、S&P500の取込が新しい米国株は確定・日経平均の取込が古い日本株は結果待ちになる', function () {
+        // Arrange: sp500 imported through 2026-10-05, nikkei225 only through 2026-09-28.
+        $jp = ssoaHolding('7203', 'jp');
+        ssoaPrices($jp, ['2026-08-31' => 1000.0, '2026-09-28' => 1100.0]);
+        $us = ssoaHolding('MSFT', 'us');
+        ssoaPrices($us, ['2026-08-31' => 100.0, '2026-09-28' => 110.0]);
+        ssoaIndex('nikkei225', ['2026-08-31' => 30000.0, '2026-09-28' => 31500.0]);
+        ssoaIndex('sp500', ['2026-08-31' => 5000.0, '2026-09-28' => 5100.0, '2026-10-05' => 5150.0]);
+        ssoaOccurrence($jp, 'buy', 'pullback', '2026-08-31');
+        ssoaOccurrence($us, 'buy', 'pullback', '2026-08-31');
+
+        // Act
+        $group = ssoaGroup(ssoaAction()->execute(), 'buy', 'pullback');
+
+        // Assert
+        expect(ssoaOccurrenceRow($group, '7203')['statuses'][4])->toBe('pending');
+        expect(ssoaOccurrenceRow($group, 'MSFT')['statuses'][4])->toBe('matured');
+        expect(ssoaOccurrenceRow($group, 'MSFT')['excess_returns'][4])->toEqualWithDelta(8.0, 1e-9);
     });
 });

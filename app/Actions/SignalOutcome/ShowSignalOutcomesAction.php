@@ -20,6 +20,9 @@ use InvalidArgumentException;
  * Mean / t-value / verdict use one sample per observed week (the mean of that
  * week's matured excess returns; ADR-0017 D7 revision, CHG-0020 Cycle5) because
  * same-week occurrences move together; median / hit rate stay per occurrence.
+ * Price series are only UPSERTed on CSV import, so the latest imported week holds
+ * a mid-week close: a week is final only when it is before both the as-of week
+ * and the market index's latest week (finalWeekBoundaries()).
  * Never writes and never changes any threshold.
  */
 class ShowSignalOutcomesAction
@@ -67,6 +70,7 @@ class ShowSignalOutcomesAction
 
         $stockCloses = $this->stockCloses($occurrences->pluck('holding_id')->unique()->values()->all());
         $indexCloses = $this->indexCloses();
+        $finalBefore = $this->finalWeekBoundaries($indexCloses, $asOfWeek);
 
         $groups = [];
 
@@ -84,7 +88,7 @@ class ShowSignalOutcomesAction
                     $horizon,
                     $stockCloses[$occurrence->holding_id] ?? [],
                     $indexName !== null ? ($indexCloses[$indexName] ?? []) : [],
-                    $asOfWeek,
+                    $indexName !== null ? $finalBefore[$indexName] : $asOfWeek,
                 );
                 $excessReturns[$horizon] = $result['excess_return'];
                 $statuses[$horizon] = $result['status'];
@@ -185,6 +189,26 @@ class ShowSignalOutcomesAction
             'horizons' => $horizons,
             'occurrences' => $group['occurrences'],
         ];
+    }
+
+    /**
+     * First not-yet-final week per index: the earlier of the as-of week and the index's
+     * latest imported week. With no index rows the as-of week is kept, so the missing
+     * index surfaces as 算出不可 (UC-014 エラーケース) rather than 結果待ち.
+     *
+     * @param  array<string, array<string, float>>  $indexCloses
+     * @return array<string, string> index_name => Y-m-d
+     */
+    private function finalWeekBoundaries(array $indexCloses, string $asOfWeek): array
+    {
+        $boundaries = [];
+
+        foreach (self::INDEX_BY_MARKET as $indexName) {
+            $weeks = array_keys($indexCloses[$indexName] ?? []);
+            $boundaries[$indexName] = $weeks === [] ? $asOfWeek : min($asOfWeek, max($weeks));
+        }
+
+        return $boundaries;
     }
 
     /**
