@@ -13,11 +13,16 @@ class ShowHoldListAction
     public function __construct(private readonly ClassifyHoldingsAction $classifyHoldingsAction) {}
 
     /**
+     * CHG-0032: 供給元Actionの出力を取得済みなら渡して二重実行を避ける。
+     *
+     * @param  array<int, array<string, mixed>>|null  $lossReviewRows
+     * @param  array<int, array<string, mixed>>|null  $takeProfitRows
+     * @param  array<int, array<string, mixed>>|null  $addOnRows
      * @return array<int, array<string, mixed>>
      */
-    public function execute(string $sort = SignalListSort::MARKET_VALUE): array
+    public function execute(string $sort = SignalListSort::MARKET_VALUE, ?array $lossReviewRows = null, ?array $takeProfitRows = null, ?array $addOnRows = null): array
     {
-        $holdings = collect($this->classifyHoldingsAction->execute()['buckets'])
+        $holdings = collect($this->classifyHoldingsAction->execute($lossReviewRows, $takeProfitRows, $addOnRows)['buckets'])
             ->firstWhere('bucket', 'hold')['holdings'] ?? [];
 
         // おすすめ順: hold_watch 先頭 → 含み損益率の低い順（ClassifyHoldingsAction と同じ）。

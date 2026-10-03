@@ -54,9 +54,15 @@ class ClassifyHoldingsAction
     ) {}
 
     /**
+     * CHG-0032: 呼び出し側が供給元Actionの出力を取得済みなら引数で渡して再実行を避ける
+     * （null の引数は従来どおり自前で実行する。空配列は「該当なし」として扱う）。
+     *
+     * @param  array<int, array<string, mixed>>|null  $lossReviewRows
+     * @param  array<int, array<string, mixed>>|null  $takeProfitRows
+     * @param  array<int, array<string, mixed>>|null  $addOnRows
      * @return array<string, mixed>
      */
-    public function execute(): array
+    public function execute(?array $lossReviewRows = null, ?array $takeProfitRows = null, ?array $addOnRows = null): array
     {
         $latestSnapshot = Snapshot::query()
             ->orderByDesc('snapshotted_at')
@@ -81,9 +87,9 @@ class ClassifyHoldingsAction
         $sectorRows = $this->sectorAllocationCalculator->calculate();
         $sectorStatusByName = collect($sectorRows)->keyBy('sector_name');
 
-        $lossReviewRows = $this->showLossReviewListAction->execute();
-        $takeProfitRows = $this->showSignalListAction->execute();
-        $addOnRows = $this->showBuySignalListAction->execute();
+        $lossReviewRows ??= $this->showLossReviewListAction->execute();
+        $takeProfitRows ??= $this->showSignalListAction->execute();
+        $addOnRows ??= $this->showBuySignalListAction->execute();
 
         // symbol_code は (symbol_code, market) の複合ユニークであり単独では
         // 一意ではない（レビュー指摘）。sourceRows（各供給元Actionの出力）は
