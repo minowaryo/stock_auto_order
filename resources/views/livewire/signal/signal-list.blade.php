@@ -1,10 +1,8 @@
 <div>
     <x-page-header title="売買シグナル" />
 
-    {{-- UC-014 / ADR-0017 D8: タブは増やさず、ここからシグナル検証画面へ遷移する --}}
-    <div class="mb-3 text-[13px]">
-        <a href="/signal-outcomes" wire:navigate class="text-primary hover:underline">シグナル検証（発生後の成績）→</a>
-    </div>
+    {{-- UC-014 / ADR-0017 D8: グローバルナビのタブは増やさず、切替タブでシグナル検証画面と行き来する --}}
+    <x-signal-outcome-tabs current="signals" />
 
     {{-- CHG-0027: 3テーブル共通の並び順切替（既定は評価額順） --}}
     <div class="flex items-center gap-2 mb-3 text-[13px]">

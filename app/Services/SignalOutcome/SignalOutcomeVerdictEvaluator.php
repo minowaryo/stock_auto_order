@@ -7,6 +7,8 @@ use InvalidArgumentException;
 
 /**
  * UC-014 / ADR-0017 D7: verdict on whether a signal source works.
+ * Samples are observed weeks (CHG-0020 Cycle5, D7 revision): occurrences in the same
+ * week move together, so pending also requires enough distinct matured weeks.
  * Priority: suspicious > pending > sign check (provisional before 3 years accumulated,
  * otherwise confirmed by the yearly means of the 3 most recent years).
  */
@@ -16,6 +18,11 @@ final class SignalOutcomeVerdictEvaluator
     private const SUSPICIOUS_THRESHOLDS = [4 => 10.0, 13 => 20.0, 26 => 30.0];
 
     private const MIN_MATURED_COUNT = 30;
+
+    /** Required matured weeks = max(MIN_MATURED_WEEKS, MATURED_WEEKS_PER_HORIZON × horizon weeks). */
+    private const MIN_MATURED_WEEKS = 13;
+
+    private const MATURED_WEEKS_PER_HORIZON = 3;
 
     /** |t| must exceed this to be significant. */
     private const T_THRESHOLD = 2.0;
@@ -38,6 +45,7 @@ final class SignalOutcomeVerdictEvaluator
         string $source,
         int $horizonWeeks,
         int $maturedCount,
+        int $maturedWeekCount,
         ?float $mean,
         ?float $tValue,
         string $firstObservedWeek,
@@ -60,6 +68,7 @@ final class SignalOutcomeVerdictEvaluator
 
         if ($mean === null
             || $maturedCount < self::MIN_MATURED_COUNT
+            || $maturedWeekCount < $this->requiredMaturedWeeks($horizonWeeks)
             || $tValue === null
             || abs($tValue) <= self::T_THRESHOLD) {
             return $this->verdict('pending');
@@ -78,6 +87,11 @@ final class SignalOutcomeVerdictEvaluator
         $matches = count(array_filter($recent, fn (float $m) => $this->hasExpectedSign($m, $isBuy)));
 
         return $this->verdict($matches >= self::MIN_MATCHING_YEARS ? 'working' : 'not_working');
+    }
+
+    private function requiredMaturedWeeks(int $horizonWeeks): int
+    {
+        return max(self::MIN_MATURED_WEEKS, self::MATURED_WEEKS_PER_HORIZON * $horizonWeeks);
     }
 
     private function hasExpectedSign(float $value, bool $isBuy): bool

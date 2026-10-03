@@ -41,6 +41,15 @@ use InvalidArgumentException;
 | Expected Red: "Target class [App\Actions\SignalOutcome\ShowSignalOutcomesAction]
 | does not exist." (BindingResolutionException) for every test.
 |
+| CHG-0020 Cycle5 (ADR-0017 D7 改訂 / UC-014「同じ週の発生は1件として判定する」):
+|   - horizons[H] gains `matured_week_count` (distinct observed_week among matured
+|     occurrences), placed right after `matured_count`.
+|   - mean / t_value / verdict use one sample per observed week (the mean of that
+|     week's matured excess returns); median / hit_rate stay per occurrence.
+|   - yearly means for the verdict = per calendar year, mean of that year's weekly means.
+|   - verdict also needs matured_week_count >= max(13, 3 × horizon) (+4w 13 / +13w 39 / +26w 78).
+|   Expected Red: missing `matured_week_count` key / per-occurrence mean & t.
+|
 */
 
 function ssoaHolding(string $code, string $market = 'jp'): Holding
@@ -182,7 +191,20 @@ describe('UC-014: シグナル結果の集計（ShowSignalOutcomesAction）', fu
         expect(array_keys($group['horizons']))->toBe([4, 13, 26]);
 
         $h4 = $group['horizons'][4];
+        expect(array_keys($h4))->toBe([
+            'matured_count',
+            'matured_week_count',
+            'pending_count',
+            'unavailable_count',
+            'mean',
+            'median',
+            't_value',
+            'hit_rate',
+            'verdict',
+            'provisional',
+        ]);
         expect($h4['matured_count'])->toBe(1);
+        expect($h4['matured_week_count'])->toBe(1);
         expect($h4['pending_count'])->toBe(0);
         expect($h4['unavailable_count'])->toBe(0);
         expect($h4['mean'])->toEqualWithDelta(5.0, 1e-9);
@@ -195,6 +217,7 @@ describe('UC-014: シグナル結果の集計（ShowSignalOutcomesAction）', fu
         foreach ([13, 26] as $horizon) {
             $h = $group['horizons'][$horizon];
             expect($h['matured_count'])->toBe(0);
+            expect($h['matured_week_count'])->toBe(0);
             expect($h['pending_count'])->toBe(1);
             expect($h['unavailable_count'])->toBe(0);
             expect($h['mean'])->toBeNull();
@@ -411,14 +434,26 @@ describe('UC-014: シグナル結果の集計（ShowSignalOutcomesAction）', fu
         expect($rows[1]['metrics'])->toEqual(['close' => 1000.0]);
     });
 
-    test('UC-014: 結果到来30件以上で一貫してプラスの買い増しシグナルは、蓄積3年未満のため「機能している（暫定）」と判定される', function () {
-        // Arrange: 32 holdings, nikkei225 flat ⇒ excess = stock return 1.50%〜2.43% (all > 0, finite t)
-        ssoaIndex('nikkei225', ['2026-08-31' => 30000.0, '2026-09-28' => 30000.0]);
+    test('UC-014: 結果到来30件以上・発生週13週以上で一貫してプラスの買い増しシグナルは、蓄積3年未満のため「機能している（暫定）」と判定される', function () {
+        // Arrange: 32 holdings spread over 16 observed weeks (2026-05-18〜2026-08-31, 2 per week),
+        //   nikkei225 flat ⇒ excess = stock return 1.50%〜2.43% (all > 0, finite t).
+        //   Weekly means are 1.74〜2.19; their mean is still 1.965.
+        $weeks = [];
+        for ($w = 0; $w < 16; $w++) {
+            $weeks[] = Carbon::parse('2026-05-18')->addWeeks($w)->format('Y-m-d');
+        }
+        $indexCloses = [];
+        for ($w = 0; $w < 20; $w++) {
+            $indexCloses[Carbon::parse('2026-05-18')->addWeeks($w)->format('Y-m-d')] = 30000.0;
+        }
+        ssoaIndex('nikkei225', $indexCloses);
         for ($i = 0; $i < 32; $i++) {
             $holding = ssoaHolding((string) (1000 + $i), 'jp');
             $return = 1.5 + $i * 0.03;
-            ssoaPrices($holding, ['2026-08-31' => 1000.0, '2026-09-28' => 1000.0 * (1 + $return / 100)]);
-            ssoaOccurrence($holding, 'buy', 'pullback', '2026-08-31');
+            $observed = $weeks[$i % 16];
+            $target = Carbon::parse($observed)->addWeeks(4)->format('Y-m-d');
+            ssoaPrices($holding, [$observed => 1000.0, $target => 1000.0 * (1 + $return / 100)]);
+            ssoaOccurrence($holding, 'buy', 'pullback', $observed);
         }
 
         // Act
@@ -427,11 +462,72 @@ describe('UC-014: シグナル結果の集計（ShowSignalOutcomesAction）', fu
         // Assert
         $h4 = ssoaGroup($result, 'buy', 'pullback')['horizons'][4];
         expect($h4['matured_count'])->toBe(32);
+        expect($h4['matured_week_count'])->toBe(16);
         expect($h4['mean'])->toEqualWithDelta(1.965, 1e-3);
         expect($h4['t_value'])->toBeGreaterThan(2.0);
         expect($h4['hit_rate'])->toEqualWithDelta(100.0, 1e-9);
         expect($h4['verdict'])->toBe('working');
         expect($h4['provisional'])->toBeTrue();
+    });
+
+    test('UC-014: 平均超過リターンとt値は発生週ごとの平均（1週＝1標本）から求め、中央値・的中率は個々の発生から求める', function () {
+        // Arrange: nikkei225 flat ⇒ excess = stock return.
+        //   W1 2026-08-24: +10.0 and 0.0 (weekly mean 5.0); W2 2026-08-31: +2.0 (weekly mean 2.0)
+        //   per-week samples [5.0, 2.0] ⇒ mean 3.5 (per-occurrence mean would be 4.0)
+        //   s = sqrt((1.5^2 + 1.5^2) / 1) = 2.1213…, t = 3.5 / (s / √2) = 2.3333…
+        //   per-occurrence: median of [10, 0, 2] = 2.0, hit rate 2/3 (0.0 is a miss)
+        ssoaIndex('nikkei225', [
+            '2026-08-24' => 30000.0,
+            '2026-08-31' => 30000.0,
+            '2026-09-21' => 30000.0,
+            '2026-09-28' => 30000.0,
+        ]);
+        $a = ssoaHolding('7203', 'jp');
+        ssoaPrices($a, ['2026-08-24' => 1000.0, '2026-09-21' => 1100.0]);
+        $b = ssoaHolding('6758', 'jp');
+        ssoaPrices($b, ['2026-08-24' => 1000.0, '2026-09-21' => 1000.0]);
+        $c = ssoaHolding('9984', 'jp');
+        ssoaPrices($c, ['2026-08-31' => 1000.0, '2026-09-28' => 1020.0]);
+        ssoaOccurrence($a, 'buy', 'pullback', '2026-08-24');
+        ssoaOccurrence($b, 'buy', 'pullback', '2026-08-24');
+        ssoaOccurrence($c, 'buy', 'pullback', '2026-08-31');
+
+        // Act
+        $result = ssoaAction()->execute();
+
+        // Assert
+        $h4 = ssoaGroup($result, 'buy', 'pullback')['horizons'][4];
+        expect($h4['matured_count'])->toBe(3);
+        expect($h4['matured_week_count'])->toBe(2);
+        expect($h4['mean'])->toEqualWithDelta(3.5, 1e-9);
+        expect($h4['t_value'])->toEqualWithDelta(7 / 3, 1e-9);
+        expect($h4['median'])->toEqualWithDelta(2.0, 1e-9);
+        expect($h4['hit_rate'])->toEqualWithDelta(200 / 3, 1e-9);
+        expect($h4['verdict'])->toBe('pending');
+    });
+
+    test('UC-014: 同じ週に出た30件の利確検討は、超過リターンが一貫してプラスでも発生週が1週のため判断保留になる（実データでの誤判定の再発防止）', function () {
+        // Arrange: 30 take_profit occurrences all observed 2026-08-31, excess +3.0〜+7.0
+        //   (per-occurrence t would be huge ⇒ formerly not_working).
+        ssoaIndex('nikkei225', ['2026-08-31' => 30000.0, '2026-09-28' => 30000.0]);
+        for ($i = 0; $i < 30; $i++) {
+            $holding = ssoaHolding((string) (2000 + $i), 'jp');
+            $return = 3.0 + ($i % 5);
+            ssoaPrices($holding, ['2026-08-31' => 1000.0, '2026-09-28' => 1000.0 * (1 + $return / 100)]);
+            ssoaOccurrence($holding, 'take_profit', 'week52_high_pullback', '2026-08-31');
+        }
+
+        // Act
+        $result = ssoaAction()->execute();
+
+        // Assert
+        $h4 = ssoaGroup($result, 'take_profit', 'week52_high_pullback')['horizons'][4];
+        expect($h4['matured_count'])->toBe(30);
+        expect($h4['matured_week_count'])->toBe(1);
+        expect($h4['mean'])->toEqualWithDelta(5.0, 1e-9);
+        expect($h4['t_value'])->toBeNull();
+        expect($h4['verdict'])->toBe('pending');
+        expect($h4['provisional'])->toBeFalse();
     });
 
     test('UC-014: 集計は読み取り専用で、発生記録・週次価格履歴を書き換えない', function () {

@@ -11,7 +11,6 @@
     $signedPercent = fn ($value) => sprintf('%+.2f%%', $value);
     $tValue = fn ($value) => $value !== null ? number_format($value, 2) : '—';
     $statusLabels = ['pending' => '結果待ち', 'unavailable' => '算出不可'];
-    $metricValue = fn ($value) => is_bool($value) ? ($value ? 'true' : 'false') : (is_scalar($value) ? $value : json_encode($value, JSON_UNESCAPED_UNICODE));
     $filterHref = function (?string $source, ?string $market) {
         $query = http_build_query(array_filter(['source' => $source, 'market' => $market], fn ($v) => $v !== null));
 
@@ -21,6 +20,7 @@
 @endphp
 <div>
     <x-page-header title="シグナル検証" caption="出たシグナルのその後の値動きを、同期間の指数（日本株は日経平均、米国株はS&P500）を差し引いた超過リターンで集計しています。" />
+    <x-signal-outcome-tabs current="outcomes" />
 
     <div class="flex flex-wrap items-center gap-2 mb-3 text-[13px]">
         <span class="text-text-secondary">発生元:</span>
@@ -45,6 +45,7 @@
         <x-card>
             <ul class="text-xs text-text-secondary space-y-1">
                 <li>※ 超過リターン＝銘柄の騰落率−同期間の指数の騰落率（配当を含まない価格ベース）。基準週: {{ $outcomes['as_of_week'] }}</li>
+                <li>※ 平均・t値・判定は、同じ週の発生は1件として判定しています（週ごとの平均を1件として扱う）。判定には評価期間の3倍の週数（+4週は13週、+13週は39週、+26週は78週）が必要です。</li>
                 <li>※ 評価期間が経過していない発生は「結果待ち」、週次価格履歴が欠けている発生は「算出不可」として集計から除いています。</li>
                 <li>※ この画面の結果で閾値・判定ロジックが自動で変わることはありません。変更は実測を根拠に別途判断します。</li>
             </ul>
@@ -79,7 +80,7 @@
                             @foreach ($group['horizons'] as $horizon => $h)
                                 <tr class="border-b border-app-border last:border-b-0">
                                     <td class="py-2 pr-4 whitespace-nowrap">+{{ $horizon }}週</td>
-                                    <td class="py-2 pr-4 text-right">{{ $h['matured_count'] }}件</td>
+                                    <td class="py-2 pr-4 text-right">{{ $h['matured_count'] }}件（{{ $h['matured_week_count'] }}週）</td>
                                     <td class="py-2 pr-4 text-right">{{ $h['mean'] !== null ? $signedPercent($h['mean']) : '—' }}</td>
                                     <td class="py-2 pr-4 text-right">{{ $h['median'] !== null ? $signedPercent($h['median']) : '—' }}</td>
                                     <td class="py-2 pr-4 text-right">{{ $tValue($h['t_value']) }}</td>
@@ -133,8 +134,8 @@
                                             @if ($row['metrics'] === null)
                                                 記録なし
                                             @else
-                                                @foreach (array_filter($row['metrics'], fn ($v) => $v !== null) as $name => $value)
-                                                    <span class="whitespace-nowrap">{{ $name }}: {{ $metricValue($value) }}</span>@if (! $loop->last) / @endif
+                                                @foreach (\App\Support\SignalOccurrenceMetricLabels::format($row['metrics']) as $item)
+                                                    <span class="whitespace-nowrap">{{ $item }}</span>@if (! $loop->last) / @endif
                                                 @endforeach
                                             @endif
                                         </td>

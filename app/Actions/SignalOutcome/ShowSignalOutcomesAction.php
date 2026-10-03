@@ -17,6 +17,9 @@ use InvalidArgumentException;
 /**
  * UC-014 / ADR-0017 D4/D7/D8: read-only aggregation of signal occurrences by
  * source × signal_type × horizon (excess return vs. 日経平均 / S&P500).
+ * Mean / t-value / verdict use one sample per observed week (the mean of that
+ * week's matured excess returns; ADR-0017 D7 revision, CHG-0020 Cycle5) because
+ * same-week occurrences move together; median / hit rate stay per occurrence.
  * Never writes and never changes any threshold.
  */
 class ShowSignalOutcomesAction
@@ -127,38 +130,49 @@ class ShowSignalOutcomesAction
         foreach (self::HORIZONS as $horizon) {
             $counts = ['matured' => 0, 'pending' => 0, 'unavailable' => 0];
             $matured = [];
-            $byYear = [];
+            $byWeek = [];
 
             foreach ($group['occurrences'] as $row) {
                 $counts[$row['statuses'][$horizon]]++;
 
                 if ($row['statuses'][$horizon] === 'matured') {
                     $matured[] = $row['excess_returns'][$horizon];
-                    $byYear[(int) substr($row['observed_week'], 0, 4)][] = $row['excess_returns'][$horizon];
+                    $byWeek[$row['observed_week']][] = $row['excess_returns'][$horizon];
                 }
             }
 
-            $stats = $this->statisticsCalculator->calculate($matured, $group['source']);
+            // Median / hit rate per occurrence; mean / t / verdict per observed week (1 week = 1 sample).
+            $occurrenceStats = $this->statisticsCalculator->calculate($matured, $group['source']);
+            $weeklyMeans = array_map(fn (array $values) => array_sum($values) / count($values), $byWeek);
+            $weeklyStats = $this->statisticsCalculator->calculate(array_values($weeklyMeans), $group['source']);
+
+            $byYear = [];
+            foreach ($weeklyMeans as $week => $weeklyMean) {
+                $byYear[(int) substr((string) $week, 0, 4)][] = $weeklyMean;
+            }
             $yearlyMeans = array_map(fn (array $values) => array_sum($values) / count($values), $byYear);
+
             $verdict = $this->verdictEvaluator->evaluate(
                 $group['source'],
                 $horizon,
-                $stats['matured_count'],
-                $stats['mean'],
-                $stats['t_value'],
+                $occurrenceStats['matured_count'],
+                count($byWeek),
+                $weeklyStats['mean'],
+                $weeklyStats['t_value'],
                 $firstObservedWeek,
                 $asOfWeek,
                 $yearlyMeans,
             );
 
             $horizons[$horizon] = [
-                'matured_count' => $stats['matured_count'],
+                'matured_count' => $occurrenceStats['matured_count'],
+                'matured_week_count' => count($byWeek),
                 'pending_count' => $counts['pending'],
                 'unavailable_count' => $counts['unavailable'],
-                'mean' => $stats['mean'],
-                'median' => $stats['median'],
-                't_value' => $stats['t_value'],
-                'hit_rate' => $stats['hit_rate'],
+                'mean' => $weeklyStats['mean'],
+                'median' => $occurrenceStats['median'],
+                't_value' => $weeklyStats['t_value'],
+                'hit_rate' => $occurrenceStats['hit_rate'],
                 'verdict' => $verdict['verdict'],
                 'provisional' => $verdict['provisional'],
             ];

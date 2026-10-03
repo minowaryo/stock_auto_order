@@ -44,18 +44,36 @@ use Livewire\Livewire;
 |   - Each group has a <details> element listing its occurrences (symbol code,
 |     observed week Y-m-d, per-horizon excess or 結果待ち/算出不可, metrics null →
 |     記録なし) in the payload order (newest first).
-|   - /signals has a link whose href ends with /signal-outcomes.
+|   - /signals has a link whose href ends with /signal-outcomes. (Cycle5: replaced
+|     by the sub-tab nav below.)
 |   - Global nav stays 6 tabs; the 売買シグナル tab gets the active classes
 |     (text-primary bg-blue-50) — app.blade.php marks the active tab by class,
 |     not by aria-current.
 |   - Verdict labels are rendered only for actual verdicts (no static legend
 |     that lists every label), otherwise the 「（暫定）」 absence check is moot.
 |   - How non-null metrics are rendered in the detail is NOT asserted (left to
-|     the implementer).
+|     the implementer). (Cycle5: now asserted, see below.)
 |   No data-testid is required.
 |
 | Expected Red: "Class App\Livewire\SignalOutcome\SignalOutcomes not found" /
 | GET /signal-outcomes 404 / /signals has no link to /signal-outcomes.
+|
+| CHG-0020 Cycle5 (ADR-0017 D7 改訂): the Action's horizon entry gains
+| `matured_week_count`; the summary table shows the matured count as
+| 「{matured_count}件（{matured_week_count}週）」 and the page carries a note
+| containing 「同じ週の発生は1件として判定」.
+|   Sub-tabs (UC-014「画面の行き来」, mirrors x-sector-concentration-tabs):
+|   both /signals and /signal-outcomes render, under the page title,
+|   <nav aria-label="売買シグナルとシグナル検証の切替"> (Blade component
+|   x-signal-outcome-tabs, prop current = 'signals' | 'outcomes') with links
+|   「売買シグナル」(href …/signals) and 「シグナル検証」(href …/signal-outcomes);
+|   only the current one has aria-current="page".
+|   Metrics in the per-occurrence detail (UC-014「根拠値の表示」): Japanese labels
+|   (close→終値, rsi→RSI, per→PER, ma75_trend_rising→75日線上昇, …), 「ラベル: 値」,
+|   numbers via number_format(…, 2), booleans はい／いいえ, nulls omitted,
+|   unknown keys keep the raw key with the same value formatting.
+| Expected Red: 「30件（1週）」 / the note text / the sub-tab nav / the Japanese
+| metric labels not found.
 |
 */
 
@@ -67,6 +85,7 @@ function ssopHorizon(array $overrides = []): array
 {
     return array_merge([
         'matured_count' => 0,
+        'matured_week_count' => 0,
         'pending_count' => 0,
         'unavailable_count' => 0,
         'mean' => null,
@@ -111,7 +130,7 @@ function ssopPayload(): array
                 'signal_type' => 'rsi_overbought',
                 'occurrence_count' => 3,
                 'horizons' => [
-                    4 => ssopHorizon(['matured_count' => 1, 'pending_count' => 1, 'unavailable_count' => 1, 'mean' => -3.25, 'median' => -3.25, 't_value' => null, 'hit_rate' => 100.0]),
+                    4 => ssopHorizon(['matured_count' => 1, 'matured_week_count' => 1, 'pending_count' => 1, 'unavailable_count' => 1, 'mean' => -3.25, 'median' => -3.25, 't_value' => null, 'hit_rate' => 100.0]),
                     13 => ssopHorizon(['pending_count' => 3]),
                     26 => ssopHorizon(['pending_count' => 3]),
                 ],
@@ -126,9 +145,9 @@ function ssopPayload(): array
                 'signal_type' => 'pullback',
                 'occurrence_count' => 2,
                 'horizons' => [
-                    4 => ssopHorizon(['matured_count' => 2, 'mean' => 5.0, 'median' => 4.876, 't_value' => 3.4567, 'hit_rate' => 66.6666, 'verdict' => 'working', 'provisional' => true]),
-                    13 => ssopHorizon(['matured_count' => 2, 'mean' => -1.234, 'median' => -1.5, 't_value' => -2.5, 'hit_rate' => 0.0, 'verdict' => 'not_working']),
-                    26 => ssopHorizon(['matured_count' => 2, 'mean' => 35.0, 'median' => 35.0, 't_value' => 9.0, 'hit_rate' => 100.0, 'verdict' => 'suspicious']),
+                    4 => ssopHorizon(['matured_count' => 2, 'matured_week_count' => 2, 'mean' => 5.0, 'median' => 4.876, 't_value' => 3.4567, 'hit_rate' => 66.6666, 'verdict' => 'working', 'provisional' => true]),
+                    13 => ssopHorizon(['matured_count' => 2, 'matured_week_count' => 2, 'mean' => -1.234, 'median' => -1.5, 't_value' => -2.5, 'hit_rate' => 0.0, 'verdict' => 'not_working']),
+                    26 => ssopHorizon(['matured_count' => 2, 'matured_week_count' => 2, 'mean' => 35.0, 'median' => 35.0, 't_value' => 9.0, 'hit_rate' => 100.0, 'verdict' => 'suspicious']),
                 ],
                 'occurrences' => [
                     ssopOccurrence('7203', 'jp', '2026-03-02', [4 => 5.0, 13 => -1.234, 26 => 35.0], [4 => 'matured', 13 => 'matured', 26 => 'matured'], ['close' => 2500.0]),
@@ -194,6 +213,21 @@ function ssopGlobalTabs(string $html): array
     }
 
     return [];
+}
+
+/**
+ * Parses the 売買シグナル｜シグナル検証 sub-tab nav: label => anchor attributes. Null when absent.
+ *
+ * @return array<string, string>|null
+ */
+function ssopSubTabs(string $html): ?array
+{
+    if (preg_match('#<nav[^>]*aria-label="売買シグナルとシグナル検証の切替"[^>]*>(.*?)</nav>#su', $html, $nav) !== 1) {
+        return null;
+    }
+    preg_match_all('#<a([^>]*)>\s*([^<]*?)\s*</a>#u', $nav[1], $links, PREG_SET_ORDER);
+
+    return array_column(array_map(fn ($l) => [$l[2], $l[1]], $links), 1, 0);
 }
 
 /**
@@ -321,8 +355,8 @@ describe('UC-014: シグナル検証画面（Livewire）', function () {
             $payload = ssopPayload();
             $payload['groups'] = [$payload['groups'][1]];
             $payload['groups'][0]['horizons'][4]['provisional'] = false;
-            $payload['groups'][0]['horizons'][13] = ssopHorizon(['matured_count' => 2]);
-            $payload['groups'][0]['horizons'][26] = ssopHorizon(['matured_count' => 2]);
+            $payload['groups'][0]['horizons'][13] = ssopHorizon(['matured_count' => 2, 'matured_week_count' => 2]);
+            $payload['groups'][0]['horizons'][26] = ssopHorizon(['matured_count' => 2, 'matured_week_count' => 2]);
             ssopMock($payload);
 
             // Act
@@ -331,6 +365,44 @@ describe('UC-014: シグナル検証画面（Livewire）', function () {
             // Assert
             $component->assertSee('機能している');
             $component->assertDontSee('機能している（暫定）');
+        });
+    });
+
+    describe('発生週単位の判定（CHG-0020 Cycle5）', function () {
+        test('UC-014: 集計表の結果到来件数は「30件（1週）」の形で発生週の数と並べて表示される', function () {
+            // Arrange: the real-data incident shape — 30 matured occurrences, all in one week
+            $user = User::factory()->create();
+            $payload = ssopPayload();
+            $payload['groups'] = [$payload['groups'][0]];
+            $payload['groups'][0]['occurrence_count'] = 30;
+            $payload['groups'][0]['horizons'][4] = ssopHorizon([
+                'matured_count' => 30,
+                'matured_week_count' => 1,
+                'mean' => 4.22,
+                'median' => 4.1,
+                't_value' => null,
+                'hit_rate' => 0.0,
+                'verdict' => 'pending',
+            ]);
+            ssopMock($payload);
+
+            // Act
+            $component = Livewire::actingAs($user)->test(SignalOutcomes::class);
+
+            // Assert
+            $component->assertSee('30件（1週）');
+        });
+
+        test('UC-014: 判定は同じ週の発生を1件として扱う旨の注記が表示される', function () {
+            // Arrange
+            $user = User::factory()->create();
+            ssopMock(ssopPayload());
+
+            // Act
+            $component = Livewire::actingAs($user)->test(SignalOutcomes::class);
+
+            // Assert
+            $component->assertSee('同じ週の発生は1件として判定');
         });
     });
 
@@ -365,6 +437,42 @@ describe('UC-014: シグナル検証画面（Livewire）', function () {
                 ->toContain('-1.23%')
                 ->toContain('+35.00%')
                 ->not->toContain('記録なし');
+        });
+    });
+
+    describe('根拠値の表示（CHG-0020 Cycle5）', function () {
+        test('UC-014: 個別発生の根拠値は日本語の項目名で、数値は小数2桁・真偽値は「はい／いいえ」で表示され、nullの項目は省かれる', function () {
+            // Arrange
+            $user = User::factory()->create();
+            $payload = ssopPayload();
+            $payload['groups'][1]['occurrences'][0]['metrics'] = [
+                'close' => 2500,
+                'rsi' => 70.437524329032,
+                'per' => 4574.7781,
+                'ma75_trend_rising' => true,
+                'equity_ratio' => false,
+                'week52_high' => null,
+                'custom_metric' => 1.5,
+            ];
+            ssopMock($payload);
+
+            // Act
+            $html = Livewire::actingAs($user)->test(SignalOutcomes::class)->html();
+
+            // Assert
+            $detail = ssopDetails($html, '7203');
+            expect($detail)->not->toBeNull();
+            expect($detail)
+                ->toContain('終値: 2,500.00')
+                ->toContain('RSI: 70.44')
+                ->toContain('PER: 4,574.78')
+                ->toContain('75日線上昇: はい')
+                ->toContain('自己資本比率: いいえ')
+                ->toContain('custom_metric: 1.50')
+                ->not->toContain('52週高値')
+                ->not->toContain('70.437524329032')
+                ->not->toContain('rsi:')
+                ->not->toContain('close:');
         });
     });
 
@@ -436,7 +544,7 @@ describe('UC-014: シグナル検証画面（Livewire）', function () {
     });
 
     describe('画面配置（ADR-0017 D8）', function () {
-        test('UC-014: 売買シグナル画面（/signals）にシグナル検証画面へのリンクがある', function () {
+        test('UC-014: 売買シグナル画面（/signals）のタイトル下に切替タブがあり、「売買シグナル」が選択中で「シグナル検証」へのリンクがある', function () {
             // Arrange
             $user = User::factory()->create();
 
@@ -445,7 +553,30 @@ describe('UC-014: シグナル検証画面（Livewire）', function () {
 
             // Assert
             $response->assertOk();
-            expect($response->getContent())->toMatch('#href="[^"]*/signal-outcomes"#');
+            $tabs = ssopSubTabs($response->getContent());
+            expect($tabs)->not->toBeNull();
+            expect(array_keys($tabs))->toBe(['売買シグナル', 'シグナル検証']);
+            expect($tabs['売買シグナル'])->toContain('aria-current="page"')->toMatch('#href="[^"]*/signals"#');
+            expect($tabs['シグナル検証'])->not->toContain('aria-current')->toMatch('#href="[^"]*/signal-outcomes"#');
+        });
+
+        test('UC-014: シグナル検証画面（/signal-outcomes）のタイトル下に切替タブがあり、「シグナル検証」が選択中で「売買シグナル」へ戻るリンクがある', function () {
+            // Arrange
+            $user = User::factory()->create();
+
+            // Act
+            $response = $this->actingAs($user)->get('/signal-outcomes');
+
+            // Assert
+            $response->assertOk();
+            $html = $response->getContent();
+            $tabs = ssopSubTabs($html);
+            expect($tabs)->not->toBeNull();
+            expect(array_keys($tabs))->toBe(['売買シグナル', 'シグナル検証']);
+            expect($tabs['シグナル検証'])->toContain('aria-current="page"')->toMatch('#href="[^"]*/signal-outcomes"#');
+            expect($tabs['売買シグナル'])->not->toContain('aria-current')->toMatch('#href="[^"]*/signals"#');
+            // Placed under the page title
+            expect(strpos($html, '<h1'))->toBeLessThan(strpos($html, 'aria-label="売買シグナルとシグナル検証の切替"'));
         });
 
         test('UC-014: グローバルナビは6タブのままで、シグナル検証画面では「売買シグナル」タブだけが選択中になる', function () {
