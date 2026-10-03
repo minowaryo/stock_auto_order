@@ -222,7 +222,7 @@ class ShowSignalOutcomesAction
         }
 
         return $this->closesBy(
-            WeeklyPrice::query()->select(['holding_id', 'week_date', 'close'])->whereIn('holding_id', $holdingIds)->get(),
+            WeeklyPrice::query()->select(['holding_id', 'week_date', 'close'])->whereIn('holding_id', $holdingIds)->toBase()->get(),
             'holding_id',
         );
     }
@@ -234,12 +234,15 @@ class ShowSignalOutcomesAction
     {
         return $this->closesBy(
             IndexWeeklyPrice::query()->select(['index_name', 'week_date', 'close'])
-                ->whereIn('index_name', array_values(self::INDEX_BY_MARKET))->get(),
+                ->whereIn('index_name', array_values(self::INDEX_BY_MARKET))->toBase()->get(),
             'index_name',
         );
     }
 
     /**
+     * Raw rows (toBase): ~25k weekly rows per render, so skip model hydration and casts.
+     * MySQL returns DATE columns as 'Y-m-d' strings and DECIMAL as numeric strings.
+     *
      * @return array<int|string, array<string, float>>
      */
     private function closesBy(Collection $rows, string $key): array
@@ -247,7 +250,7 @@ class ShowSignalOutcomesAction
         $closes = [];
 
         foreach ($rows as $row) {
-            $closes[$row->{$key}][$row->week_date->format('Y-m-d')] = (float) $row->close;
+            $closes[$row->{$key}][substr((string) $row->week_date, 0, 10)] = (float) $row->close;
         }
 
         return $closes;
