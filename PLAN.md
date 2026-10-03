@@ -122,7 +122,7 @@ Red 12件→Gate4承認→Green。フルスイート858 passed・pint適用済�
 
 Red 9件→Gate4承認→Green。フルスイート845 passed・pint適用済み。`feat/chg0028-signal-hold-table`の祖先としてmainへマージ（`d41adf8`、`Review: enhanced`）。（2026-10-03、Status記述をgit履歴で裏取りして更新）
 
-## エビデンス提言の取込とシグナル検証基盤（CHG-0020・ADR-0017・F-014・UC-014）Cycle1〜2完了・mainマージ済み、Cycle3〜4未着手（2026-09-27〜）
+## エビデンス提言の取込とシグナル検証基盤（CHG-0020・ADR-0017・F-014・UC-014）Cycle1〜2 mainマージ済み、Cycle3〜5 Green完了・`feat/chg0020-cycle3-excess-return`で未マージ（2026-09-27〜10-03）
 
 ### Decision
 
@@ -161,7 +161,16 @@ Red 9件→Gate4承認→Green。フルスイート845 passed・pint適用済み
 - **mainマージ前`/code-review enhanced`（review-score 348、8観点並列）実施・確定バグ1件を修正（2026-09-30）**: CHG-0023自身が持ち込んだ退行——`JQuantsClient::fetchStatements()`に`.throw()`を追加したのに、呼び出し元2箇所（`FetchExternalMarketDataAction`／`RefreshWatchlistMarketDataAction`）にcatchが付いておらず、J-Quantsのレート制限(429)等で例外が起きると保存済みのテクニカル指標までロールバックされ、シグナル判定・シグナル発生記録が丸ごとスキップされる（3つの独立した観点が収束、最高確度）。あわせて`fetchSectorInfo()`側の既存catchが`RequestException`のみで接続断（`ConnectionException`、共通の親`HttpClientException`）を捕捉していない件も発見・修正。対処は`fetchSectorInfo()`と同型（catch→警告ログ→空データで処理続行）。Red 3件→Gate4承認→Green、フルスイート832 passed・pintクリーン。CHG-0023固有の番号は追加発行せず本マージ準備の`/review`修正として記録（過去のマージ`/review`修正と同方式）
 - **見送り（LOW、backlog行き）**: `WeeklyPriceRecorder`のrecordHolding/recordIndex重複、逐次DB書き込みの一括化余地（Action・Command計4箇所）、`WeeklyPrice`/`IndexWeeklyPrice`モデルの重複、`observedWeek()`実装が3箇所に分散、backfillの週判定とライブ経路の週判定が異なる（ADR-0017 D6で許容範囲と明記済み）、コードコメント言語規約の軽微な違反数件、`285A`型銘柄コードのJ-Quantsコード変換が未検証の前提を持つ
 - **mainへマージ済み**（`e7753c5`、2026-09-30。2026-10-03にgit履歴で確認）
-- 次: CHG-0020 Cycle3（超過リターン算出の純ロジック）コードはGate2・3承認後に`/tdd`で着手（想定Cycle: ①`weekly_prices`/`index_weekly_prices`/`signal_occurrences`のmigrationと価格UPSERT、②シグナル発生記録と既存6スナップショットの移送、③超過リターン算出の純ロジック＋分割前提の回帰テスト、④集計表示）
+- **Cycle3〜5 Green完了（2026-10-03、worktree `.claude/worktrees/chg0020c3`・ブランチ`feat/chg0020-cycle3-excess-return`・専用テストDB`testing_chg0020c3`）**:
+  - Cycle3（`abba1be`）: `ExcessReturnCalculator`（結果待ち＝到達週が今週以降、算出不可＝端点欠損・0以下）／`OutcomeStatisticsCalculator`／`SignalOutcomeVerdictEvaluator`（純ロジック）。Red 59件→Gate4承認→Green
+  - Cycle4（`038083e`）: `ShowSignalOutcomesAction`（読み取り専用、基準週はマニラ時間の今週の月曜）、`/signal-outcomes`画面、`/signals`のナビ選択中表示の修正（本人承認）。Red 29件→Gate4承認→Green
+  - **Cycle4の実データ確認で判定の欠陥を発見**: 利確検討`week52_high_pullback`の+4週が8/24週1週分の30件だけで「機能していない」（t=2.38）。同じ週の発生は独立でないためt値が過大になる。本人承認でUC-014・ADR-0017 D7を改訂し、Cycle5で対策
+  - Cycle5: 平均・t値・判定は発生週ごとの平均（1週＝1標本）から、中央値・的中率は個々の発生から。判断保留を抜けるには発生週が評価期間の3倍（13／39／78週、本人選択）。「売買シグナル｜シグナル検証」の切替タブ、根拠値の日本語表示・小数2桁・定義順（本人承認）。実データでは全グループが判断保留（発生週はまだ1週）
+  - 実画面確認（コンテナ内`artisan serve`＋headless Chromium、セッションはファイル保存で開発DBへの書き込みなし）: タブの往復・ナビ選択中・絞り込み・`<details>`開閉・根拠値表示、コンソールエラー0。確認用サーバー・Playwright一式は削除済み
+  - 既知の限界（ADR-0017 D7改訂に明記）: +13／+26週は評価期間の重なりで週平均どうしも完全には独立しない（補正手法は使わない）
+  - **`/review`（強化レベル、スコア153、2観点並行＋私の再確認、2026-10-03）**: HIGHなし・ドメイン境界違反0。対応（本人承認）: ①【MEDIUM】週足はCSV取込時しか更新されず最後の取込週は週の途中の終値なのに、暦だけで確定扱いしていた（実測: 10/1〔木〕取込後、マニラ時間の日曜に9/28週が確定扱いになる状態）→市場ごとに「今週」と「その指数の最新週」の早い方より前だけを確定とし、取込を飛ばした週も結果待ちに（UC-014・ADR-0017 D4追記、回帰テスト3件）、②【MEDIUM】画面に「+13／+26週は評価期間が重なるため控えめに読む」の注記を追加、③【LOW】注記に「結果到来30件以上」を追記、④【LOW】UC-014の「上部のリンク」記述を切替タブに修正、⑤【LOW】週足をモデル化せず読む（実データで0.40秒→0.06秒）
+  - **別CR候補（`/review`で発見、未対応）**: (a) 売却した銘柄は週足の記録が止まるため、利確シグナルが「算出不可」のまま残り、「シグナルどおり売った」例が集計から抜ける（生存バイアス。Cycle1/2の記録範囲の問題）、(b) 3年蓄積後の年次符号チェックのずれ（データのない年を飛ばす・途中の年も1年と数える・蓄積の起点が期間別でない。影響は2029年以降）、(c) 結果1件だけでも「異常を疑う」になる（仕様どおりだが、実際の表示を見て要否を判断）
+  - 残作業: mainマージ→worktree・`testing_chg0020c3`の削除
 
 ## 売買戦略の深化ロードマップ策定（2026-09-19）
 
