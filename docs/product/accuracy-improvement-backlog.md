@@ -164,6 +164,8 @@
 
 ### 備考
 
+**2026-10-03再確認（CHG-0031／ADR-0022）:** 上表の「週次/月次の売買代金・出来高ランキング」の2026-09-05技術調査結論は撤回する。[J-Quants Free](https://jpx-jquants.com/?lang=ja)の株価は12週間遅延するため、今週の日本株ランキングに使用できない。[Alpha Vantage `TOP_GAINERS_LOSERS`](https://www.alphavantage.co/documentation/)は米国株の各上位20件のみで、[無料枠25リクエスト/日](https://www.alphavantage.co/support/)のためテーマ別の網羅的発見や全件詳細分析の母集団にはならない。代わりに[無料情報源の選定案](megatrend-source-selection.md)と[変更案件草案](megatrend-discovery-change-proposal.md)で、一次資料と専門家の役割を分けて検討する。現行要件のOUTは未改訂。
+
 - 上記のうち「チャート形状パターン検出」「出来高の判断ロジック組み込み」「利確・リバランス閾値の動的分岐」は、いずれも**要件自体は否定されていない**（将来のPhaseで着手する前提の持ち越し）。「ML的な合成特徴量・DCF法」「システム内蔵LLMチャット」は**設計方針・スコープ判断として意図的に対象外**にした点で性質が異なる
 - いずれも着手する場合はGate 0〜4のパイプライン（`.claude/rules/00-global.md`）に従い、Planフェーズからやり直す（動的分岐ロジックは`PLAN.md`記録時点で「着手時はPlanフェーズから開始」と明記済み）
 
