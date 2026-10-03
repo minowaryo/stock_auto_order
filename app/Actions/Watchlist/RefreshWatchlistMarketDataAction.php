@@ -19,6 +19,7 @@ use App\Services\MarketData\JpStockPriceClientInterface;
 use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\MarketData\MarketIndexClientInterface;
 use App\Services\MarketData\UsStockPriceClientInterface;
+use App\Services\Sector\SectorClassificationResolver;
 use App\Services\SignalOutcome\SignalOccurrenceMetricsBuilder;
 use App\Services\SignalOutcome\SignalOccurrenceRecorder;
 use App\Services\SignalOutcome\WeeklyPriceRecorder;
@@ -68,6 +69,7 @@ class RefreshWatchlistMarketDataAction
         private readonly WeeklyPriceRecorder $weeklyPriceRecorder,
         private readonly SignalOccurrenceRecorder $signalOccurrenceRecorder,
         private readonly SignalOccurrenceMetricsBuilder $signalOccurrenceMetricsBuilder,
+        private readonly SectorClassificationResolver $sectorResolver,
     ) {}
 
     /**
@@ -98,6 +100,8 @@ class RefreshWatchlistMarketDataAction
             $sp500Return13w = $this->calculate13wReturn($sp500History);
 
             foreach ($targets as $item) {
+                $this->classifySector($item->holding);
+
                 try {
                     $lastClose = $this->refreshHolding(
                         $item->holding,
@@ -129,6 +133,29 @@ class RefreshWatchlistMarketDataAction
         }
 
         return $run->refresh();
+    }
+
+    /**
+     * CHG-0044 / ADR-0020 D6: store the sector for an unheld watchlist symbol.
+     * A lookup failure or unknown sector keeps the existing value and never
+     * fails the symbol's refresh (so it is not counted in failed_count).
+     */
+    private function classifySector(Holding $holding): void
+    {
+        try {
+            $sector = $this->sectorResolver->classify($holding, $this->jQuantsClient, $this->finnhubClient);
+        } catch (Throwable) {
+            Log::warning('RefreshWatchlistMarketDataAction: sector fetch failed', [
+                'holding_id' => $holding->id,
+                'symbol_code' => $holding->symbol_code,
+            ]);
+
+            return;
+        }
+
+        if ($sector !== null && $holding->sector_classification_id !== $sector->id) {
+            $holding->forceFill(['sector_classification_id' => $sector->id])->save();
+        }
     }
 
     /**

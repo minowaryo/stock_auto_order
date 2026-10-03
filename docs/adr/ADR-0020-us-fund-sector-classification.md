@@ -35,3 +35,11 @@ UC-005（セクター配分）で「未分類」が評価額ベースで約73%�
 - 偏り判定は全体比のままなので、米国の特定業種だけで40%を超える場合のみ警告される。
 - Finnhub の呼び出しが保有米国株の数だけ増える（既存の `FinnhubClient` のスロットル・リトライに従う）。
 - 実装は `/tdd` で進め、Gate 4（テスト承認）を経る。
+
+## 追補（2026-10-03、CHG-0044）: ウォッチリスト銘柄の分類
+
+- 事象: 保有銘柄は分類済みになったが、お気に入り（ウォッチリスト）の未保有銘柄は日本株64・米国株40が未分類のままだった。`FetchExternalMarketDataAction`と`sectors:backfill`は保有（スナップショット）だけを対象にしており、`RefreshWatchlistMarketDataAction`は業種を保存していなかった
+- 決定（D6）: ウォッチリストの一括更新（`RefreshWatchlistMarketDataAction`）と`sectors:backfill`の対象にウォッチリスト銘柄を加える。分類は保有と同じ`SectorClassificationResolver`を使う（日本株=J-Quants17業種、米国株=Finnhub業種）。取得失敗・業種不明は未分類のまま既存値を保持し、銘柄の更新は止めない
+- 対象外: 米国ETF（HDV・SPYD・VYM等、Finnhubが業種を返さない）の専用カテゴリは別判断とする
+- 影響: ウォッチリストの重複率（`overlap_rate`）が市場別のセクター行を参照できるようになる。`sectors:backfill`は対象が増える分、Finnhub・J-Quantsの呼び出しが増える
+

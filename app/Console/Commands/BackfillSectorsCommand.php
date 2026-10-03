@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Holding;
 use App\Models\HoldingSnapshot;
 use App\Models\Snapshot;
+use App\Models\WatchlistItem;
 use App\Services\MarketData\FinnhubClientInterface;
 use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\Sector\SectorClassificationResolver;
@@ -13,7 +14,7 @@ use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * CHG-0029 / ADR-0020 D5: 最新スナップショットの保有のうち未分類のものへ、
+ * CHG-0029 / ADR-0020 D5: 最新スナップショットの保有とウォッチリスト銘柄のうち未分類のものへ、
  * 日本株=J-Quants / 米国株=Finnhub業種 / 投信=固定カテゴリ を一括反映する。
  *
  * 既存の分類は上書きしない（冪等）。銘柄単位の取得失敗はスキップして続行する。
@@ -40,25 +41,20 @@ class BackfillSectorsCommand extends Command
             return self::FAILURE;
         }
 
+        // CHG-0044 / ADR-0020 D6: latest holdings plus watchlist symbols. Past
+        // holdings that are neither are left alone to bound the API calls.
         $holdings = Holding::query()
             ->whereNull('sector_classification_id')
-            ->whereIn('id', HoldingSnapshot::query()->where('snapshot_id', $latestSnapshot->id)->select('holding_id'))
+            ->where(fn ($query) => $query
+                ->whereIn('id', HoldingSnapshot::query()->where('snapshot_id', $latestSnapshot->id)->select('holding_id'))
+                ->orWhereIn('id', WatchlistItem::query()->select('holding_id')))
             ->get();
 
         $classified = 0;
 
         foreach ($holdings as $holding) {
             try {
-                $sector = match (true) {
-                    $holding->instrument_type === 'mutual_fund' => $resolver->forMutualFund(),
-                    $holding->market === 'jp' => ($info = $jQuantsClient->fetchSectorInfo($holding->symbol_code)) !== null
-                        ? $resolver->forJpSector($info)
-                        : null,
-                    $holding->market === 'us' => ($industry = $finnhubClient->fetchIndustry($holding->symbol_code)) !== null
-                        ? $resolver->forUsIndustry($industry)
-                        : null,
-                    default => null,
-                };
+                $sector = $resolver->classify($holding, $jQuantsClient, $finnhubClient);
             } catch (Throwable) {
                 Log::warning('sectors:backfill: sector fetch failed', [
                     'holding_id' => $holding->id,
