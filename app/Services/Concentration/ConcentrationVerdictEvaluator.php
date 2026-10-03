@@ -44,7 +44,7 @@ final class ConcentrationVerdictEvaluator
 
     public function effectiveBets(?float $bets): ?string
     {
-        if ($bets === null) {
+        if (! $this->isJudgeable($bets)) {
             return null;
         }
 
@@ -65,9 +65,14 @@ final class ConcentrationVerdictEvaluator
         return $this->lowerIsBetter($beta === null ? null : abs($beta), self::BETA_CAUTION, self::BETA_CONCENTRATED);
     }
 
+    private function isJudgeable(?float $value): bool
+    {
+        return $value !== null && is_finite($value);
+    }
+
     public function correlationBand(?float $correlation): ?string
     {
-        if ($correlation === null) {
+        if (! $this->isJudgeable($correlation)) {
             return null;
         }
 
@@ -82,7 +87,7 @@ final class ConcentrationVerdictEvaluator
 
     private function lowerIsBetter(?float $value, float $caution, float $concentrated): ?string
     {
-        if ($value === null) {
+        if (! $this->isJudgeable($value)) {
             return null;
         }
 

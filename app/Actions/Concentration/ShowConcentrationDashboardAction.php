@@ -24,6 +24,11 @@ class ShowConcentrationDashboardAction
 {
     private const MATRIX_LIMIT = 20;
 
+    /** Decimals shown on screen (%: 1, others: 2). Verdicts use the same rounding so colour never contradicts the number. */
+    private const PERCENT_DECIMALS = 1;
+
+    private const VALUE_DECIMALS = 2;
+
     private const MIN_INCLUDED = 2;
 
     public function __construct(
@@ -131,19 +136,24 @@ class ShowConcentrationDashboardAction
                 fn (array $row) => array_map(
                     fn (?float $value, int $j) => $row['holding_id'] === $matrixIds[$j]
                         ? null
-                        : $this->verdictEvaluator->correlationBand($value),
+                        : $this->verdictEvaluator->correlationBand($this->rounded($value, self::VALUE_DECIMALS)),
                     $row['correlations'],
                     array_keys($row['correlations']),
                 ),
                 $matrix,
             ),
             'verdicts' => [
-                'pc1_share' => $this->verdictEvaluator->pc1($pc1Percent),
-                'effective_number_of_bets' => $this->verdictEvaluator->effectiveBets($enb),
-                'top5_weight' => $this->verdictEvaluator->top5($top5Percent),
-                'portfolio_sox_beta' => $this->verdictEvaluator->soxBeta($portfolioBeta),
+                'pc1_share' => $this->verdictEvaluator->pc1($this->rounded($pc1Percent, self::PERCENT_DECIMALS)),
+                'effective_number_of_bets' => $this->verdictEvaluator->effectiveBets($this->rounded($enb, self::VALUE_DECIMALS)),
+                'top5_weight' => $this->verdictEvaluator->top5($this->rounded($top5Percent, self::PERCENT_DECIMALS)),
+                'portfolio_sox_beta' => $this->verdictEvaluator->soxBeta($this->rounded($portfolioBeta, self::VALUE_DECIMALS)),
             ],
         ];
+    }
+
+    private function rounded(?float $value, int $decimals): ?float
+    {
+        return $value === null || ! is_finite($value) ? $value : round($value, $decimals);
     }
 
     /**

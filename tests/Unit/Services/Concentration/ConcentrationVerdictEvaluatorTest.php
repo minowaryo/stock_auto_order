@@ -87,3 +87,19 @@ dataset('concVerdictCorrelation', [
 test('UC-015: 相関係数は0.7・0.5・0.3・-0.3を境に5区分され、境界値は強い側（悪い側）になる', function (?float $input, ?string $expected) {
     expect((new ConcentrationVerdictEvaluator)->correlationBand($input))->toBe($expected);
 })->with('concVerdictCorrelation');
+
+dataset('concVerdictNonFinite', [
+    'NAN' => [NAN],
+    'INF' => [INF],
+    '-INF' => [-INF],
+]);
+
+test('UC-015: NAN・INF・-INF はどの指標でも判定せず null を返す（ADR-0021 D2）', function (float $input) {
+    $evaluator = new ConcentrationVerdictEvaluator;
+
+    expect($evaluator->pc1($input))->toBeNull();
+    expect($evaluator->effectiveBets($input))->toBeNull();
+    expect($evaluator->top5($input))->toBeNull();
+    expect($evaluator->soxBeta($input))->toBeNull();
+    expect($evaluator->correlationBand($input))->toBeNull();
+})->with('concVerdictNonFinite');
