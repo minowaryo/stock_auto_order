@@ -11,6 +11,7 @@ use App\Services\Import\Support\ParsedTradeRow;
 use App\Services\Import\TradeHistoryCsvParser;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * Previews or imports the 楽天証券 full-history trade CSVs (UC-017,
@@ -62,6 +63,22 @@ class ImportTradeHistoryAction
             return TradeHistoryImportSummary::failure($batch->id, $e->getMessage());
         }
 
+        try {
+            return $this->save($batch, $rows, $errorCount);
+        } catch (Throwable $e) {
+            // The transaction rolled back; record the failure so the batch is
+            // never left looking 'pending', then let the caller see the error.
+            $batch->forceFill(['status' => 'failed', 'failure_reason' => mb_substr($e->getMessage(), 0, 255)])->save();
+
+            throw $e;
+        }
+    }
+
+    /**
+     * @param  array<int, ParsedTradeRow>  $rows
+     */
+    private function save(TradeImportBatch $batch, array $rows, int $errorCount): TradeHistoryImportSummary
+    {
         return DB::transaction(function () use ($batch, $rows, $errorCount) {
             $diff = $this->diff($rows);
             $now = now();

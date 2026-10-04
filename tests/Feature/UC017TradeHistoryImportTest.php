@@ -6,7 +6,10 @@ use App\Actions\Import\ImportTradeHistoryAction;
 use App\Models\Holding;
 use App\Models\TradeExecution;
 use App\Models\TradeImportBatch;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 /*
 |--------------------------------------------------------------------------
@@ -306,6 +309,32 @@ describe('UC-017 売買履歴の取込: 異常時とプレビュー', function (
         expect($batch->failure_reason)->not->toBeNull();
         expect(TradeExecution::count())->toBe(0);
         expect(Holding::count())->toBe(0);
+    });
+
+    test('保存の途中で想定外のDBエラーが起きた場合は、明細を残さず、取込記録を失敗にしてから例外を伝える', function () {
+        // Arrange: make the trade_executions insert fail inside the transaction
+        $armed = true;
+        DB::listen(function (QueryExecuted $query) use (&$armed) {
+            if ($armed && str_starts_with(strtolower($query->sql), 'insert into `trade_executions`')) {
+                throw new RuntimeException('simulated trade_executions insert failure');
+            }
+        });
+
+        // Act
+        $thrown = null;
+        try {
+            tisImport([tisJp()], [tisUs()]);
+        } catch (RuntimeException $e) {
+            $thrown = $e;
+        }
+        $armed = false;
+
+        // Assert
+        expect($thrown)->not->toBeNull();
+        expect(TradeExecution::count())->toBe(0);
+        $batch = TradeImportBatch::sole();
+        expect($batch->status)->toBe('failed');
+        expect($batch->failure_reason)->not->toBeNull();
     });
 
     test('プレビューは新規・既存・消える行の件数と対象期間を返し、データベースを一切変えない', function () {
