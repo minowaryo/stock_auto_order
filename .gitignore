@@ -45,3 +45,6 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Sandbox placeholder / local AWS credentials
+/.aws/
