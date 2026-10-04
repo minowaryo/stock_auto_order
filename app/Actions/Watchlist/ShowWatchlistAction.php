@@ -5,6 +5,7 @@ namespace App\Actions\Watchlist;
 use App\Models\HoldingSnapshot;
 use App\Models\Snapshot;
 use App\Models\WatchlistItem;
+use App\Services\Analysis\CriteriaValuationMetricsBuilder;
 use App\Services\Analysis\FundamentalHealthEvaluator;
 use App\Services\Analysis\SignalCriteriaEvaluator;
 use App\Services\Portfolio\PortfolioEvaluationCalculator;
@@ -42,6 +43,7 @@ class ShowWatchlistAction
     public function __construct(
         private readonly FundamentalHealthEvaluator $evaluator,
         private readonly SignalCriteriaEvaluator $criteriaEvaluator,
+        private readonly CriteriaValuationMetricsBuilder $valuationMetrics,
         private readonly SectorAllocationCalculator $sectorAllocationCalculator,
         private readonly PortfolioEvaluationCalculator $portfolioEvaluationCalculator,
     ) {}
@@ -154,6 +156,7 @@ class ShowWatchlistAction
                 'revenue_growth' => $revenueGrowth,
                 'operating_income_growth' => $operatingIncomeGrowth,
                 'operating_margin' => $operatingMargin,
+                ...$this->valuationMetrics->build($holding->market, $holding->sectorClassification?->name, $fundamental),
             ]),
             // sort helper: nulls (no 52w range) go last
             '_range_sort' => $rangePosition ?? 2.0,

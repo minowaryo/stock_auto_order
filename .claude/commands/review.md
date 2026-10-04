@@ -36,6 +36,7 @@ bash .claude/hooks/domain-boundary-check.sh
 - `docs/product/use-cases.md` — 実装が要件と一致しているか確認するため
 - `docs/architecture/data-model.md` — DBスキーマ・マイグレーションの整合性確認のため
 - `docs/product/mockups/` — UI実装がモックと一致しているか確認するため（存在する場合）
+- `docs/development/review-guidelines.md` — レビュー観点の全文（作成者の事前確認・レビュアー観点）
 
 ## レビュー対象
 

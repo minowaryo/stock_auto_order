@@ -4,6 +4,8 @@ namespace App\Actions\Holding;
 
 use App\Models\Holding;
 use App\Models\HoldingSnapshot;
+use App\Services\Analysis\FundamentalMetricToneEvaluator;
+use App\Services\Analysis\ValuationBenchmarkJudge;
 use App\Support\DisplayTime;
 
 /**
@@ -25,6 +27,11 @@ class ShowHoldingDetailAction
         '5y' => 5,
         '10y' => 10,
     ];
+
+    public function __construct(
+        private readonly ValuationBenchmarkJudge $valuationJudge,
+        private readonly FundamentalMetricToneEvaluator $toneEvaluator,
+    ) {}
 
     /**
      * @return array<string, mixed>
@@ -54,6 +61,14 @@ class ShowHoldingDetailAction
 
         $technicalIndicator = $holding->technicalIndicator;
         $fundamentalIndicator = $holding->fundamentalIndicator;
+
+        $market = $holding->market;
+        $sectorName = $holding->sectorClassification->name ?? null;
+        $float = fn (string $key): ?float => ($fundamentalIndicator->{$key} ?? null) === null ? null : (float) $fundamentalIndicator->{$key};
+        $metricTones = [];
+        foreach (['roe', 'equity_ratio', 'operating_margin', 'revenue_growth', 'operating_income_growth'] as $metric) {
+            $metricTones[$metric] = $this->toneEvaluator->tone($metric, $float($metric), $market, $sectorName);
+        }
 
         [$signalResult, $signalReason] = $this->resolveSignal($latestHoldingSnapshot);
 
@@ -96,6 +111,9 @@ class ShowHoldingDetailAction
             'dividend_yield' => $fundamentalIndicator->dividend_yield ?? null,
             'eps_growth' => $fundamentalIndicator->eps_growth ?? null,
             'peg_ratio' => $fundamentalIndicator->peg_ratio ?? null,
+            'per_verdict' => $this->valuationJudge->judge('per', $float('per'), $market, $sectorName),
+            'pbr_verdict' => $this->valuationJudge->judge('pbr', $float('pbr'), $market, $sectorName),
+            'metric_tones' => $metricTones,
             'signal_result' => $signalResult,
             'signal_reason' => $signalReason,
             'memo_history' => $memoHistory,

@@ -250,6 +250,10 @@ class RefreshWatchlistMarketDataAction
             dividendYield: $fundamental['dividend_yield'] ?? null,
             avgRevenueGrowth: $fundamental['avg_revenue_growth'] ?? null,
             avgOperatingIncomeGrowth: $fundamental['avg_operating_income_growth'] ?? null,
+            // ADR-0026 D3: sector-relative PER condition. Reload the relation
+            // because classifySector() may have just updated sector_classification_id.
+            market: $holding->market,
+            sectorName: $holding->load('sectorClassification')->sectorClassification?->name,
         );
 
         DB::transaction(function () use ($holding, $technical, $fundamental, $buySignals) {

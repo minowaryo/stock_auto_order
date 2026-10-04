@@ -9,6 +9,8 @@
         'success' => 'bg-green-100 text-green-700',
         'danger' => 'bg-red-100 text-red-700',
         'warning' => 'bg-amber-100 text-amber-700',
+        'success-strong' => 'bg-green-600 text-white',
+        'warning-strong' => 'bg-orange-600 text-white',
         'info' => 'bg-blue-50 text-primary',
         default => 'bg-slate-100 text-text-secondary',
     };

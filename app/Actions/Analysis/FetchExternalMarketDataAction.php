@@ -399,6 +399,11 @@ class FetchExternalMarketDataAction
                         // or the ADR-0015 D2 rescue never applies to held stocks.
                         avgRevenueGrowth: $avgGrowth['avg_revenue_growth'] ?? null,
                         avgOperatingIncomeGrowth: $avgGrowth['avg_operating_income_growth'] ?? null,
+                        // ADR-0026 D3: sector-relative PER condition. Reload the
+                        // relation because sector_classification_id may have been
+                        // updated above.
+                        market: $holding->market,
+                        sectorName: $holding->load('sectorClassification')->sectorClassification?->name,
                     );
 
                     // Re-determination: same drop-then-recreate pattern as the

@@ -4,6 +4,7 @@ namespace App\Actions\Signal;
 
 use App\Models\HoldingSnapshot;
 use App\Models\Snapshot;
+use App\Services\Analysis\CriteriaValuationMetricsBuilder;
 use App\Services\Analysis\FundamentalHealthEvaluator;
 use App\Services\Analysis\SignalCriteriaEvaluator;
 use App\Services\Portfolio\PortfolioEvaluationCalculator;
@@ -43,6 +44,7 @@ class ShowBuySignalListAction
         private readonly FundamentalHealthEvaluator $evaluator,
         private readonly PortfolioEvaluationCalculator $portfolioEvaluationCalculator,
         private readonly SignalCriteriaEvaluator $criteriaEvaluator,
+        private readonly CriteriaValuationMetricsBuilder $valuationMetrics,
     ) {}
 
     /**
@@ -61,7 +63,7 @@ class ShowBuySignalListAction
 
         $allHoldingSnapshots = HoldingSnapshot::query()
             ->where('snapshot_id', $latestSnapshot->id)
-            ->with(['holding.fundamentalIndicator', 'holding.technicalIndicator', 'buySignals', 'signals', 'accounts'])
+            ->with(['holding.sectorClassification', 'holding.fundamentalIndicator', 'holding.technicalIndicator', 'buySignals', 'signals', 'accounts'])
             ->get();
 
         $portfolioTotal = $this->portfolioEvaluationCalculator->total($allHoldingSnapshots);
@@ -198,6 +200,7 @@ class ShowBuySignalListAction
             'revenue_growth' => $revenueGrowth,
             'operating_income_growth' => $operatingIncomeGrowth,
             'operating_margin' => $operatingMargin,
+            ...$this->valuationMetrics->build($holdingSnapshot->holding->market, $holdingSnapshot->holding->sectorClassification?->name, $fundamentalIndicator),
         ];
     }
 

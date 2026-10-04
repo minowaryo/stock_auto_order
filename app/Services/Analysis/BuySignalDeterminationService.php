@@ -77,6 +77,7 @@ final class BuySignalDeterminationService
         private readonly TechnicalIndicatorCalculator $calculator,
         private readonly FundamentalHealthEvaluator $healthEvaluator,
         private readonly LowGrowthDeterminer $lowGrowthDeterminer = new LowGrowthDeterminer,
+        private ?ValuationBenchmarkJudge $valuationJudge = null,
     ) {}
 
     /**
@@ -97,6 +98,8 @@ final class BuySignalDeterminationService
         ?float $dividendYield = null,
         ?float $avgRevenueGrowth = null,
         ?float $avgOperatingIncomeGrowth = null,
+        ?string $market = null,
+        ?string $sectorName = null,
     ): array {
         $current = $this->calculator->calculate($priceHistory, $marketReturn13w, $sectorReturn13w);
 
@@ -145,11 +148,13 @@ final class BuySignalDeterminationService
             $signals[] = $signal;
         }
 
-        if (($signal = $this->determinePegUndervalued($pegRatio, $revenueGrowth, $operatingIncomeGrowth, $per, $dividendYield)) !== null) {
+        $perMet = $this->perConditionMet($per, $market, $sectorName);
+
+        if (($signal = $this->determinePegUndervalued($pegRatio, $revenueGrowth, $operatingIncomeGrowth, $per, $dividendYield, $perMet)) !== null) {
             $signals[] = $signal;
         }
 
-        if (($signal = $this->determinePerUndervalued($per)) !== null) {
+        if (($signal = $this->determinePerUndervalued($per, $perMet)) !== null) {
             $signals[] = $signal;
         }
 
@@ -388,6 +393,7 @@ final class BuySignalDeterminationService
         ?float $operatingIncomeGrowth,
         ?float $per,
         ?float $dividendYield,
+        bool $perMet,
     ): ?array {
         if ($this->lowGrowthDeterminer->isLowGrowth($revenueGrowth, $operatingIncomeGrowth)) {
             if ($per === null || $dividendYield === null) {
@@ -398,8 +404,10 @@ final class BuySignalDeterminationService
             // loss-making companies (UsFundamentalIndicatorMapper), the same
             // hazard ADR-0012 D4 already guards against for pegRatio below.
             // Without a lower bound, a loss-making stock's negative PER would
-            // satisfy "<= 15.0" and be misread as cheap.
-            if ($per > 0.0 && $per <= self::PER_UNDERVALUED_THRESHOLD && $dividendYield >= self::DIVIDEND_YIELD_UNDERVALUED_THRESHOLD) {
+            // satisfy "<= 15.0" and be misread as cheap. $perMet carries that
+            // lower bound and, when a market is given, the sector-relative
+            // PER condition (ADR-0026 D3, see perConditionMet()).
+            if ($perMet && $dividendYield >= self::DIVIDEND_YIELD_UNDERVALUED_THRESHOLD) {
                 return [
                     'signal_type' => 'peg_undervalued',
                     'reason_summary' => sprintf(
@@ -436,7 +444,7 @@ final class BuySignalDeterminationService
      *
      * @return array{signal_type: string, reason_summary: string}|null
      */
-    private function determinePerUndervalued(?float $per): ?array
+    private function determinePerUndervalued(?float $per, bool $perMet): ?array
     {
         if ($per === null) {
             return null;
@@ -447,7 +455,8 @@ final class BuySignalDeterminationService
         // US側UsFundamentalIndicatorMapperはFinnhubのpeTTMをそのまま採用して
         // おり、赤字（トレーリング12ヶ月の実質赤字）企業では負値になりうる。
         // 下限ガードなしだと赤字企業を「PERが低い＝割安」と誤判定してしまう。
-        if ($per > 0.0 && $per <= self::PER_UNDERVALUED_THRESHOLD) {
+        // 下限ガードと業種相対の判定（ADR-0026 D3）は perConditionMet() が持つ。
+        if ($perMet) {
             return [
                 'signal_type' => 'per_undervalued',
                 'reason_summary' => sprintf('PERが%sと割安水準です', $this->formatNumber($per, 1)),
@@ -455,6 +464,23 @@ final class BuySignalDeterminationService
         }
 
         return null;
+    }
+
+    /**
+     * PER condition shared by per_undervalued and the low-growth alternative
+     * (ADR-0026 D3): sector-relative via ValuationBenchmarkJudge::buyPerVerdict()
+     * when a market is given; otherwise the fixed 0 < PER <= 15.0. A negative
+     * PER (loss-making, US Finnhub peTTM) never counts as cheap.
+     */
+    private function perConditionMet(?float $per, ?string $market, ?string $sectorName): bool
+    {
+        if ($market === null) {
+            return $per !== null && $per > 0.0 && $per <= self::PER_UNDERVALUED_THRESHOLD;
+        }
+
+        $this->valuationJudge ??= app(ValuationBenchmarkJudge::class);
+
+        return $this->valuationJudge->buyPerVerdict($per, $market, $sectorName)['met'];
     }
 
     private function formatNumber(float $value, int $decimals = 0): string

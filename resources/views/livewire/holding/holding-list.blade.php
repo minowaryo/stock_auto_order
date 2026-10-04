@@ -94,10 +94,23 @@
                                         <x-badge>RSI {{ $holding['rsi'] }}</x-badge>
                                     @endif
                                     @if ($holding['per'] !== null)
-                                        <x-badge>PER {{ $holding['per'] }}</x-badge>
+                                        @php
+                                            $perDisplay = \App\Support\ValuationDisplay::valuation($holding['per_verdict']['tier'] ?? null);
+                                            $perText = number_format((float) $holding['per'], 1);
+                                        @endphp
+                                        @if ($perDisplay !== null)
+                                            <x-badge :variant="$perDisplay['variant']">PER {{ $perText }} {{ $perDisplay['label'] }}</x-badge>
+                                        @else
+                                            <x-badge>PER {{ $perText }}</x-badge>
+                                        @endif
                                     @endif
                                     @if ($holding['revenue_growth'] !== null)
-                                        <x-badge>売上成長 {{ number_format($holding['revenue_growth'], 1) }}%</x-badge>
+                                        @php $growthDisplay = \App\Support\ValuationDisplay::tone($holding['revenue_growth_tone']); @endphp
+                                        @if ($growthDisplay !== null)
+                                            <x-badge :variant="$growthDisplay['variant']">売上成長 {{ number_format($holding['revenue_growth'], 1) }}% {{ $growthDisplay['label'] }}</x-badge>
+                                        @else
+                                            <x-badge>売上成長 {{ number_format($holding['revenue_growth'], 1) }}%</x-badge>
+                                        @endif
                                     @endif
                                 @endif
                             </td>
