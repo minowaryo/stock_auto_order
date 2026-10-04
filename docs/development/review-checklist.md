@@ -1,9 +1,9 @@
-# review-checklist.md — PRレビューチェックリスト
+# review-checklist.md — レビューチェックリスト
 
 > `/review` コマンドと合わせて使用する。
-> 詳細は `.claude/rules/50-review.md` を参照。
+> 詳細は `docs/development/review-guidelines.md` を参照。
 
-## 作成者セルフチェック（PR作成前）
+## 作成者セルフチェック（マージ前）
 
 ### 要件・設計
 - [ ] `docs/product/use-cases.md` の対応ユースケースに紐づいているか
@@ -22,6 +22,7 @@
 ### セキュリティ
 - [ ] secrets・APIキーがコードに含まれていないか
 - [ ] ログにPIIが出力されていないか
+- [ ] 特権操作・破壊的操作（削除・権限変更等）が `audit` チャンネルに記録されているか
 - [ ] バリデーションが適切か（FormRequestを使っているか）
 
 ### テスト

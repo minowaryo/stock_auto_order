@@ -99,24 +99,4 @@ $user = User::find($id);
 
 ## Git
 
-- コミットメッセージは日本語または英語で意図を書く
-- 1コミット1変更（混在させない）
-- PRは小さく保つ（レビューしやすいサイズ）
-
-### コミットメッセージ形式
-
-```
-[type]: [変更の概要]
-
-[必要なら詳細説明]
-```
-
-type: `feat` / `fix` / `refactor` / `test` / `docs` / `chore`
-
-例:
-```
-feat: ユーザー一覧APIにページネーションを追加
-
-無限スクロール対応のため cursor-based pagination を実装。
-offset-based から変更した理由は ADR-0005 を参照。
-```
+`docs/development/git-workflow.md` の §2 コミット単位 と §3 コミットメッセージ を参照。

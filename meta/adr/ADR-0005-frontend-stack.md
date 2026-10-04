@@ -54,7 +54,7 @@ Accepted
 
 ### 選定プロセス
 
-選定はGate 0の必須ステップ（`CLAUDE.md` の Gate 0 Step 1a/1b/1c）として実施する。概要:
+選定はGate 0の必須ステップ（`SETUP.md` の Gate 0 Step 1a/1b/1c）として実施する。概要:
 
 1. **選定**: 上記選定基準に基づきフロントエンド技術を決定し、`/adr` コマンドで
    `docs/adr/ADR-XXXX-frontend-stack-selection.md` として記録する
@@ -64,7 +64,7 @@ Accepted
 3. **ai-context反映**: 選定結果を `docs/ai-context/project-summary.md` の技術スタック表、
    `docs/ai-context/module-map.md` の Frontend セクションに反映する
 
-詳細な手順は `CLAUDE.md` の Gate 0 Step 1 を参照。
+詳細な手順は `SETUP.md` の Gate 0 Step 1 を参照。
 
 ## Rationale（デフォルト推奨: Vue 3 + Inertia.js + Pinia）
 
@@ -88,6 +88,6 @@ Accepted
 - `.claude/rules/15-frontend.md` はどのスタックを選定してもファイル名・参照パスが変わらない「正本」として扱う。
   Vue 3 + Inertia.js + Pinia を選定したプロジェクトはデフォルト内容（`resources/js/` 配下の構成、Vue Router 不使用等）にそのまま従う
 - Vue 以外（Blade / Livewire / React / SPA）を選定したプロジェクトは、`.claude/rules/15-frontend.md` の内容を
-  選定したスタック用に書き換える（`CLAUDE.md` 等の参照表はファイル名が変わらないため更新不要）
+  選定したスタック用に書き換える（`SETUP.md` 等の参照表はファイル名が変わらないため更新不要）
 - デフォルト推奨（Vue 3 + Inertia.js + Pinia）を選んだ場合でも、選定を明示的に確認した記録として
   プロジェクト側の `docs/ai-context/project-summary.md` に選定理由を一言残すことを推奨する

@@ -26,6 +26,10 @@ AIツールの利用方法・責任範囲・禁止事項を定めないと、品
 
 > 2026-07-15 更新: TDD運用の明文化（[[ADR-0007-tdd-enforcement-probity]] / [[ADR-0008-tdd-e2e-harness-tooling]]）に伴い、
 > テスト生成をコード生成より先に行う順序に修正した（Gate 4: テストケース承認を追加）。
+>
+> 2026-09-15 更新: 既にコードが存在するプロジェクトへの本ハーネス導入については、Gate 0〜3における
+> AI/人間の役割分担が上記の図とは異なる——テンプレート側の `ADR-0011-existing-codebase-adoption`（本プロジェクト未取り込み）と
+> `docs/development/ai-workflow.md` の「役割分担」を参照。
 
 ```
 requirements.md（人間定義）
@@ -84,3 +88,4 @@ Refactor
 - `docs/development/ai-workflow.md`
 - ADR-0007-tdd-enforcement-probity
 - ADR-0008-tdd-e2e-harness-tooling
+- ADR-0011-existing-codebase-adoption（テンプレート側のADR。本プロジェクト未取り込み）

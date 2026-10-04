@@ -30,7 +30,7 @@ tdd-guard自身のREADMEにおいて「新規プロジェクトはProbityから�
 ## Rationale
 
 ### Probity を選んだ理由
-- ファイル書き込み・シェルコマンド実行を検査し、ルール違反時にエージェントへ理由と対応方法を提示して遮断する「ポリシーエンジン」であり、TDD強制以外にも `git commit` 前のテスト成功チェック等、本リポジトリの既存ルール（00-global.mdの品質ゲート、50-review.mdのレビュー観点）と親和性が高い
+- ファイル書き込み・シェルコマンド実行を検査し、ルール違反時にエージェントへ理由と対応方法を提示して遮断する「ポリシーエンジン」であり、TDD強制以外にも `git commit` 前のテスト成功チェック等、本リポジトリの既存ルール（00-global.mdの品質ゲート、50-review.mdのレビュー観点（現在は `docs/development/review-guidelines.md`））と親和性が高い
 - テストランナー非依存（tdd-guardはVitest/Jest/pytestごとにreporter設定が必要だったが、Probityはセッション履歴を読む方式でセットアップが軽い）
 - Claude CodeとCodexの併用を前提とする本リポジトリの `AGENTS.md` 運用と一致する（tdd-guardはClaude Code専用）
 
