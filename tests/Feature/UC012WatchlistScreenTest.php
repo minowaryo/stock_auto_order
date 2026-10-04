@@ -128,7 +128,8 @@ function uc012ScreenWatchlist(string $code, array $opts = []): WatchlistItem
         'registered_at' => now(),
     ]);
 
-    foreach (range(1, $opts['buy_signals'] ?? 0) as $i) {
+    // CHG-0045: range(1, 0) は [1, 0] を返し、0件指定でも2件作っていたため for に変更
+    for ($i = 1; $i <= ($opts['buy_signals'] ?? 0); $i++) {
         $types = ['rsi_oversold_rebound', 'macd_golden_cross', 'bollinger_oversold', 'week52_low_proximity'];
         WatchlistBuySignal::create([
             'holding_id' => $holding->id,
@@ -176,7 +177,7 @@ test('保有済みのウォッチリスト銘柄は一覧に表示されない',
     $component->assertDontSee('ガンマ保有中');
 });
 
-test('一覧は押し目シグナル数の多い順→財務健全性→同セクター保有比率→52週レンジ内位置でソートされる', function () {
+test('一覧は財務健全性→押し目シグナル数の多い順→同セクター保有比率→52週レンジ内位置でソートされる', function () {
     // A: シグナル2件（最上位）
     uc012ScreenWatchlist('AAAA', ['name' => 'エー', 'buy_signals' => 2, 'roe' => 20, 'equity_ratio' => 60, 'operating_margin' => 20]);
     // B: シグナル0件・財務passed
@@ -188,6 +189,21 @@ test('一覧は押し目シグナル数の多い順→財務健全性→同セ�
 
     $rows = $component->viewData('rows');
     expect(collect($rows)->pluck('symbol_code')->all())->toBe(['AAAA', 'BBBB', 'CCCC']);
+});
+
+test('財務基準割れの銘柄は押し目シグナル数が多くても財務健全な銘柄より下に並ぶ（CHG-0045）', function () {
+    // Arrange
+    uc012ScreenWatchlist('FAIL', ['name' => '基準割れ2件', 'buy_signals' => 2, 'roe' => 1, 'equity_ratio' => 5, 'operating_margin' => 1]);
+    uc012ScreenWatchlist('PAS0', ['name' => '健全0件', 'buy_signals' => 0, 'roe' => 20, 'equity_ratio' => 60, 'operating_margin' => 20]);
+    uc012ScreenWatchlist('PAS1', ['name' => '健全1件', 'buy_signals' => 1, 'roe' => 20, 'equity_ratio' => 60, 'operating_margin' => 20]);
+    $unavailable = uc012ScreenWatchlist('UNAV', ['name' => '取得不可2件', 'buy_signals' => 2]);
+    FundamentalIndicator::where('holding_id', $unavailable->holding_id)->delete();
+
+    // Act
+    $rows = Livewire::actingAs(uc012ScreenUser())->test(CandidateCheck::class)->viewData('rows');
+
+    // Assert: 財務 passed→unavailable→failed が先、同じ財務状態の中でシグナル数の多い順
+    expect(collect($rows)->pluck('symbol_code')->all())->toBe(['PAS1', 'PAS0', 'UNAV', 'FAIL']);
 });
 
 test('★トグルでis_starredが反転し永続化される', function () {

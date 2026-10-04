@@ -148,7 +148,7 @@ Accepted（2026-09-17、Gate 1: requirements.md／Gate 2: use-cases.md UC-013 �
 |---|---|---|
 | `add_on`（買い増し） | 既存流用: ①財務健全性（`passed`優先）②買いシグナル数（多い順）③含み益率（低い順） | `ShowBuySignalListAction::compareRows()`（無改修） |
 | `loss_review`（整理検討） | 既存流用: ①押し目買いシグナル有無（無→優先）②財務ランク（failed優先）③テクニカル達成数（多い順）④含み損率（深い順） | `ShowLossReviewListAction::compareRows()`（無改修） |
-| `new_entry`（新規候補） | 既存流用: ①押し目買いシグナル数（多い順）②財務健全性③同セクター保有比率④52週レンジ内位置 | `ShowWatchlistAction`（無改修） |
+| `new_entry`（新規候補） | 既存流用: ①財務健全性②押し目買いシグナル数（多い順）③同セクター保有比率④52週レンジ内位置（2026-10-04、CHG-0045で①②入れ替え） | `ShowWatchlistAction`（無改修） |
 | `take_profit`（利確検討） | **新規設計**: ①シグナル数（多い順）②判定チェックリストのテクニカル達成数（多い順）③含み益率（高い順）。`add_on`/`loss_review`と同じ思想（シグナル性→チェックリスト達成度→含み損益率）で揃えた | `ShowSignalListAction`（**新規追加**。D10-1参照） |
 | `hold`（キープ） | **新規設計**: ① `hold_watch`（要観察）フラグが立っている銘柄を先頭に ② 残りは含み損益率が低い順 | `ClassifyHoldingsAction`内（分類俯瞰専用） |
 | `core_accumulation`（積立コア） | **新規設計**: 評価額（`market_value`）が大きい順 | `ClassifyHoldingsAction`内（分類俯瞰専用） |
