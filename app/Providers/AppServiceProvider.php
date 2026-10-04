@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\Analysis\ValuationBenchmarkJudge;
 use App\Services\MarketData\FinnhubClient;
 use App\Services\MarketData\FinnhubClientInterface;
 use App\Services\MarketData\JpStockPriceClient;
@@ -30,6 +31,9 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(MarketIndexClientInterface::class, MarketIndexClient::class);
         $this->app->bind(JQuantsClientInterface::class, JQuantsClient::class);
         $this->app->bind(FinnhubClientInterface::class, FinnhubClient::class);
+
+        // Built per resolution (not singleton) so the current config table is used.
+        $this->app->bind(ValuationBenchmarkJudge::class, fn () => new ValuationBenchmarkJudge(config('valuation_benchmarks')));
     }
 
     /**
