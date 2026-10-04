@@ -20,6 +20,7 @@ use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\MarketData\MarketIndexClientInterface;
 use App\Services\MarketData\UsStockPriceClientInterface;
 use App\Services\Sector\SectorClassificationResolver;
+use App\Services\SignalOutcome\IndicatorObservationRecorder;
 use App\Services\SignalOutcome\SignalOccurrenceMetricsBuilder;
 use App\Services\SignalOutcome\SignalOccurrenceRecorder;
 use App\Services\SignalOutcome\WeeklyPriceRecorder;
@@ -69,6 +70,7 @@ class RefreshWatchlistMarketDataAction
         private readonly WeeklyPriceRecorder $weeklyPriceRecorder,
         private readonly SignalOccurrenceRecorder $signalOccurrenceRecorder,
         private readonly SignalOccurrenceMetricsBuilder $signalOccurrenceMetricsBuilder,
+        private readonly IndicatorObservationRecorder $indicatorObservationRecorder,
         private readonly SectorClassificationResolver $sectorResolver,
     ) {}
 
@@ -281,14 +283,20 @@ class RefreshWatchlistMarketDataAction
         $observedWeek = $this->signalOccurrenceMetricsBuilder->observedWeek($priceHistory);
 
         if ($observedWeek !== null) {
+            $metrics = $this->signalOccurrenceMetricsBuilder->build($priceHistory, $technical, $fundamental);
+
             $this->signalOccurrenceRecorder->record(
                 $holding,
                 'watchlist_buy',
                 array_column($buySignals, 'signal_type'),
                 $observedWeek,
                 null,
-                $this->signalOccurrenceMetricsBuilder->build($priceHistory, $technical, $fundamental),
+                $metrics,
             );
+
+            // UC-018 (ADR-0027 D4): append the indicators whether or not a
+            // signal fired; the recorder never throws.
+            $this->indicatorObservationRecorder->record($holding, 'watchlist_refresh', $metrics);
         }
 
         return $currentPrice;

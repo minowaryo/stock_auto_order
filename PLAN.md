@@ -54,7 +54,9 @@ Red 16件→Gate4承認→Green。フルスイート1226 passed・pint適用済�
 - [x] 2026-10-04 Gate 2前レビューの推奨案1〜7を本人承認（入出庫は時価で資金出入り、売買は定型／その他の2区分〔定期的少額買付の判定は実データにパターンがなく見送り〕、買い増しの比例配分に当該銘柄を含める、クラスタ定義、暦年の対象範囲、画面「売買の振り返り」3タブ、承認の進め方）。UC-017〜019を`use-cases.md`へ反映済み。
 - [x] UC-017・UC-018のGate 2承認（2026-10-04、本人）。
 - [ ] UC-019のGate 2承認は段階3の実件数を見てから行う。
-- [ ] Gate 3: 叩き台作成済み（2026-10-04、[data-model.md](docs/architecture/data-model.md)「trade_* ほか売買振り返り用テーブル群」8テーブル＋`index_weekly_prices`へ`usdjpy`追加、[ADR-0027](docs/adr/ADR-0027-trade-history-storage.md)）。比較結果は保存せず読み取り時に算出。**Gate 3承認済み（2026-10-04、本人）**。次は`indicator_observations`（指標の週次追記保存。後から遡れない）を最初に実装する。
+- [x] Gate 3承認済み（2026-10-04、本人）。[data-model.md](docs/architecture/data-model.md)「trade_* ほか売買振り返り用テーブル群」8テーブル＋`index_weekly_prices`へ`usdjpy`追加、[ADR-0027](docs/adr/ADR-0027-trade-history-storage.md)。比較結果は保存せず読み取り時に算出。
+- [x] Gate 4 Cycle 1（`indicator_observations`＝指標の週次追記保存）: テスト9件を本人承認（2026-10-04）。Red確認（実装の接続を外すと9件とも「行が追記されない／警告ログが出ない」で失敗）→Green（`IndicatorObservationRecorder`・モデル・マイグレーション・2アクションへの接続）。専用testing DBで全体1235件通過・失敗0。ブランチ `feat/chg0033-indicator-observations`、`/review`・マージ待ち。
+- [ ] 次のCycle: UC-017（売買履歴の取込・照合）→価格の初回一括補完と`price_tracking_targets`（ADR-0024 D5）→UC-018の算出（年率・売却/推定乗換え/買付比較）。UC-019はGate 2保留。
 - [ ] Gate 4でUC名から導くテストケース（26週境界、取得失敗、価格補完後のUC-014再集計、二重集計防止の計算例、年率20％／25％境界）を承認してから実装する。
 
 ## メガトレンド候補発見（CHG-0031・ADR-0022／ADR-0025・F-016／UC-016）Gate 3承認・品質再精査待ち（2026-10-04）
