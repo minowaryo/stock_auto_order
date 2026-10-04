@@ -13,7 +13,9 @@ use Throwable;
  * never updated or deduplicated (observed_at tells them apart).
  *
  * Never throws: a recording failure must not stop the existing signal
- * determination. Only holding_id and source are logged; metrics never are.
+ * determination. The log context carries holding_id and source only (never
+ * the metrics); the exception text may still echo the failed query's
+ * bindings, which are market values and contain no personal data.
  */
 class IndicatorObservationRecorder
 {

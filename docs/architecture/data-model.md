@@ -811,7 +811,7 @@
 **Index**: `(holding_id, observed_at)`、`observed_at`
 **FK**: `holding_id` → `holdings(id)`
 
-> **履歴ログ（追記のみ）**。`technical_indicators`／`fundamental_indicators` は現在値キャッシュで上書きされるため、売買時点の業績指標を後から復元できない。**後から遡って作れないデータなので、UC-018の他の実装より先に保存を始める**。保存失敗は既存の分析を止めない（`SignalOccurrenceRecorder` と同じく警告ログのみ）。件数は保有・ウォッチリスト合計で週あたり約300行の見込み。
+> **履歴ログ（追記のみ）**。`technical_indicators`／`fundamental_indicators` は現在値キャッシュで上書きされるため、売買時点の業績指標を後から復元できない。**後から遡って作れないデータなので、UC-018の他の実装より先に保存を始める**。保存失敗は既存の分析を止めない（`SignalOccurrenceRecorder` と同じく警告ログのみ）。**同じ週に処理を2回実行すると2行になる**（一意キーなし。`signal_occurrences` とは逆の方針）。売買前に得られた記録だけを使う判定に正確な取得時刻が要るため、行は `observed_at` で区別する（2026-10-04、Gate 4 Cycle 1で承認）。件数は保有・ウォッチリスト合計で週あたり約300行の見込み。
 
 #### trade_switch_allocations（推定乗換えの割り当て・UC-018）
 
