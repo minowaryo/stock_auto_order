@@ -63,6 +63,7 @@ Red 16件→Gate4承認→Green。フルスイート1226 passed・pint適用済�
 - 未登録の日米上場企業の発見を目的とし、情報源の正確さ・裏付けやすさ・発見への有用性は4週試行後に再精査する。Gate 1承認によって情報源の採否や自動取得範囲を固定しない。
 - 2026-10-04 本人がUC-016とUC-012への受け渡し差分をGate 2承認。UC-012本文へ統合済み。
 - 2026-10-04 Gate 3叩き台: [ADR-0025](docs/adr/ADR-0025-research-candidate-storage.md)と`data-model.md`の`research_*`節。調査記録は専用8テーブルに分け、未同定の企業では`holdings`を作らない。ウォッチリストの登録経路は`watchlist_items.source`ではなく`last_seen_in_csv_at`と受け渡し履歴から導く（CSV再取込で`source`が上書きされ、調査経路が消えるため）。既存テーブルのスキーマ変更なし。
+- 別セッションへの引き継ぎ要約: [megatrend-discovery-handoff.md](docs/product/megatrend-discovery-handoff.md)（2026-10-04）。Gate 3の承認と実装時期は本人未決定。
 - 次の品質レビューは**2026-11-02以降**が目安。根拠は[試行ログ](docs/investment-research/megatrend/source-pilot-log.md)と[Gate 1再精査メモ](docs/product/megatrend-discovery-gate1-requirements-draft.md#4週間の情報源試行後に再精査するメモ2026-10-03本人指示)。対象は3テーマ・5源、試行期間2026-10-05〜11-01。週次確認とレビューは手動作業で、自動実行は設定していない。
 
 ### Files touched
