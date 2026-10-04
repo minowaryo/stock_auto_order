@@ -725,7 +725,7 @@
 | settlement_amount_usd | decimal(15,2) | YES | null | ドルの受渡金額（米国株のドル決済） |
 | fx_rate | decimal(10,4) | YES | null | CSVの為替レート（米国株） |
 | fee_amount | decimal(15,2) | YES | null | 手数料・諸費用の合計（`price_currency` 建て） |
-| content_hash | char(64) | NO | - | 正規化した行内容のSHA-256（ファイル名・行番号を含めない） |
+| content_hash | char(64) | NO | - | 正規化した行内容のSHA-256（ファイル名・行番号を含めない）。正規化は、各列の前後の空白除去、数値の桁区切り・小数末尾の0の除去、日付の `Y-m-d` 統一とし、同じ約定が書式の揺れで別行にならないようにする（Gate 4でテスト） |
 | occurrence_index | smallint unsigned | NO | - | 同じファイル内で同一 `content_hash` の何番目の出現か（1始まり） |
 | source_row | json | NO | - | 元行（列名→値）。監査・再解析用 |
 | first_import_batch_id | bigint | NO | - | 初めて取り込んだ `trade_import_batches.id` |
@@ -824,7 +824,7 @@
 | allocated_amount_jpy | decimal(15,2) | NO | - | 割り当てた円金額 |
 | created_at | timestamp | NO | now() | 作成日時 |
 
-**Index**: `(rule_version, sell_execution_id)`、`buy_execution_id`
+**Index**: `(rule_version, sell_execution_id)`、`sell_execution_id`（FK用。複合の先頭が `rule_version` のため単独で明示する）、`buy_execution_id`
 **FK**: `sell_execution_id`／`buy_execution_id` → `trade_executions(id)`
 
 > **派生データ（版単位で再生成）**: 取込確定のたびに、同じ `rule_version` の行を作り直す（元の売買履歴から決定的に再現できるため）。ルールを変える場合は新しい版で追加し、旧版の行は消さない。1つの売却の割り当て合計は売却受渡金額を超えず、1つの買付の割り当て合計は買付受渡金額を超えない（二重割り当ての防止。超過分は「新規資金」）。
