@@ -30,6 +30,8 @@
 
 [import_batches] ──1:1── [import_summary_reports] ──1:N── [import_summary_report_items]
 
+[trade_import_batches] ──1:N── [trade_executions] ──N:1── [holdings]（売買履歴、ADR-0027。詳細は該当節）
+
 [holdings] ──1:N── [holding_memos]
 [watch_records]（symbol_code + market。holdingsへの正規FKは持たない。理由は後述）
 [watched_themes]（独立マスタ）
@@ -668,6 +670,199 @@
 
 ---
 
+### trade_* ほか売買振り返り用テーブル群（UC-017／UC-018、ADR-0027、ADR-0024、CHG-0033）— Gate 3承認済み（2026-10-04）
+
+> 2026-10-04 Gate 3承認済み。UC-017・UC-018はGate 2承認済み、UC-019はGate 2保留（本節では UC-019 専用のテーブルを作らない）。承認後も、マイグレーションはGate 4（テストケース承認）後に作る。**比較結果（年率・対ガチホ差・売却／乗換え／買付の差）は保存せず、読み取り時に算出する**（ADR-0017 D4 と同じ方針。価格は上書き型の時系列で、分割の遡及調整に追随させるため）。保存するのは、元データ（売買履歴）・取得状態・判断の根拠（推定乗換えの割り当て、売買時の状況）だけとする。
+
+```
+[trade_import_batches] ──1:N── [trade_executions] ──N:1── [holdings]
+          |                          |  └──1:N── [trade_context_records]
+          |                          └──(sell)1:N── [trade_switch_allocations] ──N:1(buy)── [trade_executions]
+          └──1:N── [trade_reconciliation_items] ──N:1── [holdings] / N:1── [snapshots]
+[holdings] ──1:1── [price_tracking_targets]（追跡期限・取得状態、ADR-0024）
+[holdings] ──1:N── [stock_splits]
+[holdings] ──1:N── [indicator_observations]（週次の指標の追記保存）
+[index_weekly_prices] に index_name='usdjpy' を追加（ドル円週足、ADR-0024 D5）
+```
+
+> `holdings` の作成経路に③として**売買履歴取込**を加える。売却済みで現在保有もウォッチリストもない銘柄も、`(symbol_code, market)` で `firstOrCreate` する。保有判定は従来どおり直近 `snapshots` の `holding_snapshots` の有無で行うため、既存画面に影響しない。
+
+#### trade_import_batches（売買履歴の取込単位・UC-017）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| status | enum('pending','completed','failed') | NO | 'pending' | 取込状態。プレビューは状態を持たない（保存しない） |
+| jp_filename | varchar(255) | NO | - | 国内株履歴CSVの元ファイル名 |
+| us_filename | varchar(255) | NO | - | 米国株履歴CSVの元ファイル名 |
+| period_from / period_to | date | YES | null | 2本の約定日の最小・最大 |
+| total_rows | int unsigned | NO | 0 | 2本の総行数（ヘッダー除く） |
+| new_rows / existing_rows | int unsigned | NO | 0 | 新規登録した行数／既存と一致した行数 |
+| missing_rows | int unsigned | NO | 0 | 前回までにあって今回の全期間履歴にない行数（確認待ち） |
+| failure_reason | varchar(255) | YES | null | 失敗理由 |
+| imported_at | timestamp | YES | null | 確定日時 |
+| created_at / updated_at | timestamp | NO | now() | 作成・更新日時 |
+
+**Index**: `status`, `imported_at`
+
+#### trade_executions（約定・入出庫の明細・UC-017／UC-018）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| holding_id | bigint | NO | - | `holdings.id`（経路③で作成） |
+| market | enum('jp','us') | NO | - | 市場 |
+| trade_date | date | NO | - | 約定日 |
+| settlement_date | date | YES | null | 受渡日 |
+| account_type | enum('specific','general','nisa_growth','nisa_tsumitate') | NO | - | 口座区分（`holding_snapshot_accounts` と同じ値域） |
+| kind | enum('buy','sell','transfer_in','transfer_out','tsumitate','split_in') | NO | - | 買付・売付・入庫・出庫・積立・分割入庫 |
+| is_routine | boolean | NO | false | 定型（米国株CSVの取引区分「積立」の明示あり）。決定5の2区分 |
+| quantity | decimal(15,4) | NO | - | 数量（約定時点の株数。分割調整は読み取り時に `stock_splits` で行う） |
+| unit_price | decimal(15,4) | YES | null | 約定単価（入出庫・分割入庫は null 可） |
+| price_currency | enum('jpy','usd') | NO | - | 単価の通貨 |
+| settlement_currency | enum('jpy','usd') | YES | null | 決済通貨（入出庫・分割入庫は null） |
+| settlement_amount_jpy | decimal(15,2) | YES | null | 円の受渡金額（国内株、米国株の円決済） |
+| settlement_amount_usd | decimal(15,2) | YES | null | ドルの受渡金額（米国株のドル決済） |
+| fx_rate | decimal(10,4) | YES | null | CSVの為替レート（米国株） |
+| fee_amount | decimal(15,2) | YES | null | 手数料・諸費用の合計（`price_currency` 建て） |
+| content_hash | char(64) | NO | - | 正規化した行内容のSHA-256（ファイル名・行番号を含めない） |
+| occurrence_index | smallint unsigned | NO | - | 同じファイル内で同一 `content_hash` の何番目の出現か（1始まり） |
+| source_row | json | NO | - | 元行（列名→値）。監査・再解析用 |
+| first_import_batch_id | bigint | NO | - | 初めて取り込んだ `trade_import_batches.id` |
+| last_seen_import_batch_id | bigint | NO | - | 最後に全期間履歴で確認できた取込 |
+| review_status | enum('ok','missing_in_latest') | NO | 'ok' | 最新の全期間履歴から消えた行は `missing_in_latest`（削除しない） |
+| created_at / updated_at | timestamp | NO | now() | 作成・更新日時 |
+
+**Index**: `(market, content_hash, occurrence_index)` unique（全期間履歴の再取込を冪等にする。同一内容の複数約定は出現回数で別行）、`(holding_id, trade_date)`、`trade_date`、`first_import_batch_id`、`last_seen_import_batch_id`
+**FK**: `holding_id` → `holdings(id)`、`first_import_batch_id`／`last_seen_import_batch_id` → `trade_import_batches(id)`
+
+> **追記中心**: 既存行は `last_seen_import_batch_id` と `review_status` だけ更新し、他の列は変えない。過去行の修正・削除は通常フローに含めない（UC-017）。
+> **判断の単位**: 同日・同銘柄・同方向（`kind`）の行は、読み取り時に1つの売買としてまとめて扱う（UC-019のクラスタの最小単位）。まとめた結果は保存しない。
+
+#### trade_reconciliation_items（保有CSVとの照合結果・UC-017）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| trade_import_batch_id | bigint | NO | - | 照合を行った取込 |
+| snapshot_id | bigint | NO | - | 照合相手の `snapshots.id` |
+| holding_id | bigint | NO | - | 銘柄 |
+| account_type | enum('specific','general','nisa_growth','nisa_tsumitate') | YES | null | 口座区分（口座別に照合できない場合は null） |
+| history_quantity | decimal(15,4) | YES | null | 履歴から復元した株数 |
+| snapshot_quantity | decimal(15,4) | YES | null | 保有CSVの株数 |
+| status | enum('matched','snapshot_only','history_only','needs_review') | NO | - | 照合済み／保有側のみ変化／履歴側のみ変化／分割・移管等の確認待ち |
+| reason | varchar(255) | YES | null | 未照合の理由 |
+| created_at | timestamp | NO | now() | 作成日時 |
+
+**Index**: `(trade_import_batch_id, status)`、`snapshot_id`、`holding_id`
+**FK**: `trade_import_batch_id` → `trade_import_batches(id)`、`snapshot_id` → `snapshots(id)`、`holding_id` → `holdings(id)`
+
+> 履歴ログ（追記のみ）。取込ごとの照合結果を残す。
+
+#### price_tracking_targets（価格追跡の対象と状態・ADR-0024）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| holding_id | bigint | NO | - | 銘柄（1銘柄1行） |
+| last_sell_week | date | YES | null | 最終売却の週（月曜。`WeekDateNormalizer` 準拠） |
+| last_signal_week | date | YES | null | 最後のシグナル発生の `observed_week` |
+| track_until_week | date | NO | - | `max(last_sell_week, last_signal_week) + 26週`。新しい売却・発生で延長する |
+| status | enum('active','completed','unavailable') | NO | 'active' | 追跡中／終点確定後の保存まで完了／取得不能（上場廃止等） |
+| latest_saved_week | date | YES | null | `weekly_prices` に保存を確認できた最新週（`recordHolding` が戻っただけでは更新しない） |
+| backfilled_from_week | date | YES | null | 初回一括補完（ADR-0024 D5）で保存を確認できた最古週。null は未補完 |
+| consecutive_failures | tinyint unsigned | NO | 0 | 連続失敗回数 |
+| last_error | varchar(255) | YES | null | 直近の失敗理由（秘密情報を含めない） |
+| last_attempted_at | timestamp | YES | null | 直近の取得試行日時 |
+| created_at / updated_at | timestamp | NO | now() | 作成・更新日時 |
+
+**Index**: `holding_id` unique、`(status, track_until_week)`
+**FK**: `holding_id` → `holdings(id)`
+
+> **状態テーブル（UPSERT）**: 週次の追跡処理の対象抽出と、終点確定後まで保持する条件（ADR-0024 D1・D2）に使う。`completed` は `latest_saved_week >= track_until_week` を確認したときだけ設定する。`unavailable` は連続失敗が閾値（叩き台3回）に達し、かつ取得元が銘柄なしを返した場合に設定し、F-017側で評価額比率による判定保留に使う。
+
+#### stock_splits（株式分割・UC-018）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| holding_id | bigint | NO | - | 銘柄 |
+| effective_date | date | NO | - | 分割の効力発生日 |
+| ratio_numerator / ratio_denominator | int unsigned | NO | - | 分割比（例: 1株→4株なら 4/1） |
+| source | enum('yahoo','trade_history') | NO | - | 取得元（Yahoo chart の分割イベント／米国株CSVの分割入庫） |
+| created_at | timestamp | NO | now() | 作成日時 |
+
+**Index**: `(holding_id, effective_date)` unique
+**FK**: `holding_id` → `holdings(id)`
+
+> Yahooの終値は分割遡及調整済みのため、約定時の株数・単価を読み取り時にこの表で調整してから評価額を出す。CSVの分割入庫とYahooの分割イベントが食い違う場合は「分割情報欠損」として算出不可にする。
+
+#### indicator_observations（指標の週次追記保存・UC-018の状況記録）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| holding_id | bigint | NO | - | 銘柄 |
+| source | enum('holding_import','watchlist_refresh') | NO | - | 記録した処理（`FetchExternalMarketDataAction`／`RefreshWatchlistMarketDataAction`） |
+| observed_at | timestamp | NO | - | システムが値を得た日時（売買前判定の基準。週足のラベル日ではない） |
+| metrics | json | NO | - | その時点の `technical_indicators`・`fundamental_indicators` の主要値（`SignalOccurrenceMetricsBuilder` と同じキー） |
+| created_at | timestamp | NO | now() | 作成日時 |
+
+**Index**: `(holding_id, observed_at)`、`observed_at`
+**FK**: `holding_id` → `holdings(id)`
+
+> **履歴ログ（追記のみ）**。`technical_indicators`／`fundamental_indicators` は現在値キャッシュで上書きされるため、売買時点の業績指標を後から復元できない。**後から遡って作れないデータなので、UC-018の他の実装より先に保存を始める**。保存失敗は既存の分析を止めない（`SignalOccurrenceRecorder` と同じく警告ログのみ）。件数は保有・ウォッチリスト合計で週あたり約300行の見込み。
+
+#### trade_switch_allocations（推定乗換えの割り当て・UC-018）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| rule_version | varchar(20) | NO | - | 割り当てルールの版（初版 `v1`: 同一市場・5営業日以内・約定日順） |
+| sell_execution_id | bigint | NO | - | 売却側の `trade_executions.id` |
+| buy_execution_id | bigint | YES | null | 割り当てた買付。null は「現金のまま」の残り |
+| allocated_amount_jpy | decimal(15,2) | NO | - | 割り当てた円金額 |
+| created_at | timestamp | NO | now() | 作成日時 |
+
+**Index**: `(rule_version, sell_execution_id)`、`buy_execution_id`
+**FK**: `sell_execution_id`／`buy_execution_id` → `trade_executions(id)`
+
+> **派生データ（版単位で再生成）**: 取込確定のたびに、同じ `rule_version` の行を作り直す（元の売買履歴から決定的に再現できるため）。ルールを変える場合は新しい版で追加し、旧版の行は消さない。1つの売却の割り当て合計は売却受渡金額を超えず、1つの買付の割り当て合計は買付受渡金額を超えない（二重割り当ての防止。超過分は「新規資金」）。
+
+#### trade_context_records（売買時の状況記録・UC-018／UC-019）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| trade_execution_id | bigint | NO | - | 対象の約定 |
+| origin | enum('recorded','recomputed') | NO | - | 当時記録（`indicator_observations`／`signal_occurrences`）／事後再計算（価格系のみ、決定3） |
+| rule_version | varchar(20) | NO | - | 紐付け・再計算ルールの版 |
+| observed_at | timestamp | YES | null | 使った記録の取得日時（`recorded`）。約定日の開始より前・8日以内のものだけ |
+| basis_week | date | YES | null | 使った週足の最終週（`recomputed`。売買週の前週） |
+| signal_occurrence_ids | json | YES | null | 紐付けた `signal_occurrences.id` の配列（なければ空配列。「記録なし」は行自体を作らず状況不明とする） |
+| metrics | json | NO | - | 状況の値（価格系7項目＋`recorded` では業績指標） |
+| created_at | timestamp | NO | now() | 作成日時 |
+
+**Index**: `(trade_execution_id, origin, rule_version)` unique、`origin`
+**FK**: `trade_execution_id` → `trade_executions(id)`
+
+> **履歴ログ（追記のみ）**。過去の状況を最新値で上書きしない。ルールを変えたら新しい版の行を追加する。
+
+#### 読み取り時に算出するもの（保存しない）
+
+- 週ごとの保有株数: `trade_executions` を約定日順に積み上げ、`stock_splits` で調整する。
+- 株式部分の年率と対ガチホ（決定1）: 週ごとの株数 × `weekly_prices.close`（米国株は `index_weekly_prices` の `usdjpy` で円換算）と、`trade_executions` の受渡金額（入出庫は時価）から修正ディーツ法で求める。
+- 売却単独・推定乗換え・比例買増しの+4／+13／+26週比較（決定2・4）。
+- 価格欠損の評価額比率（5％超で判定保留）。
+- 約220週×約150銘柄の範囲で、1回の画面表示につき数万行の読み取り。表示が遅い場合は、Gate 4で週次の評価額を派生キャッシュにする（スキーマ追加はその時点でADRに記録）。
+
+#### 既存テーブルへの変更
+
+- `index_weekly_prices.index_name` の enum に `usdjpy`（Yahoo `JPY=X`、1ドルあたり円）を追加する。`sox` 追加（CHG-0026）と同じく末尾に足すだけの後方互換な変更で、既存行の変換はない。指数ではないが、週足の保存処理（`recordIndex`）と週の正規化をそのまま共用できるため、専用テーブルを作らない（ADR-0027）。
+- 他の既存テーブルのスキーマは変更しない。`weekly_prices` は ADR-0024 D2・D5 のとおり既存のUPSERTを共用する（初回補完で2021-07以降の行が増える）。
+
+---
+
 ### market_indicator_snapshots（市場全体指標・UC-007）
 
 | カラム | 型 | Nullable | デフォルト | 説明 |
@@ -737,6 +932,7 @@
 - テーブルは「現在値キャッシュ（UPSERT、履歴を持たない）」と「履歴ログ（追記のみ、UPDATE/DELETEしない）」の2種類に分けて設計する
   - 現在値キャッシュ: `technical_indicators`/`fundamental_indicators`（`holding_id`単位で1行、値が変わってもINSERTせずUPDATEする。J-Quantsの更新頻度〔最大12週遅延〕に対して毎週INSERTすると同一内容の行が積み上がるため）
   - 履歴ログ: `holding_snapshots`（`ma20`/`ma75`含む）/`financial_statements`（決算期単位）/`signals`/`market_indicator_snapshots`は、時点ごとに値そのものが変わりうる真の時系列データのため追記のみとする（UC-001業務ルール「既存スナップショットは上書きせず、履歴として蓄積する」）。`signal_occurrences`（ADR-0017）もこちら
+  - 派生データ（2026-10-04追加、ADR-0027）: `trade_switch_allocations` は元の売買履歴から決定的に再現できるため、同じ版の行を取込ごとに作り直す。ルール変更は新しい版で追加する
   - 上書き型の時系列（2026-09-27追加、ADR-0017）: `weekly_prices`/`index_weekly_prices`は日付ごとに行を持つ時系列だが、外部ソース側の分割遡及調整に追随するため、同じ`(対象, week_date)`の行は取得のたびに上書きする
 
 ## 保留・確定が必要な初期パラメータ値（Gate 3承認時点の状態）
@@ -845,6 +1041,7 @@
 | 2026-09-27 | minowaryo | 承認（Gate3） | **シグナル結果の前向き記録（CHG-0020、ADR-0017）**の新規テーブル3件（`weekly_prices`／`index_weekly_prices`／`signal_occurrences`）を同日の提案どおり承認。追加のみのマイグレーションで既存テーブルの変更なし。`weekly_prices.week_date`の週の基準日の揃い方はGate4 Cycle1で実測確認する |
 | 2026-09-30 | （Gate3レビュー待ち） | 提案（CR） | **集中度ダッシュボード（UC-015、F-015、ADR-0019、CHG-0026）**。スキーマ変更は`index_weekly_prices.index_name`のenumに`sox`を追加する1点のみ（新規テーブルなし）。既存値の後ろへの追加で後方互換、既存行の変換なし。対象は約200行の小さな表。`20-mysql.md`の「カラム型変更」に該当するためADR-0019 Consequencesに記載。Laravel 13ネイティブの`->change()`で書き、生SQLは使わない。集中度の指標値は保存せずアクセスのたびに算出する |
 | 2026-09-30 | minowaryo | 承認（Gate3） | **集中度ダッシュボード（CHG-0026、ADR-0019）**の`index_weekly_prices.index_name`への`sox`追加を同日の提案どおり承認。新規テーブルなし。`^SOX`の出来高がnullで全行が除外されないかはGate4 Cycle1で実データ確認する |
+| 2026-10-04 | minowaryo | 承認（Gate3） | **売買の振り返り（UC-017／UC-018、F-017、ADR-0027、CHG-0033）**。新規テーブル8件（`trade_import_batches`／`trade_executions`／`trade_reconciliation_items`／`price_tracking_targets`／`stock_splits`／`indicator_observations`／`trade_switch_allocations`／`trade_context_records`）と、`index_weekly_prices.index_name`への`usdjpy`追加を承認。比較結果は保存せず根拠データから読み取り時に算出する方針（UC-018本文の「比較結果を保存」を「根拠データを保存し結果は再現する」と読み替え）、`indicator_observations`（後から遡れない指標の週次追記）を最初に実装する方針、価格の取得不能は「3回連続失敗かつ取得元が銘柄なしを返す」場合とする叩き台を承認。UC-019はGate 2保留のため専用テーブルなし。マイグレーションはGate 4後 |
 
 ## 変更履歴
 
@@ -894,3 +1091,4 @@
 | 2026-09-30 | 集中度ダッシュボード（CHG-0026）のGate3叩き台として`index_weekly_prices.index_name`のenumへの`sox`追加を記載。新規テーブルなし。Gate3レビュー待ち | ADR-0019 |
 | 2026-09-30 | CHG-0026の`sox`追加をGate3承認 | ADR-0019 |
 | 2026-10-04 | 調査候補（CHG-0031、UC-016）のGate3叩き台として`research_*`の8テーブル・受け渡し履歴・集計の定義を追記。既存テーブルのスキーマ変更なし（`in_rakuten_favorites`の判定基準を`last_seen_in_csv_at`へ改める表示ロジック変更を含む）。Gate3レビュー待ち | ADR-0025 |
+| 2026-10-04 | 売買の振り返り（CHG-0033、UC-017／UC-018）のGate3叩き台として`trade_import_batches`／`trade_executions`／`trade_reconciliation_items`／`price_tracking_targets`／`stock_splits`／`indicator_observations`／`trade_switch_allocations`／`trade_context_records`の8テーブルと、`index_weekly_prices.index_name`への`usdjpy`追加を記載。比較結果は保存せず読み取り時に算出。Gate3承認済み | ADR-0027、ADR-0024 |
