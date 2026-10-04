@@ -242,12 +242,16 @@
             @php
                 // 固定6列 700px + 14項目×72px = 1708px
                 $holdCriteria = $holdings[0]['criteria'];
-                $holdColgroup = '<col class="w-[150px]"><col class="w-[110px]"><col class="w-[70px]"><col class="w-[110px]"><col class="w-[150px]"><col class="w-[110px]">'
-                    .str_repeat('<col class="w-[72px]">', count($holdCriteria['technical']) + count($holdCriteria['fundamental']));
+                $holdCriteriaCount = count($holdCriteria['technical']) + count($holdCriteria['fundamental']);
             @endphp
             <div id="hold-header-scroll" class="overflow-x-auto sticky top-0 z-20 bg-surface [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <table class="table-fixed w-[1708px] text-[11px] border border-app-border border-b-0 [&_th]:border [&_th]:border-app-border">
-                    <colgroup>{!! $holdColgroup !!}</colgroup>
+                    <colgroup>
+                        <col class="w-[150px]"><col class="w-[110px]"><col class="w-[70px]"><col class="w-[110px]"><col class="w-[150px]"><col class="w-[110px]">
+                        @for ($i = 0; $i < $holdCriteriaCount; $i++)
+                            <col class="w-[72px]">
+                        @endfor
+                    </colgroup>
                     <x-signal-table-head
                         :labels="['銘柄', '評価額', '含み損益率', '要観察', '財務健全性', 'セクター']"
                         :criteria="$holdCriteria"
@@ -257,12 +261,21 @@
             </div>
             <div class="overflow-x-auto" data-scroll-sync-with="hold-header-scroll">
                 <table class="table-fixed w-[1708px] text-[11px] border border-app-border [&_td]:border [&_td]:border-app-border [&_td]:align-top [&_td]:break-words">
-                    <colgroup>{!! $holdColgroup !!}</colgroup>
+                    <colgroup>
+                        <col class="w-[150px]"><col class="w-[110px]"><col class="w-[70px]"><col class="w-[110px]"><col class="w-[150px]"><col class="w-[110px]">
+                        @for ($i = 0; $i < $holdCriteriaCount; $i++)
+                            <col class="w-[72px]">
+                        @endfor
+                    </colgroup>
                     <tbody>
                         @foreach ($holdings as $row)
                             <tr class="border-b border-app-border last:border-b-0">
                                 <td class="py-1.5 px-1.5 sticky left-0 z-10 bg-surface">
-                                    <div><a href="/holdings/{{ $row['id'] }}" wire:navigate class="text-primary hover:underline">{{ $row['symbol_name'] }}</a> {{ $row['symbol_code'] }}</div>
+                                    @if ($row['id'] !== null)
+                                        <div><a href="/holdings/{{ $row['id'] }}" wire:navigate class="text-primary hover:underline">{{ $row['symbol_name'] }}</a> {{ $row['symbol_code'] }}</div>
+                                    @else
+                                        <div>{{ $row['symbol_name'] }} {{ $row['symbol_code'] }}</div>
+                                    @endif
                                     @php
                                         $holdSummary = $row['criteria']['summary'];
                                         $fundamentalSummaryClass = match (true) {

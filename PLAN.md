@@ -20,7 +20,7 @@
 
 ### Status
 
-Red 28件→Gate4承認（2026-10-04）→Green。フルスイート1205 passed・pint適用済み。worktreeを8046番で起動し実ブラウザで表示確認済み（キープ59銘柄・黄/緑チップ描画、ヘッダー横スクロール同期OK）。次: `/commit`→`/review`→`prepare-merge`。ブランチ`feat/chg0046-hold-table-rich-columns`（worktree `.claude/worktrees/chg0046`）
+Red 28件→Gate4承認（2026-10-04）→Green。フルスイート1205 passed・pint適用済み。worktreeを8046番で起動し実ブラウザで表示確認済み（キープ59銘柄・黄/緑チップ描画、ヘッダー横スクロール同期OK）。`/review`（強化、スコア58）指摘2件を修正: 含み益率の利確ラインを利確検討と同じ`TakeProfitThresholdEvaluator`に揃える（高水準モード+150%。実データ6098が誤って黄だった）／分類と拡充の間に取り込みが重なり行が見つからない場合に画面が500になる経路を既定行で回避。Red 3件→Gate4承認→Green、フルスイート1209 passed。次: `/commit`→`prepare-merge`。ブランチ`feat/chg0046-hold-table-rich-columns`（worktree `.claude/worktrees/chg0046`）
 
 ## ウォッチリスト銘柄のセクター分類（CHG-0044・ADR-0020追補）Green完了（2026-10-03）
 

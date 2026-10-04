@@ -3,15 +3,18 @@
 namespace Tests\Feature;
 
 use App\Actions\Portfolio\ClassifyHoldingsAction;
+use App\Actions\Portfolio\ShowHoldListAction;
 use App\Livewire\Signal\SignalList;
 use App\Models\FundamentalIndicator;
 use App\Models\Holding;
 use App\Models\HoldingSnapshot;
+use App\Models\HoldingSnapshotAccount;
 use App\Models\ImportBatch;
 use App\Models\Snapshot;
 use App\Models\TechnicalIndicator;
 use App\Models\User;
 use Livewire\Livewire;
+use Mockery;
 
 /*
 |--------------------------------------------------------------------------
@@ -274,6 +277,64 @@ describe('CHG-0046: キープ表の列拡充', function () {
 
         expect($row)->toContain('bg-amber-100')->toContain('bg-green-100');
         expect(chg46TestText($row))->toContain('利確寄り 1')->toContain('15.2%');
+    });
+});
+
+describe('CHG-0046 /review 指摘: 利確ラインと行の欠落', function () {
+    test('財務健全性が合格でシグナル0件の銘柄は、利確検討と同じ高水準モード+150%で含み益率を判定する', function () {
+        // 既定の財務指標は FundamentalHealthEvaluator で passed → TakeProfitThresholdEvaluator は high_water_mark
+        $hs = chg46TestHolding(chg46TestSnapshot(), '6098', '高水準銘柄', [
+            'current_price' => 1980, 'unrealized_gain_amount' => 98000, 'unrealized_gain_rate' => 98.0,
+        ]);
+        chg46TestIndicators($hs->holding);
+
+        $gainChip = collect(app(ShowHoldListAction::class)->execute())->firstWhere('symbol_code', '6098')['criteria']['technical'][0];
+        expect([$gainChip['label'], $gainChip['status'], $gainChip['tone'], $gainChip['threshold_label']])
+            ->toBe(['含み益率', 'unmet', null, '利確≥+150%']);
+
+        $row = chg46TestText(chg46TestRowHtml(chg46TestRender(), '高水準銘柄'));
+        expect($row)->toContain('利確≥+150%')->not->toContain('利確≥+20%');
+    });
+
+    test('財務健全性が基準割れの銘柄は、通常モード+20%で含み益率を判定する', function () {
+        // 課税口座で+20%超なら利確検討に入るため、キープに残るのはNISA成長投資枠のみの保有
+        // （実データのAAPLと同じ状況）。
+        $hs = chg46TestHolding(chg46TestSnapshot(), '6099', '通常銘柄', [
+            'current_price' => 1250, 'unrealized_gain_amount' => 25000, 'unrealized_gain_rate' => 25.0,
+        ]);
+        HoldingSnapshotAccount::create([
+            'holding_snapshot_id' => $hs->id,
+            'account_type' => 'nisa_growth',
+            'quantity' => 100,
+            'average_cost' => 1000.00,
+        ]);
+        chg46TestIndicators($hs->holding, [], ['roe' => 2.0]);
+
+        $gainChip = collect(app(ShowHoldListAction::class)->execute())->firstWhere('symbol_code', '6099')['criteria']['technical'][0];
+        expect([$gainChip['status'], $gainChip['tone'], $gainChip['threshold_label']])
+            ->toBe(['met', 'warning', '利確≥+20%']);
+    });
+
+    test('分類結果の行が最新スナップショットに見つからなくても、画面はエラーにならず指標を「—」で表示する', function () {
+        // 分類と行の拡充の間に取り込みが完了した状況を、分類Actionの戻り値で再現する。
+        $classify = Mockery::mock(ClassifyHoldingsAction::class);
+        $classify->shouldReceive('execute')->andReturn(['buckets' => [[
+            'bucket' => 'hold',
+            'group' => 'hold',
+            'holdings' => [[
+                'symbol_code' => '9999', 'symbol_name' => '消えた銘柄', 'market' => 'jp', 'instrument_type' => 'stock',
+                'market_value' => 100000.0, 'unrealized_gain_rate' => 1.0, 'bucket_reason' => 'x', 'also_matched' => [],
+                'overweight_sector' => false, 'hold_watch' => false, 'health_line' => 'x', 'sector_name' => '未分類',
+            ]],
+        ]]]);
+        app()->instance(ClassifyHoldingsAction::class, $classify);
+
+        $component = Livewire::actingAs(User::factory()->create())->test(SignalList::class);
+
+        $component->assertOk();
+        $row = chg46TestText(chg46TestRowHtml(chg46TestHoldHtml($component->html()), '消えた銘柄'));
+        expect($row)->toContain('—')->toContain('財務指標 取得不可')->toContain('財務 0/4');
+        expect(chg46TestRowHtml(chg46TestHoldHtml($component->html()), '消えた銘柄'))->not->toContain('href="/holdings/"');
     });
 });
 

@@ -396,13 +396,15 @@ final class SignalCriteriaEvaluator
     {
         $currentPrice = $metrics['current_price'] ?? null;
         $percent = fn (float $v) => sprintf('%+.1f%%', $v);
+        // 利確検討と同じ利確ライン（TakeProfitThresholdEvaluator: 通常+20% / 高水準モード+150%）。
+        $gainLineThreshold = $metrics['gain_line_threshold'] ?? TakeProfitThresholdEvaluator::MIN_POSSIBLE_GAIN_RATE_THRESHOLD;
 
         $technical = [
             $this->twoWayRow(
                 '含み益率',
-                sprintf('利確≥+%d%%', (int) TakeProfitThresholdEvaluator::MIN_POSSIBLE_GAIN_RATE_THRESHOLD),
+                sprintf('利確≥+%d%%', (int) round($gainLineThreshold)),
                 $metrics['unrealized_gain_rate'] ?? null,
-                [TakeProfitThresholdEvaluator::MIN_POSSIBLE_GAIN_RATE_THRESHOLD, 'gte'],
+                [$gainLineThreshold, 'gte'],
                 null,
                 $percent,
             ),

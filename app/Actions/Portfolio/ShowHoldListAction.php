@@ -6,6 +6,7 @@ use App\Models\HoldingSnapshot;
 use App\Models\Snapshot;
 use App\Services\Analysis\FundamentalHealthEvaluator;
 use App\Services\Analysis\SignalCriteriaEvaluator;
+use App\Services\Analysis\TakeProfitThresholdEvaluator;
 use App\Support\SignalListSort;
 
 /**
@@ -22,6 +23,7 @@ class ShowHoldListAction
         private readonly ClassifyHoldingsAction $classifyHoldingsAction,
         private readonly SignalCriteriaEvaluator $criteriaEvaluator,
         private readonly FundamentalHealthEvaluator $fundamentalHealthEvaluator,
+        private readonly TakeProfitThresholdEvaluator $takeProfitThresholdEvaluator,
     ) {}
 
     /**
@@ -64,15 +66,32 @@ class ShowHoldListAction
         $snapshotsByKey = HoldingSnapshot::query()
             ->where('snapshot_id', $latestSnapshot?->id)
             ->whereHas('holding', fn ($query) => $query->whereIn('symbol_code', array_column($holdings, 'symbol_code')))
-            ->with(['holding.fundamentalIndicator', 'holding.technicalIndicator'])
+            ->with(['holding.fundamentalIndicator', 'holding.technicalIndicator', 'signals'])
             ->get()
             ->keyBy(fn (HoldingSnapshot $hs) => $hs->holding->market.':'.$hs->holding->symbol_code);
 
         return array_map(function (array $row) use ($snapshotsByKey) {
             $holdingSnapshot = $snapshotsByKey->get($row['market'].':'.$row['symbol_code']);
 
-            return $holdingSnapshot === null ? $row : array_merge($row, $this->detail($holdingSnapshot, $row));
+            return array_merge($row, $holdingSnapshot === null ? $this->missingDetail() : $this->detail($holdingSnapshot, $row));
         }, $holdings);
+    }
+
+    /**
+     * 分類と行の拡充の間に取り込みが完了し、最新スナップショットに行が見つからない
+     * 場合の既定値（/review 指摘）。画面をエラーにせず全指標を「—」で出す。
+     *
+     * @return array<string, mixed>
+     */
+    private function missingDetail(): array
+    {
+        return [
+            'id' => null,
+            'criteria' => $this->criteriaEvaluator->evaluateHold([]),
+            'fundamental_status' => 'unavailable',
+            'fundamental_summary' => 'ファンダメンタルズ指標が未取得のため判定できません',
+            'hold_watch_reasons' => [],
+        ];
     }
 
     /**
@@ -92,8 +111,21 @@ class ShowHoldListAction
 
         $float = fn ($value) => $value !== null ? (float) $value : null;
 
+        // 利確検討（ShowSignalListAction::resolveThreshold）と同じ利確ライン。
+        $gainLine = $this->takeProfitThresholdEvaluator->evaluate(
+            $holdingSnapshot->signals->count(),
+            $equityRatio,
+            $roe,
+            $revenueGrowth,
+            $operatingIncomeGrowth,
+            $operatingMargin,
+            $avgRevenueGrowth,
+            $avgOperatingIncomeGrowth,
+        );
+
         $criteria = $this->criteriaEvaluator->evaluateHold([
             'unrealized_gain_rate' => $float($row['unrealized_gain_rate']),
+            'gain_line_threshold' => $gainLine['target_gain_rate_threshold'],
             // US株は current_price が円換算済み・technical_indicators は USD の
             // ため、乖離チップの計算前に USD へ割り戻す（CHG-0010）。
             'current_price' => SignalCriteriaEvaluator::indicatorComparablePrice(

@@ -113,6 +113,20 @@ describe('CHG-0046: キープ表の判定チェックリスト（evaluateHold）
         expect($loss['status'])->toBe('unmet')->and($loss['tone'])->toBeNull();
     });
 
+    test('含み益率の利確ラインは gain_line_threshold に従い、高水準モード+150%では+98%でも利確寄りにならない', function () {
+        // /review 指摘（2026-10-04）: 利確検討と同じく TakeProfitThresholdEvaluator の
+        // 利確ラインを渡す。未指定時は通常モード+20%。
+        $evaluator = new SignalCriteriaEvaluator;
+
+        $highWater = holdEvalItem($evaluator->evaluateHold(holdEvalMetrics(['unrealized_gain_rate' => 98.0, 'gain_line_threshold' => 150.0])), '含み益率');
+        $nearHighWater = holdEvalItem($evaluator->evaluateHold(holdEvalMetrics(['unrealized_gain_rate' => 125.0, 'gain_line_threshold' => 150.0])), '含み益率');
+        $normal = holdEvalItem($evaluator->evaluateHold(holdEvalMetrics(['unrealized_gain_rate' => 25.0, 'gain_line_threshold' => 20.0])), '含み益率');
+
+        expect([$highWater['status'], $highWater['tone'], $highWater['threshold_label']])->toBe(['unmet', null, '利確≥+150%']);
+        expect([$nearHighWater['status'], $nearHighWater['tone']])->toBe(['near', 'warning']);
+        expect([$normal['status'], $normal['tone'], $normal['threshold_label']])->toBe(['met', 'warning', '利確≥+20%']);
+    });
+
     test('MACD-シグナル線はプラスで押し目寄り、マイナスで利確寄りになる', function () {
         $evaluator = new SignalCriteriaEvaluator;
 
