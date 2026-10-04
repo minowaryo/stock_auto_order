@@ -504,6 +504,170 @@
 
 ---
 
+### research_* テーブル群（調査候補・UC-016、ADR-0025、CHG-0031）— Gate 3叩き台・未承認
+
+> 2026-10-04 Gate 3叩き台。UC-016・UC-012受け渡しはGate 2承認済み。本節とADR-0025の承認までマイグレーションを作らない。既存テーブルのスキーマは変更しない。文字数・URL長はUC-016の入力定義（URL 2048文字、記述2000文字）に従う。
+
+```
+[research_events] ──1:N── [research_discovery_links]
+       |  └──(merged_into_event_id, 自己参照)
+       └──1:N── [research_candidates] ──N:1── [research_entities] ──1:N── [research_entity_listings]
+                      |  └──1:N── [research_claims]
+                      |  └──1:N── [research_candidate_revisions]
+                      └──1:N── [research_watchlist_handoffs] ──N:1(nullable)── [watchlist_items] / [holdings]
+```
+
+#### research_events（元発表・出来事）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| title | varchar(255) | NO | - | 出来事の短い名前 |
+| original_url | varchar(2048) | YES | null | 元資料URL（HTTP(S)のみ）。未確認なら null |
+| original_publisher | varchar(255) | YES | null | 元の発行主体 |
+| announced_on | date | YES | null | 元発表日。不明なら null（確認日で補わない） |
+| verification_status | enum('unverified','verified','unavailable') | NO | 'unverified' | 元資料の確認状態。`unavailable`＝リンク切れ等で確認不能 |
+| verified_on | date | YES | null | 元資料を確認した日 |
+| merged_into_event_id | bigint | YES | null | 同一出来事として統合した先の `research_events.id`。統合元の行は消さない |
+| created_at / updated_at | timestamp | NO | now() | |
+
+**Index**: `merged_into_event_id`、`announced_on`
+**FK**: `merged_into_event_id` → `research_events(id)`
+
+#### research_discovery_links（発見経路）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| research_event_id | bigint | NO | - | 元発表 |
+| route_type | enum('manual') | NO | 'manual' | 記録経路。情報源固有の自動取得は後続CRで値を追加（ADR-0025 D8） |
+| url | varchar(2048) | NO | - | 紹介記事・動画・SNS等のURL（HTTP(S)のみ。サーバーからアクセスしない） |
+| url_hash | char(64) | NO | - | `url` の sha256。一意制約用 |
+| source_title | varchar(255) | NO | - | 資料名 |
+| publisher | varchar(255) | NO | - | 発行者 |
+| posted_on | date | YES | null | 紹介元の投稿日（元発表日とは別） |
+| checked_on | date | NO | - | 本人の確認日 |
+| summary | text | NO | - | 本人の要約（2000文字以内。本文の丸ごと保存はしない） |
+| sponsorship_note | varchar(2000) | YES | null | 利益相反・スポンサー表示。不明は null |
+| created_at / updated_at | timestamp | NO | now() | |
+
+**Index**: `(research_event_id, url_hash)` unique、`url_hash`（同一URLの横断検索）
+**FK**: `research_event_id` → `research_events(id)`
+
+#### research_entities（言及された法人）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| legal_name | varchar(255) | NO | - | 法人名 |
+| identification_status | enum('unidentified','identified','unlisted','foreign_only','ambiguous') | NO | 'unidentified' | 上場主体の同定状態。`ambiguous`＝同名・親子関係不明・上場廃止/コード変更の疑い |
+| identification_note | varchar(2000) | YES | null | 同定の根拠・保留理由 |
+| created_at / updated_at | timestamp | NO | now() | |
+
+**Index**: `legal_name`
+
+#### research_entity_listings（法人の上場）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| research_entity_id | bigint | NO | - | 法人 |
+| market | enum('jp','us') | NO | - | 市場（日米のみ。F-016） |
+| symbol_code | varchar(20) | NO | - | 証券コード／ティッカー |
+| listed_entity_name | varchar(255) | NO | - | 上場主体名（親会社等、法人名と異なりうる） |
+| source_url | varchar(2048) | NO | - | 同定の確認元URL |
+| confirmed_on | date | NO | - | 同定の確認日 |
+| created_at / updated_at | timestamp | NO | now() | |
+
+**Index**: `research_entity_id`、`(market, symbol_code)`（非unique。保存時に既存法人を提示するため。ADR-0025 D3）
+**FK**: `research_entity_id` → `research_entities(id)`
+
+> `holdings` への参照は持たない。調査中・未選択の銘柄で `holdings` を作らないため（ADR-0025 D2）。監視登録時に `(symbol_code, market)` で `holdings` を find-or-create する。
+
+#### research_candidates（調査候補＝元発表×法人）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| research_event_id | bigint | NO | - | 元発表 |
+| research_entity_id | bigint | NO | - | 法人 |
+| theme | varchar(100) | NO | - | テーマ名（自由入力。UC-012のフォルダとは独立） |
+| theme_relation | varchar(2000) | NO | - | テーマとの関係 |
+| entity_role | varchar(255) | YES | null | 企業の役割（供給者・顧客・採択先等）。未確定は null |
+| evidence_stage | enum('unknown','research','product','regulatory','plan','operation','order','revenue') | NO | 'unknown' | 証拠段階（研究・採択／製品／規制承認／導入計画／稼働／受注／売上） |
+| counter_evidence | varchar(2000) | YES | null | 反証・未確認事項 |
+| counter_evidence_checked_on | date | YES | null | 反証を確認した日（監視登録の必須条件） |
+| status | enum('investigating','on_hold','rejected','watchlisted') | NO | 'investigating' | 調査状態 |
+| status_reason | varchar(2000) | YES | null | 保留・見送り・監視登録の理由（該当状態では必須。FormRequestで検証） |
+| needs_recheck | boolean | NO | false | 監視登録後に同定・根拠を訂正した場合 true（要再確認表示） |
+| lock_version | int unsigned | NO | 1 | 楽観ロック（ADR-0025 D4） |
+| archived_at | timestamp | YES | null | アーカイブ日時（削除相当、復元可） |
+| created_at / updated_at | timestamp | NO | now() | |
+
+**Index**: `(research_event_id, research_entity_id)` unique、`research_entity_id`、`(status, archived_at)`、`theme`、`created_at`
+**FK**: `research_event_id` → `research_events(id)`、`research_entity_id` → `research_entities(id)`
+
+#### research_claims（主張と根拠）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| research_candidate_id | bigint | NO | - | 候補 |
+| claim | varchar(2000) | NO | - | 主張 |
+| evidence_url | varchar(2048) | YES | null | 根拠URL |
+| status | enum('unverified','verified','contradicted','unavailable') | NO | 'unverified' | 未確認／確認済み／不一致（反証）／確認不能。URLの存在だけでは `verified` にしない |
+| is_primary_source | boolean | NO | false | 一次資料による確認か（監視登録の必須条件は一次資料で確認済みの主張1件以上） |
+| checked_on | date | YES | null | 確認日 |
+| created_at / updated_at | timestamp | NO | now() | |
+
+**Index**: `research_candidate_id`
+**FK**: `research_candidate_id` → `research_candidates(id)`
+
+#### research_candidate_revisions（候補の版）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| research_candidate_id | bigint | NO | - | 候補 |
+| lock_version | int unsigned | NO | - | この版の版数 |
+| change_type | enum('created','updated','status_changed','merged','unmerged','archived','restored','handed_off') | NO | - | 変更種別 |
+| payload | json | NO | - | 候補・主張・元発表・発見経路・法人・上場の全体スナップショット |
+| created_at | timestamp | NO | now() | 変更日時 |
+
+**Index**: `(research_candidate_id, lock_version)` unique
+**FK**: `research_candidate_id` → `research_candidates(id)`
+
+> 追記のみ（更新・削除しない）。変更前後は連続する版の `payload` を比較して表示する。
+
+#### research_watchlist_handoffs（監視への受け渡し履歴）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| research_candidate_id | bigint | NO | - | 候補 |
+| research_candidate_revision_id | bigint | NO | - | 確認した版 |
+| research_entity_listing_id | bigint | NO | - | 登録した上場 |
+| holding_id | bigint | NO | - | find-or-create した銘柄マスタ |
+| watchlist_item_id | bigint | YES | null | 作成・関連付けたウォッチリスト行。`already_held` は null |
+| outcome | enum('created','linked_existing','already_held') | NO | - | 結果（ADR-0025 D6） |
+| matched_snapshot_id | bigint | YES | null | 照合に使った保有スナップショット（未取込は null） |
+| favorites_last_imported_at | timestamp | YES | null | 照合時点のお気に入りCSV最終取込時刻（`watchlist_items.last_seen_in_csv_at` の最大値） |
+| idempotency_key | char(36) | NO | - | 確認欄表示時に発行するUUID。二重送信防止 |
+| created_at | timestamp | NO | now() | 登録日時 |
+
+**Index**: `(research_candidate_id, idempotency_key)` unique、`watchlist_item_id`、`holding_id`、`research_candidate_revision_id`、`research_entity_listing_id`、`matched_snapshot_id`
+**FK**: `research_candidate_id` → `research_candidates(id)`、`research_candidate_revision_id` → `research_candidate_revisions(id)`、`research_entity_listing_id` → `research_entity_listings(id)`、`holding_id` → `holdings(id)`、`watchlist_item_id` → `watchlist_items(id)`、`matched_snapshot_id` → `snapshots(id)`
+
+> 追記のみ。ウォッチリストの「調査候補」経路はこのテーブルの存在で判定し、`watchlist_items.source` は経路判定に使わない（CSV再取込で上書きされるため。ADR-0025 D5）。調査候補から新規作成する `watchlist_items` 行は `source='manual'`、`is_starred=true`、`folder_name=null`、`last_seen_in_csv_at=null`。`in_rakuten_favorites` は `last_seen_in_csv_at` 基準で判定し、一度もCSVに出ていない行に「楽天側で解除済み」を出さない。
+
+#### 集計の定義（UC-016 出力4）
+
+- 元発表の件数: `merged_into_event_id IS NULL` の `research_events` のうち、アーカイブされていない候補を1件以上持つもの。
+- 確認済み上場企業の数: `identification_status='identified'` かつ上場を1件以上持つ `research_entities` の件数（複数テーマ・複数発表・複数上場でも1社）。
+- 今週の新規発見: 候補の `created_at` が対象週内で、かつ同じ法人の候補が対象週より前に存在しないもの。元発表日が対象週より前の発表は「過去の発表」、元発表日が不明なものは「発表日不明」として新規発見と分けて表示する（UC-016 出力4）。
+
+---
+
 ### market_indicator_snapshots（市場全体指標・UC-007）
 
 | カラム | 型 | Nullable | デフォルト | 説明 |
@@ -729,3 +893,4 @@
 | 2026-09-27 | CHG-0020の3テーブルをGate3承認 | ADR-0017 |
 | 2026-09-30 | 集中度ダッシュボード（CHG-0026）のGate3叩き台として`index_weekly_prices.index_name`のenumへの`sox`追加を記載。新規テーブルなし。Gate3レビュー待ち | ADR-0019 |
 | 2026-09-30 | CHG-0026の`sox`追加をGate3承認 | ADR-0019 |
+| 2026-10-04 | 調査候補（CHG-0031、UC-016）のGate3叩き台として`research_*`の8テーブル・受け渡し履歴・集計の定義を追記。既存テーブルのスキーマ変更なし（`in_rakuten_favorites`の判定基準を`last_seen_in_csv_at`へ改める表示ロジック変更を含む）。Gate3レビュー待ち | ADR-0025 |

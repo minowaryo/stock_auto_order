@@ -22,23 +22,27 @@
 - [ ] Gate 3で売買履歴・状況記録・価格追跡対象の保存形式と、追跡期限・再試行・取得不能理由の保持方法を確定する。
 - [ ] Gate 4でUC名から導くテストケース（26週境界、取得失敗、価格補完後のUC-014再集計、二重集計防止の計算例、年率20％／25％境界）を承認してから実装する。
 
-## メガトレンド候補発見（CHG-0031・ADR-0022・F-016／UC-016）Gate 1承認・品質再精査待ち（2026-10-04）
+## メガトレンド候補発見（CHG-0031・ADR-0022／ADR-0025・F-016／UC-016）Gate 2承認・Gate 3レビュー待ち・品質再精査待ち（2026-10-04）
 
 ### Decision
 
 - 本人が2026-10-03に「承認、Gate1の品質の件はPlan等に残しておいて。Mockは今回は不要」と指示。Gate 1草案を正式要件F-016へ反映。今回のGate 2はUC本文でレビューし、モックを省略する。Gate 2〜4の承認とは扱わない。
 - 未登録の日米上場企業の発見を目的とし、情報源の正確さ・裏付けやすさ・発見への有用性は4週試行後に再精査する。Gate 1承認によって情報源の採否や自動取得範囲を固定しない。
+- 2026-10-04 本人がUC-016とUC-012への受け渡し差分をGate 2承認。UC-012本文へ統合済み。
+- 2026-10-04 Gate 3叩き台: [ADR-0025](docs/adr/ADR-0025-research-candidate-storage.md)と`data-model.md`の`research_*`節。調査記録は専用8テーブルに分け、未同定の企業では`holdings`を作らない。ウォッチリストの登録経路は`watchlist_items.source`ではなく`last_seen_in_csv_at`と受け渡し履歴から導く（CSV再取込で`source`が上書きされ、調査経路が消えるため）。既存テーブルのスキーマ変更なし。
 - 次の品質レビューは**2026-11-02以降**が目安。根拠は[試行ログ](docs/investment-research/megatrend/source-pilot-log.md)と[Gate 1再精査メモ](docs/product/megatrend-discovery-gate1-requirements-draft.md#4週間の情報源試行後に再精査するメモ2026-10-03本人指示)。対象は3テーマ・5源、試行期間2026-10-05〜11-01。週次確認とレビューは手動作業で、自動実行は設定していない。
 
 ### Files touched
 
-`docs/product/requirements.md`、`docs/product/use-cases.md`（UC-016草案・UC-012変更案）、`docs/product/megatrend-discovery-gate1-requirements-draft.md`、`docs/product/megatrend-discovery-change-proposal.md`、`docs/product/megatrend-source-selection.md`、`docs/adr/ADR-0022-megatrend-source-radar.md`、`docs/rcid/traceability-matrix.md`、`PLAN.md`。
+`docs/product/requirements.md`、`docs/product/use-cases.md`（UC-016・UC-012統合・承認記録）、`docs/architecture/data-model.md`（`research_*`節）、`docs/adr/ADR-0025-research-candidate-storage.md`、`docs/product/megatrend-discovery-gate1-requirements-draft.md`、`docs/product/megatrend-discovery-change-proposal.md`、`docs/product/megatrend-source-selection.md`、`docs/adr/ADR-0022-megatrend-source-radar.md`、`docs/rcid/traceability-matrix.md`、`PLAN.md`。
 
 ### Status
 
-**Gate 1承認済み・Gate 2本文レビュー待ち。情報源品質は未検証、Gate 3／4未着手。** 次回作業時は以下の未完了項目から再開する。
+**Gate 1・Gate 2承認済み。Gate 3（ADR-0025・data-model.md）本人レビュー待ち。情報源品質は未検証、Gate 4未着手。** 次回作業時は以下の未完了項目から再開する。
 
-- [ ] UC-016の共通処理（記録・確認・重複排除・本人確認後の監視登録）とUC-012受け渡し差分をレビューしGate 2を承認する。源固有の自動取得は後続差分にする。
+- [x] UC-016の共通処理とUC-012受け渡し差分のGate 2承認（2026-10-04）。源固有の自動取得は後続差分。
+- [ ] Gate 3: ADR-0025と`research_*`の8テーブル定義をレビューし承認する。
+- [ ] Gate 4: featureブランチを切り、`/tdd`でUC-016のテストケース（UC-016末尾の候補）を書いて承認を得る。`audit`チャンネル新設と`in_rakuten_favorites`判定変更の回帰テストを含める。
 - [ ] 4週の新着確認を試行ログへ記録する（10/05〜11、10/12〜18、10/19〜25、10/26〜11/01）。源ごとに元URL・発表日・照合結果・所要時間・確認できなかった理由を残す。
 - [ ] 11/02以降、主張と一次資料の一致／不一致／確認不能、訂正、誤同定、転載重複、欠測、未登録企業数、テーマ・市場の偏り、確認時間を源ごとに集計する。情報源の誤りと調査時の読み違いを区別する。
 - [ ] 源ごとに継続／補助参照／入替／保留を決め、根拠カードと利用条件を記録する。取得可能な源だけ自動取得の対象・頻度を提案する。
