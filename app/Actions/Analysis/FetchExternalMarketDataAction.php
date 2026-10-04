@@ -23,6 +23,7 @@ use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\MarketData\MarketIndexClientInterface;
 use App\Services\MarketData\UsStockPriceClientInterface;
 use App\Services\Sector\SectorClassificationResolver;
+use App\Services\SignalOutcome\IndicatorObservationRecorder;
 use App\Services\SignalOutcome\SignalOccurrenceMetricsBuilder;
 use App\Services\SignalOutcome\SignalOccurrenceRecorder;
 use App\Services\SignalOutcome\WeeklyPriceRecorder;
@@ -77,6 +78,7 @@ class FetchExternalMarketDataAction
         private readonly WeeklyPriceRecorder $weeklyPriceRecorder,
         private readonly SignalOccurrenceRecorder $signalOccurrenceRecorder,
         private readonly SignalOccurrenceMetricsBuilder $signalOccurrenceMetricsBuilder,
+        private readonly IndicatorObservationRecorder $indicatorObservationRecorder,
         private readonly SectorClassificationResolver $sectorResolver,
     ) {}
 
@@ -435,7 +437,26 @@ class FetchExternalMarketDataAction
             }
 
             $this->recordSignalOccurrences($holding, $snapshot, $priceHistory, $occurrences);
+            $this->recordIndicatorObservation($holding, $priceHistory, $occurrences);
         }
+    }
+
+    /**
+     * UC-018 (ADR-0027 D4): append the indicators obtained for this holding,
+     * whether or not a signal fired. Runs outside the per-holding transaction
+     * and the recorder never throws, so a recording failure never affects the
+     * saved signals.
+     *
+     * @param  array<int, array{date: string, close: float, volume: int}>  $priceHistory
+     * @param  array{take_profit: array<int, string>|null, buy: array<int, string>, metrics: array<string, mixed>}|null  $occurrences
+     */
+    private function recordIndicatorObservation(Holding $holding, array $priceHistory, ?array $occurrences): void
+    {
+        if ($occurrences === null || $priceHistory === []) {
+            return;
+        }
+
+        $this->indicatorObservationRecorder->record($holding, 'holding_import', $occurrences['metrics']);
     }
 
     /**
