@@ -18,7 +18,7 @@ use Livewire\Component;
  * ない参照専用Actionのため、render()のたびに毎回呼び直す（HoldingListと
  * 同じ規約）。
  */
-#[Layout('components.layouts.app', ['title' => '売買シグナル'])]
+#[Layout('components.layouts.app', ['title' => '売買シグナル', 'active' => 'signals'])]
 class SignalList extends Component
 {
     /** CHG-0027: 3テーブル共通の並び順。既定は評価額順、おすすめ順（従来の透明マルチキー）に切替可。 */

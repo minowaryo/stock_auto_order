@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>週次売買履歴の取込と保有変化の照合 | ポートフォリオ管理</title>
+  <link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<header class="app-header">
+  <div class="logo">📊 ポートフォリオ管理</div>
+  <nav class="app-nav" aria-label="主な画面">
+    <a href="screen-UC002-holding-list.html">保有一覧</a>
+    <a href="screen-UC004-signal-list.html">売買シグナル</a>
+    <a href="screen-UC005-sector-dashboard.html">セクター配分</a>
+    <a href="screen-UC006-candidate-check.html">新規投資候補</a>
+    <a href="screen-UC001-csv-import.html" class="active">CSV取込</a>
+    <a href="screen-UC009-summary-report.html">サマリーレポート</a>
+  </nav>
+</header>
+<main class="app-main">
+  <p class="page-caption"><a href="screen-UC001-csv-import.html">CSV取込</a> / 売買履歴（配置案・Gate 2レビュー用）</p>
+  <h1>週次売買履歴の取込と保有変化の照合</h1>
+  <p class="page-caption">楽天証券の国内株・米国株の全期間取引履歴を週次で追加します。保有CSVは既存の取込画面で登録します。</p>
+  <section class="card">
+    <h2>全期間の取引履歴を選択</h2>
+    <div class="grid-2col">
+      <div class="form-group"><label for="jp">国内株の取引履歴 CSV *</label><input id="jp" type="file" accept=".csv"><p class="text-secondary">サンプル: tradehistory(JP)_YYYYMMDD.csv</p></div>
+      <div class="form-group"><label for="us">米国株の取引履歴 CSV *</label><input id="us" type="file" accept=".csv"><p class="text-secondary">サンプル: tradehistory(US)_YYYYMMDD.csv</p></div>
+    </div>
+    <p class="text-secondary">資産残高 CSV と特定口座損益 CSV は毎週の提出に不要です。同じ全期間履歴を再提出しても取引を二重登録しません。</p>
+    <button class="btn btn-primary" type="button">内容を確認</button>
+  </section>
+  <section class="card">
+    <h2>取込前の確認例 <span class="badge badge-neutral">ダミーデータ</span></h2>
+    <div class="stat-row">
+      <div class="stat-box"><div class="label">対象期間</div><div class="value" style="font-size:16px">2025-01-01〜2026-10-03</div></div>
+      <div class="stat-box"><div class="label">既存の行</div><div class="value">120</div></div>
+      <div class="stat-box"><div class="label">新しい行</div><div class="value text-success">4</div></div>
+      <div class="stat-box"><div class="label">確認が必要</div><div class="value text-danger">1</div></div>
+    </div>
+    <p class="text-secondary">完全に同じ内容の約定が2行ある場合も、元CSV内の出現回数を保持します。過去行の消失・変更は自動削除しません。</p>
+    <table><thead><tr><th>市場</th><th>区分</th><th>ファイル上の行数</th><th>新規</th><th>確認が必要</th></tr></thead><tbody>
+      <tr><td>国内株</td><td>買付・売付・入出庫</td><td>80</td><td>2</td><td>1</td></tr>
+      <tr><td>米国株</td><td>買付・売付・積立・分割入庫</td><td>44</td><td>2</td><td>0</td></tr>
+    </tbody></table>
+    <p><button class="btn btn-secondary" type="button">確認待ちの行を見る</button></p>
+  </section>
+  <section class="card">
+    <h2>保有数量との照合例</h2>
+    <table><thead><tr><th>銘柄・口座</th><th>前週→今週</th><th>履歴の変化</th><th>状態</th></tr></thead><tbody>
+      <tr><td>架空銘柄A / 特定</td><td>10株→8株</td><td>売付2株</td><td><span class="badge badge-success">照合済み</span></td></tr>
+      <tr><td>架空銘柄B / NISA</td><td>5株→10株</td><td>履歴なし</td><td><span class="badge badge-warning">要確認</span></td></tr>
+    </tbody></table>
+    <p class="text-secondary">保有数量の減少だけでは売却と確定しません。分割・移管・取込漏れも確認します。</p>
+    <button class="btn btn-primary" type="button">取込を確定</button>
+  </section>
+</main>
+</body>
+</html>

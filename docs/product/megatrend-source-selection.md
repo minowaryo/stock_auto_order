@@ -1,6 +1,6 @@
 # メガトレンド候補の無料情報源と調査カード（CHG-0031）
 
-> 状態: 提案。2026-10-03時点。Gate 1〜4未承認。アプリには未登録。
+> 状態: 手動試行の方針を2026-10-03に確認。Gate 1承認済み（2026-10-03、正式反映10-04）。Gate 2〜4未承認。アプリには未登録。
 
 ## 目的と選定方法
 
@@ -8,15 +8,15 @@
 
 採用条件は、無料で継続閲覧できること、発行主体・発表日・元URLを追えること、今回のテーマとの関係が明瞭なこと、銘柄へつなぐ経路があること、取得条件を守れること。発行者の権威に加え、**その資料が直接証明する範囲**を評価する。需要予測、採択、規制承認、受注、売上を同じ証拠にしない。
 
-`定期`は公開頻度に応じて更新を確認する登録先。`照合`は候補が生じた時に読む登録先。自動取得が可能と明記したもの以外はブラウザで手動確認する。**登録はアプリへの実装済み登録を意味しない。**
+以下は試行対象を選ぶための候補台帳。初回の試行で定期確認するのはS03・S09・S10・H01・H02の5源で、ほかは必要に応じた照合先に留める。自動取得が可能と明記したもの以外はブラウザで手動確認する。**台帳への記載はアプリへの実装済み登録を意味しない。**
 
-## 定期登録する一次情報（12系統）
+## 一次情報の候補（12系統）
 
 | ID | 領域・情報源 | 無料の取得経路と頻度 | 使い道・証明できないこと |
 |---|---|---|---|
 | S01 | 半導体: [SEMIプレス](https://www.semi.org/en/news-media-press/semi-press-releases/press-archive) | 公開記事・[メール](https://discover.semi.org/join-media-list-registration.html)、月次確認 | 装置投資の変化。詳細統計は有料で、個社受注は示さない。 |
 | S02 | 半導体: [NIST CHIPS採択・交付先](https://www.nist.gov/chips/funding) | 公開ページを発表時に手動確認 | 工場・材料・装置にかかわる事業者を発見。交付と売上を区別する。 |
-| S03 | AI基盤: [Open Compute ProjectのAI/製品掲載](https://www.opencompute.org/ai-marketplace) | 公開ページを月次手動確認 | 電源、冷却、光接続など周辺企業を探す。[製品掲載](https://www.opencompute.org/marketplace)は顧客採用の証明ではない。 |
+| S03 | AI基盤: [Open Compute ProjectのAI/製品掲載](https://www.opencompute.org/ai-marketplace) | 公開ページを月次手動確認 | 電源、冷却、光接続など周辺工程を把握する。[Marketplace掲載](https://www.opencompute.org/marketplace)は承認されたSolution Providerによる製品・サービス紹介で、顧客採用や販売実績の証明ではない。 |
 | S04 | 日本の電源: [OCCTO長期脱炭素電源オークション](https://www.occto.or.jp/various/capacity-market/jitsujukyukanren/2025_boshuyoukou_long.html) | 公開PDFを結果発表時に手動確認 | [落札一覧](https://www.occto.or.jp/assets/various/capacity-market/jitsujukyukanren/2025_boshuyoukou_long/260513_longauction_youryouyakujokekka_kouhyou_besshi_ousatsu2025.pdf)に事業者・電源・容量。建設・稼働・利益は別途確認。 |
 | S05 | 日本の蓄電: [SII系統用蓄電池交付決定](https://sii.or.jp/chikudenchi07/decision.html) | 公開PDFを公募結果ごとに手動確認 | [交付先一覧](https://sii.or.jp/chikudenchi07/uploads/R7kess_koufukettei.pdf)に事業者・地域・補助額。補助先と機器納入者を混同しない。 |
 | S06 | 米国の電源・蓄電: [EIA-860M](https://www.eia.gov/electricity/data/eia860m/index.php) | 公式XLS、月次 | 発電・蓄電設備の事業者と計画・稼働状態。月次値は暫定で、計画は建設確約ではない。 |
@@ -27,27 +27,28 @@
 | S11 | 日本医療AI: [PMDA医療機器承認品目一覧](https://www.pmda.go.jp/review-services/drug-reviews/review-information/devices/0018.html) | 公開表・PDF、掲載時に手動確認 | 製品と承認取得者を発見。AIの包括タグはなく審査資料を個別に読む。 |
 | S12 | 医療AIの臨床: [ClinicalTrials.gov](https://clinicaltrials.gov/data-api/api) | 公式API v2/CSV、週次 | 試験設計、主要評価項目、結果登録。登録・試験終了だけでは有効性を証明しない。 |
 
-定期登録は「毎週12サイトを全面精読する」という意味ではない。週次は公開・変更の有無と新しい企業名だけ確認し、四半期・年次資料は公開時に読む。個社につながらない統計はテーマの強弱を測る用途に限定する。
+初回5源以外は4週間で採否を判定しない。公開頻度の低い資料を新着の有無だけで評価せず、固定した過去12か月のサンプルも確認する。個社につながらない統計はテーマの強弱を測る用途に限定する。
 
 S04・S05・S08・S09は年度・四半期でURLが変わる資料の**現行例**を載せた。次回の確認時は同じ発行主体の新しい公表ページを探し、調査カードに実際に読んだ版のURL・発表日を残す。補助的に[SIAの月次市場データ](https://www.semiconductors.org/policies/market-data/)・[SEAJの国内装置統計](https://www.seaj.or.jp/statistics/)を需要の方向確認に使えるが、詳細データは有料・個社売上は分からないため定期12系統には入れていない。
 
-## 候補が出た時の照合先（6系統）
+## 候補が出た時の照合先（7系統）
 
 | ID | 情報源 | 無料の取得経路 | 照合事項 |
 |---|---|---|---|
 | V01 | [SEC EDGAR](https://www.sec.gov/search-filings/edgar-application-programming-interfaces) | 公式JSON API、鍵不要。[公平アクセス規則](https://www.sec.gov/about/webmaster-frequently-asked-questions)を守る | 米上場主体・ティッカー・事業・設備投資・部門売上。製品単位の売上が非開示なら未確認。 |
 | V02 | [JPX適時開示（TDnet）](https://www.jpx.co.jp/equities/listing/disclosure/tdnet/index.html) | 最新31日分を手動閲覧。[公開画面の自動収集は控える](https://www.jpx.co.jp/listing/disclosure/01.html) | 国内の会社コード、受注、提携、業績修正。[公式APIは有料](https://www.jpx.co.jp/markets/paid-info-listing/tdnet/02.html)。 |
-| V03 | [EDINET](https://disclosure2.edinet-fsa.go.jp/) | 公開画面、[公式APIは登録とキーが必要](https://disclosure2dl.edinet-fsa.go.jp/guide/static/disclosure/download/ESE140206.pdf) | 日本の上場主体と事業セグメント、子会社の位置付け。 |
+| V03 | [EDINET](https://disclosure2.edinet-fsa.go.jp/) | 公開画面、[無償の公式API](https://disclosure2dl.edinet-fsa.go.jp/guide/static/disclosure/download/ESE140191.pdf)（アカウント登録・[APIキー](https://disclosure2dl.edinet-fsa.go.jp/guide/static/disclosure/download/ESE140206.pdf)が必要）。将来の正規自動取得候補 | 日本の法定開示書類から上場主体、事業セグメント、子会社を照合。TDnetの適時開示とは対象書類が異なり、受注・提携等の全件を代替しない。 |
 | V04 | [FDA/openFDA医療機器API](https://open.fda.gov/apis/device/)・[PMDA製品検索](https://www.pmda.go.jp/PmdaSearch/kikiSearch/) | 公式API／個別手動検索 | 医療AIの製品、使用目的、規制状態。規制承認と保険償還を分ける。 |
 | V05 | [厚労省・中医協](https://www.mhlw.go.jp/stf/shingi/shingi-chuo_128154.html)・[CMS Coverage Database](https://api.coverage.cms.gov/docs/swagger/index.html) | 公開PDF／公式API（CMSは一部に規約同意トークン） | 日米の保険適用条件。給付対象でも製品の採用数・売上は不明。 |
 | V06 | [EIA-860確定版](https://www.eia.gov/electricity/data/eia860/index.php)・[EIA-923](https://www.eia.gov/electricity/data/eia923/) | 公式ZIP | 米国電源案件の設備状態・事後稼働。機器供給者は通常分からない。 |
+| V07 | 上場企業の公式IR・決算資料（候補ごとに発行企業の公式URLを記録） | 企業サイトを手動閲覧 | 上場主体・事業セグメント・売上・見通し・逆風を照合する。当事者資料なので、顧客採用や競争優位の主張は独立確認する。 |
 
 ## 専門家・メディア: 仮説を得る5源
 
 | ID | 公開範囲 | 向くテーマ | 取扱い |
 |---|---|---|---|
-| H01 | [ものづくり太郎の公開YouTube](https://www.youtube.com/channel/UCY9KXoezyo6cp-YwguOOCcg) | 日本の製造装置、部材、工場自動化 | 企業との協業・スポンサー企画があるため、紹介企業の評価を一次資料で照合。 |
-| H02 | [中島聡さんの公開note](https://note.com/lifeisbeautiful/all) | AIの利用形態と技術転換 | 有料メルマガ本文は無料取得源に含めない。本人の購読内容は本人が私的に要点を手入力する場合のみ。 |
+| H01 | [ものづくり太郎の公開YouTube](https://www.youtube.com/channel/UCY9KXoezyo6cp-YwguOOCcg)、[公式RSS](https://www.youtube.com/feeds/videos.xml?channel_id=UCY9KXoezyo6cp-YwguOOCcg) | 日本の製造装置、部材、工場自動化 | RSSは公開日・URLの手動照合用。全動画をテーマ候補として数えない。企業との協業・スポンサー企画があるため、紹介企業の評価を一次資料で照合。 |
+| H02 | [中島聡さんの公開note](https://note.com/lifeisbeautiful/all)、[公式RSS](https://note.com/lifeisbeautiful/rss) | AIの利用形態と技術転換 | RSSは公開日・URLの手動照合用。記事日付と参照した元発表日を分ける。有料メルマガ本文は無料取得源に含めない。本人の購読内容は本人が私的に要点を手入力する場合のみ。 |
 | H03 | [SemiAnalysisの公開記事](https://newsletter.semianalysis.com/about) | HBM、AI計算、電力・ネットワーク制約 | 無料記事と有料分析を区別し、個社の数字は開示資料で再確認。 |
 | H04 | [Semiconductor Engineering](https://semiengineering.com/about-us/)の無料記事 | 半導体工程・設計・製造の変化 | 独立編集の記事とスポンサー掲載を区別する。記事が引用する原資料を確認。 |
 | H05 | [Eric TopolのGround Truths](https://erictopol.substack.com/newsletters)の公開記事 | 医療AIの臨床・研究品質 | 論文・臨床試験・FDA/PMDA原資料で照合。臨床上の有望性を売上とみなさない。 |
@@ -77,8 +78,8 @@ S04・S05・S08・S09は年度・四半期でURLが変わる資料の**現行例
 
 各発見は[調査カードのテンプレート](megatrend-research-card-template.md)に1件ずつ記録する。`テーマの変化 → 工程・製品 → 事業者 → 上場親会社とティッカー → 採用/受注/売上 → 反証`を追い、企業名や親会社が曖昧なら未確定のまま止める。候補の掲載は売買推奨ではない。
 
-4週間の手動試行では、[試行ログ](megatrend-source-pilot-log.md)に週1回ダイジェストを作り、源ごとに`新しい上場企業数 / 元資料到達数 / 既存ウォッチリストとの非重複数 / 銘柄誤同定数 / 反証発見数 / 調査時間`を記録する。実績が乏しい源は定期監視から随時参照へ下げる。法的・技術的な取得条件と効果を確認した源だけ、その後に自動取得を設計する。
+初回の手動試行では、[試行ログ](../investment-research/megatrend/source-pilot-log.md)でS03・S09・S10・H01・H02の固定した過去12か月サンプルと4週新着を分け、`新しい上場企業数 / 元資料到達数 / 既存ウォッチリストとの非重複数 / 銘柄誤同定数 / 反証発見数 / 調査時間`を記録する。実績が乏しい源は公表時だけの確認に下げるか入れ替える。EDINETは正規の自動取得候補だが、キー管理・書類種別・取得頻度・利用条件を試行後に別途設計する。
 
 **UC-012への受け渡し**: 企業と上場主体・銘柄コードが確認でき、元の一次資料と反証がカードに残り、本人が「監視する」と判断した時に限る。現行UC-012の入口は楽天証券お気に入りCSVであり、自動昇格や任意銘柄の直接追加は含まれない。新入口は別UC・データモデルで定義する。
 
-**変更案件の次段階**: Gate 1で`requirements.md`の対象外記述を範囲限定で改訂し、Gate 2で週次ダイジェストと市場全体の発見を別UCとして定義する。Gate 3では必要なカード/出典/企業対応の保存形式を設計し、Gate 4では出典重複、上場親会社誤同定、本人未確認の自動昇格を防ぐテストを承認後に実装する。ここでは要件・UC・コードを変更しない。
+**変更案件の次段階**: [Gate 1要件草案](megatrend-discovery-gate1-requirements-draft.md)を本人が承認し、`requirements.md`のF-016へ反映した。4週試行の最低条件は**情報源の継続・定期取得対象の採否**に使い、Gate 1審議の前提条件にしない。Gate 1承認後、Gate 2では情報源に依存しない候補の記録・同定・人手確認を先に定義できる。源固有の取得フローと既存候補ダイジェストは試行結果を見て別途判断する。Gate 3では必要なカード/出典/企業対応の保存形式を設計し、Gate 4では出典重複、上場親会社誤同定、本人未確認の自動昇格を防ぐテストを承認後に実装する。[UC-016草案](use-cases.md#uc-016-市場からの調査候補発見確認)を作成済み。今回のモックは本人指示で省略し、品質再精査を[PLAN](../../PLAN.md)に残す。アプリは未実装。

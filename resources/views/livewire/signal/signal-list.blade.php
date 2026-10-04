@@ -1,6 +1,9 @@
 <div>
     <x-page-header title="売買シグナル" />
 
+    {{-- UC-014 / ADR-0017 D8: グローバルナビのタブは増やさず、切替タブでシグナル検証画面と行き来する --}}
+    <x-signal-outcome-tabs current="signals" />
+
     {{-- CHG-0027: 3テーブル共通の並び順切替（既定は評価額順） --}}
     <div class="flex items-center gap-2 mb-3 text-[13px]">
         <span class="text-text-secondary">並び順:</span>
