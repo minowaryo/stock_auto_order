@@ -17,6 +17,16 @@ final class ValuationDisplay
         'strong_expensive' => ['強い割高', 'warning-strong'],
     ];
 
+    private const CHIP_CLASSES = [
+        'strong_cheap' => 'bg-green-600 text-white border-green-700',
+        'cheap' => 'bg-green-100 text-green-800 border-green-200',
+        'fair' => 'bg-slate-50 text-slate-700 border-app-border',
+        'expensive' => 'bg-amber-100 text-amber-800 border-amber-200',
+        'strong_expensive' => 'bg-orange-600 text-white border-orange-700',
+    ];
+
+    public const STRONG_GOOD_CHIP_CLASSES = 'bg-green-600 text-white border-green-700';
+
     private const TONE = [
         'strong_good' => ['強い良好', 'success-strong'],
         'good' => ['良好', 'success'],
@@ -45,6 +55,11 @@ final class ValuationDisplay
     public static function tone(?string $tone): ?array
     {
         return self::pick(self::TONE, $tone);
+    }
+
+    public static function chipClasses(?string $tier): ?string
+    {
+        return self::CHIP_CLASSES[$tier] ?? null;
     }
 
     public static function reason(?string $reason): ?string
