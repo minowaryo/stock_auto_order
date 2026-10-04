@@ -18,8 +18,8 @@ use Illuminate\Support\Collection;
  * - Rows = watchlist_items whose holding is NOT in the latest snapshot's
  *   holding_snapshots (held favorites drop off automatically).
  * - Ranked by a transparent multi-key sort (NOT filtered, NOT a composite
- *   score — same stance as ADR-0010 D8): ①押し目買いシグナル件数 desc,
- *   ②財務健全性 passed→unavailable→failed, ③同セクター保有比率 asc,
+ *   score — same stance as ADR-0010 D8): ①財務健全性 passed→unavailable→failed,
+ *   ②押し目買いシグナル件数 desc (CHG-0045 swapped ①②), ③同セクター保有比率 asc,
  *   ④52週レンジ内位置 asc.
  * - Reuses FundamentalHealthEvaluator (合否), SignalCriteriaEvaluator::evaluateBuy
  *   (判定チェックリスト, same as UC-010), and SectorAllocationCalculator
@@ -77,8 +77,8 @@ class ShowWatchlistAction
             ->all();
 
         usort($rows, function (array $a, array $b) {
-            return [$b['rebound_buy_signal_count'], self::FUNDAMENTAL_RANK[$a['fundamental_status']], $a['overlap_rate'], $a['_range_sort']]
-                <=> [$a['rebound_buy_signal_count'], self::FUNDAMENTAL_RANK[$b['fundamental_status']], $b['overlap_rate'], $b['_range_sort']];
+            return [self::FUNDAMENTAL_RANK[$a['fundamental_status']], $b['rebound_buy_signal_count'], $a['overlap_rate'], $a['_range_sort']]
+                <=> [self::FUNDAMENTAL_RANK[$b['fundamental_status']], $a['rebound_buy_signal_count'], $b['overlap_rate'], $b['_range_sort']];
         });
 
         return $rows;
