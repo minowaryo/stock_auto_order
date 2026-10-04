@@ -8,17 +8,18 @@
 - 2026-10-04 本人指示: CHG-0020の別CR候補(a)（売却済み銘柄の週足が止まる生存バイアス）をF-017の株価追跡に統合。売却済み銘柄と`signal_occurrences`に直近26週以内の発生がある銘柄を、最終売却+26週と最終シグナル発生+26週の遅いほうまで、既存`WeeklyPriceRecorder::recordHolding`の104週UPSERTで追跡する。ADR-0017 D2の改訂方針と追加取得数の見積もりは[ADR-0024](docs/adr/ADR-0024-trade-and-signal-price-tracking.md)に記録し、ADR-0017本文の追記もF-017側で実施済み。UC-014の判定ロジック・画面・閾値、別CR候補(b)(c)は対象外。
 - 2026-10-04 本人選択: 運用全体の絶対リターンは年率20％を目標、25％を上位目標とし（同日、当初案の25％／30％から本人指示で引き下げ）、対ガチホ差分と別軸で表示する（例: 実績22％・ガチホ30％なら「20％達成・25％未達・対ガチホ劣後」）。短期の個別売買は期間目標への到達を参考表示に留め、売却単独の差額には年率目標を当てない。
 - 2026-10-04 本人指示: 理由・判断区分・買付代替先の手入力は設けない。売買前に保存済みのシグナル・指標・保有状況を自動で紐付け、「どんな状況で売買すると結果が良かったか」を振り返る。本人の主観的な理由は推測しない。
-- 売却単独（保有継続との比較）と乗換え全体（資金の対応を根拠付きで復元できる場合のみ）を区別し、同じ資金を二重に集計しない。対応が不明なら乗換え全体は算出不可とする。
+- 売却単独・推定乗換え・買付を区別し、同じ資金を二重に集計しない。
+- 2026-10-04 レビュー後の本人選択（「現実的な機能へ落とし込む」）: (1) 年率は国内・米国株の株式部分の直近52週の時間加重リターン（修正ディーツ法・配当除く）で測り、現金・入出金データを不要にする。対ガチホは52週前の保有を持ち続けた場合との差。(2) 売買全体の効果は(1)の対ガチホ差で答え、個別の乗換えは同一市場・売却から5営業日以内の買付に売却代金を割り当てる推定（参考）とする。(3) 2026-10より前の売買は価格系指標だけ事後再計算し、仮説づくりに限る。(4) 買付の主比較は既存保有の比例買増し、指数は参考。初回に約146銘柄等の週足を2021-07まで一括補完する（ADR-0024 D5）。段階1〜4の機能は[UC草案](docs/product/trade-decision-effect-gate2-uc-draft.md)の「実装する機能と段階」。
 
 ### Files touched
 
-`docs/product/requirements.md`、`docs/product/trade-decision-effect-proposal.md`、`docs/product/trade-decision-effect-gate1-requirements-draft.md`、`docs/product/trade-decision-effect-gate2-uc-draft.md`、`docs/adr/ADR-0024-trade-and-signal-price-tracking.md`、`docs/adr/ADR-0017-signal-outcome-tracking.md`（D2改訂方針の追記）、`docs/product/mockups/README.md`（モック省略の記録）、`docs/rcid/traceability-matrix.md`（CHG-0033行）、`PLAN.md`。アプリコードは未変更。
+`docs/product/requirements.md`、`docs/product/trade-decision-effect-proposal.md`、`docs/product/trade-decision-effect-gate1-requirements-draft.md`、`docs/product/trade-decision-effect-gate2-uc-draft.md`、`docs/adr/ADR-0024-trade-and-signal-price-tracking.md`（D5 初回一括補完を追加）、`docs/adr/ADR-0017-signal-outcome-tracking.md`（D2改訂方針の追記）、`docs/product/mockups/README.md`（モック省略の記録）、`docs/rcid/traceability-matrix.md`（CHG-0033行）、`PLAN.md`。アプリコードは未変更。
 
 ### Status
 
 **Gate 1承認済み・Gate 2（UC-017〜019草案）本文レビュー待ち。Gate 3／4未着手。** 次回は以下から再開する。
 
-- [ ] UC草案の未決事項（状況記録の有効期間、クラスタの束ね方、全体の年率算出が可能な範囲）をレビューし、`use-cases.md`へ反映してGate 2を承認する。
+- [ ] UC草案の残る論点（修正ディーツ法の式、判定保留の5％基準、推定乗換えの5営業日、クラスタの束ね方）をレビューし、`use-cases.md`へ反映してGate 2を承認する。状況記録の有効期間は8日で草案化済み。
 - [ ] Gate 3で売買履歴・状況記録・価格追跡対象の保存形式と、追跡期限・再試行・取得不能理由の保持方法を確定する。
 - [ ] Gate 4でUC名から導くテストケース（26週境界、取得失敗、価格補完後のUC-014再集計、二重集計防止の計算例、年率20％／25％境界）を承認してから実装する。
 
