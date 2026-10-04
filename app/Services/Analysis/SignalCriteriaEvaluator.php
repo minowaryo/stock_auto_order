@@ -133,22 +133,22 @@ final class SignalCriteriaEvaluator
             // ことは利確を後押ししない）ため、買い増し候補のPERのような
             // met/near/unmet閾値は持たせず、PBRと同じ基準なしの参考表示
             // （'none'→'info'）とする。
-            $this->row(
+            $this->withValuation($this->row(
                 'PER',
                 '',
                 $metrics['per'] ?? null,
                 0.0,
                 'none',
                 fn (float $v) => number_format($v, 1),
-            ),
-            $this->row(
+            ), $metrics['per_verdict'] ?? null),
+            $this->withValuation($this->row(
                 'PBR',
                 '',
                 $metrics['pbr'] ?? null,
                 0.0,
                 'none',
                 fn (float $v) => number_format($v, 2),
-            ),
+            ), $metrics['pbr_verdict'] ?? null),
         ];
 
         $fundamental = $this->fundamentalRows($metrics);
@@ -247,7 +247,7 @@ final class SignalCriteriaEvaluator
                 'lte_positive',
                 fn (float $v) => number_format($v, 1),
             ),
-            $this->row(
+            $this->withValuation($this->row(
                 'PBR',
                 // ADR-0016 D3: PBRは判定基準を持たない参考表示のため
                 // threshold_labelは空にする。
@@ -256,7 +256,7 @@ final class SignalCriteriaEvaluator
                 0.0,
                 'none',
                 fn (float $v) => number_format($v, 2),
-            ),
+            ), $metrics['pbr_verdict'] ?? null),
         ];
 
         $fundamental = $this->fundamentalRows($metrics);
@@ -348,22 +348,22 @@ final class SignalCriteriaEvaluator
             // CHG-0019: 整理検討にもPERを使う判定ロジックが無い（割安である
             // ことは整理の後押しにならない）ため、利確検討と同じく基準なしの
             // 参考表示（'none'→'info'）とする。
-            $this->row(
+            $this->withValuation($this->row(
                 'PER',
                 '',
                 $metrics['per'] ?? null,
                 0.0,
                 'none',
                 fn (float $v) => number_format($v, 1),
-            ),
-            $this->row(
+            ), $metrics['per_verdict'] ?? null, true),
+            $this->withValuation($this->row(
                 'PBR',
                 '',
                 $metrics['pbr'] ?? null,
                 0.0,
                 'none',
                 fn (float $v) => number_format($v, 2),
-            ),
+            ), $metrics['pbr_verdict'] ?? null, true),
         ];
 
         $fundamental = $this->fundamentalRows($metrics, true);
@@ -465,8 +465,8 @@ final class SignalCriteriaEvaluator
                 [BuySignalDeterminationService::PEG_UNDERVALUED_THRESHOLD, 'lte_positive'],
                 fn (float $v) => number_format($v, 2),
             ),
-            $this->twoWayRow('PER', '', $metrics['per'] ?? null, null, null, fn (float $v) => number_format($v, 1)),
-            $this->twoWayRow('PBR', '', $metrics['pbr'] ?? null, null, null, fn (float $v) => number_format($v, 2)),
+            $this->withValuation($this->twoWayRow('PER', '', $metrics['per'] ?? null, null, null, fn (float $v) => number_format($v, 1)), $metrics['per_verdict'] ?? null),
+            $this->withValuation($this->twoWayRow('PBR', '', $metrics['pbr'] ?? null, null, null, fn (float $v) => number_format($v, 2)), $metrics['pbr_verdict'] ?? null),
         ];
 
         $fundamental = $this->fundamentalRows($metrics);
@@ -571,40 +571,78 @@ final class SignalCriteriaEvaluator
             ];
         }
 
+        $tones = $metrics['metric_tones'] ?? [];
+        $growthTone = $growthRate === null ? null : (($metrics['revenue_growth'] ?? null) === $growthRate ? ($tones['revenue_growth'] ?? null) : ($tones['operating_income_growth'] ?? null));
+
         return [
-            $this->row(
+            $this->withStrength($this->row(
                 'ROE',
                 sprintf('≥%d%%', (int) FundamentalHealthEvaluator::MIN_ROE),
                 $metrics['roe'] ?? null,
                 FundamentalHealthEvaluator::MIN_ROE,
                 'gte',
                 fn (float $v) => number_format($v, 1).'%',
-            ),
-            $this->row(
+            ), $tones['roe'] ?? null),
+            $this->withStrength($this->row(
                 '自己資本比率',
                 sprintf('≥%d%%', (int) FundamentalHealthEvaluator::MIN_EQUITY_RATIO),
                 $metrics['equity_ratio'] ?? null,
                 FundamentalHealthEvaluator::MIN_EQUITY_RATIO,
                 'gte',
                 fn (float $v) => number_format($v, 1).'%',
-            ),
-            $this->row(
+            ), $tones['equity_ratio'] ?? null),
+            $this->withStrength($this->row(
                 '成長率',
                 '>0%',
                 $growthRate,
                 FundamentalHealthEvaluator::MIN_GROWTH_RATE,
                 'gt',
                 fn (float $v) => sprintf('%+.1f%%', $v),
-            ),
-            $this->row(
+            ), $growthTone),
+            $this->withStrength($this->row(
                 '営業利益率',
                 sprintf('≥%d%%', (int) FundamentalHealthEvaluator::MIN_OPERATING_MARGIN),
                 $metrics['operating_margin'] ?? null,
                 FundamentalHealthEvaluator::MIN_OPERATING_MARGIN,
                 'gte',
                 fn (float $v) => number_format($v, 1).'%',
-            ),
+            ), $tones['operating_margin'] ?? null),
         ];
+    }
+
+    /**
+     * CHG-0034: attaches the sector-benchmark verdict to a PER/PBR chip.
+     * `$labelOnly` marks the 整理検討 chips, which show the tier as a label
+     * without coloring (ADR-0026).
+     *
+     * @param  array<string, mixed>  $row
+     * @param  array<string, mixed>|null  $verdict  ValuationBenchmarkJudge::judge() result
+     * @return array<string, mixed>
+     */
+    private function withValuation(array $row, ?array $verdict, bool $labelOnly = false): array
+    {
+        $row['valuation'] = ($verdict['tier'] ?? null) === null
+            ? null
+            : ['tier' => $verdict['tier'], 'unstable' => (bool) ($verdict['unstable'] ?? false)];
+
+        if ($labelOnly) {
+            $row['label_only'] = true;
+        }
+
+        return $row;
+    }
+
+    /**
+     * CHG-0034: 'strong_good' only for a met health chip whose tone is strong_good.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    private function withStrength(array $row, ?string $tone): array
+    {
+        $row['strength'] = $row['status'] === 'met' && $tone === 'strong_good' ? 'strong_good' : null;
+
+        return $row;
     }
 
     /**
