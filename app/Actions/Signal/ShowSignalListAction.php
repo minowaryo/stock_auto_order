@@ -8,6 +8,7 @@ use App\Services\Analysis\BuySignalDeterminationService;
 use App\Services\Analysis\LowGrowthDeterminer;
 use App\Services\Analysis\SignalCriteriaEvaluator;
 use App\Services\Analysis\TakeProfitThresholdEvaluator;
+use App\Support\NisaHoldingStatus;
 use App\Support\SignalListSort;
 
 /**
@@ -146,6 +147,8 @@ class ShowSignalListAction
             'id' => $holding->id,
             'symbol_code' => $holding->symbol_code,
             'symbol_name' => $holding->symbol_name,
+            // CHG-0047: 銘柄セルのNISA保有区分バッジ（nisa_only / nisa_partial / null）。
+            'nisa_holding' => NisaHoldingStatus::fromAccountTypes($holdingSnapshot->accounts->pluck('account_type')),
             // CHG-0011: 評価額（保有数量 × 現在値）。US株の current_price は
             // 取込時に参考為替レートで円換算済みのため円建て。表示専用で
             // シグナル判定・対象抽出には使わない。

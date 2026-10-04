@@ -1,5 +1,21 @@
 # PLAN.md
 
+## 売買シグナル画面のNISA保有区分バッジ（CHG-0047）実装完了・mainマージ済み（2026-10-04）
+
+### Decision
+
+- 発端: CHG-0046でキープ表のNISAのみ銘柄（AAPL等）が利確対象外なのに黄表示になる点を報告。本人要望で、NISAのみ／一部NISAを銘柄セルに表示する
+- 本人判断（推奨案）: 4テーブルすべて・「NISAのみ」「NISA一部」の2種類（株数の内訳なし）・成長枠とつみたて枠は区別しない
+- 設計: 判定は純関数`App\Support\NisaHoldingStatus`に集約し、4つのActionが行に`nisa_holding`を追加。表示は`x-nisa-holding-badge`を共用。データは既存の`holding_snapshot_accounts`（DB変更なし）
+
+### Files touched
+
+`docs/product/use-cases.md`（UC-004業務ルール・承認記録）、`docs/product/ui-guidelines.md`、`docs/rcid/traceability-matrix.md`、`app/Support/NisaHoldingStatus.php`、`app/Actions/Signal/ShowSignalListAction.php`・`ShowBuySignalListAction.php`・`ShowLossReviewListAction.php`、`app/Actions/Portfolio/ShowHoldListAction.php`、`resources/views/components/nisa-holding-badge.blade.php`、`resources/views/livewire/signal/signal-list.blade.php`、`tests/Unit/Support/NisaHoldingStatusTest.php`、`tests/Feature/CHG0047SignalNisaBadgeTest.php`
+
+### Status
+
+Red 16件→Gate4承認→Green。フルスイート1226 passed・pint適用済み。本人指示（小さな変更のためコミット・マージ・pushまで一括可）でmainへ`--no-ff`マージ。ブランチ`feat/chg0047-nisa-badge`
+
 ## 売買判断の対ガチホ効果検証（CHG-0033・F-017／UC-017〜019・ADR-0024）Gate 1承認・Gate 2本文レビュー待ち（2026-10-04）
 
 ### Decision
@@ -189,6 +205,7 @@ Red 6件（失敗4・回帰ガード2）→Gate4承認（2026-10-03）→Green�
 - **Cycle4 Green完了（2026-10-01）**: `ShowConcentrationDashboardAction`（読み取り専用、13キー）、`ConcentrationDashboard`（Livewire、`/concentration-dashboard`、ナビのアクティブはセクター配分）、ビュー、`/sector-dashboard`上部のリンクを追加。Red 23件→Gate4承認→Green、フルスイート937 passed・pintクリーン。新しいTailwindクラスなし。空状態の文言「週足がそろった銘柄がありません。次回のCSV取込後に算出できます」はGate4で本人承認。ユーザーガイドにUC-015の見方を追加。- **実画面確認（`run`、2026-10-01）**: worktreeのコードをコンテナ内の`artisan serve`（8001番）で起動し、Playwright（コンテナ内、使い捨て）でログイン→`/sector-dashboard`のリンク→`/concentration-dashboard`を実データ（開発DB／複製DB）で確認。コンソールエラー0、ナビは6タブのまま。**テストで検出できない表示不具合を2点発見して修正**: ①相関行列の左端列が狭く銘柄名が1文字ずつ折り返され表が約1,800pxに伸びた→`whitespace-nowrap`＋左端固定（`sticky left-0`）で746pxに、②投資信託は銘柄コードと銘柄名が同一文字列で除外一覧に二重表示→同一なら1回だけ表示（新規Tailwindクラスなし、テスト23件は変更なしで通過）。SOXあり（複製DBに`^SOX`を投入）の状態も確認: ポートフォリオの対SOXベータ0.39、銘柄別MU 1.45・INPEX -0.33・AAPL 0.10。SOXなし（開発DB）は「取得不可（—）」表示。**注意**: `artisan serve`は環境変数`DB_DATABASE`ではなく`.env`を読むため、複製DBに向けるにはworktreeの`.env`を一時的に書き換える必要があった（確認後に復元）。開発DBの`sessions`に私のログインで5行入ったが削除済み。後片付け済み（8001のサーバー停止・Playwright一時ファイル・複製DB削除）。他セッション（CHG-0029）が`sector-dashboard.blade.php`の書式を変更中だが別の行で、マージは自動統合の見込み（マージ時に目視確認）。- **`/review`（強化レベル、スコア242、3観点並行＋私の再確認）対応（2026-10-01）**: 重大な欠陥なし（数式は直接計算と1e-13以内で一致）。指摘対応: ①Yahooクライアントは失敗時に例外でなく空配列を返すためSOX取得失敗が警告ログに出なかった→空の結果も警告ログ化（UC-015エラーケース・ADR-0019 D2に追記）、②計算対象2銘柄未満で`hidden_count`が1になり「算出不可」と矛盾→0に、③traceabilityの状態・クラス数の食い違い、ユーザーガイドの注記条件、列見出しの`scope="col"`、回帰ガード3件（定数系列・N=40>T=12の直接計算一致）を追加。見送り: 週足の全件モデル化（実測0.71秒・5クエリ・75MB）、行見出しのscope（ビルド済みCSSに無いクラスが必要）、絶対閾値1e-18（実データでは到達しない）。フルスイート968 passed・pintクリーン。- **mainへマージ・後片付け完了（2026-10-01）**: マージ前にmain（CHG-0029）を取り込み衝突なし（SOX取得とセクター分類が`FetchExternalMarketDataAction`内で両立）。メインディレクトリがCHG-0029のマージ作業中（`MERGE_HEAD`あり）だったため、コミットを待ってから実施。`main`にマージ（`c522d60`、`--no-ff`、`Merge-Check: required (score 247)`・`Review: enhanced`・`Tests: 989 passed`）。push未実施。`chg0026`のworktree・ローカルブランチ・専用テストDB`testing_chg0026`を削除。**開発DBに`sox`のマイグレーションを適用済み**（`index_name`は`enum('nikkei225','sp500','sox')`・NOT NULL、既存行は不変）。次回のCSV取込から`^SOX`の週足が保存され、集中度ダッシュボードの対SOXベータが数値になる（それまでは「取得不可（—）」）。
 - **今後の宿題**: ①候補N（エクスポージャー管理）は本機能で保存が始まるSOX週次系列を利用できる、②ENBの固有値上位が近い領域での不安定性（ADR-0019 Consequences）が気になる場合は最小ねじりベットを別ADRで検討、③`YahooFinanceChartClient`が失敗時に空配列を返す仕様はnikkei225/sp500でも無警告のまま（今回はSOXのみ空の結果をログ化）想定Cycle: ①enum拡張マイグレーション（単独コミット）＋SOXの取得・保存（失敗時の継続・`^SOX`の出来高を実データで確認）、②ウェイト・リターン行列（窓・除外、除外件数を実データで確認）・Jacobi法、③相関・PC1・ENB・ベータ・上位5銘柄（手計算できる小行列で固定、双対形とN×N直接計算の一致を回帰テスト）、④Action・Livewire・ビュー・ルート・リンク（Feature Test、`run`スキルで実画面確認）
 
+> 2026-10-04: CHG-0047作業時にPLAN.mdが300行を超えたため「売買シグナル画面へのキープ（hold）表の追加（CHG-0028）実装完了・mainマージ済み（2026-10-01）」エントリを`docs/history/plan-archive.md`へ退避（既知の懸念だった二重実行はCHG-0032で解消済み）。
 > 2026-10-04: CHG-0046のmainマージでPLAN.mdが300行を超えたため「売買シグナル画面の評価額ソート・整理検討の評価額列/列順統一（CHG-0027）実装完了・mainマージ済み（2026-10-01）」エントリを`docs/history/plan-archive.md`へ退避（実装完了・mainマージ済みと記載済み）。
 > 2026-10-01: CHG-0028作業時に「お気に入り未保有銘柄ウォッチリスト／新規投資候補画面の刷新（F-012・UC-012・ADR-0013・CHG-0014）」エントリを`docs/history/plan-archive.md`へ退避（実装完了・mainマージ済みと記載済み）。
 > 2026-10-01: CHG-0027作業時に「成長率算出バグの是正（CHG-0013・ADR-0012）＋押し目買いPEG下限バグ」エントリを`docs/history/plan-archive.md`へ退避（mainマージ済み確認）。
@@ -208,21 +225,6 @@ Red 6件（失敗4・回帰ガード2）→Gate4承認（2026-10-03）→Green�
 ### Status
 
 Red 19件（通過3件は回帰ガード）→Gate4承認→Green。フルスイート877 passed・pint適用済み。追加: マイグレーション`2026_10_01_000000`、`SectorClassificationResolver`、`sectors:backfill`、`FinnhubClient::fetchIndustry`。その後`/review`（強化レベル）で市場別の重複照合を修正（`2598490`）し、mainへマージ（`3c6e886`、`Merge-Check: required (score 72)`・`Review: enhanced`・`Tests: 879 passed`）。**未確認**: `sectors:backfill`を開発DBで実行済みか（実行すると米国株分の保有ごとにFinnhubを呼ぶ。記録なし）。（2026-10-03、Status記述をgit履歴で裏取りして更新）
-
-## 売買シグナル画面へのキープ（hold）表の追加（CHG-0028）実装完了・mainマージ済み（2026-10-01）
-
-### Decision
-
-- 本人要望: 売買シグナルにホールドも出す／既存3テーブルと同じ表形式で。`hold`はUC-013（F-013）の既存バケツで、現状はサマリーレポートの簡易表にしか出ていない
-- 本人判断（すべて推奨案）: `hold`のみ（`core_accumulation`除外）／列=銘柄・評価額・含み損益率・要観察・ヘルスライン・セクター／並びはCHG-0027の共通切替／`feat/chg0027-...`から`feat/chg0028-signal-hold-table`を分岐
-
-### Files touched
-
-`docs/product/use-cases.md`（UC-013業務ルール・承認記録）、`docs/rcid/traceability-matrix.md`、`docs/ai-context/module-map.md`、`app/Actions/Portfolio/ShowHoldListAction.php`（新規）、`ClassifyHoldingsAction`（`sector_name`追加）、`SignalList`、`signal-list.blade.php`、`tests/Feature/CHG0028SignalHoldTableTest.php`
-
-### Status
-
-Red 12件→Gate4承認→Green。フルスイート858 passed・pint適用済み・`/review`実施済み（HIGHなし）。既知の懸念（別CR候補）: 描画ごとに`ClassifyHoldingsAction`が3 Actionを二重実行する。CHG-0027と合わせてmainへマージ（`d41adf8`、`Merge-Check: required (score 67)`・`Review: enhanced`・`Tests: 858 passed`）。（2026-10-03、Status記述をgit履歴で裏取りして更新）
 
 ## エビデンス提言の取込とシグナル検証基盤（CHG-0020・ADR-0017・F-014・UC-014）Cycle1〜5 実装完了・mainマージ済み（2026-09-27〜10-03）
 

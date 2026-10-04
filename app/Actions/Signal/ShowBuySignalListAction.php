@@ -7,6 +7,7 @@ use App\Models\Snapshot;
 use App\Services\Analysis\FundamentalHealthEvaluator;
 use App\Services\Analysis\SignalCriteriaEvaluator;
 use App\Services\Portfolio\PortfolioEvaluationCalculator;
+use App\Support\NisaHoldingStatus;
 use App\Support\SignalListSort;
 
 /**
@@ -60,7 +61,7 @@ class ShowBuySignalListAction
 
         $allHoldingSnapshots = HoldingSnapshot::query()
             ->where('snapshot_id', $latestSnapshot->id)
-            ->with(['holding.fundamentalIndicator', 'holding.technicalIndicator', 'buySignals', 'signals'])
+            ->with(['holding.fundamentalIndicator', 'holding.technicalIndicator', 'buySignals', 'signals', 'accounts'])
             ->get();
 
         $portfolioTotal = $this->portfolioEvaluationCalculator->total($allHoldingSnapshots);
@@ -126,6 +127,8 @@ class ShowBuySignalListAction
         return [
             'symbol_code' => $holding->symbol_code,
             'symbol_name' => $holding->symbol_name,
+            // CHG-0047: 銘柄セルのNISA保有区分バッジ（nisa_only / nisa_partial / null）。
+            'nisa_holding' => NisaHoldingStatus::fromAccountTypes($holdingSnapshot->accounts->pluck('account_type')),
             'current_price' => $holdingSnapshot->current_price,
             // CHG-0011: 評価額（保有数量 × 現在値）。US株の current_price は
             // 取込時に参考為替レートで円換算済みのため円建て。表示専用。
