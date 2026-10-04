@@ -724,7 +724,7 @@
 | settlement_amount_jpy | decimal(15,2) | YES | null | 円の受渡金額（国内株、米国株の円決済） |
 | settlement_amount_usd | decimal(15,2) | YES | null | ドルの受渡金額（米国株のドル決済） |
 | fx_rate | decimal(10,4) | YES | null | CSVの為替レート（米国株） |
-| fee_amount | decimal(15,2) | YES | null | 手数料・諸費用の合計（`price_currency` 建て） |
+| fee_amount | decimal(15,2) | YES | null | CSVの手数料列の値（`price_currency` 建て。「-」は null）。国内株の「税金等」（手数料にかかる消費税）と「諸費用」は含めない（2026-10-04実データでは諸費用は全行0、税金等は手数料がある58行で非0）。費用を含めた金額が要るときは、手数料込みの受渡金額から求める |
 | content_hash | char(64) | NO | - | 正規化した行内容のSHA-256（ファイル名・行番号を含めない）。正規化は、各列の前後の空白除去、数値の桁区切り・小数末尾の0の除去、日付の `Y-m-d` 統一とし、同じ約定が書式の揺れで別行にならないようにする（Gate 4でテスト） |
 | occurrence_index | smallint unsigned | NO | - | 同じファイル内で同一 `content_hash` の何番目の出現か（1始まり） |
 | source_row | json | NO | - | 元行（列名→値）。監査・再解析用 |
