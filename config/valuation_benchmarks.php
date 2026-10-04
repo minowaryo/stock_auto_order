@@ -7,7 +7,7 @@
 
 return [
     'jp' => [
-        'as_of' => '2026-09（JPX月次統計 基準日2026-09末）',
+        'as_of' => '2026-09',
         'source' => 'JPX 月次統計（東証17業種、プライム・連結、加重）。17業種は33業種の公式値を純利益・純資産で加重集計した再計算値',
         'per' => [
             '食品' => ['value' => 23.5, 'confidence' => 'high'],
@@ -49,7 +49,7 @@ return [
         ],
     ],
     'us' => [
-        'as_of' => '2026-01-05（Damodaran基準日）/ 2026-10-01（SPDR ETF）',
+        'as_of' => '2026-01〜2026-10',
         'source' => 'Damodaran（NYU Stern）業種別データと SPDR 業種ETF の実績P/Eの相加平均',
         'per' => [
             'Semiconductors' => ['value' => 44.8, 'confidence' => 'high'],
