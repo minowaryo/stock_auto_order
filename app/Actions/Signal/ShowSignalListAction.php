@@ -5,6 +5,7 @@ namespace App\Actions\Signal;
 use App\Models\HoldingSnapshot;
 use App\Models\Snapshot;
 use App\Services\Analysis\BuySignalDeterminationService;
+use App\Services\Analysis\CriteriaValuationMetricsBuilder;
 use App\Services\Analysis\LowGrowthDeterminer;
 use App\Services\Analysis\SignalCriteriaEvaluator;
 use App\Services\Analysis\TakeProfitThresholdEvaluator;
@@ -26,6 +27,7 @@ class ShowSignalListAction
     public function __construct(
         private readonly TakeProfitThresholdEvaluator $takeProfitThresholdEvaluator,
         private readonly SignalCriteriaEvaluator $criteriaEvaluator,
+        private readonly CriteriaValuationMetricsBuilder $valuationMetrics,
         private readonly LowGrowthDeterminer $lowGrowthDeterminer,
     ) {}
 
@@ -60,7 +62,7 @@ class ShowSignalListAction
                     ->orWhereHas('accounts', fn ($accounts) => $accounts
                         ->whereIn('account_type', ['specific', 'general']));
             })
-            ->with(['holding', 'holding.fundamentalIndicator', 'holding.technicalIndicator', 'signals', 'accounts'])
+            ->with(['holding', 'holding.sectorClassification', 'holding.fundamentalIndicator', 'holding.technicalIndicator', 'signals', 'accounts'])
             ->get();
 
         $rows = $holdingSnapshots
@@ -234,6 +236,7 @@ class ShowSignalListAction
             'operating_margin' => $fundamentalIndicator?->operating_margin !== null ? (float) $fundamentalIndicator->operating_margin : null,
             'per' => $fundamentalIndicator?->per !== null ? (float) $fundamentalIndicator->per : null,
             'pbr' => $fundamentalIndicator?->pbr !== null ? (float) $fundamentalIndicator->pbr : null,
+            ...$this->valuationMetrics->build($holding->market, $holding->sectorClassification?->name, $fundamentalIndicator),
         ];
     }
 

@@ -4,6 +4,7 @@ namespace App\Actions\Portfolio;
 
 use App\Models\HoldingSnapshot;
 use App\Models\Snapshot;
+use App\Services\Analysis\CriteriaValuationMetricsBuilder;
 use App\Services\Analysis\FundamentalHealthEvaluator;
 use App\Services\Analysis\SignalCriteriaEvaluator;
 use App\Services\Analysis\TakeProfitThresholdEvaluator;
@@ -23,6 +24,7 @@ class ShowHoldListAction
     public function __construct(
         private readonly ClassifyHoldingsAction $classifyHoldingsAction,
         private readonly SignalCriteriaEvaluator $criteriaEvaluator,
+        private readonly CriteriaValuationMetricsBuilder $valuationMetrics,
         private readonly FundamentalHealthEvaluator $fundamentalHealthEvaluator,
         private readonly TakeProfitThresholdEvaluator $takeProfitThresholdEvaluator,
     ) {}
@@ -67,7 +69,7 @@ class ShowHoldListAction
         $snapshotsByKey = HoldingSnapshot::query()
             ->where('snapshot_id', $latestSnapshot?->id)
             ->whereHas('holding', fn ($query) => $query->whereIn('symbol_code', array_column($holdings, 'symbol_code')))
-            ->with(['holding.fundamentalIndicator', 'holding.technicalIndicator', 'signals', 'accounts'])
+            ->with(['holding.sectorClassification', 'holding.fundamentalIndicator', 'holding.technicalIndicator', 'signals', 'accounts'])
             ->get()
             ->keyBy(fn (HoldingSnapshot $hs) => $hs->holding->market.':'.$hs->holding->symbol_code);
 
@@ -150,6 +152,7 @@ class ShowHoldListAction
             'revenue_growth' => $revenueGrowth,
             'operating_income_growth' => $operatingIncomeGrowth,
             'operating_margin' => $operatingMargin,
+            ...$this->valuationMetrics->build($holding->market, $holding->sectorClassification?->name, $fundamentalIndicator),
         ]);
 
         return [

@@ -4,6 +4,7 @@ namespace App\Actions\Signal;
 
 use App\Models\HoldingSnapshot;
 use App\Models\Snapshot;
+use App\Services\Analysis\CriteriaValuationMetricsBuilder;
 use App\Services\Analysis\FundamentalHealthEvaluator;
 use App\Services\Analysis\LossReviewThresholds;
 use App\Services\Analysis\SignalCriteriaEvaluator;
@@ -30,6 +31,7 @@ class ShowLossReviewListAction
         private readonly FundamentalHealthEvaluator $evaluator,
         private readonly PortfolioEvaluationCalculator $portfolioEvaluationCalculator,
         private readonly SignalCriteriaEvaluator $criteriaEvaluator,
+        private readonly CriteriaValuationMetricsBuilder $valuationMetrics,
         private readonly ContinuousHoldingWeeksCalculator $continuousHoldingWeeksCalculator,
     ) {}
 
@@ -55,7 +57,7 @@ class ShowLossReviewListAction
 
         $allHoldingSnapshots = HoldingSnapshot::query()
             ->where('snapshot_id', $latestSnapshot->id)
-            ->with(['holding.fundamentalIndicator', 'holding.technicalIndicator', 'buySignals', 'accounts'])
+            ->with(['holding.sectorClassification', 'holding.fundamentalIndicator', 'holding.technicalIndicator', 'buySignals', 'accounts'])
             ->get();
 
         $portfolioTotal = $this->portfolioEvaluationCalculator->total($allHoldingSnapshots);
@@ -161,6 +163,7 @@ class ShowLossReviewListAction
             'operating_margin' => $operatingMargin,
             'per' => $fundamentalIndicator?->per !== null ? (float) $fundamentalIndicator->per : null,
             'pbr' => $fundamentalIndicator?->pbr !== null ? (float) $fundamentalIndicator->pbr : null,
+            ...$this->valuationMetrics->build($holding->market, $holding->sectorClassification?->name, $fundamentalIndicator),
         ]);
 
         $portfolioLossShare = $portfolioTotal > 0.0
