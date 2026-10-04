@@ -5,6 +5,21 @@
 
 
 
+## 新規投資候補の並び順で財務健全性を先頭キーに（CHG-0045・ADR-0013 D4追補）Green完了（2026-10-04）
+
+### Decision
+
+- 本人要望「新規投資候補もおすすめ順で」。調査の結果、UC-012は既に透明マルチキーで並んでいたが、先頭キーが押し目シグナル件数のため財務基準割れ（シグナル2件）が財務健全（シグナル1件）より上に来ていた
+- 本人判断（AskUserQuestion）: 財務を先頭キーにする（①財務 passed→unavailable→failed ②シグナル件数 ③④は不変）。UC-013の`new_entry`参考リストも同じActionのため同じ並び
+
+### Files touched
+
+`app/Actions/Watchlist/ShowWatchlistAction.php`、`tests/Feature/UC012WatchlistScreenTest.php`（新規1件・既存テスト名更新・ヘルパーの`range(1, 0)`バグ修正）、`docs/product/use-cases.md`、`docs/adr/ADR-0013-*.md`（D4追補）、`docs/adr/ADR-0014-*.md`、`docs/architecture/data-model.md`、`docs/rcid/traceability-matrix.md`
+
+### Status
+
+Red 1件→Gate4承認→Green。フルスイート1178 passed・pint適用済み。開発DB（未保有105銘柄）で財務failedの先頭位置が1位→58位に下がることを確認。ブランチ`feat/chg0045-watchlist-sort-fundamental-first`（worktree `.claude/worktrees/chg0045`）、未コミット
+
 ## ウォッチリスト銘柄のセクター分類（CHG-0044・ADR-0020追補）Green完了（2026-10-03）
 
 ### Decision
