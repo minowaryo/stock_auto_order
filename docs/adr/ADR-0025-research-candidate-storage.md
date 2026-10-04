@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed（2026-10-04、CHG-0031 Gate 3叩き台）。UC-016・UC-012受け渡しはGate 2承認済み（2026-10-04）。本ADRとdata-model.mdの該当節が本人承認されるまでマイグレーション・実装に着手しない。
+Accepted（2026-10-04、本人が「Ｇａｔｅ３承認でよい」と明示）。CHG-0031のUC-016・UC-012受け渡しはGate 2承認済み。同日のGate 3承認対象は本ADRとdata-model.mdの`research_*`節の保存設計。情報源固有の自動取得とGate 4テストケースは未承認。
 
 ## Date
 
