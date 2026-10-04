@@ -62,9 +62,11 @@ final class ValuationBenchmarkJudge
             return $none('confidence_none', $entry);
         }
 
-        // Round to the displayed digit before comparing so the color never
-        // contradicts the number on screen (ADR-0023 D3, same as ADR-0021 D2).
-        $benchmark = round((float) $entry['value'], 1);
+        // Round the value to the displayed digit before comparing so the color
+        // never contradicts the number on screen (ADR-0023 D3, same as
+        // ADR-0021 D2). The benchmark is used as listed (PBR benchmarks carry
+        // two decimals; rounding 0.74 to 0.7 would waste the precision).
+        $benchmark = (float) $entry['value'];
         $ratio = round(round($value, 1) / $benchmark, 2);
 
         $tier = $this->tierFor($ratio);
@@ -108,7 +110,7 @@ final class ValuationBenchmarkJudge
             return null;
         }
 
-        return round(round((float) $entry['value'], 1) * self::BUY_PER_RATIO, 1);
+        return round((float) $entry['value'] * self::BUY_PER_RATIO, 1);
     }
 
     /**
