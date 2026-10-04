@@ -40,7 +40,7 @@ final class ValuationBenchmarkJudge
         $none = fn (string $reason, ?array $entry = null): array => [
             'tier' => null,
             'ratio' => null,
-            'benchmark' => $entry === null ? null : round((float) $entry['value'], 1),
+            'benchmark' => isset($entry['value']) ? (float) $entry['value'] : null,
             'confidence' => $entry['confidence'] ?? null,
             'unstable' => false,
             'as_of' => $asOf,

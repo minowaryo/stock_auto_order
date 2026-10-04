@@ -278,3 +278,42 @@ test('UC-010: PERがnull・0以下（赤字）は買い増しのPER条件を満�
 
     expect($verdict['met'])->toBeFalse()->and($verdict['basis'])->toBe($basis);
 })->with('vbjBuyVerdictInvalidPer');
+
+test('UC-003: 基準値が null の対象外業種（信頼度none）は、判定なしの benchmark を 0.0 にせず null で返す', function () {
+    // Arrange: the real config lists US Automobiles etc. as value null / confidence none.
+    $judge = new ValuationBenchmarkJudge([
+        'us' => [
+            'as_of' => '2026-01',
+            'source' => 'test',
+            'per' => ['Automobiles' => ['value' => null, 'confidence' => 'none']],
+            'pbr' => [],
+        ],
+    ]);
+
+    // Act
+    $result = $judge->judge('per', 30.0, 'us', 'Automobiles');
+
+    // Assert
+    expect($result['tier'])->toBeNull()
+        ->and($result['reason'])->toBe('confidence_none')
+        ->and($result['benchmark'])->toBeNull();
+});
+
+test('UC-003: 判定なしでも基準値は表の桁のまま返す（PBR 1.86 を 1.9 に丸めない）', function () {
+    // Arrange
+    $judge = new ValuationBenchmarkJudge([
+        'jp' => [
+            'as_of' => '2026-09',
+            'source' => 'test',
+            'per' => [],
+            'pbr' => ['対象外' => ['value' => 1.86, 'confidence' => 'none']],
+        ],
+    ]);
+
+    // Act
+    $result = $judge->judge('pbr', 1.0, 'jp', '対象外');
+
+    // Assert
+    expect($result['reason'])->toBe('confidence_none')
+        ->and($result['benchmark'])->toBe(1.86);
+});
