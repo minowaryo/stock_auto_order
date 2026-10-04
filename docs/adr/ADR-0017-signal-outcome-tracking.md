@@ -40,8 +40,14 @@ Accepted（2026-09-27、Gate 1〜3 本人承認。D8の画面配置は新ルー�
 
 - `weekly_prices`: `holding_id` × `week_date` で UNIQUE。`close`・`volume` を保存
 - `index_weekly_prices`: `index_name`（nikkei225 / sp500）× `week_date` で UNIQUE。`close` を保存
-- `FetchExternalMarketDataAction`（保有銘柄）・`RefreshWatchlistMarketDataAction`（未保有ウォッチリスト銘柄）が**既に取得している**104週系列を UPSERT するだけ。新規の外部APIコールは発生しない
+- CHG-0020当初の対象では、`FetchExternalMarketDataAction`（保有銘柄）・`RefreshWatchlistMarketDataAction`（未保有ウォッチリスト銘柄）が**既に取得している**104週系列を UPSERT するだけ。新規の外部APIコールは発生しない
 - 取得のたびに系列全体を UPSERT（既存行も上書き）する。Yahoo 側で遡及調整が入った場合も、直近104週の範囲は常に最新の調整に揃う
+
+#### D2 改訂方針: 非保有銘柄の継続取得をF-017と共用（2026-10-04、CHG-0033）
+
+本人指示により、保有・ウォッチリストから外れた売却済み銘柄と、`signal_occurrences` に直近26週以内の発生記録がある銘柄をF-017の共通追跡に含める。最終売却+26週と最後の発生（`observed_week`）+26週の遅いほうの終点週が確定し、取得・保存するまで追跡する。既存取得に含まれない銘柄は週1回の追加APIコールを認めるため、「新規の外部APIコールは発生しない」という前提をこの範囲で部分改訂する。
+
+保存は引き続き `WeeklyPriceRecorder::recordHolding` による104週系列の `weekly_prices` へのUPSERTを共用する。詳細・取得数の見積もり・終了条件は [ADR-0024](ADR-0024-trade-and-signal-price-tracking.md)（Proposed）に記録。本文の追記はF-017側が担当済み。Gate 2〜4と追跡実装は未完了であり、UC-014の判定ロジック・画面・閾値は本改訂の対象に含めない。
 
 ### D3 シグナル発生記録 `signal_occurrences`
 

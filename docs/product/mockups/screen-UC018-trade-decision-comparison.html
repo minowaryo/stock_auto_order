@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ja">
+<head><meta charset="UTF-8"><title>裁量売買の対ガチホ比較と判断記録 | ポートフォリオ管理</title><link rel="stylesheet" href="_shared.css"></head>
+<body>
+<header class="app-header"><div class="logo">📊 ポートフォリオ管理</div><nav class="app-nav" aria-label="主な画面">
+  <a href="screen-UC002-holding-list.html">保有一覧</a><a href="screen-UC004-signal-list.html" class="active">売買シグナル</a><a href="screen-UC005-sector-dashboard.html">セクター配分</a><a href="screen-UC006-candidate-check.html">新規投資候補</a><a href="screen-UC001-csv-import.html">CSV取込</a><a href="screen-UC009-summary-report.html">サマリーレポート</a>
+</nav></header>
+<main class="app-main">
+  <p class="page-caption"><a href="screen-UC004-signal-list.html">売買シグナル</a> / 売買結果（配置案・Gate 2レビュー用）</p>
+  <h1>裁量売買の対ガチホ比較と判断記録</h1>
+  <p class="page-caption">判断時の記録と、週次CSVから照合した実際の約定を結び付けます。例はすべて架空データです。</p>
+  <p><a class="btn btn-secondary" href="screen-UC019-decision-pattern-review.html">理由別の振り返りを見る →</a></p>
+  <section class="card">
+    <h2>売買判断を記録 <span class="badge badge-warning">判断時点に入力</span></h2>
+    <div class="grid-2col">
+      <div class="form-group"><label for="symbol">銘柄 *</label><input id="symbol" type="text" value="架空銘柄C"></div>
+      <div class="form-group"><label for="direction">売買方向 *</label><select id="direction"><option>買付</option><option>売却</option></select></div>
+    </div>
+    <div class="form-group"><label for="reason">判断理由 *</label><textarea id="reason">業績の見通しと既存保有との比較から購入を検討</textarea></div>
+    <div class="grid-2col">
+      <div class="form-group"><label for="indicator">判断時に見た指標・シグナル</label><input id="indicator" type="text" value="売上成長率、相対力"></div>
+      <div class="form-group"><label for="alternative">買わなかった場合の代替先</label><select id="alternative"><option>既存の積立先</option><option>別銘柄</option><option>指数連動商品</option><option>現金待機</option><option>不明</option></select></div>
+    </div>
+    <p class="text-secondary">週次の履歴CSVが届いた後、該当約定と紐付けます。過去の理由を後から入力した場合は「遡及」と明示します。</p>
+    <button class="btn btn-primary" type="button">判断を記録</button>
+  </section>
+  <section class="card">
+    <h2>売却判断の比較例 <span class="badge badge-neutral">ダミーデータ</span></h2>
+    <p>架空銘柄A / 売付2株 / 判断区分 <span class="badge badge-warning">裁量</span> / 比較相手「売らずに2株保有」</p>
+    <table><thead><tr><th>評価時点</th><th>売却代金を現金保持</th><th>保有継続の仮想評価額</th><th>売却の差額</th><th>状態</th></tr></thead><tbody>
+      <tr><td>+4週</td><td>¥20,000</td><td>¥18,000</td><td class="text-success">+¥2,000</td><td><span class="badge badge-success">比較可能</span></td></tr>
+      <tr><td>+13週</td><td>¥20,000</td><td>¥22,000</td><td class="text-danger">−¥2,000</td><td><span class="badge badge-success">比較可能</span></td></tr>
+      <tr><td>+26週</td><td>—</td><td>—</td><td>—</td><td><span class="badge badge-neutral">結果待ち</span></td></tr>
+    </tbody></table>
+    <p class="text-secondary">価格・売買コストベース。配当、金利、譲渡益税は含みません。評価日・株価・為替の出典を詳細画面で確認します。</p>
+  </section>
+  <section class="card">
+    <h2>比較できない例</h2>
+    <table><thead><tr><th>取引</th><th>判断区分</th><th>主比較</th><th>理由</th></tr></thead><tbody>
+      <tr><td>架空銘柄D / 買付</td><td>不明</td><td>算出不可</td><td>判断時点の代替先が未記録。指数との比較は参考値のみ</td></tr>
+      <tr><td>架空銘柄E / 売付</td><td>不明</td><td>参考表示のみ</td><td>売却後の保有継続との差は表示可能。理由別集計には含めない</td></tr>
+      <tr><td>架空銘柄F / 売付</td><td>裁量</td><td>算出不可</td><td>銘柄コード変更後の株価を確認中</td></tr>
+    </tbody></table>
+  </section>
+</main>
+</body>
+</html>
