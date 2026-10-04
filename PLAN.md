@@ -1,5 +1,21 @@
 # PLAN.md
 
+## 売買シグナル画面などへの業種比較の色付けの展開と買い増し判定のPER基準の業種相対化（CHG-0048・ADR-0026）Gate 2承認済み・実装着手待ち（2026-10-04）
+
+### Decision
+
+- 発端: 本人から「整理検討以外のすべての表に反映。整理検討はラベル文字のみ」「買い増し候補のPER≦15は判定基準なので判定にも反映が妥当では」（2026-10-04）
+- 設計（ADR-0026）: 利確検討・買い増し候補・キープ・ウォッチリストのPER・PBRチップに業種比較の色とラベル、整理検討はラベルのみ。買い増し判定のPER条件を、信頼度が高・中の業種で比率0.80未満に置き換え、それ以外は従来の≦15（試算: 174件中の該当36→42件、変化8件）。財務チップの二段階も整理検討以外に展開。保有一覧・銘柄詳細はCHG-0034（Gate 2承認済み）と同じサイクルで実装
+- 注意: 判定の変更は2026-09-27の「実測が先」の決定を本人の指示で先に進めるもの。実測用の記録（判定に使った基準・段階をシグナル発生記録に保存）は後続CR
+
+### Files touched
+
+`docs/adr/ADR-0026-*.md`（新規）、`docs/adr/ADR-0015-*.md`・`ADR-0016-*.md`（注記）、`docs/product/use-cases.md`（UC-004・UC-010・UC-011・UC-012・UC-013・承認記録）、`docs/rcid/traceability-matrix.md`（CHG-0048）。コードは未着手
+
+### Status
+
+ドキュメントのみ作成（ブランチ`docs/chg0048-valuation-color-all-tables`）。use-cases.mdは**Gate 2承認済み（2026-10-04）**。次は`/tdd`でCHG-0034と一緒に実装。実装前に、基準値の主要な値（特にETF側）を公式ページで目視確認する（CHG-0034の宿題）。`BuySignalDeterminationService`が市場・業種を受け取る変更が要る
+
 ## 売買シグナル画面のNISA保有区分バッジ（CHG-0047）実装完了・mainマージ済み（2026-10-04）
 
 ### Decision
@@ -121,7 +137,7 @@ Red 1件→Gate4承認→Green。フルスイート1178 passed・pint適用済�
 
 Red 28件→Gate4承認（2026-10-04）→Green。フルスイート1205 passed・pint適用済み。worktreeを8046番で起動し実ブラウザで表示確認済み（キープ59銘柄・黄/緑チップ描画、ヘッダー横スクロール同期OK）。`/review`（強化、スコア58）指摘2件を修正: 含み益率の利確ラインを利確検討と同じ`TakeProfitThresholdEvaluator`に揃える（高水準モード+150%。実データ6098が誤って黄だった）／分類と拡充の間に取り込みが重なり行が見つからない場合に画面が500になる経路を既定行で回避。Red 3件→Gate4承認→Green、フルスイート1209 passed。再`/review`（8ff7357）後にmainへ--no-ffマージ。ブランチ`feat/chg0046-hold-table-rich-columns`（worktree `.claude/worktrees/chg0046`）
 
-## ウォッチリスト銘柄のセクター分類（CHG-0044・ADR-0020追補）Green完了（2026-10-03）
+## ウォッチリスト銘柄のセクター分類（CHG-0044・ADR-0020追補）Green完了・mainマージ済み（2026-10-03〜10-04）
 
 ### Decision
 
@@ -134,6 +150,8 @@ Red 28件→Gate4承認（2026-10-04）→Green。フルスイート1205 passed�
 `docs/adr/ADR-0020-*.md`（追補）、`docs/product/use-cases.md`（UC-012フロー・承認記録）、`app/Actions/Watchlist/RefreshWatchlistMarketDataAction.php`、`app/Console/Commands/BackfillSectorsCommand.php`、`app/Services/Sector/SectorClassificationResolver.php`、`tests/Feature/CHG0044WatchlistSectorClassificationTest.php`
 
 ### Status
+
+Red 8件（3件は回帰ガード）→Gate4承認→Green。フルスイート1070 passed・pint適用済み。分類ロジックは`SectorClassificationResolver::classify()`に集約（一括更新・`sectors:backfill`が共用）。mainにマージ済み（`9b61d75`）。`sectors:backfill`を実データで実行した（2026-10-04）: 対象は未分類の6件（米国ETF5件〔HDV・SPYD・VYM・QQQ・VTI〕とBRK B）で、分類できたのは0件。日本株は実行前に全件分類済みだった。残り6件は本人判断で当面対応不要（ETFはB案で対象外、BRK Bは銘柄コードの表記〔半角スペース〕が原因の可能性があるが未調査）。**未実施**: `/review`
 
 Red 8件（3件は回帰ガード）→Gate4承認→Green。フルスイート1070 passed・pint適用済み。分類ロジックは`SectorClassificationResolver::classify()`に集約（一括更新・`sectors:backfill`が共用）。**未実施**: `/review`、`sectors:backfill`の実データ実行、コミット。worktree: `.claude/worktrees/chg0044`（Vite成果物`public/build`と`vendor`のハードリンクコピーを手で持ち込んで実行。コミット対象外）
 
@@ -209,22 +227,6 @@ Red 6件（失敗4・回帰ガード2）→Gate4承認（2026-10-03）→Green�
 > 2026-10-04: CHG-0046のmainマージでPLAN.mdが300行を超えたため「売買シグナル画面の評価額ソート・整理検討の評価額列/列順統一（CHG-0027）実装完了・mainマージ済み（2026-10-01）」エントリを`docs/history/plan-archive.md`へ退避（実装完了・mainマージ済みと記載済み）。
 > 2026-10-01: CHG-0028作業時に「お気に入り未保有銘柄ウォッチリスト／新規投資候補画面の刷新（F-012・UC-012・ADR-0013・CHG-0014）」エントリを`docs/history/plan-archive.md`へ退避（実装完了・mainマージ済みと記載済み）。
 > 2026-10-01: CHG-0027作業時に「成長率算出バグの是正（CHG-0013・ADR-0012）＋押し目買いPEG下限バグ」エントリを`docs/history/plan-archive.md`へ退避（mainマージ済み確認）。
-
-## 米国株・投資信託のセクター分類と市場別・金額付き表示（CHG-0029・ADR-0020）実装完了・mainマージ済み（2026-10-01）
-
-### Decision
-
-- 発端: セクター配分の「未分類」が評価額の約73%（米国株約978万円・投信約157万円。日本株は最新スナップショットで全件分類済み）で常時「偏り警告」。米国株・投信にはセクター取得処理が存在しない
-- 本人判断: 米国株=Finnhub業種／投信=専用カテゴリで進める。追加要望: 米国と日本株を区別／合計額も表示／構成比は小数1桁（最後の1つは実装済み・未コミット）
-- 設計（ADR-0020）: `sector_classifications.market`追加・一意制約を`(market,name)`へ、`FinnhubClient::fetchIndustry()`、表示は市場別＋評価額＋市場小計＋全体合計、既存分は`sectors:backfill`
-
-### Files touched
-
-`docs/adr/ADR-0020-*.md`（新規）、`docs/product/use-cases.md`（UC-005・承認記録=承認待ち）、`docs/architecture/data-model.md`（`sector_classifications`）、`resources/views/livewire/sector/sector-dashboard.blade.php`（小数1桁のみ）
-
-### Status
-
-Red 19件（通過3件は回帰ガード）→Gate4承認→Green。フルスイート877 passed・pint適用済み。追加: マイグレーション`2026_10_01_000000`、`SectorClassificationResolver`、`sectors:backfill`、`FinnhubClient::fetchIndustry`。その後`/review`（強化レベル）で市場別の重複照合を修正（`2598490`）し、mainへマージ（`3c6e886`、`Merge-Check: required (score 72)`・`Review: enhanced`・`Tests: 879 passed`）。**未確認**: `sectors:backfill`を開発DBで実行済みか（実行すると米国株分の保有ごとにFinnhubを呼ぶ。記録なし）。（2026-10-03、Status記述をgit履歴で裏取りして更新）
 
 ## エビデンス提言の取込とシグナル検証基盤（CHG-0020・ADR-0017・F-014・UC-014）Cycle1〜5 実装完了・mainマージ済み（2026-09-27〜10-03）
 
