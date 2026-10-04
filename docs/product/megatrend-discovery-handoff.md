@@ -20,7 +20,7 @@
 | 情報源の品質 | **未検証**。4週試行 2026-10-05〜11-01、再精査は2026-11-02以降 | `source-pilot-log.md`、PLAN.md |
 | Gate 4・実装 | 未着手。featureブランチなし | — |
 
-mainはorigin/mainへpush済み（2026-10-04）。
+Gitの反映状況は変動するため、再開時に `git log` と `git status` で main・origin/main・作業ブランチを確認する。
 
 ## 3. 決まっている方針
 

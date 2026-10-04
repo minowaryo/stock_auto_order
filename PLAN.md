@@ -59,7 +59,7 @@ Red 16件→Gate4承認→Green。フルスイート1226 passed・pint適用済�
 
 ### Decision
 
-- 本人が2026-10-03に「承認、Gate1の品質の件はPlan等に残しておいて。Mockは今回は不要」と指示。Gate 1草案を正式要件F-016へ反映。今回のGate 2はUC本文でレビューし、モックを省略する。Gate 2〜4の承認とは扱わない。
+- 本人が2026-10-03に「承認、Gate1の品質の件はPlan等に残しておいて。Mockは今回は不要」と指示。Gate 1草案を正式要件F-016へ反映。今回のGate 2はUC本文でレビューし、モックを省略する。この時点ではGate 2〜4の承認とは扱わなかった。
 - 未登録の日米上場企業の発見を目的とし、情報源の正確さ・裏付けやすさ・発見への有用性は4週試行後に再精査する。Gate 1承認によって情報源の採否や自動取得範囲を固定しない。
 - 2026-10-04 本人がUC-016とUC-012への受け渡し差分をGate 2承認。UC-012本文へ統合済み。
 - 2026-10-04 Gate 3叩き台: [ADR-0025](docs/adr/ADR-0025-research-candidate-storage.md)と`data-model.md`の`research_*`節。調査記録は専用8テーブルに分け、未同定の企業では`holdings`を作らない。ウォッチリストの登録経路は`watchlist_items.source`ではなく`last_seen_in_csv_at`と受け渡し履歴から導く（CSV再取込で`source`が上書きされ、調査経路が消えるため）。既存テーブルのスキーマ変更なし。
@@ -68,7 +68,7 @@ Red 16件→Gate4承認→Green。フルスイート1226 passed・pint適用済�
 
 ### Files touched
 
-`docs/product/requirements.md`、`docs/product/use-cases.md`（UC-016・UC-012統合・承認記録）、`docs/architecture/data-model.md`（`research_*`節）、`docs/adr/ADR-0025-research-candidate-storage.md`、`docs/product/megatrend-discovery-gate1-requirements-draft.md`、`docs/product/megatrend-discovery-change-proposal.md`、`docs/product/megatrend-source-selection.md`、`docs/adr/ADR-0022-megatrend-source-radar.md`、`docs/rcid/traceability-matrix.md`、`PLAN.md`。
+`docs/product/requirements.md`、`docs/product/use-cases.md`（UC-016・UC-012統合・承認記録）、`docs/product/megatrend-discovery-handoff.md`、`docs/architecture/data-model.md`（`research_*`節）、`docs/adr/ADR-0025-research-candidate-storage.md`、`docs/product/megatrend-discovery-gate1-requirements-draft.md`、`docs/product/megatrend-discovery-change-proposal.md`、`docs/product/megatrend-source-selection.md`、`docs/adr/ADR-0022-megatrend-source-radar.md`、`docs/rcid/traceability-matrix.md`、`PLAN.md`。
 
 ### Status
 
