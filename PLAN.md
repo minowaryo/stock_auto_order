@@ -5,6 +5,23 @@
 
 
 
+## 売買シグナル画面キープ表の列拡充（CHG-0046）Green完了・コミット待ち（2026-10-04）
+
+### Decision
+
+- 発端: キープ表が6列（ヘルスラインは1行の文字列）のみで、他3テーブルの指標・色分けが見られない。本人要望で他テーブルと同じ指標（PER/PBR・財務含む）を列に分けて色付き表示する
+- ファンダメンタルズは既存データで表示可能（実データ59銘柄中ROE 40・PER 43件。nullはJ-Quantsの本決算のみ開示項目・ETF〔VYM/HDV/SPYDがstock登録〕・未取得6324による。ETF登録の件は別件として報告のみ）
+- 本人判断（推奨案）: テクニカルは利確・買い増しの既存閾値の両方に照らし利確寄り＝黄／押し目寄り＝緑。PER/PBRは値のみ（業種比較色はCHG-0034後）。ヘルスライン列は廃止
+- 設計: `SignalCriteriaEvaluator::evaluateHold()`を追加。行の拡充は`ShowHoldListAction`側（`ClassifyHoldingsAction`の出力・JSON APIは不変）
+
+### Files touched
+
+`docs/product/use-cases.md`（UC-013業務ルール・承認記録）、`docs/product/ui-guidelines.md`、`docs/rcid/traceability-matrix.md`、`app/Services/Analysis/SignalCriteriaEvaluator.php`（`evaluateHold()`）、`app/Actions/Portfolio/ShowHoldListAction.php`、`app/Actions/Portfolio/ClassifyHoldingsAction.php`（`HOLD_WATCH_GAIN_RATE_BUFFER`をpublic化のみ）、`resources/views/livewire/signal/signal-list.blade.php`、`resources/views/components/criteria-chip.blade.php`、`resources/views/components/signal-table-head.blade.php`、`tests/Unit/Services/Analysis/SignalCriteriaEvaluatorHoldTest.php`、`tests/Feature/CHG0046HoldTableRichColumnsTest.php`、`tests/Feature/CHG0028SignalHoldTableTest.php`
+
+### Status
+
+Red 28件→Gate4承認（2026-10-04）→Green。フルスイート1205 passed・pint適用済み。worktreeを8046番で起動し実ブラウザで表示確認済み（キープ59銘柄・黄/緑チップ描画、ヘッダー横スクロール同期OK）。次: `/commit`→`/review`→`prepare-merge`。ブランチ`feat/chg0046-hold-table-rich-columns`（worktree `.claude/worktrees/chg0046`）
+
 ## ウォッチリスト銘柄のセクター分類（CHG-0044・ADR-0020追補）Green完了（2026-10-03）
 
 ### Decision

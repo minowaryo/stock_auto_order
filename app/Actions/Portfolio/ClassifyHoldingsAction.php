@@ -42,7 +42,7 @@ class ClassifyHoldingsAction
      * hold_watch 判定 (c) の叩き台バッファ境界（ADR-0014 D5、data-model.md
      * 「未確定」）: 整理検討ライン(-20%)の手前、レンジ上限の-15.0%以下。
      */
-    private const HOLD_WATCH_GAIN_RATE_BUFFER = -15.0;
+    public const HOLD_WATCH_GAIN_RATE_BUFFER = -15.0;
 
     public function __construct(
         private readonly ShowSignalListAction $showSignalListAction,
