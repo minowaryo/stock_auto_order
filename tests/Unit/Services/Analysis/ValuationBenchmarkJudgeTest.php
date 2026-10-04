@@ -155,14 +155,126 @@ test('UC-010: 買い増し基準PERは米国株highでも0.8倍(小数1桁)に�
     expect(vbj()->buyPerThreshold('us', 'Semiconductors'))->toBe(35.8);
 });
 
+// CHG-0048（ADR-0026 D3、2026-10-04改訂）: 信頼度lowの業種は null ではなく基準PERの0.7倍を返す。
+// 旧: low → null ／ 新: low → 0.7×基準（下の「信頼度lowは0.7倍」のテスト）。
+test('UC-010: 買い増し基準PERは信頼度lowなら基準PERの0.7倍(小数1桁)になる', function () {
+    expect(vbj()->buyPerThreshold('jp', '低信頼'))->toBe(14.0);
+});
+
 dataset('vbjBuyNull', [
-    'low' => ['jp', '低信頼'],
     'none' => ['jp', '信頼なし'],
     '未分類' => ['jp', null],
     '表にない業種' => ['jp', '存在しない業種'],
     'その他' => ['jp', 'その他'],
 ]);
 
-test('UC-010: 買い増し基準PERは信頼度low・none・未分類・表にない業種ではnullを返す', function (string $market, ?string $sector) {
+test('UC-010: 買い増し基準PERは信頼度none・未分類・表にない業種ではnullを返す', function (string $market, ?string $sector) {
     expect(vbj()->buyPerThreshold($market, $sector))->toBeNull();
 })->with('vbjBuyNull');
+
+/*
+|--------------------------------------------------------------------------
+| CHG-0048 サイクル4: buyPerVerdict（買い増し判定のPER条件、ADR-0026 D3 2026-10-04改訂）— Red phase
+|--------------------------------------------------------------------------
+| 戻り値: ['met' => bool, 'basis' => 'sector'|'fixed', 'threshold' => float, 'benchmark' => ?float, 'factor' => ?float]
+|   high/medium: 比率（round(PER,1)÷基準、小数2桁）< 0.80、threshold=round(0.80×基準,1)
+|   low:         比率 < 0.70、threshold=round(0.70×基準,1)
+|   none・未分類・表にない業種: 従来どおり PER≦15.0（basis 'fixed'）
+|   PER null・0以下: met false
+| Expected Red: Call to undefined method ValuationBenchmarkJudge::buyPerVerdict().
+*/
+
+dataset('vbjBuyVerdictMet', [
+    'high 基準20 PER15.8 -> 0.79 成立' => ['基準20', 15.8, true],
+    'high 基準20 PER16.0 -> 0.80 不成立' => ['基準20', 16.0, false],
+    'high 基準20 PER10.0 -> 0.50 成立' => ['基準20', 10.0, true],
+    'medium 基準16 PER12.5 -> 0.78 成立' => ['中信頼', 12.5, true],
+    'medium 基準16 PER12.8 -> 0.80 不成立' => ['中信頼', 12.8, false],
+    'low 基準20 PER13.8 -> 0.69 成立' => ['低信頼', 13.8, true],
+    'low 基準20 PER14.0 -> 0.70 不成立' => ['低信頼', 14.0, false],
+    'low 基準20 PER15.8 -> 0.79 (0.80未満でも0.70以上は)不成立' => ['低信頼', 15.8, false],
+]);
+
+test('UC-010: 業種の基準PERがある業種では、比率が信頼度に応じた倍率未満のとき買い増しのPER条件を満たす', function (string $sector, float $per, bool $met) {
+    expect(vbj()->buyPerVerdict($per, 'jp', $sector)['met'])->toBe($met);
+})->with('vbjBuyVerdictMet');
+
+test('UC-010: 信頼度highの業種は basis sector・倍率0.8・基準PER・0.8倍の閾値を返す', function () {
+    $verdict = vbj()->buyPerVerdict(15.8, 'jp', '基準20');
+
+    expect($verdict['basis'])->toBe('sector')
+        ->and($verdict['factor'])->toBe(0.8)
+        ->and($verdict['benchmark'])->toBe(20.0)
+        ->and($verdict['threshold'])->toBe(16.0)
+        ->and($verdict['met'])->toBeTrue();
+});
+
+test('UC-010: 信頼度mediumの業種も倍率0.8で判定する', function () {
+    $verdict = vbj()->buyPerVerdict(12.5, 'jp', '中信頼');
+
+    expect($verdict['basis'])->toBe('sector')
+        ->and($verdict['factor'])->toBe(0.8)
+        ->and($verdict['benchmark'])->toBe(16.0)
+        ->and($verdict['threshold'])->toBe(12.8);
+});
+
+test('UC-010: 信頼度lowの業種は固定の15ではなく、より厳しい倍率0.7で判定する', function () {
+    $verdict = vbj()->buyPerVerdict(13.8, 'jp', '低信頼');
+
+    expect($verdict['basis'])->toBe('sector')
+        ->and($verdict['factor'])->toBe(0.7)
+        ->and($verdict['benchmark'])->toBe(20.0)
+        ->and($verdict['threshold'])->toBe(14.0)
+        ->and($verdict['met'])->toBeTrue();
+});
+
+test('UC-010: 米国株も基準表にある業種は同じ規則（Semiconductors high、基準44.8）で判定する', function () {
+    // 35.0 / 44.8 = 0.78125 -> 0.78（成立）、threshold = round(35.84, 1) = 35.8
+    $verdict = vbj()->buyPerVerdict(35.0, 'us', 'Semiconductors');
+
+    expect($verdict['met'])->toBeTrue()
+        ->and($verdict['basis'])->toBe('sector')
+        ->and($verdict['threshold'])->toBe(35.8)
+        ->and($verdict['benchmark'])->toBe(44.8);
+});
+
+test('UC-010: PERは小数1桁に丸めてから比率を算出する（15.84 -> 15.8 -> 0.79 成立、15.96 -> 16.0 -> 0.80 不成立）', function () {
+    expect(vbj()->buyPerVerdict(15.84, 'jp', '基準20')['met'])->toBeTrue()
+        ->and(vbj()->buyPerVerdict(15.96, 'jp', '基準20')['met'])->toBeFalse();
+});
+
+dataset('vbjBuyVerdictFixed', [
+    '信頼度none' => ['jp', '信頼なし'],
+    '業種未分類' => ['jp', null],
+    '表にない業種' => ['jp', '存在しない業種'],
+    '市場の取り違え（米国にない業種）' => ['us', '基準20'],
+]);
+
+test('UC-010: 信頼度none・業種未分類・基準表にない業種は従来どおりPER≦15.0で判定する（basis fixed）', function (string $market, ?string $sector) {
+    $met = vbj()->buyPerVerdict(15.0, $market, $sector);
+    $unmet = vbj()->buyPerVerdict(15.1, $market, $sector);
+
+    expect($met['met'])->toBeTrue()
+        ->and($met['basis'])->toBe('fixed')
+        ->and($met['threshold'])->toBe(15.0)
+        ->and($met['benchmark'])->toBeNull()
+        ->and($met['factor'])->toBeNull()
+        ->and($unmet['met'])->toBeFalse()
+        ->and($unmet['basis'])->toBe('fixed');
+})->with('vbjBuyVerdictFixed');
+
+dataset('vbjBuyVerdictInvalidPer', [
+    'high PER null' => [null, '基準20', 'sector'],
+    'high PER 0' => [0.0, '基準20', 'sector'],
+    'high PER 負' => [-8.0, '基準20', 'sector'],
+    'low PER 負' => [-8.0, '低信頼', 'sector'],
+    '未分類 PER null' => [null, null, 'fixed'],
+    '未分類 PER 0' => [0.0, null, 'fixed'],
+    '未分類 PER 負' => [-8.0, null, 'fixed'],
+]);
+
+test('UC-010: PERがnull・0以下（赤字）は買い増しのPER条件を満たさない', function (?float $per, ?string $sector, string $basis) {
+    $verdict = vbj()->buyPerVerdict($per, 'jp', $sector);
+
+    expect($verdict['met'])->toBeFalse()->and($verdict['basis'])->toBe($basis);
+})->with('vbjBuyVerdictInvalidPer');

@@ -20,7 +20,7 @@ final class CriteriaValuationMetricsBuilder
 
     /**
      * @param  object|null  $fundamentalIndicator  FundamentalIndicator model (decimal columns may be strings)
-     * @return array{per_verdict: array<string, mixed>, pbr_verdict: array<string, mixed>, metric_tones: array<string, string|null>}
+     * @return array{per_verdict: array<string, mixed>, pbr_verdict: array<string, mixed>, buy_per_verdict: array<string, mixed>, metric_tones: array<string, string|null>}
      */
     public function build(string $market, ?string $sectorName, ?object $fundamentalIndicator): array
     {
@@ -34,6 +34,8 @@ final class CriteriaValuationMetricsBuilder
         return [
             'per_verdict' => $this->valuationJudge->judge('per', $float('per'), $market, $sectorName),
             'pbr_verdict' => $this->valuationJudge->judge('pbr', $float('pbr'), $market, $sectorName),
+            // ADR-0026 D3: 買い増し PER chip (SignalCriteriaEvaluator::evaluateBuy()).
+            'buy_per_verdict' => $this->valuationJudge->buyPerVerdict($float('per'), $market, $sectorName),
             'metric_tones' => $tones,
         ];
     }

@@ -235,18 +235,20 @@ final class SignalCriteriaEvaluator
                 'gte',
                 fn (float $v) => number_format($v, 2).'倍',
             ),
-            $this->row(
-                'PER',
-                sprintf('≤%s', number_format(BuySignalDeterminationService::PER_UNDERVALUED_THRESHOLD, 1)),
-                $metrics['per'] ?? null,
-                BuySignalDeterminationService::PER_UNDERVALUED_THRESHOLD,
-                // `/review`指摘: US株のFinnhub peTTMは赤字企業で負値になりうる
-                // （BuySignalDeterminationService::determinePerUndervalued()の
-                // 下限ガードと同じ理由、ADR-0012 D4のPEGチップと同じ扱い）。
-                // 負値・ゼロは met/near と誤読させないため lte_positive を使う。
-                'lte_positive',
-                fn (float $v) => number_format($v, 1),
-            ),
+            ($metrics['buy_per_verdict'] ?? null) !== null
+                ? $this->buyPerRow($metrics['per'] ?? null, $metrics['buy_per_verdict'])
+                : $this->row(
+                    'PER',
+                    sprintf('≤%s', number_format(BuySignalDeterminationService::PER_UNDERVALUED_THRESHOLD, 1)),
+                    $metrics['per'] ?? null,
+                    BuySignalDeterminationService::PER_UNDERVALUED_THRESHOLD,
+                    // `/review`指摘: US株のFinnhub peTTMは赤字企業で負値になりうる
+                    // （BuySignalDeterminationService::determinePerUndervalued()の
+                    // 下限ガードと同じ理由、ADR-0012 D4のPEGチップと同じ扱い）。
+                    // 負値・ゼロは met/near と誤読させないため lte_positive を使う。
+                    'lte_positive',
+                    fn (float $v) => number_format($v, 1),
+                ),
             $this->withValuation($this->row(
                 'PBR',
                 // ADR-0016 D3: PBRは判定基準を持たない参考表示のため
@@ -607,6 +609,44 @@ final class SignalCriteriaEvaluator
                 'gte',
                 fn (float $v) => number_format($v, 1).'%',
             ), $tones['operating_margin'] ?? null),
+        ];
+    }
+
+    /**
+     * ADR-0026 D3: the 買い増し PER chip driven by
+     * ValuationBenchmarkJudge::buyPerVerdict(). 'met' follows the verdict;
+     * otherwise PER <= threshold x 1.2 is 'near'. A non-positive PER is never
+     * met/near.
+     *
+     * @param  array{met: bool, basis: string, threshold: float, benchmark: ?float, factor: ?float}  $verdict
+     * @return array{label: string, threshold_label: string, value_label: string, status: string}
+     */
+    private function buyPerRow(?float $per, array $verdict): array
+    {
+        $threshold = (float) $verdict['threshold'];
+        $thresholdLabel = sprintf('≤%s', number_format($threshold, 1));
+
+        if ($verdict['basis'] === 'sector') {
+            $thresholdLabel .= sprintf(
+                '（業種基準%sの%s倍）',
+                number_format((float) $verdict['benchmark'], 1),
+                number_format((float) $verdict['factor'], 1),
+            );
+        }
+
+        $status = match (true) {
+            $per === null => 'unavailable',
+            $per <= 0.0 => 'unmet',
+            $verdict['met'] => 'met',
+            $per <= $threshold + $threshold * self::NEAR_BUFFER_RATE => 'near',
+            default => 'unmet',
+        };
+
+        return [
+            'label' => 'PER',
+            'threshold_label' => $thresholdLabel,
+            'value_label' => $per === null ? self::UNAVAILABLE_LABEL : number_format($per, 1),
+            'status' => $status,
         ];
     }
 
