@@ -4,6 +4,8 @@ namespace App\Actions\Holding;
 
 use App\Models\HoldingSnapshot;
 use App\Models\Snapshot;
+use App\Services\Analysis\FundamentalMetricToneEvaluator;
+use App\Services\Analysis\ValuationBenchmarkJudge;
 
 /**
  * UC-002 (保有銘柄一覧表示): lists the holdings recorded in the most recent
@@ -11,6 +13,11 @@ use App\Models\Snapshot;
  */
 class ListHoldingsAction
 {
+    public function __construct(
+        private readonly ValuationBenchmarkJudge $valuationJudge,
+        private readonly FundamentalMetricToneEvaluator $toneEvaluator,
+    ) {}
+
     /**
      * @return array<int, array<string, mixed>>
      */
@@ -57,6 +64,11 @@ class ListHoldingsAction
     private function toRow(HoldingSnapshot $holdingSnapshot): array
     {
         $holding = $holdingSnapshot->holding;
+        $fundamental = $holding->fundamentalIndicator;
+        $sectorName = $holding->sectorClassification->name ?? null;
+        $isStock = $holding->instrument_type === 'stock';
+        $per = $fundamental?->per === null ? null : (float) $fundamental->per;
+        $revenueGrowth = $fundamental?->revenue_growth === null ? null : (float) $fundamental->revenue_growth;
 
         return [
             'id' => $holding->id,
@@ -77,6 +89,12 @@ class ListHoldingsAction
             'per' => $holding->fundamentalIndicator->per ?? null,
             'revenue_growth' => $holding->fundamentalIndicator->revenue_growth ?? null,
             'is_newly_detected' => $holdingSnapshot->is_newly_detected,
+            'per_verdict' => $isStock && $sectorName !== null && $per !== null && $per > 0
+                ? $this->valuationJudge->judge('per', $per, $holding->market, $sectorName)
+                : null,
+            'revenue_growth_tone' => $isStock
+                ? $this->toneEvaluator->tone('revenue_growth', $revenueGrowth, $holding->market, $sectorName)
+                : null,
         ];
     }
 }
