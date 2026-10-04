@@ -56,6 +56,14 @@
         'EPS成長率' => $fmtUnsignedPercent($detail['eps_growth']),
         'PEGレシオ' => $fmt2Decimal($detail['peg_ratio']),
     ];
+
+    $verdictsByLabel = ['PER' => ['per', $detail['per_verdict']], 'PBR' => ['pbr', $detail['pbr_verdict']]];
+    $tonesByLabel = [
+        'ROE' => 'roe',
+        '売上成長率' => 'revenue_growth',
+        '自己資本比率' => 'equity_ratio',
+        '営業利益率' => 'operating_margin',
+    ];
 @endphp
 <div>
     <x-page-header
@@ -132,6 +140,35 @@
                     <div class="flex justify-between py-1 border-b border-app-border last:border-b-0">
                         <dt class="text-text-secondary">{{ $label }}</dt>
                         <dd>{{ $value ?? '取得不可' }}</dd>
+                        @if (isset($verdictsByLabel[$label]))
+                            @php
+                                [$metricKey, $verdict] = $verdictsByLabel[$label];
+                                $verdictDisplay = \App\Support\ValuationDisplay::valuation($verdict['tier']);
+                            @endphp
+                            <div data-testid="{{ $metricKey }}-verdict" class="ml-2">
+                                @if ($verdictDisplay !== null)
+                                    <x-badge :variant="$verdictDisplay['variant']">{{ $verdictDisplay['label'] }}</x-badge>
+                                    @if ($verdict['unstable'])
+                                        <span class="text-xs text-text-secondary">基準が不安定</span>
+                                    @endif
+                                @else
+                                    {{ \App\Support\ValuationDisplay::reason($verdict['reason']) }}
+                                @endif
+                            </div>
+                            @if ($verdictDisplay !== null)
+                                <div data-testid="{{ $metricKey }}-benchmark" class="text-xs text-text-secondary ml-2">
+                                    業種基準 {{ number_format($verdict['benchmark'], $metricKey === 'pbr' ? 2 : 1) }}・基準比 {{ number_format($verdict['ratio'], 2) }}倍・基準日 {{ $verdict['as_of'] }}・出典 {{ $verdict['source'] }}
+                                </div>
+                            @endif
+                        @endif
+                        @if (isset($tonesByLabel[$label]))
+                            @php $toneDisplay = \App\Support\ValuationDisplay::tone($detail['metric_tones'][$tonesByLabel[$label]] ?? null); @endphp
+                            @if ($toneDisplay !== null)
+                                <div data-testid="tone-{{ $tonesByLabel[$label] }}" class="ml-2">
+                                    <x-badge :variant="$toneDisplay['variant']">{{ $toneDisplay['label'] }}</x-badge>
+                                </div>
+                            @endif
+                        @endif
                     </div>
                 @endforeach
             </dl>
