@@ -215,9 +215,9 @@ function chg34scSeed(string $kind, string $market, ?string $sector, array $funda
 
 // --- PER・PBRチップの valuation ---
 
-test('利確検討(UC-004): 日本・食品でPER10.0・PBR0.9はPER・PBRチップとも強い割安の判定を持つ', function () {
+test('利確検討(UC-004): 日本・食品でPER9.0・PBR0.5はPER・PBRチップとも強い割安の判定を持つ', function () {
     // Arrange
-    chg34scSeed('take_profit', 'jp', '食品', ['per' => 10.0, 'pbr' => 0.9]);
+    chg34scSeed('take_profit', 'jp', '食品', ['per' => 9.0, 'pbr' => 0.5]);
 
     // Act
     $row = chg34scRow('take_profit');
@@ -255,8 +255,8 @@ test('利確検討(UC-004): 米国・SemiconductorsはPERを基準表で判定�
 });
 
 test('利確検討(UC-004): 基準の信頼度が低い業種(電機・精密)は unstable が true で、強い割安は割安に格下げされる', function () {
-    // Arrange（基準PER 43.5・PBR 3.64、ともに confidence low。PER20.0=0.46 / PBR1.0=0.27 は本来強い割安）
-    chg34scSeed('take_profit', 'jp', '電機・精密', ['per' => 20.0, 'pbr' => 1.0]);
+    // Arrange（基準PER 28.5・PBR 2.40、ともに confidence low。PER12.0=0.42 / PBR1.0=0.42 は本来強い割安）
+    chg34scSeed('take_profit', 'jp', '電機・精密', ['per' => 12.0, 'pbr' => 1.0]);
 
     // Act
     $row = chg34scRow('take_profit');
@@ -288,7 +288,7 @@ test('利確検討(UC-004): 基準表の設定を差し替えるとチップの�
 
 test('キープ(UC-013): PER・PBRチップは valuation を持つ', function () {
     // Arrange
-    chg34scSeed('hold', 'jp', '食品', ['per' => 10.0, 'pbr' => 0.9]);
+    chg34scSeed('hold', 'jp', '食品', ['per' => 9.0, 'pbr' => 0.5]);
 
     // Act
     $row = chg34scRow('hold');
@@ -314,8 +314,8 @@ test('キープ(UC-013): 業種未分類のPER・PBRチップは valuation が n
 });
 
 test('整理検討(UC-011): PER・PBRチップは valuation と label_only を持つ', function () {
-    // Arrange（PER35.0=1.49倍＝割高、PBR0.9=0.48倍＝強い割安）
-    chg34scSeed('loss', 'jp', '食品', ['per' => 35.0, 'pbr' => 0.9]);
+    // Arrange（PER35.0=1.85倍＝割高、PBR0.5=0.43倍＝強い割安）
+    chg34scSeed('loss', 'jp', '食品', ['per' => 35.0, 'pbr' => 0.5]);
 
     // Act
     $row = chg34scRow('loss');
@@ -346,7 +346,7 @@ test('整理検討(UC-011): 業種未分類のPER・PBRチップは valuation �
 
 test('買い増し候補(UC-010): PBRチップだけが valuation を持ち、PERチップは従来どおり valuation キーを持たない', function () {
     // Arrange
-    chg34scSeed('buy', 'jp', '食品', ['per' => 10.0, 'pbr' => 0.9]);
+    chg34scSeed('buy', 'jp', '食品', ['per' => 9.0, 'pbr' => 0.5]);
 
     // Act
     $row = chg34scRow('buy');
@@ -358,7 +358,7 @@ test('買い増し候補(UC-010): PBRチップだけが valuation を持ち、PE
 
 test('ウォッチリスト(UC-012): 買い増し候補と同じく PBRチップだけが valuation を持つ', function () {
     // Arrange
-    chg34scSeed('watchlist', 'jp', '食品', ['per' => 10.0, 'pbr' => 0.9]);
+    chg34scSeed('watchlist', 'jp', '食品', ['per' => 9.0, 'pbr' => 0.5]);
 
     // Act
     $row = chg34scRow('watchlist');

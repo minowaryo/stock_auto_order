@@ -67,14 +67,14 @@ function uc003vTestDetail(string $market, ?string $sector, ?array $fundamental):
     return app(ShowHoldingDetailAction::class)->execute($holding->fresh());
 }
 
-test('日本・食品でPER10.0・PBR0.9の銘柄はPERもPBRも大きく割安と判定される', function () {
+test('日本・食品でPER9.0・PBR0.5の銘柄はPERもPBRも大きく割安と判定される', function () {
     // Arrange / Act
-    $detail = uc003vTestDetail('jp', '食品', ['per' => 10.0, 'pbr' => 0.9]);
+    $detail = uc003vTestDetail('jp', '食品', ['per' => 9.0, 'pbr' => 0.5]);
 
     // Assert
     expect($detail['per_verdict']['tier'])->toBe('strong_cheap');
     expect($detail['pbr_verdict']['tier'])->toBe('strong_cheap');
-    expect((float) $detail['pbr_verdict']['ratio'])->toBe(0.48);
+    expect((float) $detail['pbr_verdict']['ratio'])->toBe(0.43);
 });
 
 test('米国・SemiconductorsのPBRは基準なし(no_benchmark)で判定されない', function () {

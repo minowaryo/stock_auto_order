@@ -10,23 +10,23 @@ use App\Services\Analysis\ValuationBenchmarkJudge;
 
 dataset('jp_benchmarks', [
     // 業種名 => [PER値, PER信頼度, PBR値, PBR信頼度]
-    '食品' => ['食品', 23.5, 'high', 1.86, 'high'],
-    'エネルギー資源' => ['エネルギー資源', 12.3, 'low', 0.95, 'low'],
-    '建設・資材' => ['建設・資材', 13.9, 'low', 1.35, 'high'],
-    '素材・化学' => ['素材・化学', 23.3, 'high', 1.41, 'high'],
-    '医薬品' => ['医薬品', 24.3, 'high', 1.90, 'high'],
-    '自動車・輸送機' => ['自動車・輸送機', 16.0, 'medium', 0.92, 'high'],
-    '鉄鋼・非鉄' => ['鉄鋼・非鉄', 23.9, 'low', 1.60, 'low'],
-    '機械' => ['機械', 25.4, 'high', 2.20, 'high'],
-    '電機・精密' => ['電機・精密', 43.5, 'low', 3.64, 'low'],
-    '情報通信・サービスその他' => ['情報通信・サービスその他', 17.3, 'low', 2.05, 'high'],
-    '電気・ガス' => ['電気・ガス', 14.3, 'low', 0.74, 'medium'],
-    '運輸・物流' => ['運輸・物流', 12.8, 'high', 1.08, 'high'],
-    '商社・卸売' => ['商社・卸売', 17.3, 'high', 1.80, 'medium'],
-    '小売' => ['小売', 27.7, 'high', 2.50, 'high'],
-    '銀行' => ['銀行', 18.4, 'high', 1.60, 'low'],
-    '金融（除く銀行）' => ['金融（除く銀行）', 12.8, 'high', 1.44, 'high'],
-    '不動産' => ['不動産', 13.2, 'low', 1.30, 'medium'],
+    '食品' => ['食品', 18.9, 'high', 1.17, 'high'],
+    'エネルギー資源' => ['エネルギー資源', 12.4, 'low', 1.00, 'low'],
+    '建設・資材' => ['建設・資材', 15.4, 'medium', 1.37, 'high'],
+    '素材・化学' => ['素材・化学', 20.9, 'high', 1.31, 'high'],
+    '医薬品' => ['医薬品', 18.6, 'high', 1.20, 'high'],
+    '自動車・輸送機' => ['自動車・輸送機', 14.9, 'medium', 0.96, 'high'],
+    '鉄鋼・非鉄' => ['鉄鋼・非鉄', 13.7, 'low', 0.99, 'low'],
+    '機械' => ['機械', 23.2, 'high', 1.80, 'high'],
+    '電機・精密' => ['電機・精密', 28.5, 'low', 2.40, 'low'],
+    '情報通信・サービスその他' => ['情報通信・サービスその他', 19.0, 'high', 1.95, 'high'],
+    '電気・ガス' => ['電気・ガス', 10.8, 'medium', 0.80, 'medium'],
+    '運輸・物流' => ['運輸・物流', 13.9, 'high', 1.11, 'high'],
+    '商社・卸売' => ['商社・卸売', 15.3, 'high', 1.40, 'high'],
+    '小売' => ['小売', 22.5, 'high', 1.90, 'high'],
+    '銀行' => ['銀行', 20.0, 'low', 1.20, 'low'],
+    '金融（除く銀行）' => ['金融（除く銀行）', 12.9, 'high', 1.16, 'high'],
+    '不動産' => ['不動産', 11.5, 'high', 1.50, 'high'],
 ]);
 
 test('設定には日本・米国の出典と基準時点が空でない文字列で定義されている', function () {
@@ -41,7 +41,7 @@ test('設定には日本・米国の出典と基準時点が空でない文字�
         expect($config[$market]['source'])->toBeString()->not->toBe('');
     }
     expect($config['jp']['as_of'])->toContain('2026-09');
-    expect($config['jp']['source'])->toContain('JPX');
+    expect($config['jp']['source'])->toContain('JPX')->toContain('単純平均')->not->toContain('加重');
     expect($config['us']['source'])->toContain('Damodaran');
 });
 
@@ -103,15 +103,61 @@ test('米国の業種別基準PBRはUtilitiesのみ設定されている', funct
     expect($pbr['Utilities']['confidence'])->toBe('high');
 });
 
-test('実際の設定で日本の食品PER10.0は大きく割安と判定される', function () {
+test('実際の設定で日本の食品PER9.0は大きく割安と判定される', function () {
     // Arrange
     $judge = app(ValuationBenchmarkJudge::class);
 
     // Act
-    $result = $judge->judge('per', 10.0, 'jp', '食品');
+    $result = $judge->judge('per', 9.0, 'jp', '食品');
 
     // Assert
     expect($result['tier'])->toBe('strong_cheap');
+    expect($result['ratio'])->toBe(0.48);
+    expect($result['benchmark'])->toBe(18.9);
+});
+
+test('実際の設定で日本の食品PER10.0は割安(比率0.53)と判定される', function () {
+    // Arrange / Act
+    $result = app(ValuationBenchmarkJudge::class)->judge('per', 10.0, 'jp', '食品');
+
+    // Assert
+    expect($result['tier'])->toBe('cheap');
+    expect($result['ratio'])->toBe(0.53);
+});
+
+dataset('jp_per_confidence_changes', [
+    '情報通信・サービスその他はhigh' => ['情報通信・サービスその他', 'high'],
+    '不動産はhigh' => ['不動産', 'high'],
+    '建設・資材はmedium' => ['建設・資材', 'medium'],
+    '電気・ガスはmedium' => ['電気・ガス', 'medium'],
+    '銀行はlow' => ['銀行', 'low'],
+]);
+
+test('単純平均への切替で日本のPER信頼度が変わった業種が新しい信頼度になっている', function (string $sector, string $confidence) {
+    // Arrange / Act
+    $result = app(ValuationBenchmarkJudge::class)->judge('per', 10.0, 'jp', $sector);
+
+    // Assert
+    expect($result['confidence'])->toBe($confidence);
+})->with('jp_per_confidence_changes');
+
+test('実際の設定で日本の銀行PERは信頼度lowのため濃い色が付かず不安定扱いになる', function () {
+    // Arrange / Act (基準PER 20.0。PER8.0=0.40 は本来強い割安)
+    $result = app(ValuationBenchmarkJudge::class)->judge('per', 8.0, 'jp', '銀行');
+
+    // Assert
+    expect($result['ratio'])->toBe(0.4);
+    expect($result['tier'])->toBe('cheap');
+    expect($result['unstable'])->toBeTrue();
+});
+
+test('実際の設定で日本の情報通信・サービスその他PER9.0はhighのため強い割安になる', function () {
+    // Arrange / Act (基準PER 19.0。PER9.0=0.47)
+    $result = app(ValuationBenchmarkJudge::class)->judge('per', 9.0, 'jp', '情報通信・サービスその他');
+
+    // Assert
+    expect($result['tier'])->toBe('strong_cheap');
+    expect($result['unstable'])->toBeFalse();
 });
 
 test('実際の設定で米国Automobilesの基準値nullは例外にならず判定なし(confidence_none)になる', function () {

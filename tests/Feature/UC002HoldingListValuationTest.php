@@ -73,21 +73,21 @@ function uc002vTestRow(string $market, ?string $sector, ?array $fundamental, str
     return app(ListHoldingsAction::class)->execute()[0];
 }
 
-test('日本・食品でPER10.0の個別株は業種比較で大きく割安と判定される', function () {
+test('日本・食品でPER9.0の個別株は業種比較で大きく割安と判定される', function () {
     // Arrange / Act
-    $row = uc002vTestRow('jp', '食品', ['per' => 10.0]);
+    $row = uc002vTestRow('jp', '食品', ['per' => 9.0]);
 
     // Assert
     expect($row['per_verdict'])->toBeArray();
     expect($row['per_verdict']['tier'])->toBe('strong_cheap');
-    expect((float) $row['per_verdict']['benchmark'])->toBe(23.5);
+    expect((float) $row['per_verdict']['benchmark'])->toBe(18.9);
     expect($row['per_verdict']['confidence'])->toBe('high');
     expect($row['per_verdict'])->toHaveKeys(['ratio', 'unstable', 'as_of', 'source']);
 });
 
-test('基準の信頼度が低い業種(電機・精密)でPER20.0は濃色が格下げされ割安・不安定扱いになる', function () {
+test('基準の信頼度が低い業種(電機・精密)でPER12.0は濃色が格下げされ割安・不安定扱いになる', function () {
     // Arrange / Act
-    $row = uc002vTestRow('jp', '電機・精密', ['per' => 20.0]);
+    $row = uc002vTestRow('jp', '電機・精密', ['per' => 12.0]);
 
     // Assert
     expect($row['per_verdict']['tier'])->toBe('cheap');

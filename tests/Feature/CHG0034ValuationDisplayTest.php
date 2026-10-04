@@ -145,12 +145,12 @@ test('バッジ部品の既存バリアントの色は変わらない', function
 
 // --- 保有一覧 (UC-002) ---
 
-test('保有一覧: 日本・食品でPER10.0の個別株は「PER 10.0 強い割安」を濃い緑で表示する', function () {
+test('保有一覧: 日本・食品でPER9.0の個別株は「PER 9.0 強い割安」を濃い緑で表示する', function () {
     // Arrange
-    chg34Holding('jp', '食品', ['per' => 10.0]);
+    chg34Holding('jp', '食品', ['per' => 9.0]);
 
     // Act
-    $class = chg34BadgeClass(chg34ListHtml(), 'PER 10.0 強い割安');
+    $class = chg34BadgeClass(chg34ListHtml(), 'PER 9.0 強い割安');
 
     // Assert
     expect($class)->not->toBeNull();
@@ -158,7 +158,7 @@ test('保有一覧: 日本・食品でPER10.0の個別株は「PER 10.0 強い�
 });
 
 test('保有一覧: PERの段階ごとにラベルと色が対応する', function (float $per, string $label, string $color) {
-    // Arrange (日本・食品の基準 23.5。比率: 15.0=0.64 / 23.5=1.00 / 35.0=1.49 / 60.0=2.55)
+    // Arrange (日本・食品の基準 18.9。比率: 15.0=0.79 / 18.9=1.00 / 35.0=1.85 / 60.0=3.17)
     chg34Holding('jp', '食品', ['per' => $per]);
 
     // Act
@@ -169,17 +169,17 @@ test('保有一覧: PERの段階ごとにラベルと色が対応する', functi
     expect($class)->toContain($color);
 })->with([
     '割安' => [15.0, '割安', 'bg-green-100'],
-    '並み' => [23.5, '並み', 'bg-slate-100'],
+    '並み' => [18.9, '並み', 'bg-slate-100'],
     '割高' => [35.0, '割高', 'bg-amber-100'],
     '強い割高' => [60.0, '強い割高', 'bg-orange-600'],
 ]);
 
-test('保有一覧: 基準の信頼度が低い業種(電機・精密)のPER20.0は濃い色にならず「割安」を緑で表示する', function () {
+test('保有一覧: 基準の信頼度が低い業種(電機・精密)のPER12.0は濃い色にならず「割安」を緑で表示する', function () {
     // Arrange
-    chg34Holding('jp', '電機・精密', ['per' => 20.0]);
+    chg34Holding('jp', '電機・精密', ['per' => 12.0]);
 
     // Act
-    $class = chg34BadgeClass(chg34ListHtml(), 'PER 20.0 割安');
+    $class = chg34BadgeClass(chg34ListHtml(), 'PER 12.0 割安');
 
     // Assert
     expect($class)->not->toBeNull();
@@ -274,9 +274,9 @@ test('保有一覧: 基準表の設定を差し替えると表示の判定に反
 
 // --- 銘柄詳細 (UC-003) ---
 
-test('詳細: 日本・食品でPER10.0・PBR0.9はPER・PBRとも「強い割安」を濃い緑のバッジで表示する', function () {
+test('詳細: 日本・食品でPER9.0・PBR0.5はPER・PBRとも「強い割安」を濃い緑のバッジで表示する', function () {
     // Arrange
-    $holding = chg34Holding('jp', '食品', ['per' => 10.0, 'pbr' => 0.9]);
+    $holding = chg34Holding('jp', '食品', ['per' => 9.0, 'pbr' => 0.5]);
 
     // Act
     $html = chg34DetailHtml($holding);
@@ -291,7 +291,7 @@ test('詳細: 日本・食品でPER10.0・PBR0.9はPER・PBRとも「強い割�
 });
 
 test('詳細: 判定の段階ごとにラベルと色が対応する', function (float $per, string $label, string $color) {
-    // Arrange (日本・食品のPER基準 23.5)
+    // Arrange (日本・食品のPER基準 18.9)
     $holding = chg34Holding('jp', '食品', ['per' => $per]);
 
     // Act
@@ -302,7 +302,7 @@ test('詳細: 判定の段階ごとにラベルと色が対応する', function 
     expect($el['html'])->toContain($color);
 })->with([
     '割安' => [15.0, '割安', 'bg-green-100'],
-    '並み' => [23.5, '並み', 'bg-slate-100'],
+    '並み' => [18.9, '並み', 'bg-slate-100'],
     '割高' => [35.0, '割高', 'bg-amber-100'],
     '強い割高' => [60.0, '強い割高', 'bg-orange-600'],
 ]);
@@ -331,20 +331,20 @@ test('詳細: 基準値・基準比・基準日・出典を表示する(PER・PB
     // Assert
     $per = chg34Testid($html, 'per-benchmark');
     expect($per['text'])
-        ->toContain('業種基準 23.5')
-        ->toContain('0.43倍')
+        ->toContain('業種基準 18.9')
+        ->toContain('0.53倍')
         ->toContain('基準日 '.config('valuation_benchmarks.jp.as_of'))
         ->toContain('出典 '.config('valuation_benchmarks.jp.source'));
     $pbr = chg34Testid($html, 'pbr-benchmark');
     expect($pbr['text'])
-        ->toContain('業種基準 1.86')
-        ->toContain('0.48倍')
+        ->toContain('業種基準 1.17')
+        ->toContain('0.77倍')
         ->toContain('基準日 '.config('valuation_benchmarks.jp.as_of'));
 });
 
 test('詳細: 基準が不安定な業種(電機・精密)は「基準が不安定」を表示し、濃い色にならない', function () {
     // Arrange
-    $holding = chg34Holding('jp', '電機・精密', ['per' => 20.0]);
+    $holding = chg34Holding('jp', '電機・精密', ['per' => 12.0]);
 
     // Act
     $el = chg34Testid(chg34DetailHtml($holding), 'per-verdict');
