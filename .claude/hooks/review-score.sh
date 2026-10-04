@@ -3,7 +3,7 @@
 # Scores everything changed since the current branch diverged from `main` — commits on
 # the branch plus staged, unstaged, and untracked work in the working tree — so /review
 # can pick "normal" vs "enhanced" depth without manual judgment, and prepare-merge can
-# pick the pre-merge tier (.claude/rules/70-git.md §6).
+# pick the pre-merge tier (docs/development/git-workflow.md §6).
 # No state file, no AI calls: pure local git commands.
 #
 # Output ends with two machine-read lines, in this order (/review parses the last one):
@@ -135,7 +135,7 @@ fi
 echo "  Score           : $SCORE (light below: $LIGHT_THRESHOLD, enhanced/required from: $THRESHOLD)"
 echo
 
-# Pre-merge tier (.claude/rules/70-git.md §6): any sensitive path forces "required".
+# Pre-merge tier (docs/development/git-workflow.md §6): any sensitive path forces "required".
 if [ "$SENSITIVE_COUNT" -gt 0 ] || [ "$SCORE" -ge "$THRESHOLD" ]; then
   MERGE_CHECK=required
 elif [ "$SCORE" -ge "$LIGHT_THRESHOLD" ]; then

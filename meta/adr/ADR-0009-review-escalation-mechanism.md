@@ -70,6 +70,6 @@ Accepted
 ## Related
 
 - `.claude/rules/30-testing.md`
-- `.claude/rules/50-review.md`
+- `.claude/rules/50-review.md`（コア）と `docs/development/review-guidelines.md`（全文）
 - `.claude/commands/review.md`
 - ADR-0004-ai-development-policy
