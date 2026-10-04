@@ -7,6 +7,7 @@ use App\Models\Snapshot;
 use App\Services\Analysis\FundamentalHealthEvaluator;
 use App\Services\Analysis\SignalCriteriaEvaluator;
 use App\Services\Analysis\TakeProfitThresholdEvaluator;
+use App\Support\NisaHoldingStatus;
 use App\Support\SignalListSort;
 
 /**
@@ -66,7 +67,7 @@ class ShowHoldListAction
         $snapshotsByKey = HoldingSnapshot::query()
             ->where('snapshot_id', $latestSnapshot?->id)
             ->whereHas('holding', fn ($query) => $query->whereIn('symbol_code', array_column($holdings, 'symbol_code')))
-            ->with(['holding.fundamentalIndicator', 'holding.technicalIndicator', 'signals'])
+            ->with(['holding.fundamentalIndicator', 'holding.technicalIndicator', 'signals', 'accounts'])
             ->get()
             ->keyBy(fn (HoldingSnapshot $hs) => $hs->holding->market.':'.$hs->holding->symbol_code);
 
@@ -87,6 +88,7 @@ class ShowHoldListAction
     {
         return [
             'id' => null,
+            'nisa_holding' => null,
             'criteria' => $this->criteriaEvaluator->evaluateHold([]),
             'fundamental_status' => 'unavailable',
             'fundamental_summary' => 'ファンダメンタルズ指標が未取得のため判定できません',
@@ -152,6 +154,8 @@ class ShowHoldListAction
 
         return [
             'id' => $holding->id,
+            // CHG-0047: 銘柄セルのNISA保有区分バッジ（nisa_only / nisa_partial / null）。
+            'nisa_holding' => NisaHoldingStatus::fromAccountTypes($holdingSnapshot->accounts->pluck('account_type')),
             'criteria' => $criteria,
             'fundamental_status' => $fundamentalStatus,
             'fundamental_summary' => $this->fundamentalSummary($fundamentalStatus, $roe, $equityRatio, $revenueGrowth, $operatingIncomeGrowth, $operatingMargin),

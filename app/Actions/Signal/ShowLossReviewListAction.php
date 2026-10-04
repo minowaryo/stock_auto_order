@@ -9,6 +9,7 @@ use App\Services\Analysis\LossReviewThresholds;
 use App\Services\Analysis\SignalCriteriaEvaluator;
 use App\Services\Portfolio\ContinuousHoldingWeeksCalculator;
 use App\Services\Portfolio\PortfolioEvaluationCalculator;
+use App\Support\NisaHoldingStatus;
 use App\Support\SignalListSort;
 
 /**
@@ -54,7 +55,7 @@ class ShowLossReviewListAction
 
         $allHoldingSnapshots = HoldingSnapshot::query()
             ->where('snapshot_id', $latestSnapshot->id)
-            ->with(['holding.fundamentalIndicator', 'holding.technicalIndicator', 'buySignals'])
+            ->with(['holding.fundamentalIndicator', 'holding.technicalIndicator', 'buySignals', 'accounts'])
             ->get();
 
         $portfolioTotal = $this->portfolioEvaluationCalculator->total($allHoldingSnapshots);
@@ -178,6 +179,8 @@ class ShowLossReviewListAction
             'id' => $holding->id,
             'symbol_code' => $holding->symbol_code,
             'symbol_name' => $holding->symbol_name,
+            // CHG-0047: 銘柄セルのNISA保有区分バッジ（nisa_only / nisa_partial / null）。
+            'nisa_holding' => NisaHoldingStatus::fromAccountTypes($holdingSnapshot->accounts->pluck('account_type')),
             'unrealized_gain_rate' => $unrealizedGainRate,
             // CHG-0027: 評価額（保有数量 × 現在値）。UC-004/UC-010 と同じ算出。
             'market_value' => (float) $holdingSnapshot->quantity * (float) $holdingSnapshot->current_price,
