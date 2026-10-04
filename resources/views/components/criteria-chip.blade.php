@@ -5,7 +5,12 @@
 --}}
 @props(['item', 'tone' => 'success'])
 @php
+    // CHG-0046: キープ表のように1項目ごとに向きが変わる表は item 側の tone を優先する
+    // （'warning'=利確寄り＝黄 / 'success'=押し目寄り＝緑）。
+    $tone = $item['tone'] ?? $tone;
     $variantClasses = match (true) {
+        $item['status'] === 'met' && $tone === 'warning' => 'bg-amber-100 text-amber-800 border-amber-200',
+        $item['status'] === 'near' && $tone === 'warning' => 'bg-amber-50 text-amber-700 border-amber-100',
         $item['status'] === 'met' && $tone === 'danger' => 'bg-red-100 text-red-800 border-red-200',
         $item['status'] === 'near' && $tone === 'danger' => 'bg-red-50 text-red-700 border-red-100',
         $item['status'] === 'met' => 'bg-green-100 text-green-800 border-green-200',

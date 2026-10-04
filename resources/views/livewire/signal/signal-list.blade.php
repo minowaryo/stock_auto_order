@@ -229,49 +229,87 @@
         @endif
     </x-card>
 
-    {{-- CHG-0028: キープ（hold）バケツ銘柄の一覧。列は固定（基準別セルなし）のため colgroup を直書きする。 --}}
+    {{-- CHG-0028: キープ（hold）バケツ銘柄の一覧。
+         CHG-0046: 他3テーブルと同じ「固定列＋判定チェックリスト（チップ1項目=1列）」形式。
+         テクニカルは利確寄り＝黄／押し目寄り＝緑（item の tone）で色分けする。 --}}
     <x-card>
         <h2 class="text-lg font-semibold mb-1">キープ（ホールド）</h2>
-        <p class="text-[13px] text-text-secondary mb-3">いずれのシグナルにも該当しない保有銘柄です（積立・インデックスコアは除く）。</p>
+        <p class="text-[13px] text-text-secondary mb-3">いずれのシグナルにも該当しない保有銘柄です（積立・インデックスコアは除く）。判定チェックリストは利確検討・買い増し候補の基準に照らし、利確寄りを黄、押し目寄りを緑で示します。</p>
 
         @if (empty($holdings))
             <x-empty-state>キープ対象の銘柄はありません</x-empty-state>
         @else
+            @php
+                // 固定6列 700px + 14項目×72px = 1708px
+                $holdCriteria = $holdings[0]['criteria'];
+                $holdCriteriaCount = count($holdCriteria['technical']) + count($holdCriteria['fundamental']);
+            @endphp
             <div id="hold-header-scroll" class="overflow-x-auto sticky top-0 z-20 bg-surface [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                <table class="table-fixed w-[1000px] text-[11px] border border-app-border border-b-0 [&_th]:border [&_th]:border-app-border">
+                <table class="table-fixed w-[1708px] text-[11px] border border-app-border border-b-0 [&_th]:border [&_th]:border-app-border">
                     <colgroup>
-                        <col style="width: 200px"><col style="width: 110px"><col style="width: 100px"><col style="width: 90px"><col style="width: 360px"><col style="width: 140px">
+                        <col class="w-[150px]"><col class="w-[110px]"><col class="w-[70px]"><col class="w-[110px]"><col class="w-[150px]"><col class="w-[110px]">
+                        @for ($i = 0; $i < $holdCriteriaCount; $i++)
+                            <col class="w-[72px]">
+                        @endfor
                     </colgroup>
-                    <thead>
-                        <tr class="bg-surface">
-                            <th class="py-1.5 px-1.5 text-left">銘柄</th>
-                            <th class="py-1.5 px-1.5 text-left">評価額</th>
-                            <th class="py-1.5 px-1.5 text-left">含み損益率</th>
-                            <th class="py-1.5 px-1.5 text-left">要観察</th>
-                            <th class="py-1.5 px-1.5 text-left">ヘルスライン</th>
-                            <th class="py-1.5 px-1.5 text-left">セクター</th>
-                        </tr>
-                    </thead>
+                    <x-signal-table-head
+                        :labels="['銘柄', '評価額', '含み損益率', '要観察', '財務健全性', 'セクター']"
+                        :criteria="$holdCriteria"
+                        variant="hold"
+                    />
                 </table>
             </div>
             <div class="overflow-x-auto" data-scroll-sync-with="hold-header-scroll">
-                <table class="table-fixed w-[1000px] text-[11px] border border-app-border [&_td]:border [&_td]:border-app-border [&_td]:align-top [&_td]:break-words">
+                <table class="table-fixed w-[1708px] text-[11px] border border-app-border [&_td]:border [&_td]:border-app-border [&_td]:align-top [&_td]:break-words">
                     <colgroup>
-                        <col style="width: 200px"><col style="width: 110px"><col style="width: 100px"><col style="width: 90px"><col style="width: 360px"><col style="width: 140px">
+                        <col class="w-[150px]"><col class="w-[110px]"><col class="w-[70px]"><col class="w-[110px]"><col class="w-[150px]"><col class="w-[110px]">
+                        @for ($i = 0; $i < $holdCriteriaCount; $i++)
+                            <col class="w-[72px]">
+                        @endfor
                     </colgroup>
                     <tbody>
                         @foreach ($holdings as $row)
                             <tr class="border-b border-app-border last:border-b-0">
-                                <td class="py-1.5 px-1.5 sticky left-0 z-10 bg-surface">{{ $row['symbol_name'] }} {{ $row['symbol_code'] }}</td>
+                                <td class="py-1.5 px-1.5 sticky left-0 z-10 bg-surface">
+                                    @if ($row['id'] !== null)
+                                        <div><a href="/holdings/{{ $row['id'] }}" wire:navigate class="text-primary hover:underline">{{ $row['symbol_name'] }}</a> {{ $row['symbol_code'] }}</div>
+                                    @else
+                                        <div>{{ $row['symbol_name'] }} {{ $row['symbol_code'] }}</div>
+                                    @endif
+                                    @php
+                                        $holdSummary = $row['criteria']['summary'];
+                                        $fundamentalSummaryClass = match (true) {
+                                            $holdSummary['fundamental']['met'] === $holdSummary['fundamental']['total'] => 'text-green-700',
+                                            $holdSummary['fundamental']['met'] === 0 => 'text-slate-400',
+                                            default => 'text-amber-600',
+                                        };
+                                    @endphp
+                                    <div class="mt-0.5 text-[10px] {{ $holdSummary['technical']['sell'] > 0 ? 'text-amber-600' : 'text-slate-400' }}">利確寄り {{ $holdSummary['technical']['sell'] }}</div>
+                                    <div class="text-[10px] {{ $holdSummary['technical']['buy'] > 0 ? 'text-green-700' : 'text-slate-400' }}">押し目寄り {{ $holdSummary['technical']['buy'] }}</div>
+                                    <div class="text-[10px] {{ $fundamentalSummaryClass }}">財務 {{ $holdSummary['fundamental']['met'] }}/{{ $holdSummary['fundamental']['total'] }}</div>
+                                </td>
                                 <td class="py-1.5 px-1.5 text-right">{{ number_format($row['market_value']) }}円</td>
                                 <td class="py-1.5 px-1.5">{{ $row['unrealized_gain_rate'] === null ? '-' : sprintf('%+.1f%%', $row['unrealized_gain_rate']) }}</td>
                                 <td class="py-1.5 px-1.5">
                                     @if ($row['hold_watch'])
                                         <x-badge variant="warning">要観察</x-badge>
+                                        @foreach ($row['hold_watch_reasons'] as $reason)
+                                            <div>{{ $reason }}</div>
+                                        @endforeach
                                     @endif
                                 </td>
-                                <td class="py-1.5 px-1.5">{{ $row['health_line'] }}</td>
+                                <td class="py-1.5 px-1.5">
+                                    @if ($row['fundamental_status'] === 'unavailable')
+                                        <x-badge variant="neutral">財務指標 取得不可</x-badge>
+                                    @else
+                                        <div>{{ $row['fundamental_summary'] }}</div>
+                                        @if ($row['fundamental_status'] === 'failed')
+                                            <x-badge variant="danger">財務健全性 基準割れ</x-badge>
+                                        @endif
+                                    @endif
+                                </td>
                                 <td class="py-1.5 px-1.5">{{ $row['sector_name'] }}</td>
+                                <x-signal-criteria-cells :criteria="$row['criteria']" />
                             </tr>
                         @endforeach
                     </tbody>

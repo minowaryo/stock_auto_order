@@ -18,9 +18,12 @@
     // 整理検討（UC-011, ADR-0010 D6）は財務3項目の判定を反転しているため、
     // グループ見出しもサマリバッジ（x-signal-criteria-summary-badges）と
     // 同じ語彙に揃える。利確検討・買い増し候補は従来どおり。
-    [$technicalGroupLabel, $fundamentalGroupLabel] = $variant === 'lossReview'
-        ? ['判定チェックリスト（整理シグナル）', '判定チェックリスト（投資根拠の毀損）']
-        : ['判定チェックリスト（テクニカル）', '判定チェックリスト（財務）'];
+    // キープ（CHG-0046）はテクニカル項目ごとに利確寄り/押し目寄りの色が混在するため凡例を添える。
+    [$technicalGroupLabel, $fundamentalGroupLabel] = match ($variant) {
+        'lossReview' => ['判定チェックリスト（整理シグナル）', '判定チェックリスト（投資根拠の毀損）'],
+        'hold' => ['判定チェックリスト（テクニカル：利確寄り＝黄／押し目寄り＝緑）', '判定チェックリスト（財務）'],
+        default => ['判定チェックリスト（テクニカル）', '判定チェックリスト（財務）'],
+    };
 @endphp
 <thead>
     <tr class="text-left text-text-secondary border-b border-app-border">

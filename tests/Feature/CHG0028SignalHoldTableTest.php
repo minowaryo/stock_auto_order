@@ -29,6 +29,7 @@ use Livewire\Livewire;
 |   - SignalList の画面末尾に見出し「キープ（ホールド）」の4つ目のテーブルを表示する
 |     （ClassifyHoldingsAction の hold バケツを再利用。core_accumulation は出さない）
 |   - 列: 銘柄 → 評価額 → 含み損益率 → 要観察バッジ → ヘルスライン → セクター
+|     （CHG-0046でヘルスライン列を廃止し判定チェックリスト列を追加）
 |   - 並びは SignalList::$sort に従う（既定 評価額順 / recommended は
 |     hold_watch 先頭 → 含み損益率の低い順）
 |   - ClassifyHoldingsAction の各行に sector_name（未分類は '未分類'）を追加
@@ -241,15 +242,8 @@ describe('CHG-0028: 売買シグナル画面のキープ表（Livewire）', func
         expect(chg28TestRowText($section, 'キープ中型', $names))->not->toContain('要観察');
     });
 
-    test('各行にヘルスラインが表示される', function () {
-        $user = User::factory()->create();
-        chg28TestSeedHold(chg28TestSnapshot());
-
-        $section = chg28TestHoldSection(Livewire::actingAs($user)->test(SignalList::class)->html());
-
-        $large = chg28TestRowText($section, 'キープ大型', ['キープ中型', 'キープ要観察']);
-        expect($large)->toContain('含み益率+5.0%・RSI50.0・財務');
-    });
+    // CHG-0046: ヘルスライン列は判定チェックリスト列に置き換えて廃止
+    // （tests/Feature/CHG0046HoldTableRichColumnsTest.php で担保）。
 
     test('既定の並び順は評価額の大きい順になる', function () {
         $user = User::factory()->create();

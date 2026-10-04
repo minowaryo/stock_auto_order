@@ -379,6 +379,146 @@ final class SignalCriteriaEvaluator
     }
 
     /**
+     * キープ（hold）表のチェックリスト（CHG-0046）。キープはシグナルの方向を
+     * 持たないため、テクニカル各項目を利確検討（UC-004）と買い増し候補
+     * （UC-010）の既存閾値の両方に照らし、`tone` に 'warning'（利確寄り）/
+     * 'success'（押し目寄り）/ null を載せる。閾値は新設しない。
+     * 優先順位: 利確met > 押し目met > 利確near > 押し目near > unmet。
+     *
+     * @param  array<string, float|null>  $metrics
+     * @return array{
+     *   technical: list<array{label: string, threshold_label: string, value_label: string, status: string, tone: string|null}>,
+     *   fundamental: list<array{label: string, threshold_label: string, value_label: string, status: string}>,
+     *   summary: array{technical: array{sell: int, buy: int, total: int}, fundamental: array{met: int, near: int, total: int}},
+     * }
+     */
+    public function evaluateHold(array $metrics): array
+    {
+        $currentPrice = $metrics['current_price'] ?? null;
+        $percent = fn (float $v) => sprintf('%+.1f%%', $v);
+        // 利確検討と同じ利確ライン（TakeProfitThresholdEvaluator: 通常+20% / 高水準モード+150%）。
+        $gainLineThreshold = $metrics['gain_line_threshold'] ?? TakeProfitThresholdEvaluator::MIN_POSSIBLE_GAIN_RATE_THRESHOLD;
+
+        $technical = [
+            $this->twoWayRow(
+                '含み益率',
+                sprintf('利確≥+%d%%', (int) round($gainLineThreshold)),
+                $metrics['unrealized_gain_rate'] ?? null,
+                [$gainLineThreshold, 'gte'],
+                null,
+                $percent,
+            ),
+            $this->twoWayRow(
+                'RSI',
+                sprintf('利確≥%d／押し目≤%d', (int) SignalDeterminationService::RSI_REVERSAL_THRESHOLD, (int) BuySignalDeterminationService::RSI_OVERSOLD_THRESHOLD),
+                $metrics['rsi'] ?? null,
+                [SignalDeterminationService::RSI_REVERSAL_THRESHOLD, 'gte'],
+                [BuySignalDeterminationService::RSI_OVERSOLD_THRESHOLD, 'lte'],
+                fn (float $v) => number_format($v, 1),
+            ),
+            $this->twoWayRow(
+                '52週高値からの下落率',
+                '利確≤-10%',
+                $this->percentDeviation($currentPrice, $metrics['week52_high'] ?? null),
+                [(SignalDeterminationService::WEEK52_HIGH_PULLBACK_RATE - 1) * 100, 'lte'],
+                null,
+                $percent,
+            ),
+            $this->twoWayRow(
+                '52週安値からの距離',
+                '押し目≤+10%',
+                $this->percentDeviation($currentPrice, $metrics['week52_low'] ?? null),
+                null,
+                [(BuySignalDeterminationService::WEEK52_LOW_PROXIMITY_RATE - 1) * 100, 'lte'],
+                $percent,
+            ),
+            $this->twoWayRow(
+                'MA20乖離率',
+                '押し目≤-10%',
+                $this->percentDeviation($currentPrice, $metrics['ma20'] ?? null),
+                null,
+                [BuySignalDeterminationService::MA_DEVIATION_OVERSOLD_PCT, 'lte'],
+                $percent,
+            ),
+            $this->twoWayRow(
+                'MACD-シグナル線',
+                '利確<0／押し目>0',
+                $this->macdDiff($metrics['macd'] ?? null, $metrics['macd_signal'] ?? null),
+                [SignalDeterminationService::MACD_CROSS_THRESHOLD, 'lt'],
+                [BuySignalDeterminationService::MACD_CROSS_THRESHOLD, 'gt'],
+                fn (float $v) => number_format($v, 2),
+            ),
+            // hold_watch (ClassifyHoldingsAction::isHoldWatch) と同じ対セクター優先。
+            $this->twoWayRow(
+                $this->relativeStrengthLabel($metrics),
+                '利確<0',
+                $this->preferredRelativeStrength($metrics),
+                [SignalDeterminationService::RELATIVE_STRENGTH_WEAKENING_THRESHOLD, 'lt'],
+                null,
+                fn (float $v) => sprintf('%+.1f', $v),
+            ),
+            $this->twoWayRow(
+                'PEGレシオ',
+                sprintf('利確≥%s／押し目≤%s', number_format(SignalDeterminationService::PEG_OVERVALUED_THRESHOLD, 1), number_format(BuySignalDeterminationService::PEG_UNDERVALUED_THRESHOLD, 1)),
+                $metrics['peg_ratio'] ?? null,
+                [SignalDeterminationService::PEG_OVERVALUED_THRESHOLD, 'gte'],
+                [BuySignalDeterminationService::PEG_UNDERVALUED_THRESHOLD, 'lte_positive'],
+                fn (float $v) => number_format($v, 2),
+            ),
+            $this->twoWayRow('PER', '', $metrics['per'] ?? null, null, null, fn (float $v) => number_format($v, 1)),
+            $this->twoWayRow('PBR', '', $metrics['pbr'] ?? null, null, null, fn (float $v) => number_format($v, 2)),
+        ];
+
+        $fundamental = $this->fundamentalRows($metrics);
+
+        $metCount = fn (string $tone) => count(array_filter(
+            $technical,
+            fn (array $row) => $row['status'] === 'met' && $row['tone'] === $tone,
+        ));
+
+        return [
+            'technical' => $technical,
+            'fundamental' => $fundamental,
+            'summary' => [
+                'technical' => ['sell' => $metCount('warning'), 'buy' => $metCount('success'), 'total' => count($technical)],
+                'fundamental' => $this->summarize($fundamental),
+            ],
+        ];
+    }
+
+    /**
+     * CHG-0046: 利確側・押し目側それぞれの [threshold, direction]（片側のみ・
+     * 両方nullの参考表示も可）で classify() し、tone 付きの1行にまとめる。
+     *
+     * @param  array{0: float, 1: string}|null  $sell
+     * @param  array{0: float, 1: string}|null  $buy
+     * @param  callable(float): string  $formatValue
+     * @return array{label: string, threshold_label: string, value_label: string, status: string, tone: string|null}
+     */
+    private function twoWayRow(string $label, string $thresholdLabel, ?float $value, ?array $sell, ?array $buy, callable $formatValue): array
+    {
+        $row = $this->row($label, $thresholdLabel, $value, 0.0, 'none', $formatValue);
+        $row['tone'] = null;
+
+        if ($value === null || ($sell === null && $buy === null)) {
+            return $row;
+        }
+
+        $sellStatus = $sell === null ? 'unmet' : $this->classify($value, $sell[0], $sell[1]);
+        $buyStatus = $buy === null ? 'unmet' : $this->classify($value, $buy[0], $buy[1]);
+
+        [$row['status'], $row['tone']] = match (true) {
+            $sellStatus === 'met' => ['met', 'warning'],
+            $buyStatus === 'met' => ['met', 'success'],
+            $sellStatus === 'near' => ['near', 'warning'],
+            $buyStatus === 'near' => ['near', 'success'],
+            default => ['unmet', null],
+        };
+
+        return $row;
+    }
+
+    /**
      * 財務健全性4項目（CHG-0012 / ADR-0011 で営業利益率を4項目目に追加）。
      *
      * $forLossReview = false（UC-004/UC-010）: FundamentalHealthEvaluator の
