@@ -14,6 +14,8 @@
     $labelOnly = (bool) ($item['label_only'] ?? false);
     $tierClasses = ($valuationInfo && ! $labelOnly) ? \App\Support\ValuationDisplay::chipClasses($valuation['tier']) : null;
     $strongGood = ($item['strength'] ?? null) === 'strong_good' && $item['status'] === 'met';
+    $deepBackground = $strongGood
+        || ($tierClasses !== null && in_array($valuation['tier'] ?? null, ['strong_cheap', 'strong_expensive'], true));
     $variantClasses = match (true) {
         $strongGood => \App\Support\ValuationDisplay::STRONG_GOOD_CHIP_CLASSES,
         $tierClasses !== null => $tierClasses,
@@ -34,7 +36,7 @@
 <div {{ $attributes->class(['flex flex-col items-start gap-0.5 rounded border px-1.5 py-1 text-[10px] leading-tight w-full break-words', $variantClasses]) }}>
     <span class="font-medium">{{ $item['label'] }}</span>
     <span class="text-[11px] font-semibold tabular-nums">{{ $item['value_label'] }}</span>
-    <span class="text-text-secondary">{{ $item['threshold_label'] }}</span>
+    <span class="{{ $deepBackground ? 'text-white/80' : 'text-text-secondary' }}">{{ $item['threshold_label'] }}</span>
     @if ($valuationInfo)
         <span data-testid="chip-valuation" class="font-medium">{{ $valuationInfo['label'] }}@if (! empty($valuation['unstable'])) 基準不安定@endif</span>
     @endif

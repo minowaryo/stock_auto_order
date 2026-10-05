@@ -28,6 +28,10 @@ final class SignalOccurrenceMetricLabels
         'avg_revenue_growth' => '平均売上成長率',
         'avg_operating_income_growth' => '平均営業利益成長率',
         'dividend_yield' => '配当利回り',
+        'per_basis' => 'PER判定の基準',
+        'per_benchmark' => '業種の基準PER',
+        'per_factor' => '基準比のしきい値',
+        'per_valuation_tier' => '業種比較の段階',
     ];
 
     /**
@@ -45,10 +49,24 @@ final class SignalOccurrenceMetricLabels
                 continue;
             }
 
-            $items[] = (self::LABELS[$key] ?? $key).': '.self::value($value);
+            $items[] = (self::LABELS[$key] ?? $key).': '.self::display($key, $value);
         }
 
         return $items;
+    }
+
+    private static function display(string $key, mixed $value): string
+    {
+        return match ($key) {
+            'per_basis' => match ($value) {
+                'sector' => '業種比較',
+                'fixed' => '固定（PER≦15）',
+                default => self::value($value),
+            },
+            'per_factor' => (float) $value.'倍',
+            'per_valuation_tier' => ValuationDisplay::valuation((string) $value)['label'] ?? self::value($value),
+            default => self::value($value),
+        };
     }
 
     private static function value(mixed $value): string

@@ -2,6 +2,7 @@
 
 namespace App\Services\SignalOutcome;
 
+use App\Services\Analysis\ValuationBenchmarkJudge;
 use App\Services\MarketData\WeekDateNormalizer;
 use Throwable;
 
@@ -15,6 +16,7 @@ class SignalOccurrenceMetricsBuilder
 {
     public function __construct(
         private readonly WeekDateNormalizer $weekDateNormalizer,
+        private readonly ValuationBenchmarkJudge $valuationBenchmarkJudge,
     ) {}
 
     /**
@@ -37,14 +39,27 @@ class SignalOccurrenceMetricsBuilder
     }
 
     /**
+     * The PER judgement basis is stored on signal_occurrences only; the
+     * weekly indicator observations (UC-018) keep their original key set.
+     *
+     * @param  array<string, mixed>  $metrics  build() result
+     * @return array<string, mixed>
+     */
+    public function withoutPerBasis(array $metrics): array
+    {
+        return array_diff_key($metrics, array_flip(['per_basis', 'per_benchmark', 'per_factor', 'per_valuation_tier']));
+    }
+
+    /**
      * @param  array<int, array{date: string, close: float, volume: int}>  $priceHistory
      * @param  array<string, mixed>  $technical  TechnicalIndicatorCalculator::calculate() result
      * @param  array<string, mixed>  $fundamental  fundamental mapper result (+ avg growth when available)
+     * @param  ?string  $market  when given, the PER judgement basis is also stored (ADR-0026 D5)
      * @return array<string, mixed>
      */
-    public function build(array $priceHistory, array $technical, array $fundamental): array
+    public function build(array $priceHistory, array $technical, array $fundamental, ?string $market = null, ?string $sectorName = null): array
     {
-        return [
+        $metrics = [
             'close' => $priceHistory !== [] ? (float) $priceHistory[count($priceHistory) - 1]['close'] : null,
             'rsi' => $technical['rsi'] ?? null,
             'week52_high' => $technical['week52_high'] ?? null,
@@ -62,6 +77,21 @@ class SignalOccurrenceMetricsBuilder
             'avg_revenue_growth' => $fundamental['avg_revenue_growth'] ?? null,
             'avg_operating_income_growth' => $fundamental['avg_operating_income_growth'] ?? null,
             'dividend_yield' => $fundamental['dividend_yield'] ?? null,
+        ];
+
+        if ($market === null) {
+            return $metrics;
+        }
+
+        $per = isset($fundamental['per']) ? (float) $fundamental['per'] : null;
+        $verdict = $this->valuationBenchmarkJudge->buyPerVerdict($per, $market, $sectorName);
+
+        return [
+            ...$metrics,
+            'per_basis' => $verdict['basis'],
+            'per_benchmark' => $verdict['benchmark'],
+            'per_factor' => $verdict['factor'],
+            'per_valuation_tier' => $this->valuationBenchmarkJudge->judge('per', $per, $market, $sectorName)['tier'],
         ];
     }
 }

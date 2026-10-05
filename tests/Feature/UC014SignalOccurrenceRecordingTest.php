@@ -77,6 +77,8 @@ function uc014oMetricKeys(): array
         'close', 'rsi', 'week52_high', 'relative_strength_vs_market', 'relative_strength_vs_sector', 'ma75_trend_rising',
         'per', 'pbr', 'peg_ratio', 'roe', 'equity_ratio', 'operating_margin',
         'revenue_growth', 'operating_income_growth', 'avg_revenue_growth', 'avg_operating_income_growth', 'dividend_yield',
+        // CHG-0048 / ADR-0026 D5: the basis the buy-side PER was judged on.
+        'per_basis', 'per_benchmark', 'per_factor', 'per_valuation_tier',
     ];
 }
 
