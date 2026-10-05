@@ -70,7 +70,11 @@ final class YahooFinanceChartClient
             return new PriceHistory(PriceHistory::FAILED, message: $e->getMessage());
         }
 
-        if ($response->status() === 404) {
+        // Only Yahoo's symbol-specific answer counts as "no such symbol". A bare
+        // 404 (plain text, no chart error) is what the whole endpoint returns
+        // when access is refused or the API changed: treating that as a
+        // missing symbol would mark every real symbol unavailable.
+        if ($response->status() === 404 && $response->json('chart.error.code') === 'Not Found') {
             return new PriceHistory(PriceHistory::NOT_FOUND, message: 'HTTP 404');
         }
 
@@ -94,18 +98,22 @@ final class YahooFinanceChartClient
      * The shared bar rules: skip bars without close/volume, drop the
      * unconfirmed tail placeholder, fold same-week bars.
      *
-     * @param  array<int, array<string, mixed>>|null  $result  chart.result
+     * @param  mixed  $result  chart.result (anything unexpected yields no rows)
      * @return list<array{date: string, close: float, volume: int}>
      */
-    private function rowsFrom(?array $result): array
+    private function rowsFrom(mixed $result): array
     {
-        if (empty($result)) {
+        if (! is_array($result) || $result === [] || ! is_array($result[0] ?? null)) {
             return [];
         }
 
         $timestamps = $result[0]['timestamp'] ?? [];
         $closes = $result[0]['indicators']['quote'][0]['close'] ?? [];
         $volumes = $result[0]['indicators']['quote'][0]['volume'] ?? [];
+
+        if (! is_array($timestamps) || ! is_array($closes) || ! is_array($volumes)) {
+            return [];
+        }
 
         $history = [];
 

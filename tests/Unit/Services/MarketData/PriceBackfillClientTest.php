@@ -207,6 +207,22 @@ describe('YahooFinanceChartClient::fetchHistory（取得失敗の区別・例外
         expect($history->rows)->toBe([]);
     });
 
+    test('404でも、本文がYahooの「銘柄なし」のJSONでない場合（全銘柄に同じ404が返る障害・仕様変更）は「銘柄なし」にせず「取得失敗」にする', function (string|array $body) {
+        // Arrange: when the whole endpoint answers 404, a real symbol must not look like a missing one
+        Http::fake(['query1.finance.yahoo.com/*' => Http::response($body, 404)]);
+
+        // Act
+        $history = (new YahooFinanceChartClient)->fetchHistory('7203.T', '10y');
+
+        // Assert
+        expect($history->status)->toBe('failed');
+        expect($history->message)->toContain('404');
+    })->with([
+        'plain text' => ['Not Found'],
+        'json without the chart error' => [['message' => 'gone']],
+        'chart error with another code' => [['chart' => ['result' => null, 'error' => ['code' => 'Bad Request', 'description' => 'x']]]],
+    ]);
+
     test('レート制限（429）やサーバーエラー（5xx）は「取得失敗」で、理由にステータスが入る', function (int $status) {
         // Arrange
         Http::fake(['query1.finance.yahoo.com/*' => Http::response('Too Many Requests', $status)]);
@@ -230,6 +246,18 @@ describe('YahooFinanceChartClient::fetchHistory（取得失敗の区別・例外
         // Assert
         expect($history->status)->toBe('failed');
         expect($history->message)->toContain('timed out');
+    });
+
+    test('chart.resultが想定外の形（文字列など）でも、例外を投げず「データなし」にする', function () {
+        // Arrange
+        Http::fake(['query1.finance.yahoo.com/*' => Http::sequence()
+            ->push(['chart' => ['result' => 'oops', 'error' => null]])
+            ->push(['chart' => ['result' => [['timestamp' => 'x', 'indicators' => 'y']], 'error' => null]])]);
+        $client = new YahooFinanceChartClient;
+
+        // Act & Assert
+        expect($client->fetchHistory('NVDA', '10y')->status)->toBe('empty');
+        expect($client->fetchHistory('NVDA', '10y')->status)->toBe('empty');
     });
 
     test('200でも結果が空・使える週足がない場合は「データなし」で、失敗とは区別する', function () {
