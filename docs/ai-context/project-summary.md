@@ -34,6 +34,7 @@
 | memo（メモ） | 銘柄ごとの自由記述メモ（LLMとの壁打ち内容の手動転記用） | HoldingMemo |
 | market_overview（市場全体指標） | 日経平均・S&P500・米国10年債利回り・VIX指数・USD/JPY為替レートの取得・週次記録・参考表示（個別銘柄シグナルへの自動反映はしない） | MarketIndicatorSnapshot |
 | watchlist（注目テーマ・新規投資候補レコメンド） | 本人が手動登録した「注目テーマ・セクター」への合致判定・財務健全性フィルタによる新規投資候補の軽量レコメンド（テーマ自体の自動発見はしない） | WatchedTheme, RecommendationCandidate |
+| research（市場からの調査候補） | 公開資料から本人が手動で記録した未登録企業を、元発表・上場主体・根拠とともに確認してからウォッチリストへ渡す（UC-016、CHG-0031）。情報源の自動取得は4週試行後に再検討 | ResearchCandidate, ResearchEvent, ResearchEntity |
 
 ## ディレクトリ構成（概要）
 
@@ -55,7 +56,7 @@ docs/                 - 設計ドキュメント全体
 
 ## 現在のフォーカス
 
-要件定義フェーズ（Gate 1）。`docs/product/requirements.md` の叩き台をレビュー中。承認後、`docs/product/use-cases.md`（Gate 2）に進む。
+CHG-0031（市場からの調査候補、UC-016）はGate 1〜4承認済みで、手動記録・確認・UC-012への受け渡しをfeatureブランチでGreen確認中。情報源の4週試行は2026-10-05〜11-01、品質再精査は11-02以降。源固有の自動取得は別のGate 2差分として検討する。
 
 ## 読む順序（AIへの案内）
 

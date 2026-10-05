@@ -65,6 +65,13 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'audit' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/audit.jsonl'),
+            'level' => 'info',
+            'formatter' => Monolog\Formatter\JsonFormatter::class,
+        ],
+
         'daily' => [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),

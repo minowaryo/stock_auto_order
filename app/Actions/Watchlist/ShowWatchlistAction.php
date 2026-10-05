@@ -10,6 +10,7 @@ use App\Services\Analysis\SignalCriteriaEvaluator;
 use App\Services\Portfolio\PortfolioEvaluationCalculator;
 use App\Services\Sector\SectorAllocationCalculator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * UC-012「基本フロー（一覧の閲覧）」(F-012 / ADR-0013 D4): builds the unheld
@@ -72,8 +73,15 @@ class ShowWatchlistAction
             ->with(['holding.sectorClassification', 'holding.technicalIndicator', 'holding.fundamentalIndicator', 'watchlistBuySignals'])
             ->get();
 
+        $researchCandidateByItem = DB::table('research_watchlist_handoffs')
+            ->whereIn('watchlist_item_id', $items->pluck('id'))
+            ->orderByDesc('id')
+            ->get(['watchlist_item_id', 'research_candidate_id'])
+            ->unique('watchlist_item_id')
+            ->pluck('research_candidate_id', 'watchlist_item_id');
+
         $rows = $items
-            ->map(fn (WatchlistItem $item) => $this->toRow($item, $sectorAllocations, $suggestedAmount))
+            ->map(fn (WatchlistItem $item) => $this->toRow($item, $sectorAllocations, $suggestedAmount, $researchCandidateByItem->get($item->id)))
             ->all();
 
         usort($rows, function (array $a, array $b) {
@@ -88,7 +96,7 @@ class ShowWatchlistAction
      * @param  Collection<string, array<string, mixed>>  $sectorAllocations
      * @return array<string, mixed>
      */
-    private function toRow(WatchlistItem $item, $sectorAllocations, float $suggestedAmount): array
+    private function toRow(WatchlistItem $item, $sectorAllocations, float $suggestedAmount, ?int $researchCandidateId): array
     {
         $holding = $item->holding;
         $technical = $holding->technicalIndicator;
@@ -116,7 +124,12 @@ class ShowWatchlistAction
             'market' => $holding->market,
             'folder_name' => $item->folder_name,
             'is_starred' => $item->is_starred,
-            'in_rakuten_favorites' => $item->source === 'rakuten_favorites_csv',
+            'in_rakuten_favorites' => $item->last_seen_in_csv_at !== null,
+            'registration_routes' => array_values(array_filter([
+                $item->last_seen_in_csv_at !== null ? 'CSV' : null,
+                $researchCandidateId !== null ? '調査候補' : null,
+            ])),
+            'research_candidate_id' => $researchCandidateId,
             'current_price' => $currentPrice,
             'week52_range_position' => $rangePosition,
             'overlap_rate' => $overlapRate,
