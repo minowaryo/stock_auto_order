@@ -118,7 +118,7 @@ class TradeHistoryReconciler
             ->select(['holding_id', 'market', 'account_type', 'kind', 'quantity', 'trade_date'])
             ->where('review_status', 'ok')
             // Coarse filter; the per-market close check below is exact.
-            ->whereDate('trade_date', '<=', $snapshotAt->toDateString())
+            ->where('trade_date', '<=', $snapshotAt->toDateString())
             ->toBase()
             ->get()
             ->each(function (object $row) use (&$quantities, $snapshotAt) {

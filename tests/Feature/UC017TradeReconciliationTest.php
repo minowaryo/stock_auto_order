@@ -336,6 +336,28 @@ describe('UC-017 照合: 対象と時点', function () {
         expect((float) $item->history_quantity)->toBe(15.0);
     });
 
+    test('米国株の取引終了の判定は冬時間（EST）でも正しく、16:00 ESTは21:00 UTCになる', function () {
+        // Arrange: 12/1 buy 10 (EST: close = 21:00 UTC)
+        $us = [trcUs(['約定日' => '2026/12/1', '受渡日' => '2026/12/3'])];
+        trcSnapshot('2026-12-01 20:30:00', [['code' => 'TEST', 'market' => 'us', 'accounts' => ['specific' => 5]]]); // 15:30 EST: before the close
+
+        // Act 1
+        $before = trcImport([], $us);
+
+        // Assert 1: the 12/1 buy is not counted yet (a summer-time rule would count it at 20:30 UTC)
+        $item = TradeReconciliationItem::where('trade_import_batch_id', $before->batchId)->sole();
+        expect($item->status)->toBe('snapshot_only');
+        expect($item->history_quantity)->toBeNull();
+
+        // Act 2
+        trcSnapshot('2026-12-01 21:30:00', [['code' => 'TEST', 'market' => 'us', 'accounts' => ['specific' => 10]]]); // 16:30 EST
+        $after = trcImport([], $us);
+
+        // Assert 2
+        $item = TradeReconciliationItem::where('trade_import_batch_id', $after->batchId)->sole();
+        expect($item->status)->toBe('matched');
+    });
+
     test('最新の履歴から消えて確認待ちになった約定は、積み上げに含めない', function () {
         // Arrange
         trcSnapshot('2026-10-03 12:00:00', [
