@@ -14,6 +14,7 @@ use App\Models\TradeImportBatch;
 use App\Models\TradeReconciliationItem;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 
@@ -282,7 +283,7 @@ describe('UC-017 売買履歴の取込画面: プレビュー', function () {
         $tamper = fn () => $component->set('preview', ['totalRows' => 1, 'newRows' => 1, 'existingRows' => 0, 'missingRows' => 0, 'errorCount' => 0, 'periodFrom' => null, 'periodTo' => null, 'reconciliation' => null]);
 
         // Assert: the property is locked, and nothing was imported
-        expect($tamper)->toThrow(\Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException::class);
+        expect($tamper)->toThrow(CannotUpdateLockedPropertyException::class);
         $component->call('confirm');
         expect(TradeImportBatch::count())->toBe(0);
     });
