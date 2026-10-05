@@ -427,6 +427,8 @@ class FetchExternalMarketDataAction
                             $priceHistory,
                             $technical,
                             [...($fundamental ?? []), ...$avgGrowth],
+                            market: $holding->market,
+                            sectorName: $holding->sectorClassification?->name,
                         ),
                     ];
                 });
@@ -461,7 +463,7 @@ class FetchExternalMarketDataAction
             return;
         }
 
-        $this->indicatorObservationRecorder->record($holding, 'holding_import', $occurrences['metrics']);
+        $this->indicatorObservationRecorder->record($holding, 'holding_import', $this->signalOccurrenceMetricsBuilder->withoutPerBasis($occurrences['metrics']));
     }
 
     /**

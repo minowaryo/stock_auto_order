@@ -495,7 +495,7 @@
 | signal_type | varchar(50) | NO | - | シグナル種別（発生元テーブルの`signal_type`の値をそのまま格納。値域が3テーブルで異なり今後も増えるため enum にしない） |
 | observed_week | date | NO | - | 判定に使った週足系列の最終確定週（`weekly_prices.week_date`と同じ基準）。超過リターンの起点 |
 | snapshot_id | bigint | YES | null | `snapshots.id` への参照。`take_profit`／`buy`で設定、`watchlist_buy`はnull |
-| metrics | json | YES | null | 発生時点の判定根拠値（終値・RSI・52週高値比・相対力〔対市場/対セクター〕・`ma75_trend_rising`・PER・PBR・PEG・ROE・自己資本比率・営業利益率・成長率〔単年/3期平均〕・配当利回り・財務健全性判定）。既存スナップショットからの移送分はnull（D6） |
+| metrics | json | YES | null | 発生時点の判定根拠値（終値・RSI・52週高値比・相対力〔対市場/対セクター〕・`ma75_trend_rising`・PER・PBR・PEG・ROE・自己資本比率・営業利益率・成長率〔単年/3期平均〕・配当利回り・財務健全性判定。2026-10-04から、PERの判定に使った基準〔`per_basis`=sector/fixed・`per_benchmark`・`per_factor`〕と業種比較の段階〔`per_valuation_tier`〕も保存。CHG-0048・ADR-0026 D5）。既存スナップショットからの移送分はnull（D6） |
 | created_at | timestamp | NO | now() | 作成日時 |
 
 **Index**: `(holding_id, source, signal_type, observed_week)` unique（同じ週の再実行で重複させない。先頭列が`holding_id`のためFKインデックスを兼ねる）、`(source, signal_type, observed_week)`（UC-014の種別別集計用）、`snapshot_id`

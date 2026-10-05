@@ -9,6 +9,7 @@ use App\Services\Analysis\CriteriaValuationMetricsBuilder;
 use App\Services\Analysis\LowGrowthDeterminer;
 use App\Services\Analysis\SignalCriteriaEvaluator;
 use App\Services\Analysis\TakeProfitThresholdEvaluator;
+use App\Services\Analysis\ValuationBenchmarkJudge;
 use App\Support\NisaHoldingStatus;
 use App\Support\SignalListSort;
 
@@ -29,6 +30,7 @@ class ShowSignalListAction
         private readonly SignalCriteriaEvaluator $criteriaEvaluator,
         private readonly CriteriaValuationMetricsBuilder $valuationMetrics,
         private readonly LowGrowthDeterminer $lowGrowthDeterminer,
+        private readonly ValuationBenchmarkJudge $valuationBenchmarkJudge,
     ) {}
 
     /**
@@ -194,8 +196,10 @@ class ShowSignalListAction
             return null;
         }
 
-        return $per > 0.0
-            && $per <= BuySignalDeterminationService::PER_UNDERVALUED_THRESHOLD
+        $holding = $holdingSnapshot->holding;
+        $perMet = $this->valuationBenchmarkJudge->buyPerVerdict($per, $holding->market, $holding->sectorClassification?->name)['met'];
+
+        return $perMet
             && $dividendYield >= BuySignalDeterminationService::DIVIDEND_YIELD_UNDERVALUED_THRESHOLD
                 ? '絶対バリュエーション上は割安ゾーン'
                 : null;

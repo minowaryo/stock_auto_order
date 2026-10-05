@@ -137,7 +137,8 @@
             <h2 class="text-base font-semibold mb-2">ファンダメンタルズ指標</h2>
             <dl class="text-[13px]">
                 @foreach ($fundamentalFields as $label => $value)
-                    <div class="flex justify-between py-1 border-b border-app-border last:border-b-0">
+                    <div class="py-1 border-b border-app-border last:border-b-0">
+                    <div class="flex justify-between">
                         <dt class="text-text-secondary">{{ $label }}</dt>
                         <dd>{{ $value ?? '取得不可' }}</dd>
                         @if (isset($verdictsByLabel[$label]))
@@ -147,7 +148,7 @@
                             @endphp
                             <div data-testid="{{ $metricKey }}-verdict" class="ml-2">
                                 @if ($verdictDisplay !== null)
-                                    <x-badge :variant="$verdictDisplay['variant']">{{ $verdictDisplay['label'] }}</x-badge>
+                                    <x-badge :variant="$verdictDisplay['variant']" class="whitespace-nowrap">{{ $verdictDisplay['label'] }}</x-badge>
                                     @if ($verdict['unstable'])
                                         <span class="text-xs text-text-secondary">基準が不安定</span>
                                     @endif
@@ -155,20 +156,21 @@
                                     {{ \App\Support\ValuationDisplay::reason($verdict['reason']) }}
                                 @endif
                             </div>
-                            @if ($verdictDisplay !== null)
-                                <div data-testid="{{ $metricKey }}-benchmark" class="text-xs text-text-secondary ml-2">
-                                    業種基準 {{ number_format($verdict['benchmark'], $metricKey === 'pbr' ? 2 : 1) }}・基準比 {{ number_format($verdict['ratio'], 2) }}倍・基準日 {{ $verdict['as_of'] }}・出典 {{ $verdict['source'] }}
-                                </div>
-                            @endif
                         @endif
                         @if (isset($tonesByLabel[$label]))
                             @php $toneDisplay = \App\Support\ValuationDisplay::tone($detail['metric_tones'][$tonesByLabel[$label]] ?? null); @endphp
                             @if ($toneDisplay !== null)
                                 <div data-testid="tone-{{ $tonesByLabel[$label] }}" class="ml-2">
-                                    <x-badge :variant="$toneDisplay['variant']">{{ $toneDisplay['label'] }}</x-badge>
+                                    <x-badge :variant="$toneDisplay['variant']" class="whitespace-nowrap">{{ $toneDisplay['label'] }}</x-badge>
                                 </div>
                             @endif
                         @endif
+                    </div>
+                    @if (isset($verdictsByLabel[$label]) && $verdictDisplay !== null)
+                        <div data-testid="{{ $metricKey }}-benchmark" class="text-xs text-text-secondary mt-1">
+                            業種基準 {{ number_format($verdict['benchmark'], $metricKey === 'pbr' ? 2 : 1) }}・基準比 {{ number_format($verdict['ratio'], 2) }}倍・基準日 {{ $verdict['as_of'] }}・出典 {{ $verdict['source'] }}
+                        </div>
+                    @endif
                     </div>
                 @endforeach
             </dl>

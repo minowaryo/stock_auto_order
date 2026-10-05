@@ -287,7 +287,13 @@ class RefreshWatchlistMarketDataAction
         $observedWeek = $this->signalOccurrenceMetricsBuilder->observedWeek($priceHistory);
 
         if ($observedWeek !== null) {
-            $metrics = $this->signalOccurrenceMetricsBuilder->build($priceHistory, $technical, $fundamental);
+            $metrics = $this->signalOccurrenceMetricsBuilder->build(
+                $priceHistory,
+                $technical,
+                $fundamental,
+                market: $holding->market,
+                sectorName: $holding->sectorClassification?->name,
+            );
 
             $this->signalOccurrenceRecorder->record(
                 $holding,
@@ -300,7 +306,7 @@ class RefreshWatchlistMarketDataAction
 
             // UC-018 (ADR-0027 D4): append the indicators whether or not a
             // signal fired; the recorder never throws.
-            $this->indicatorObservationRecorder->record($holding, 'watchlist_refresh', $metrics);
+            $this->indicatorObservationRecorder->record($holding, 'watchlist_refresh', $this->signalOccurrenceMetricsBuilder->withoutPerBasis($metrics));
         }
 
         return $currentPrice;
