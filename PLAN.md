@@ -63,7 +63,11 @@ Red 16件→Gate4承認→Green。フルスイート1226 passed・pint適用済�
 - [x] Gate 4 Cycle 4（UC-017 保有CSVとの照合）: テスト10件を本人承認→Green。実データ検証で、日付だけの時点判定は国内16件の不一致になる（市場が開く前の取込で当日約定まで数えるため）ことが判明し、本人承認のうえ「取込時刻が約定日の市場の取引終了（国内15:30東京・米国16:00NY）以降のときだけ含める」基準に変更（追加テスト2件。`/review`で冬時間のテスト1件を追加し、夏時間固定に変えると失敗することを確認）。実データは156件すべて一致。計13件。`trade_reconciliation_items`・`TradeHistoryReconciler`。ブランチ `feat/chg0033-reconcile`、マージ待ち。
 - [x] main マージ・push済み（2026-10-05）: Cycle 4（保有CSVとの照合、`742f8fb`）。開発用DBに`trade_reconciliation_items`をmigrate済み。
 - [x] Gate 4 Cycle 5（UC-017 取込画面）: テスト17件を本人承認→Green（`/trade-history-import`、UC-001画面からのリンク、プレビュー→確定、照合結果と使った保有CSVの日付、取込履歴）。`/review`でサーバー保持の状態がブラウザから書き換えられる点を発見し、再発防止テスト（計18件）を先に書いて`#[Locked]`で修正。承認済みテストは、日本語を確認できない`assertSeeInOrder`を表示テキストの検査に直した（確認内容は同じ）。画面の見た目はスクリーンショットで確認したが、ブラウザ自動操作では「プレビュー」の結果表示まで確認できていない（自動テストは通過。実機での確認は本人にお願い）。module-map・user-guide・モックREADMEを更新。ブラウザ確認の初回に、プレビュー用サーバーが開発用DBに接続し、ゲストのセッション行が作られた（業務データへの書き込みなし。以後は`.env`を専用DBに固定してから起動する）。ブランチ `feat/chg0033-import-screen`、マージ待ち。
-- [ ] 次のCycle: 価格の初回一括補完と`price_tracking_targets`（ADR-0024 D5、`stock_splits`・`usdjpy`を含む）→UC-018の算出（年率・売却/推定乗換え/買付比較）。UC-019はGate 2保留。
+- [x] main マージ・push済み（2026-10-05）: Cycle 5（取込画面、`8e621b3`）。実機のブラウザ確認は本人確認待ち（自動操作では「プレビュー」の結果表示まで確認できていない）。
+- [x] Gate 4 Cycle 6a（価格取得のクライアント層）: テスト19件を本人承認→Green（`PriceBackfillClient`・`YahooFinanceChartClient::fetchHistory()`・`PriceHistory`。10年の週足＋分割＋取得結果の状態 ok／empty／not_found／failed）。実際のYahooで確認: `range=5y`は2021-10からで足りず`10y`にした／分割は国内・米国とも取得可／終値は分割調整済み。`/review`で、Yahooが全銘柄に本文「Not Found」だけの404を返す障害を実際に観測し、404を一律「銘柄なし」にすると実在銘柄が取得不能になると判明→「銘柄なし」はJSONの`chart.error.code=Not Found`のときだけとし、それ以外の404は「取得失敗」へ（再発防止テストを先に書いて修正）。想定外の形の応答でも例外を投げない。計23件。ブランチ `feat/chg0033-price-client`、マージ待ち。
+- [x] Gate 4 Cycle 6b（価格の保存と追跡状態）: テスト27件を本人承認→Green（`price_tracking_targets`〔`track_until_week`をnullable・`splits_incomplete`追加を承認〕・`stock_splits`・`usdjpy`、`PriceTrackingTargetUpdater`・`StockSplitRecorder`）。ブランチ `feat/chg0033-price-state`（6aの上）、6aのマージ後にレビュー・マージ。
+- [ ] **Yahooの実データ検証が未了**: 検証中にYahooが全銘柄へ404を返す状態になり（User-Agent・ホストを変えても同じ）、復旧後に次を確認する: 英字を含む国内コード（売買履歴に1銘柄ある）が`{コード}.T`で取得できるか／米国のクラス株（`BRK.B`→`BRK-B`など。現在の売買履歴にはない）。取得できない場合の扱いは6cで決める。
+- [ ] 次のCycle 6c: 初回補完の実行（対象銘柄の洗い出し、約146リクエストの取得〔間隔・タイムアウト・失敗時の扱い〕、`unavailable`の判定、コマンド）→6d: 毎週の追跡→UC-018の算出（年率・売却/推定乗換え/買付比較）。UC-019はGate 2保留。
 - [ ] Gate 4でUC名から導くテストケース（26週境界、取得失敗、価格補完後のUC-014再集計、二重集計防止の計算例、年率20％／25％境界）を承認してから実装する。
 
 ## メガトレンド候補発見（CHG-0031・ADR-0022／ADR-0025・F-016／UC-016）Green・回帰確認済み（2026-10-05）

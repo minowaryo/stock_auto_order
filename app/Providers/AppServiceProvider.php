@@ -11,6 +11,8 @@ use App\Services\MarketData\JQuantsClient;
 use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\MarketData\MarketIndexClient;
 use App\Services\MarketData\MarketIndexClientInterface;
+use App\Services\MarketData\PriceBackfillClient;
+use App\Services\MarketData\PriceBackfillClientInterface;
 use App\Services\MarketData\UsStockPriceClient;
 use App\Services\MarketData\UsStockPriceClientInterface;
 use Illuminate\Support\ServiceProvider;
@@ -29,6 +31,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(JpStockPriceClientInterface::class, JpStockPriceClient::class);
         $this->app->bind(UsStockPriceClientInterface::class, UsStockPriceClient::class);
         $this->app->bind(MarketIndexClientInterface::class, MarketIndexClient::class);
+        $this->app->bind(PriceBackfillClientInterface::class, PriceBackfillClient::class);
         $this->app->bind(JQuantsClientInterface::class, JQuantsClient::class);
         $this->app->bind(FinnhubClientInterface::class, FinnhubClient::class);
 
