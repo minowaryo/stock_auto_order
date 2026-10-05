@@ -2,6 +2,7 @@
 
 namespace App\Services\MarketData;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -40,8 +41,64 @@ final class YahooFinanceChartClient
             return [];
         }
 
-        $result = $response->json('chart.result');
+        $history = $this->rowsFrom($response->json('chart.result'));
 
+        if (count($history) > $weeks) {
+            $history = array_slice($history, -$weeks);
+        }
+
+        return $history;
+    }
+
+    /**
+     * Weekly history for a longer range, optionally with stock splits
+     * (ADR-0024 D5 backfill). Never throws: the outcome is in the status
+     * (404 → not_found; other non-2xx or a connection error → failed; a 200
+     * without usable bars → empty).
+     */
+    public function fetchHistory(string $symbol, string $range, bool $withSplits = false): PriceHistory
+    {
+        $query = ['range' => $range, 'interval' => '1wk'];
+
+        if ($withSplits) {
+            $query['events'] = 'splits';
+        }
+
+        try {
+            $response = Http::get(self::BASE_URL.$symbol, $query);
+        } catch (ConnectionException $e) {
+            return new PriceHistory(PriceHistory::FAILED, message: $e->getMessage());
+        }
+
+        if ($response->status() === 404) {
+            return new PriceHistory(PriceHistory::NOT_FOUND, message: 'HTTP 404');
+        }
+
+        if (! $response->successful()) {
+            return new PriceHistory(PriceHistory::FAILED, message: 'HTTP '.$response->status());
+        }
+
+        $result = $response->json('chart.result');
+        $rows = $this->rowsFrom($result);
+
+        if ($rows === []) {
+            return new PriceHistory(PriceHistory::EMPTY);
+        }
+
+        [$splits, $incomplete] = $withSplits ? $this->splitsFrom($result) : [[], false];
+
+        return new PriceHistory(PriceHistory::OK, $rows, $splits, $incomplete);
+    }
+
+    /**
+     * The shared bar rules: skip bars without close/volume, drop the
+     * unconfirmed tail placeholder, fold same-week bars.
+     *
+     * @param  array<int, array<string, mixed>>|null  $result  chart.result
+     * @return list<array{date: string, close: float, volume: int}>
+     */
+    private function rowsFrom(?array $result): array
+    {
         if (empty($result)) {
             return [];
         }
@@ -82,12 +139,39 @@ final class YahooFinanceChartClient
         // Yahoo can also emit a last-trading-day bar (nonzero volume) dated
         // inside the same week as a weekly bar, not only at the tail. Keep
         // the first row of each week (shared rule with WeeklyPriceRecorder).
-        $history = $this->weekDateNormalizer->foldByWeek($history);
+        return $this->weekDateNormalizer->foldByWeek($history);
+    }
 
-        if (count($history) > $weeks) {
-            $history = array_slice($history, -$weeks);
+    /**
+     * Whole-number splits only (stock_splits stores integer ratios); any
+     * other entry is dropped and reported through the incomplete flag.
+     *
+     * @param  array<int, array<string, mixed>>  $result  chart.result
+     * @return array{0: list<array{date: string, numerator: int, denominator: int}>, 1: bool}
+     */
+    private function splitsFrom(array $result): array
+    {
+        $splits = [];
+        $incomplete = false;
+
+        foreach (($result[0]['events']['splits'] ?? []) as $split) {
+            $numerator = $split['numerator'] ?? null;
+            $denominator = $split['denominator'] ?? null;
+            $at = $split['date'] ?? null;
+
+            if (! is_numeric($numerator) || ! is_numeric($denominator) || ! is_numeric($at)
+                || (float) $numerator !== floor((float) $numerator) || (float) $denominator !== floor((float) $denominator)
+                || (int) $numerator < 1 || (int) $denominator < 1) {
+                $incomplete = true;
+
+                continue;
+            }
+
+            $splits[] = ['date' => gmdate('Y-m-d', (int) $at), 'numerator' => (int) $numerator, 'denominator' => (int) $denominator];
         }
 
-        return $history;
+        usort($splits, fn (array $a, array $b) => $a['date'] <=> $b['date']);
+
+        return [$splits, $incomplete];
     }
 }
