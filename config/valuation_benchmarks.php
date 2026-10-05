@@ -8,7 +8,7 @@
 return [
     'jp' => [
         'as_of' => '2026-09',
-        'source' => 'JPX 月次統計（東証17業種、プライム・連結、単純平均＝株価合計÷EPS合計・BPS合計）。17業種は33業種の公式値を会社数・単純EPS・単純BPSで重み付けして集約',
+        'source' => 'JPX 月次統計（東証17業種・単純平均）',
         'per' => [
             '食品' => ['value' => 18.9, 'confidence' => 'high'],
             'エネルギー資源' => ['value' => 12.4, 'confidence' => 'low'],
@@ -50,7 +50,7 @@ return [
     ],
     'us' => [
         'as_of' => '2026-01〜2026-10',
-        'source' => 'Damodaran（NYU Stern）業種別データと SPDR 業種ETF の実績P/Eの相加平均',
+        'source' => 'Damodaran・SPDR 業種ETF',
         'per' => [
             'Semiconductors' => ['value' => 44.8, 'confidence' => 'high'],
             'Aerospace & Defense' => ['value' => 33.4, 'confidence' => 'high'],

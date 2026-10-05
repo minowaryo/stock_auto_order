@@ -15,7 +15,7 @@
 
 ### Status
 
-実装完了（2026-10-04）。ブランチ`feat/chg0034-sector-valuation-color`で、CHG-0034とCHG-0048を一緒に実装（各Cycleで Red→Gate4→Green）。Cycle1: 判定ロジック（`ValuationBenchmarkJudge`・`FundamentalMetricToneEvaluator`）。Cycle2a/2b: 基準値の設定・保有一覧と銘柄詳細の表示。Cycle2c: 日本株の基準をJPXの単純平均へ。Cycle3a/3b: 売買シグナル画面・新規投資候補のチップ（整理検討はラベルのみ）。Cycle4: 買い増し判定のPER基準の業種相対化。フルスイート全件Green（1574件）、`/review`（強化レベル）実施済み。**未対応**: 利確検討の注記「絶対バリュエーション上は割安ゾーン」（PER≦15・配当3%）を買い増し判定にそろえるかは本人の判断待ち、UC-010の改訂文面と基準値の表の最終確認、`run`スキルでの画面確認、シグナル発生記録に判定の基準を残す後続CR（ADR-0026 D5）
+実装完了（2026-10-04）。ブランチ`feat/chg0034-sector-valuation-color`で、CHG-0034とCHG-0048を一緒に実装（各Cycleで Red→Gate4→Green）。Cycle1: 判定ロジック（`ValuationBenchmarkJudge`・`FundamentalMetricToneEvaluator`）。Cycle2a/2b: 基準値の設定・保有一覧と銘柄詳細の表示。Cycle2c: 日本株の基準をJPXの単純平均へ。Cycle3a/3b: 売買シグナル画面・新規投資候補のチップ（整理検討はラベルのみ）。Cycle4: 買い増し判定のPER基準の業種相対化。フルスイート全件Green（1574件）、`/review`（強化レベル）実施済み。フォローアップ（2026-10-05、mainマージ済み2e94baa）: 利確検討の注記を業種相対にそろえ、シグナル発生記録にPERの判定の基準を保存、チップの文字色と銘柄詳細のバッジの折り返しを修正。UC-010の改訂文面と基準値の表は本人が確認済み。銘柄詳細の出典の表示は短い名前に変更（詳しい算出方法はvaluation-benchmarks.md）
 
 ## 売買シグナル画面のNISA保有区分バッジ（CHG-0047）実装完了・mainマージ済み（2026-10-04）
 
