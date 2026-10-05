@@ -3,12 +3,14 @@
 namespace App\Actions\Import;
 
 use App\Actions\Import\Support\TradeHistoryImportSummary;
+use App\Actions\Import\Support\TradeReconciliationSummary;
 use App\Exceptions\Import\CsvStructureException;
 use App\Models\Holding;
 use App\Models\TradeExecution;
 use App\Models\TradeImportBatch;
 use App\Services\Import\Support\ParsedTradeRow;
 use App\Services\Import\TradeHistoryCsvParser;
+use App\Services\Import\TradeHistoryReconciler;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -29,6 +31,7 @@ class ImportTradeHistoryAction
 
     public function __construct(
         private readonly TradeHistoryCsvParser $parser,
+        private readonly TradeHistoryReconciler $reconciler,
     ) {}
 
     /**
@@ -100,7 +103,8 @@ class ImportTradeHistoryAction
                 ]);
             }
 
-            $summary = $this->summary($batch->id, $rows, $errorCount, $diff);
+            $reconciliation = $this->reconciler->reconcile($batch);
+            $summary = $this->summary($batch->id, $rows, $errorCount, $diff, $reconciliation);
 
             $batch->forceFill([
                 'status' => 'completed',
@@ -216,7 +220,7 @@ class ImportTradeHistoryAction
      * @param  array<int, ParsedTradeRow>  $rows
      * @param  array{new: array<int, ParsedTradeRow>, existingIds: array<int, int>, missingIds: array<int, int>}  $diff
      */
-    private function summary(?int $batchId, array $rows, int $errorCount, array $diff): TradeHistoryImportSummary
+    private function summary(?int $batchId, array $rows, int $errorCount, array $diff, ?TradeReconciliationSummary $reconciliation = null): TradeHistoryImportSummary
     {
         $dates = array_map(fn (ParsedTradeRow $r) => $r->tradeDate, $rows);
 
@@ -230,6 +234,7 @@ class ImportTradeHistoryAction
             errorCount: $errorCount,
             periodFrom: $dates === [] ? null : min($dates),
             periodTo: $dates === [] ? null : max($dates),
+            reconciliation: $reconciliation,
         );
     }
 }
