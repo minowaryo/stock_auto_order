@@ -63,7 +63,7 @@ ADR-0017 D2の「新規の外部APIコールは発生しない」は、CHG-0020�
 F-017の株式部分の年率（時間加重リターン）、売却・買付・推定乗換えの比較、過去の売買の価格系指標の事後再計算には、売買履歴の開始（国内2022-07、米国2024-08）より前の52週を含む週足が要る。既存の104週（`range=2y`）では足りないため、次を**初回に1回だけ**行う。
 
 - 対象: 売買履歴に現れた全銘柄（2026-10-03時点で国内95・米国48の約143銘柄）、日経225、S&P500、ドル円の週足。合計約146リクエスト。
-- 期間: 2021-07以降（Yahoo Finance chartの `range=5y` 相当）。既存の `YahooFinanceChartClient` に取得期間の指定を足し、保存は `weekly_prices` / `index_weekly_prices` へのUPSERTを共用する。ドル円の週足の保存先はGate 3で決める（既存の `fx_rate_used` はスナップショット時点の値だけで週次系列はない）。→ [ADR-0027](ADR-0027-trade-history-storage.md) D5 で `index_weekly_prices` の `usdjpy` とする案（Gate 3承認済み 2026-10-04）。追跡状態は同 D7 の `price_tracking_targets`。
+- 期間: **過去10年（Yahoo Finance chartの `range=10y`、週足約524点）**。2026-10-05に実際のAPIで確認したところ、`range=5y` は2021-10からしか取れず、2022年の売買の価格系指標（移動平均75週・52週高値）の計算に必要な過去が足りない。`range=max` は古い期間が月足に変わるため使えない（当初案は「2021-07以降・5年相当」だった。リクエスト数は同じ約146回、データ量は約2倍）。分割は `events=splits` で国内・米国とも取得でき、終値は分割で遡って調整済み（Gate 4 Cycle 6a）。**取得結果の判定**: HTTP 404 のうち、本文が Yahoo の「銘柄なし」のJSON（`chart.error.code = "Not Found"`）のものだけを `not_found`（銘柄なし）とし、JSONでない404（全銘柄に同じ404が返るアクセス拒否・仕様変更）は `failed` とする（そうしないと、障害時に実在する銘柄がすべて取得不能になる）。既存の `YahooFinanceChartClient` に取得期間の指定を足し、保存は `weekly_prices` / `index_weekly_prices` へのUPSERTを共用する。ドル円の週足の保存先はGate 3で決める（既存の `fx_rate_used` はスナップショット時点の値だけで週次系列はない）。→ [ADR-0027](ADR-0027-trade-history-storage.md) D5 で `index_weekly_prices` の `usdjpy` とする案（Gate 3承認済み 2026-10-04）。追跡状態は同 D7 の `price_tracking_targets`。
 - 以後の週次は D2・D4 の104週UPSERTのまま。新しい売買履歴で未知の銘柄が現れたときだけ、その銘柄を同じ方法で補完する。
 - 上場廃止等で取得できない銘柄は「取得不能」と記録し、F-017側で評価額比率に応じて判定保留にする。
 - Yahooの終値は分割調整済みのため、売買履歴の株数も分割調整後に揃えて使う。
