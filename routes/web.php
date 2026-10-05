@@ -23,6 +23,7 @@ use App\Livewire\ImportSummaryReport\Show;
 use App\Livewire\Sector\SectorDashboard;
 use App\Livewire\Signal\SignalList;
 use App\Livewire\SignalOutcome\SignalOutcomes;
+use App\Livewire\TradeHistory\Import;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -51,6 +52,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/signal-outcomes', SignalOutcomes::class);
     Route::get('/signals', SignalList::class);
     Route::get('/summary-report', Latest::class);
+    Route::get('/trade-history-import', Import::class);
 });
 
 // JSON API（フロントエンドのLivewireページはこれらをHTTP経由で呼ばず、

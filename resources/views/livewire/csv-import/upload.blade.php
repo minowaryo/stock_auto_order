@@ -1,6 +1,10 @@
 <div>
     <x-page-header title="CSV取込" caption="楽天証券からダウンロードしたCSVファイルを取り込みます" />
 
+    <p class="mb-4">
+        <x-btn tag="a" variant="secondary" href="/trade-history-import" wire:navigate>売買履歴の取込へ</x-btn>
+    </p>
+
     <x-card>
         @if ($importError)
             <div class="mb-4 px-4 py-3 rounded-md bg-red-50 text-danger text-[13px]">

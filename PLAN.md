@@ -61,7 +61,9 @@ Red 16件→Gate4承認→Green。フルスイート1226 passed・pint適用済�
 - [x] Gate 4 Cycle 3（UC-017 取込の保存）: テスト11件を本人承認→Green（`trade_import_batches`・`trade_executions`、`ImportTradeHistoryAction` の preview/execute）。`/review`で、想定外のDBエラー時に取込記録が`pending`のまま残る不具合を発見し、再発防止テストを追加して修正（計12件）。実データ1248行の初回取込・再取込（増えない）を専用DBで確認。ブランチ `feat/chg0033-trade-import-save`。
 - [x] main マージ・push済み（2026-10-04）: Cycle 3（取込の保存、`b22c2fa`）。開発用DBに`trade_import_batches`・`trade_executions`をmigrate済み。
 - [x] Gate 4 Cycle 4（UC-017 保有CSVとの照合）: テスト10件を本人承認→Green。実データ検証で、日付だけの時点判定は国内16件の不一致になる（市場が開く前の取込で当日約定まで数えるため）ことが判明し、本人承認のうえ「取込時刻が約定日の市場の取引終了（国内15:30東京・米国16:00NY）以降のときだけ含める」基準に変更（追加テスト2件。`/review`で冬時間のテスト1件を追加し、夏時間固定に変えると失敗することを確認）。実データは156件すべて一致。計13件。`trade_reconciliation_items`・`TradeHistoryReconciler`。ブランチ `feat/chg0033-reconcile`、マージ待ち。
-- [ ] 次のCycle: 取込画面（UC-001からの導線、プレビュー→確定、照合結果と使った保有CSVの日付を表示）→価格の初回一括補完と`price_tracking_targets`（ADR-0024 D5）→UC-018の算出。UC-019はGate 2保留。
+- [x] main マージ・push済み（2026-10-05）: Cycle 4（保有CSVとの照合、`742f8fb`）。開発用DBに`trade_reconciliation_items`をmigrate済み。
+- [x] Gate 4 Cycle 5（UC-017 取込画面）: テスト17件を本人承認→Green（`/trade-history-import`、UC-001画面からのリンク、プレビュー→確定、照合結果と使った保有CSVの日付、取込履歴）。`/review`でサーバー保持の状態がブラウザから書き換えられる点を発見し、再発防止テスト（計18件）を先に書いて`#[Locked]`で修正。承認済みテストは、日本語を確認できない`assertSeeInOrder`を表示テキストの検査に直した（確認内容は同じ）。画面の見た目はスクリーンショットで確認したが、ブラウザ自動操作では「プレビュー」の結果表示まで確認できていない（自動テストは通過。実機での確認は本人にお願い）。module-map・user-guide・モックREADMEを更新。ブラウザ確認の初回に、プレビュー用サーバーが開発用DBに接続し、ゲストのセッション行が作られた（業務データへの書き込みなし。以後は`.env`を専用DBに固定してから起動する）。ブランチ `feat/chg0033-import-screen`、マージ待ち。
+- [ ] 次のCycle: 価格の初回一括補完と`price_tracking_targets`（ADR-0024 D5、`stock_splits`・`usdjpy`を含む）→UC-018の算出（年率・売却/推定乗換え/買付比較）。UC-019はGate 2保留。
 - [ ] Gate 4でUC名から導くテストケース（26週境界、取得失敗、価格補完後のUC-014再集計、二重集計防止の計算例、年率20％／25％境界）を承認してから実装する。
 
 ## メガトレンド候補発見（CHG-0031・ADR-0022／ADR-0025・F-016／UC-016）Green・回帰確認済み（2026-10-05）
