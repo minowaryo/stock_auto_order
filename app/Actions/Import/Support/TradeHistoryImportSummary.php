@@ -19,6 +19,7 @@ final class TradeHistoryImportSummary
         public readonly ?string $periodFrom,
         public readonly ?string $periodTo,
         public readonly ?string $failureReason = null,
+        public readonly ?TradeReconciliationSummary $reconciliation = null,
     ) {}
 
     public static function failure(?int $batchId, string $reason): self
