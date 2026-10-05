@@ -9,6 +9,7 @@ use App\Models\TradeImportBatch;
 use App\Models\TradeReconciliationItem;
 use App\Support\DisplayTime;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
@@ -36,14 +37,20 @@ class Import extends Component
 
     public $us_trade_file = null;
 
+    // Server-held state: locked so a tampered client cannot fake a preview
+    // (which would skip the preview-before-confirm step) or a result.
     /** @var array<string, mixed>|null */
+    #[Locked]
     public ?array $preview = null;
 
+    #[Locked]
     public ?string $previewError = null;
 
     /** @var array<string, mixed>|null */
+    #[Locked]
     public ?array $result = null;
 
+    #[Locked]
     public ?string $importError = null;
 
     /**

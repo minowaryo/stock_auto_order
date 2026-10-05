@@ -272,6 +272,21 @@ describe('UC-017 売買履歴の取込画面: プレビュー', function () {
         $component->assertDontSee('取込を確定');
     });
 
+    test('ブラウザ側からプレビューの状態を書き換えても、プレビューなしで確定することはできない', function () {
+        // Arrange
+        [$jp, $us] = tiuiFiles([tiuiJp()]);
+        $component = Livewire::actingAs(tiuiUser())->test(Import::class)
+            ->set('jp_trade_file', $jp)->set('us_trade_file', $us);
+
+        // Act: a tampered client sets the server-held preview state directly
+        $tamper = fn () => $component->set('preview', ['totalRows' => 1, 'newRows' => 1, 'existingRows' => 0, 'missingRows' => 0, 'errorCount' => 0, 'periodFrom' => null, 'periodTo' => null, 'reconciliation' => null]);
+
+        // Assert: the property is locked, and nothing was imported
+        expect($tamper)->toThrow(\Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException::class);
+        $component->call('confirm');
+        expect(TradeImportBatch::count())->toBe(0);
+    });
+
     test('プレビューをしていない状態で確定を呼んでも、取込は行われない', function () {
         // Arrange
         [$jp, $us] = tiuiFiles([tiuiJp()]);
