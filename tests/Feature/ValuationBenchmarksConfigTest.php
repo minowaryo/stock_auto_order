@@ -228,3 +228,14 @@ test('FundamentalMetricToneEvaluatorはサービスコンテナから解決で�
     expect($evaluator)->toBeInstanceOf(FundamentalMetricToneEvaluator::class);
     expect($evaluator->tone('roe', 16.0, 'jp', '食品'))->toBe('strong_good');
 });
+
+test('UC-003: 銘柄詳細の基準欄に出す出典は、画面で読める短い名前にする（詳しい算出方法は valuation-benchmarks.md に置く）', function () {
+    // Arrange
+    $config = config('valuation_benchmarks');
+
+    // Act / Assert: the full method lives in docs/product/valuation-benchmarks.md
+    expect($config['jp']['source'])->toBe('JPX 月次統計（東証17業種・単純平均）');
+    expect($config['us']['source'])->toBe('Damodaran・SPDR 業種ETF');
+    expect(mb_strlen($config['jp']['source']))->toBeLessThanOrEqual(30);
+    expect(mb_strlen($config['us']['source']))->toBeLessThanOrEqual(30);
+});
