@@ -1,6 +1,11 @@
 <div class="space-y-6">
     <x-page-header title="新規投資候補" caption="楽天証券のお気に入り銘柄のうち、まだ保有していない銘柄を新規投資候補として一覧表示します（UC-012）" />
 
+    <nav class="flex gap-2 border-b border-app-border pb-2 text-[13px]" aria-label="新規投資候補の切替">
+        <a href="/candidate-check" wire:navigate aria-current="page" class="rounded bg-blue-50 px-3 py-1.5 font-semibold text-primary">ウォッチリスト</a>
+        <a href="/candidate-research" wire:navigate class="rounded px-3 py-1.5 text-text-secondary hover:bg-app-bg">調査候補</a>
+    </nav>
+
     {{-- 取込・更新バー --}}
     <x-card>
         <div class="flex flex-wrap items-end gap-4">
@@ -91,9 +96,12 @@
                                     <span class="block text-[11px] text-text-secondary">{{ $row['symbol_code'] }}</span>
                                 </button>
                                 <x-signal-criteria-summary-badges :criteria="$row['criteria']" />
-                                @unless ($row['in_rakuten_favorites'])
+                                @if (in_array('CSV', $row['registration_routes'] ?? [], true) && ! $row['in_rakuten_favorites'])
                                     <span class="mt-1 inline-block rounded bg-slate-100 px-1 text-[10px] text-slate-500">楽天お気に入り解除済</span>
-                                @endunless
+                                @endif
+                                @if ($row['research_candidate_id'] ?? null)
+                                    <a href="/candidate-research?candidate={{ $row['research_candidate_id'] }}" wire:navigate class="mt-1 inline-block rounded bg-blue-50 px-1 text-[10px] text-primary hover:underline">調査候補から登録</a>
+                                @endif
                                 @if ($row['nisa_recommended'])
                                     <span class="mt-1 inline-block rounded bg-blue-50 px-1 text-[10px] text-primary">NISA推奨</span>
                                 @endif
