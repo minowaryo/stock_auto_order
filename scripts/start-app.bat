@@ -94,12 +94,23 @@ exit /b 1
 
 echo [3/4] Waiting for app to respond...
 set /a n=0
+set /a restarted=0
 :wait_app
 powershell -NoProfile -Command "try{Invoke-WebRequest -UseBasicParsing '%APP_URL%' -TimeoutSec 3 | Out-Null;exit 0}catch{exit 1}" >nul 2>&1
 if not errorlevel 1 goto app_ok
 set /a n+=1
-if !n! geq 30 (echo   [WARN] Timed out. Open the browser and check manually. & goto open)
+if !n! geq 30 goto app_restart
 ping -n 3 127.0.0.1 >nul
+goto wait_app
+
+:app_restart
+rem The container can be Up while "artisan serve" inside it has exited
+rem (supervisord does not restart it on exit code 0). Restart it once.
+if !restarted! equ 1 (echo   [WARN] Timed out. Open the browser and check manually. & goto open)
+set /a restarted=1
+echo   [WARN] App did not respond. Restarting laravel.test container...
+wsl -d %WSL_DISTRO% -- bash -lc "cd %WSL_PROJECT_DIR% && docker compose restart laravel.test"
+set /a n=0
 goto wait_app
 
 :app_ok
