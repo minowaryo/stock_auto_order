@@ -40,6 +40,10 @@ Docker Desktop は Windows / WSL で共有されるため、`docker info` によ
 - 別ディストロ／別パスに置いた場合は各バッチ冒頭の `WSL_DISTRO` / `WSL_PROJECT_DIR` を編集
 - VS Code の WSL 統合ターミナルからは `cd /root/workspace/stock_auto_order && docker compose up -d` / `stop` を直接叩けばよい（バッチ不要）
 
+## `poc/` — CHG-0049 PoCの評価スクリプト（アプリ外）
+
+定性判定（CHG-0049）のPoC用の使い捨てスクリプト。アプリの一部ではない。詳細は [poc/README.md](poc/README.md)。
+
 ## `migrate-to-wsl.sh` — WSLネイティブ環境への複製移設（1回限り・実施済み）
 
 Windows bind-mount による実HTTPリクエストの遅さ（`docs/ai-context/known-pitfalls.md` 参照）を解消するため、
