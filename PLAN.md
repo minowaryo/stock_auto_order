@@ -1,6 +1,6 @@
 # PLAN.md
 
-## 日本株の財務指標の計算元の修正（CHG-0050・ADR-0030）実装完了・マージ待ち（2026-10-09）
+## 日本株の財務指標の計算元の修正（CHG-0050・ADR-0030）実装完了・mainマージ済み（2026-10-09）
 
 ### Decision
 
@@ -17,7 +17,7 @@
 
 ### Status
 
-ブランチ`fix/chg0050-indicator-source`（ワークツリー`.claude/worktrees/chg0050-indicator-source`、テストDB`testing_chg0050`）。Gate 4承認（2026-10-09）、Red（新規7件）→Green→Refactor済み、フルスイート1736件Green。次: マージ前チェック、マージ後に次回の外部データ取得で値が入れ替わることを実データで確認する
+ブランチ`fix/chg0050-indicator-source`（ワークツリー`.claude/worktrees/chg0050-indicator-source`、テストDB`testing_chg0050`）。Gate 4承認（2026-10-09）、Red（新規7件）→Green→Refactor済み、フルスイート1736件Green。mainへマージ済み（2026-10-09、マージ結果で1781件Green）。ブランチ・ワークツリーは削除済み。次: 次回の外部データ取得で値が入れ替わることを実データで確認する（例: 2914のPERが65.1→約25、ROEが表示される）
 
 ## 定性情報の数値化（判定APIによる開示・ニュースの判定、CHG-0049）段階0 PoC進行中——このPCでの事前確認は完了、別PCでの作業待ち（2026-10-07〜08）
 
