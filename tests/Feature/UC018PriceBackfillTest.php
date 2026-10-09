@@ -13,6 +13,8 @@ use App\Models\TradeImportBatch;
 use App\Models\WeeklyPrice;
 use App\Services\MarketData\PriceBackfillClientInterface;
 use App\Services\MarketData\PriceHistory;
+use App\Services\MarketData\WeekDateNormalizer;
+use App\Services\SignalOutcome\WeeklyPriceRecorder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Sleep;
@@ -328,6 +330,28 @@ describe('UC-018 初回の一括補完: 取得元の障害（間隔・中断・�
 
         // Assert
         expect([$summary->aborted, $summary->failed, $summary->notFound])->toBe([false, 7, 1]);
+    });
+
+    test('取得できても保存を確認できなかった銘柄は、失敗として数え、補完済みにせず、警告ログに残す', function () {
+        // Arrange: the recorder swallowed a DB error and saved nothing (its real failure mode)
+        Log::spy();
+        $h = bfHolding('1111');
+        bfTrade($h, 'buy', '2022-07-04');
+        bfClient(new FakeBackfillClient);
+        app()->instance(WeeklyPriceRecorder::class, new class(app(WeekDateNormalizer::class)) extends WeeklyPriceRecorder
+        {
+            public function recordHolding(Holding $holding, array $history): void {}
+        });
+
+        // Act
+        $summary = bfRun();
+
+        // Assert
+        expect([$summary->ok, $summary->failed])->toBe([0, 1]);
+        expect(PriceTrackingTarget::where('holding_id', $h->id)->sole()->backfilled_from_week)->toBeNull();
+        Log::shouldHaveReceived('warning')
+            ->withArgs(fn (string $m, array $c = []) => ($c['holding_id'] ?? null) === $h->id && ($c['status'] ?? null) === 'failed')
+            ->once();
     });
 
     test('取得できなかった銘柄・指数は、銘柄IDまたは指数名と結果だけを警告ログに残す（価格は出さない）', function () {
