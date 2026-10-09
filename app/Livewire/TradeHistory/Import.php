@@ -87,7 +87,9 @@ class Import extends Component
         $this->clearPreview();
     }
 
-    public function preview(): void
+    // Not named preview(): $wire.preview would read the $preview property
+    // instead of calling this method (tests/Unit/Livewire/ComponentMemberNamesTest.php).
+    public function runPreview(): void
     {
         $this->clearPreview();
         $this->result = null;
