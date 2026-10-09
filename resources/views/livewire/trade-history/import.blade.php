@@ -13,7 +13,7 @@
             </div>
         @endif
 
-        <form wire:submit="preview" class="flex flex-col gap-4">
+        <form wire:submit="runPreview" class="flex flex-col gap-4">
             <div>
                 <label for="jp_trade_file" class="block text-[13px] font-medium mb-1">国内株式の売買履歴CSV</label>
                 <input type="file" id="jp_trade_file" wire:model="jp_trade_file" class="text-[13px]">
