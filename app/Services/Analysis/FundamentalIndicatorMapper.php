@@ -22,23 +22,28 @@ final class FundamentalIndicatorMapper
      */
     public function map(array $statements, ?float $currentPrice): array
     {
-        $latest = $statements[0] ?? null;
+        // ADR-0030 D2: flow figures (EPS, ROE, sales/profit, dividends) come
+        // from the latest full-year row — quarterly rows are cumulative and
+        // J-Quants leaves ROE/annual dividends blank on them.
+        $latestAnnual = $this->annualStatementsDescending($statements)[0] ?? null;
 
-        $per = $this->calculatePer($latest, $currentPrice);
+        $per = $this->calculatePer($latestAnnual, $currentPrice);
         $revenueGrowth = $this->annualGrowth($statements, 'net_sales');
         $operatingIncomeGrowth = $this->annualGrowth($statements, 'operating_profit');
         $epsGrowth = $this->annualGrowth($statements, 'eps');
 
         return [
             'per' => $per,
-            'pbr' => $this->calculatePbr($latest, $currentPrice),
-            'roe' => $this->toPercent($latest['roe'] ?? null),
+            // ADR-0030 D3: balance-sheet figures are point-in-time, so the newest
+            // row that has a value (quarterly included) is the freshest source.
+            'pbr' => $this->calculatePbr($this->latestValue($statements, 'book_value_per_share'), $currentPrice),
+            'roe' => $this->toPercent($latestAnnual['roe'] ?? null),
             'revenue_growth' => $revenueGrowth,
             'operating_income_growth' => $operatingIncomeGrowth,
-            'equity_ratio' => $this->toPercent($latest['equity_to_asset_ratio'] ?? null),
-            'operating_margin' => $this->calculateOperatingMargin($latest),
-            'dividend_yield' => $this->calculateDividendYield($latest, $currentPrice),
-            'dividend_payout_ratio' => $this->toPercent($latest['payout_ratio_annual'] ?? null),
+            'equity_ratio' => $this->toPercent($this->latestValue($statements, 'equity_to_asset_ratio')),
+            'operating_margin' => $this->calculateOperatingMargin($latestAnnual),
+            'dividend_yield' => $this->calculateDividendYield($latestAnnual, $currentPrice),
+            'dividend_payout_ratio' => $this->toPercent($latestAnnual['payout_ratio_annual'] ?? null),
             'eps_growth' => $epsGrowth,
             'peg_ratio' => $this->calculatePegRatio($per, $epsGrowth),
         ];
@@ -58,13 +63,8 @@ final class FundamentalIndicatorMapper
         return $currentPrice / $eps;
     }
 
-    /**
-     * @param  array<string, float|null>|null  $latest
-     */
-    private function calculatePbr(?array $latest, ?float $currentPrice): ?float
+    private function calculatePbr(?float $bookValuePerShare, ?float $currentPrice): ?float
     {
-        $bookValuePerShare = $latest['book_value_per_share'] ?? null;
-
         if ($currentPrice === null || $bookValuePerShare === null || $bookValuePerShare <= 0) {
             return null;
         }
@@ -230,6 +230,22 @@ final class FundamentalIndicatorMapper
         krsort($annualByFiscalYear); // most recent fiscal year first
 
         return array_values($annualByFiscalYear);
+    }
+
+    /**
+     * The first non-null value of `$field` in latest-first statements.
+     *
+     * @param  array<int, array<string, mixed>>  $statements
+     */
+    private function latestValue(array $statements, string $field): ?float
+    {
+        foreach ($statements as $statement) {
+            if (($statement[$field] ?? null) !== null) {
+                return $statement[$field];
+            }
+        }
+
+        return null;
     }
 
     private function toPercent(?float $ratio): ?float

@@ -68,6 +68,14 @@ final class JQuantsClient implements JQuantsClientInterface
             return [];
         }
 
+        // ADR-0030 D1: forecast-revision rows carry CurPerType/CurFYEn but no
+        // actuals, so drop them before anything treats them as results.
+        $data = array_values(array_filter(
+            $data,
+            fn (array $row) => ! str_starts_with($row['DocType'] ?? '', 'EarnForecastRevision')
+                && ! str_starts_with($row['DocType'] ?? '', 'DividendForecastRevision'),
+        ));
+
         usort($data, fn (array $a, array $b) => strcmp($b['DiscDate'], $a['DiscDate']));
 
         $data = array_slice($data, 0, $periods);
