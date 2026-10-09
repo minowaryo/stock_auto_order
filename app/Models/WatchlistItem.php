@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'last_close',
     'last_refreshed_at',
     'last_seen_in_csv_at',
+    'last_seen_favorite_import_id',
     'registered_at',
 ])]
 class WatchlistItem extends Model
@@ -36,6 +37,7 @@ class WatchlistItem extends Model
             'last_close' => 'decimal:2',
             'last_refreshed_at' => 'datetime',
             'last_seen_in_csv_at' => 'datetime',
+            'last_seen_favorite_import_id' => 'integer',
             'registered_at' => 'datetime',
         ];
     }
@@ -43,6 +45,11 @@ class WatchlistItem extends Model
     public function holding(): BelongsTo
     {
         return $this->belongsTo(Holding::class);
+    }
+
+    public function lastSeenFavoriteImport(): BelongsTo
+    {
+        return $this->belongsTo(FavoriteCsvImportBatch::class, 'last_seen_favorite_import_id');
     }
 
     public function watchlistBuySignals(): HasMany

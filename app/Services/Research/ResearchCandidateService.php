@@ -2,6 +2,7 @@
 
 namespace App\Services\Research;
 
+use App\Models\FavoriteCsvImportState;
 use App\Models\Holding;
 use App\Models\ResearchCandidate;
 use App\Models\ResearchCandidateRevision;
@@ -104,6 +105,7 @@ class ResearchCandidateService
             $candidate->save();
 
             $event = $candidate->event;
+            $previousOriginalUrl = $event->original_url;
             if (array_key_exists('event_title', $form)) {
                 $event->title = $form['event_title'];
             }
@@ -112,6 +114,11 @@ class ResearchCandidateService
                     $event->{$field} = $field === 'verification_status' ? $form[$field] : $this->blankToNull($form[$field]);
                 }
             }
+            if ($previousOriginalUrl !== null && $event->original_url !== $previousOriginalUrl) {
+                // The submitted confirmation belongs to the old original source.
+                $event->verification_status = 'unverified';
+                $event->verified_on = null;
+            }
             if ($event->isDirty()) {
                 if ($candidate->status === 'watchlisted') {
                     $candidate->update(['needs_recheck' => true]);
@@ -119,7 +126,6 @@ class ResearchCandidateService
                 $event->save();
             }
             $eventChanged = $event->wasChanged();
-
             $entity = $candidate->entity;
             foreach (['legal_name', 'identification_status', 'identification_note'] as $field) {
                 if (array_key_exists($field, $form)) {
@@ -155,6 +161,16 @@ class ResearchCandidateService
             }
             if (isset($form['listings']) && is_array($form['listings'])) {
                 $this->syncListings($entity, $form['listings']);
+            }
+            if ($previousOriginalUrl !== null && (
+                $event->original_url !== $previousOriginalUrl
+                || ($event->verification_status === 'unavailable' && $event->wasChanged('verification_status'))
+            )) {
+                ResearchClaim::query()
+                    ->whereHas('candidate', fn ($query) => $query->where('research_event_id', $event->id))
+                    ->where('evidence_url', $previousOriginalUrl)
+                    ->where('status', 'verified')
+                    ->update(['status' => 'unverified', 'checked_on' => null]);
             }
             if ($candidate->status === 'watchlisted' && ($listingChanged || $claimChanged || isset($form['listings']) || isset($form['claims']))) {
                 $candidate->needs_recheck = true;
@@ -414,9 +430,12 @@ class ResearchCandidateService
 
     private function baseline(): array
     {
+        $latestFavoriteImport = FavoriteCsvImportState::query()->with('latestBatch')->find(1)?->latestBatch;
+
         return [
             'snapshot' => Snapshot::query()->orderByDesc('snapshotted_at')->orderByDesc('id')->first(),
-            'favorites_last_imported_at' => WatchlistItem::whereNotNull('last_seen_in_csv_at')->max('last_seen_in_csv_at'),
+            'favorites_last_imported_at' => $latestFavoriteImport?->imported_at?->toDateTimeString()
+                ?? WatchlistItem::whereNotNull('last_seen_in_csv_at')->max('last_seen_in_csv_at'),
         ];
     }
 
@@ -503,7 +522,11 @@ class ResearchCandidateService
                 continue;
             }
             $claim = ! empty($input['id']) ? $candidate->claims()->findOrFail($input['id']) : new ResearchClaim(['research_candidate_id' => $candidate->id]);
-            $claim->fill(array_intersect_key($input, array_flip(['claim', 'evidence_url', 'status', 'is_primary_source', 'checked_on'])));
+            $fields = array_intersect_key($input, array_flip(['claim', 'evidence_url', 'status', 'is_primary_source', 'checked_on']));
+            if (array_key_exists('checked_on', $fields)) {
+                $fields['checked_on'] = $this->blankToNull($fields['checked_on']);
+            }
+            $claim->fill($fields);
             $claim->save();
         }
     }

@@ -2,6 +2,7 @@
 
 namespace App\Actions\Watchlist;
 
+use App\Models\FavoriteCsvImportState;
 use App\Models\HoldingSnapshot;
 use App\Models\Snapshot;
 use App\Models\WatchlistItem;
@@ -82,8 +83,10 @@ class ShowWatchlistAction
             ->unique('watchlist_item_id')
             ->pluck('research_candidate_id', 'watchlist_item_id');
 
+        $latestFavoriteImportId = FavoriteCsvImportState::query()->find(1)?->latest_batch_id;
+
         $rows = $items
-            ->map(fn (WatchlistItem $item) => $this->toRow($item, $sectorAllocations, $suggestedAmount, $researchCandidateByItem->get($item->id)))
+            ->map(fn (WatchlistItem $item) => $this->toRow($item, $sectorAllocations, $suggestedAmount, $researchCandidateByItem->get($item->id), $latestFavoriteImportId))
             ->all();
 
         usort($rows, function (array $a, array $b) {
@@ -98,7 +101,7 @@ class ShowWatchlistAction
      * @param  Collection<string, array<string, mixed>>  $sectorAllocations
      * @return array<string, mixed>
      */
-    private function toRow(WatchlistItem $item, $sectorAllocations, float $suggestedAmount, ?int $researchCandidateId): array
+    private function toRow(WatchlistItem $item, $sectorAllocations, float $suggestedAmount, ?int $researchCandidateId, ?int $latestFavoriteImportId): array
     {
         $holding = $item->holding;
         $technical = $holding->technicalIndicator;
@@ -126,7 +129,9 @@ class ShowWatchlistAction
             'market' => $holding->market,
             'folder_name' => $item->folder_name,
             'is_starred' => $item->is_starred,
-            'in_rakuten_favorites' => $item->last_seen_in_csv_at !== null,
+            'in_rakuten_favorites' => $latestFavoriteImportId === null
+                ? $item->last_seen_in_csv_at !== null
+                : $item->last_seen_favorite_import_id === $latestFavoriteImportId,
             'registration_routes' => array_values(array_filter([
                 $item->last_seen_in_csv_at !== null ? 'CSV' : null,
                 $researchCandidateId !== null ? '調査候補' : null,

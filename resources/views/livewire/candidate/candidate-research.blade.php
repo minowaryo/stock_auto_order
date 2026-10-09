@@ -238,9 +238,12 @@
                 <x-btn type="submit" wire:loading.attr="disabled">訂正を保存</x-btn>
             </form>
             <div class="mt-5 grid gap-4 lg:grid-cols-2">
-                <form wire:submit="addClaim" class="space-y-2 rounded border border-app-border p-3 text-[13px]">
-                    <h3 class="font-semibold">主張と根拠を追加</h3>
-                    <p class="text-text-secondary">既存の主張を残して、新しい主張を別の版として記録します。</p>
+                <form wire:submit="{{ $selectedClaimForEditId === null ? 'addClaim' : 'saveClaimChanges' }}" class="space-y-2 rounded border border-app-border p-3 text-[13px]">
+                    <h3 class="font-semibold">{{ $selectedClaimForEditId === null ? '主張と根拠を追加' : '選択した主張を訂正' }}</h3>
+                    <p class="text-text-secondary">既存の主張を選ぶと、その行だけを新しい版として訂正できます。</p>
+                    @foreach ($editingCandidate?->claims ?? [] as $existingClaim)
+                        <button type="button" wire:click="selectClaimForEdit({{ $existingClaim->id }})" class="block w-full rounded border border-app-border p-2 text-left hover:bg-app-surface" aria-label="主張 {{ $existingClaim->id }} を訂正">#{{ $existingClaim->id }} {{ $existingClaim->claim }}</button>
+                    @endforeach
                     <label class="block">主張 <span class="text-danger">必須</span><textarea wire:model.blur="claimForm.claim" class="mt-1 w-full rounded border border-app-border p-2" maxlength="2000"></textarea></label>
                     <label class="block">根拠URL <span class="text-danger">必須</span><input wire:model.blur="claimForm.evidence_url" type="url" class="mt-1 w-full rounded border border-app-border p-2" maxlength="2048"></label>
                     <label class="block">確認状態<select wire:model="claimForm.status" class="mt-1 w-full rounded border border-app-border p-2"><option value="unverified">未確認</option><option value="verified">確認済み</option><option value="contradicted">不一致</option><option value="unavailable">確認不能</option></select></label>
@@ -251,11 +254,14 @@
                             @foreach ($messages as $message)<p role="alert" class="text-danger">{{ $message }}</p>@endforeach
                         @endif
                     @endforeach
-                    <x-btn type="submit" wire:loading.attr="disabled">主張を追加</x-btn>
+                    <x-btn type="submit" wire:loading.attr="disabled">{{ $selectedClaimForEditId === null ? '主張を追加' : '主張の訂正を保存' }}</x-btn>
                 </form>
-                <form wire:submit="addListing" class="space-y-2 rounded border border-app-border p-3 text-[13px]">
-                    <h3 class="font-semibold">上場先と確認元を追加</h3>
-                    <p class="text-text-secondary">同じ法人に複数の上場先がある場合、それぞれの確認元を記録します。</p>
+                <form wire:submit="{{ $selectedListingForEditId === null ? 'addListing' : 'saveListingChanges' }}" class="space-y-2 rounded border border-app-border p-3 text-[13px]">
+                    <h3 class="font-semibold">{{ $selectedListingForEditId === null ? '上場先と確認元を追加' : '選択した上場先を訂正' }}</h3>
+                    <p class="text-text-secondary">上場先を選ぶと、その行だけを新しい版として訂正できます。</p>
+                    @foreach ($editingCandidate?->entity?->listings ?? [] as $existingListing)
+                        <button type="button" wire:click="selectListingForEdit({{ $existingListing->id }})" class="block w-full rounded border border-app-border p-2 text-left hover:bg-app-surface" aria-label="上場先 {{ $existingListing->id }} を訂正">#{{ $existingListing->id }} {{ $existingListing->market }} {{ $existingListing->symbol_code }}</button>
+                    @endforeach
                     <label class="block">市場 <span class="text-danger">必須</span><select wire:model="listingForm.market" class="mt-1 w-full rounded border border-app-border p-2"><option value="">選択してください</option><option value="jp">日本株</option><option value="us">米国株</option></select></label>
                     <label class="block">証券コード <span class="text-danger">必須</span><input wire:model.blur="listingForm.symbol_code" class="mt-1 w-full rounded border border-app-border p-2" maxlength="20"></label>
                     <label class="block">上場主体名 <span class="text-danger">必須</span><input wire:model.blur="listingForm.listed_entity_name" class="mt-1 w-full rounded border border-app-border p-2" maxlength="255"></label>
@@ -266,7 +272,7 @@
                             @foreach ($messages as $message)<p role="alert" class="text-danger">{{ $message }}</p>@endforeach
                         @endif
                     @endforeach
-                    <x-btn type="submit" wire:loading.attr="disabled">上場先を追加</x-btn>
+                    <x-btn type="submit" wire:loading.attr="disabled">{{ $selectedListingForEditId === null ? '上場先を追加' : '上場先の訂正を保存' }}</x-btn>
                 </form>
             </div>
         </x-card>

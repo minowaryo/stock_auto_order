@@ -5,6 +5,8 @@ namespace App\Actions\Watchlist;
 use App\Actions\Watchlist\Support\FavoriteImportResult;
 use App\Exceptions\Import\CsvStructureException;
 use App\Jobs\RefreshWatchlistMarketDataJob;
+use App\Models\FavoriteCsvImportBatch;
+use App\Models\FavoriteCsvImportState;
 use App\Models\Holding;
 use App\Models\WatchlistItem;
 use App\Models\WatchlistRefreshRun;
@@ -21,7 +23,8 @@ use Illuminate\Support\Facades\DB;
  *
  * Re-import is additive: rows absent from the new CSV are not deleted, and
  * `is_starred` is preserved; only `folder_name` / `exchange_label` /
- * `last_seen_in_csv_at` are refreshed.
+ * `last_seen_in_csv_at` are refreshed. A successful batch ID records current
+ * CSV membership separately from the historical CSV registration route.
  *
  * Never touches `snapshots` / `holding_snapshots` / `signals` / `buy_signals`.
  * The bulk indicator refresh is a separate step (Cycle 3).
@@ -43,9 +46,16 @@ class ImportFavoriteCsvAction
         $now = now();
 
         DB::transaction(function () use ($parsed, $now) {
+            $state = FavoriteCsvImportState::query()->whereKey(1)->lockForUpdate()->firstOrFail();
+            $batch = FavoriteCsvImportBatch::create([
+                'imported_at' => $now,
+                'registered_count' => count($parsed->rows),
+            ]);
             foreach ($parsed->rows as $row) {
-                $this->registerRow($row, $now);
+                $this->registerRow($row, $now, $batch->id);
             }
+            $state->latest_batch_id = $batch->id;
+            $state->save();
         });
 
         // UC-012 フロー5: 取込完了後、未保有ウォッチリスト銘柄の指標取得を
@@ -59,7 +69,7 @@ class ImportFavoriteCsvAction
         return FavoriteImportResult::success(count($parsed->rows), $parsed->skippedCount);
     }
 
-    private function registerRow(ParsedFavoriteRow $row, \DateTimeInterface $seenAt): void
+    private function registerRow(ParsedFavoriteRow $row, \DateTimeInterface $seenAt, int $batchId): void
     {
         $holding = Holding::firstOrCreate(
             ['symbol_code' => $row->code, 'market' => $row->market],
@@ -77,6 +87,7 @@ class ImportFavoriteCsvAction
                 'exchange_label' => $row->exchangeLabel,
                 'source' => 'rakuten_favorites_csv',
                 'last_seen_in_csv_at' => $seenAt,
+                'last_seen_favorite_import_id' => $batchId,
             ],
         );
     }
