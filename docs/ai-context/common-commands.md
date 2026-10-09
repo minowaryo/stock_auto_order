@@ -148,6 +148,15 @@ docker compose exec laravel.test php artisan market-data:refetch-us-fundamentals
 docker compose exec laravel.test php artisan sectors:backfill
 ```
 
+```bash
+# 売買の振り返り用の価格の初回一括補完（CHG-0033 / UC-018 / ADR-0024 D5）
+# 売買履歴に現れた銘柄と日経225・S&P500・ドル円の過去10年の週足を取得する（約146リクエスト、1.5秒間隔で約5分）。
+# 取得失敗が5回続くと中断して終了コード1。再実行すると補完済み・取得不能の銘柄は飛ばす。
+# 先に売買履歴CSVを /trade-history-import で取り込んでおく。--dry-run は対象数を数えるだけ。
+docker compose exec laravel.test php artisan price:backfill --dry-run
+docker compose exec laravel.test php artisan price:backfill
+```
+
 ## コード生成（Artisan）
 
 ```bash
