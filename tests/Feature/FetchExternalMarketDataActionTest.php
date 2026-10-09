@@ -1506,6 +1506,72 @@ describe('FetchExternalMarketDataAction: 外部データ取得・指標計算・
         });
     });
 
+    describe('ADR-0030 (CHG-0050): 最新の開示行が四半期決算でも、財務指標を項目ごとに適切な行から保存する', function () {
+        /*
+        | Source of truth: docs/adr/ADR-0030-jp-fundamentals-source-row.md D2・D3.
+        | 実データ（2026-10-09）で、最新の行が四半期決算の銘柄は ROE が空・PER が
+        | 累計EPSで過大のまま fundamental_indicators に保存されていた。
+        | Expected Red: 現行は最新の1行から計算するため per=60・roe=null 等で
+        | assertion 不一致になる。期待値は ADR から手で導いた値（実装から逆算しない）。
+        */
+        test('UC-001 JP個別株の最新の開示が第1四半期決算でも、PER・ROE・配当は最新の本決算から、自己資本比率は第1四半期から保存される', function () {
+            [$batch, $snapshot] = femdImportBatch();
+            $holding = femdHolding([
+                'symbol_code' => '2914',
+                'market' => 'jp',
+                'instrument_type' => 'stock',
+                'symbol_name' => '日本たばこ産業',
+            ]);
+            femdHoldingSnapshot($snapshot, $holding, [
+                'current_price' => 1800.0,
+                'unrealized_gain_rate' => 5.0, // <=20% -> シグナル判定の副作用を避ける
+            ]);
+
+            $statements = [
+                [
+                    'disclosed_date' => '2026-08-07', 'period_type' => '1Q', 'fiscal_year_end' => '2027-03-31',
+                    'net_sales' => 300.0, 'operating_profit' => 30.0, 'profit' => 25.0, 'eps' => 30.0,
+                    'book_value_per_share' => null, 'equity_to_asset_ratio' => 0.50, 'roe' => null,
+                    'dividend_per_share_annual' => null, 'payout_ratio_annual' => null,
+                ],
+                [
+                    'disclosed_date' => '2026-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2026-03-31',
+                    'net_sales' => 1200.0, 'operating_profit' => 200.0, 'profit' => 150.0, 'eps' => 120.0,
+                    'book_value_per_share' => 800.0, 'equity_to_asset_ratio' => 0.45, 'roe' => 0.152,
+                    'dividend_per_share_annual' => 36.0, 'payout_ratio_annual' => 0.30,
+                ],
+                [
+                    'disclosed_date' => '2025-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2025-03-31',
+                    'net_sales' => 1000.0, 'operating_profit' => 160.0, 'profit' => 110.0, 'eps' => 100.0,
+                    'book_value_per_share' => 720.0, 'equity_to_asset_ratio' => 0.41, 'roe' => 0.135,
+                    'dividend_per_share_annual' => 32.0, 'payout_ratio_annual' => 0.26,
+                ],
+            ];
+
+            $action = femdAction(
+                new FakeJpStockPriceClient(['2914' => femdPriceHistory(femdCloses(1700.0, 5.0, 20))]),
+                new FakeUsStockPriceClient,
+                new FakeMarketIndexClient([
+                    'nikkei225' => femdPriceHistory(femdCloses(30000.0, 100.0, 20)),
+                    'sp500' => femdPriceHistory(femdCloses(4500.0, 20.0, 20)),
+                ]),
+                new FakeJQuantsClient(statementsResponses: ['2914' => $statements]),
+            );
+
+            $action->execute($batch);
+
+            femdAssertFundamentalIndicatorMatches($holding->id, [
+                'per' => 15.0,                 // 1800 / FYのEPS 120
+                'pbr' => 2.25,                 // 1800 / FYの1株純資産 800（1Qは空）
+                'roe' => 15.2,                 // FYの 0.152
+                'equity_ratio' => 50.0,        // 1Qの 0.50（FYより新しい）
+                'operating_margin' => 16.67,   // FYの 200 / 1200
+                'dividend_yield' => 2.0,       // FYの 36 / 1800
+                'dividend_payout_ratio' => 30.0, // FYの 0.30
+            ]);
+        });
+    });
+
     describe('ADR-0004 再発防止: 実データ由来のバグの回帰テスト', function () {
         /*
         |----------------------------------------------------------------
