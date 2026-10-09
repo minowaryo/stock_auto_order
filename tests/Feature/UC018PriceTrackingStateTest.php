@@ -42,8 +42,8 @@ use Illuminate\Support\Carbon;
 |         last_signal_week) + 26 weeks, or null when both are null. A
 |         completed target whose deadline moves beyond latest_saved_week
 |         becomes active again.
-|       applyFetch(Holding, PriceHistory $history, bool $backfill = false)
-|           : PriceTrackingTarget
+|       applyFetch(Holding, PriceHistory $history, bool $backfill = false,
+|           bool $splitsFetched = true): PriceTrackingTarget
 |         Call it AFTER the caller saved the rows with
 |         WeeklyPriceRecorder::recordHolding(), which swallows DB errors, so
 |         "it returned" proves nothing. Creates the row (no deadline) when
@@ -64,7 +64,9 @@ use Illuminate\Support\Carbon;
 |                  "no such data"); repeated 'failed' (rate limit, server
 |                  error) never makes a symbol unavailable.
 |         Always: last_attempted_at = now(); splits_incomplete =
-|         $history->splitsIncomplete (only updated by an ok fetch).
+|         $history->splitsIncomplete (only updated by an ok fetch that
+|         asked for splits, i.e. $splitsFetched; a fetch without splits
+|         leaves the marker as it is).
 |         A later ok fetch resets an 'unavailable' target to active/completed.
 |
 | Expected Red: the table, the model and the service do not exist yet.
@@ -293,6 +295,36 @@ describe('UC-018 取得結果の反映（applyFetch）: 成功', function () {
         // Assert
         expect($incomplete->splits_incomplete)->toBeTrue();
         expect($complete->fresh()->splits_incomplete)->toBeFalse();
+    });
+
+    test('分割を取得しなかった取得（週次の追跡など）では、分割情報の欠損の記録を変えない', function () {
+        // Arrange: the backfill dropped a split, so the holding is marked incomplete
+        Carbon::setTestNow('2026-10-07 10:00:00');
+        $holding = ptHolding();
+        ptSaveAndApply($holding, ptOk(['2026-09-21'], splitsIncomplete: true), backfill: true);
+
+        // Act: a later fetch that did not ask Yahoo for splits (its history always reads "not incomplete")
+        $history = ptOk(['2026-09-21', '2026-09-28'], splitsIncomplete: false);
+        app(WeeklyPriceRecorder::class)->recordHolding($holding, $history->rows);
+        $target = app(PriceTrackingTargetUpdater::class)->applyFetch($holding, $history, splitsFetched: false);
+
+        // Assert: the marker survives, and the rest of the fetch is still applied
+        expect($target->fresh()->splits_incomplete)->toBeTrue();
+        expect($target->fresh()->latest_saved_week->toDateString())->toBe('2026-09-28');
+    });
+
+    test('分割を取得しなかった取得でも、欠損の記録がない銘柄は欠損なしのままである', function () {
+        // Arrange
+        Carbon::setTestNow('2026-10-07 10:00:00');
+        $holding = ptHolding();
+
+        // Act
+        $history = ptOk(['2026-09-28']);
+        app(WeeklyPriceRecorder::class)->recordHolding($holding, $history->rows);
+        $target = app(PriceTrackingTargetUpdater::class)->applyFetch($holding, $history, splitsFetched: false);
+
+        // Assert
+        expect($target->fresh()->splits_incomplete)->toBeFalse();
     });
 });
 

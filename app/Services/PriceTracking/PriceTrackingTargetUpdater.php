@@ -57,8 +57,12 @@ class PriceTrackingTargetUpdater
 
     /**
      * Applies the outcome of one price fetch for the holding.
+     *
+     * $splitsFetched: whether the fetch asked Yahoo for splits. A fetch
+     * without splits always reads "not incomplete", so it must not clear a
+     * marker set by an earlier fetch that did ask (e.g. the backfill).
      */
-    public function applyFetch(Holding $holding, PriceHistory $history, bool $backfill = false): PriceTrackingTarget
+    public function applyFetch(Holding $holding, PriceHistory $history, bool $backfill = false, bool $splitsFetched = true): PriceTrackingTarget
     {
         $target = $this->target($holding);
         $today = now()->toDateString();
@@ -83,7 +87,9 @@ class PriceTrackingTargetUpdater
 
         $target->consecutive_failures = 0;
         $target->last_error = null;
-        $target->splits_incomplete = $history->splitsIncomplete;
+        if ($splitsFetched) {
+            $target->splits_incomplete = $history->splitsIncomplete;
+        }
 
         if ($confirmed !== []) {
             $target->latest_saved_week = $this->later($target->latest_saved_week?->toDateString(), max($confirmed));

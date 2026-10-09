@@ -773,7 +773,7 @@
 | latest_saved_week | date | YES | null | `weekly_prices` に保存を確認できた最新週（`recordHolding` が戻っただけでは更新しない） |
 | backfilled_from_week | date | YES | null | 初回一括補完（ADR-0024 D5）で保存を確認できた最古週。null は未補完 |
 | consecutive_failures | tinyint unsigned | NO | 0 | 連続失敗回数（成功で0に戻る。上限255） |
-| splits_incomplete | boolean | NO | false | 直近の成功した取得で、分割情報を捨てた（整数でない比・読み取れない）。true の銘柄に分割が必要な結果は「算出不可」（分割情報欠損）。2026-10-06 Gate 4 Cycle 6bで追加 |
+| splits_incomplete | boolean | NO | false | 分割も取得した直近の成功取得で、分割情報を捨てた（整数でない比・読み取れない）。分割を取得しない取得（週次の追跡など）では変更しない。true の銘柄に分割が必要な結果は「算出不可」（分割情報欠損）。2026-10-06 Gate 4 Cycle 6bで追加 |
 | last_error | varchar(255) | YES | null | 直近の失敗理由（秘密情報を含めない） |
 | last_attempted_at | timestamp | YES | null | 直近の取得試行日時 |
 | created_at / updated_at | timestamp | NO | now() | 作成・更新日時 |
