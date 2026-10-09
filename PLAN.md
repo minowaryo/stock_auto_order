@@ -1,5 +1,24 @@
 # PLAN.md
 
+## 日本株の財務指標の計算元の修正（CHG-0050・ADR-0030）Gate 4待ち（2026-10-09）
+
+### Decision
+
+- 発端: CHG-0049段階0のJ-Quants Lightの効果の見積もり（2026-10-09）で、`FundamentalIndicatorMapper::map()`が種類を見ずに最新の開示行から指標を計算していることがわかった。最新の行が四半期決算の銘柄（149銘柄中52）でROE・配当が空、PERが累計EPSで最大6.7倍に過大。業績予想の修正の行（3銘柄）では全指標が空。修正の行は`CurPerType='FY'`を持つため、成長率の「最新の通期決算」にも誤って選ばれうる
+- 本人の判断（2026-10-09）: Lightの契約に関わらず直す。計算元は項目ごとに使い分ける案を選択（全項目を通期から・ROE等だけ直す、の2案と比較）。Lightは契約する方向（3か月程度のお試し）だが、契約作業はいまはしない
+- 設計（ADR-0030）: D1 修正の行は`JQuantsClient::fetchStatements()`で除外。D2 PER・ROE・営業利益率・配当利回り・配当性向は最新の通期決算の行から（空なら空、古い年度に遡らない）。D3 自己資本比率・PBRは値がある最新の実績の行から。米国株は対象外
+- ADR番号: ADR-0028は別セッション（`fix/chg0031-review-fixes`、未コミット）が使用中、ADR-0029はCHG-0049段階1の予定のため、0030を採番
+
+### Files touched
+
+- `docs/adr/ADR-0030-jp-fundamentals-source-row.md`（新規）、`docs/rcid/traceability-matrix.md`（CHG-0050行）、`docs/architecture/data-model.md`（`fundamental_indicators`の各カラム・`financial_statements`の注記）
+- Red: `tests/Unit/Services/Analysis/FundamentalIndicatorMapperTest.php`、`tests/Unit/Services/MarketData/JQuantsClientTest.php`、`tests/Feature/FetchExternalMarketDataActionTest.php`
+- Green予定: `app/Services/MarketData/JQuantsClient.php`、`app/Services/Analysis/FundamentalIndicatorMapper.php`
+
+### Status
+
+ブランチ`fix/chg0050-indicator-source`（ワークツリー`.claude/worktrees/chg0050-indicator-source`、テストDB`testing_chg0050`）。Redのテストを作成済み、Gate 4（テストケース承認）待ち。マージ後、次回の外部データ取得で値が入れ替わることを実データで確認する
+
 ## 定性情報の数値化（判定APIによる開示・ニュースの判定、CHG-0049）段階0 PoC進行中——このPCでの事前確認は完了、別PCでの作業待ち（2026-10-07〜08）
 
 ### Decision

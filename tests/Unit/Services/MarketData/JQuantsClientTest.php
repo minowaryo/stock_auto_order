@@ -259,6 +259,30 @@ test('fetchStatementsは四半期・本決算の混在レスポンスから peri
     expect($fyCount)->toBeGreaterThanOrEqual(2);
 });
 
+test('fetchStatementsは業績予想・配当予想の修正の行を除外してから、指定期数に絞り込む（ADR-0030 D1）', function () {
+    // Source of truth: docs/adr/ADR-0030-jp-fundamentals-source-row.md D1
+    // 実データ（2026-10-09、6503・5803）: 修正の行は CurPerType='FY' 等と CurFYEn を
+    // 持ち、実績（Sales・EPS 等）は空文字。通期決算と同じ日に開示されることもある。
+    Http::fake([
+        'api.jquants.com/v2/fins/summary*' => Http::response([
+            'data' => [
+                ['DiscDate' => '2026-02-05', 'DiscTime' => '15:00', 'Code' => '65030', 'DocType' => '3QFinancialStatements_Consolidated_IFRS', 'CurPerType' => '3Q', 'CurFYEn' => '2026-03-31', 'Sales' => '4000', 'OP' => '300', 'NP' => '200', 'EPS' => '90', 'BPS' => '1000', 'EqAR' => '0.50', 'ROE' => '', 'DivAnn' => '', 'PayoutRatioAnn' => ''],
+                ['DiscDate' => '2026-05-13', 'DiscTime' => '15:00', 'Code' => '65030', 'DocType' => 'FYFinancialStatements_Consolidated_IFRS', 'CurPerType' => 'FY', 'CurFYEn' => '2026-03-31', 'Sales' => '5500', 'OP' => '420', 'NP' => '280', 'EPS' => '125', 'BPS' => '1050', 'EqAR' => '0.51', 'ROE' => '0.12', 'DivAnn' => '50', 'PayoutRatioAnn' => '0.40'],
+                ['DiscDate' => '2026-05-13', 'DiscTime' => '15:00', 'Code' => '65030', 'DocType' => 'DividendForecastRevision', 'CurPerType' => 'FY', 'CurFYEn' => '2026-03-31', 'Sales' => '', 'OP' => '', 'NP' => '', 'EPS' => '', 'BPS' => '', 'EqAR' => '', 'ROE' => '', 'DivAnn' => '', 'PayoutRatioAnn' => ''],
+                ['DiscDate' => '2026-06-18', 'DiscTime' => '15:00', 'Code' => '65030', 'DocType' => 'EarnForecastRevision', 'CurPerType' => '2Q', 'CurFYEn' => '2027-03-31', 'Sales' => '', 'OP' => '', 'NP' => '', 'EPS' => '', 'BPS' => '', 'EqAR' => '', 'ROE' => '', 'DivAnn' => '', 'PayoutRatioAnn' => ''],
+            ],
+        ], 200),
+    ]);
+
+    $result = (new JQuantsClient)->fetchStatements('65030', 2);
+
+    // 修正の2行を除いた実績の2行だけが、新しい順に残る
+    expect($result)->toHaveCount(2);
+    expect(array_column($result, 'period_type'))->toBe(['FY', '3Q']);
+    expect(array_column($result, 'disclosed_date'))->toBe(['2026-05-13', '2026-02-05']);
+    expect($result[0]['net_sales'])->toBe(5500.0);
+});
+
 test('fetchStatementsは取得件数が指定期数より少ない場合は取得できた件数分のみ返す', function () {
     // Arrange: only 2 statements exist, but periods=5 is requested
     Http::fake([

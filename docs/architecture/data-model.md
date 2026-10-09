@@ -207,17 +207,17 @@
 |---|---|---|---|---|
 | id | bigint | NO | auto | 主キー |
 | holding_id | bigint | NO | - | `holdings.id` への参照（1:1、保有中・候補いずれの銘柄も対象） |
-| per | decimal(10,2) | YES | null | PER |
-| pbr | decimal(10,2) | YES | null | PBR |
-| roe | decimal(7,4) | YES | null | ROE（%） |
+| per | decimal(10,2) | YES | null | PER。**JP株は現在株価÷最新の本決算（FY）のEPS（実績PER、ADR-0030。2026-10-09に「最新の開示行のEPS」から変更。四半期の累計EPSで過大になっていた）** |
+| pbr | decimal(10,2) | YES | null | PBR。**JP株は現在株価÷値がある最新の実績の行の1株純資産（四半期を含む、ADR-0030）** |
+| roe | decimal(7,4) | YES | null | ROE（%）。**JP株は最新の本決算（FY）の行の値（ADR-0030。J-Quantsは通期の行にしか入れない）** |
 | revenue_growth | decimal(10,4) | YES | null | 売上高成長率（%）。**JP株は最新の本決算（FY）とその前期の本決算の比較（前期通期比、ADR-0012。2026-09-06に「配列4つ前との比較」から変更）**、US株はFinnhub`revenueGrowthTTMYoy`（TTM前年同期比）をそのまま採用。同一カラムに算出方法が異なる値が混在する（`peg_ratio`と同じ構図）。ADR-0006により`decimal(7,4)`から拡張 |
 | operating_income_growth | decimal(10,4) | YES | null | 営業利益成長率（%）。**JP株は最新の本決算（FY）とその前期の本決算の比較（前期通期比、ADR-0012）**、US株はFinnhubの`financials-reported`の`us-gaap_OperatingIncomeLoss`を直近期・前期で比較（ADR-0009）。ADR-0006により`decimal(7,4)`から拡張 |
 | avg_revenue_growth | decimal(10,4) | YES | null | 直近3期平均の売上高成長率（%）。CHG-0017／ADR-0015 D2の平均成長率OR救済（財務健全性フィルタで単年度`revenue_growth`が0以下でもこちらが0超なら`passed`）専用のカラムで、単年度の`revenue_growth`とは別に保持する。**JP株限定**（`FundamentalIndicatorMapper::averageAnnualGrowth()`、直近4期のFY決算から3期分のYoYを平均。US株は算出しない、常にnull） |
 | avg_operating_income_growth | decimal(10,4) | YES | null | 直近3期平均の営業利益成長率（%）。用途・算出方法・US株null固定は`avg_revenue_growth`と同じ（CHG-0017／ADR-0015 D2） |
-| equity_ratio | decimal(7,4) | YES | null | 自己資本比率（%） |
-| operating_margin | decimal(10,4) | YES | null | 営業利益率（%、営業利益÷売上高）。財務健全性フィルタの4条件目（CHG-0012／ADR-0011）。**JP株は決算期ベースの実測算出（`operating_profit ÷ net_sales × 100`、`FundamentalIndicatorMapper`）、US株はFinnhubの`operatingMarginTTM`（無ければ`operatingMarginAnnual`）をそのまま採用**しており、`peg_ratio`と同様に同一カラムに算出方法が異なる値が混在する（両者を比較する機能を追加する際は注意）。`\|営業利益率\| > 999%`（売上ほぼゼロのプレレベニュー企業。実データでFinnhubが`-243100`を返す例あり）は両Mapperでnull化してINSERTしない（ADR-0006のeps_growth桁あふれと同種の予防）。`decimal(10,4)`は成長率3列（ADR-0006）と揃えた |
-| dividend_yield | decimal(7,4) | YES | null | 配当利回り（%） |
-| dividend_payout_ratio | decimal(7,4) | YES | null | 配当性向（%） |
+| equity_ratio | decimal(7,4) | YES | null | 自己資本比率（%）。**JP株は値がある最新の実績の行の値（四半期を含む、ADR-0030）** |
+| operating_margin | decimal(10,4) | YES | null | 営業利益率（%、営業利益÷売上高）。財務健全性フィルタの4条件目（CHG-0012／ADR-0011）。**JP株は最新の本決算（FY）の行からの実測算出（`operating_profit ÷ net_sales × 100`、`FundamentalIndicatorMapper`。2026-10-09に最新の開示行からFYの行に変更、ADR-0030）、US株はFinnhubの`operatingMarginTTM`（無ければ`operatingMarginAnnual`）をそのまま採用**しており、`peg_ratio`と同様に同一カラムに算出方法が異なる値が混在する（両者を比較する機能を追加する際は注意）。`\|営業利益率\| > 999%`（売上ほぼゼロのプレレベニュー企業。実データでFinnhubが`-243100`を返す例あり）は両Mapperでnull化してINSERTしない（ADR-0006のeps_growth桁あふれと同種の予防）。`decimal(10,4)`は成長率3列（ADR-0006）と揃えた |
+| dividend_yield | decimal(7,4) | YES | null | 配当利回り（%）。**JP株は最新の本決算（FY）の年間配当÷現在株価（ADR-0030）** |
+| dividend_payout_ratio | decimal(7,4) | YES | null | 配当性向（%）。**JP株は最新の本決算（FY）の行の値（ADR-0030）** |
 | eps_growth | decimal(10,4) | YES | null | EPS成長率（%）。**JP株は最新の本決算（FY）とその前期の本決算の`financial_statements.eps`を比較（前期通期比、ADR-0012。2026-09-06に「配列4つ前との比較」から変更）**、US株はFinnhub`epsGrowthTTMYoy`（ADR-0009）。実データでほぼゼロ近辺からの回復銘柄が999.9999%を超えINSERTエラーになったため、ADR-0006により`decimal(7,4)`から拡張 |
 | peg_ratio | decimal(10,4) | YES | null | PEGレシオ。JP株は`PER÷EPS成長率`で自前算出し、`eps_growth`が0以下の場合は算出せずnull（ADR-0004）。**US株はFinnhubの`pegTTM`をそのまま採用しており、算出方法がJP株と同一とは限らない**（ADR-0009。同一カラムに算出方法が異なる値が混在するため、両者を比較する機能を追加する際は注意が必要）。買い増しシグナル（`BuySignalDeterminationService::determinePegUndervalued`）は`0 < peg <= 1.0`のみを割安とする（負のPEGは減益・赤字成長を意味するため割安判定から除外、ADR-0012 D4） |
 | fetched_at | timestamp | NO | now() | 外部データソースからの取得日時（値が変化した時のみ更新）。JP株はJ-Quants由来で最大12週間遅延の可能性あり。US株はFinnhub由来（ADR-0009）でこの遅延制約は適用されない |
@@ -228,6 +228,8 @@
 ---
 
 ### financial_statements（UC-006の過去業績推移、保有中・候補いずれの銘柄も対象）
+
+> **2026-10-09（CHG-0050・ADR-0030）**: 業績予想・配当予想の修正の行（実績が空）は`JQuantsClient::fetchStatements()`で除外するため、新しく保存されなくなった。既に保存済みの実績が空の行は自動では削除しない。
 
 決算期ごとの実績は期をまたいで値そのものが変わる真の履歴データなので、`technical_indicators`/`fundamental_indicators`とは異なりUPSERTではなく期ごとにレコードを持つ（`(holding_id, fiscal_period)`が既存なら更新、なければ追加＝`fiscal_period`単位でのUPSERT。同一期を重複INSERTしない）。
 

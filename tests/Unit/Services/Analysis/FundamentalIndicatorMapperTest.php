@@ -714,3 +714,125 @@ describe('ADR-0015 D2: averageAnnualGrowth()は直近$periods期のYoY成長率�
         expect(method_exists($mapper, 'averageAnnualGrowth'))->toBeTrue();
     });
 });
+
+// -----------------------------------------------------------------------
+// CR (2026-10-09, CHG-0050 / ADR-0030): 項目ごとに適切な開示行から計算する
+// -----------------------------------------------------------------------
+// Source of truth:
+//   - docs/adr/ADR-0030-jp-fundamentals-source-row.md
+//     D2: PER(EPS)・ROE・営業利益率・配当利回り・配当性向は最新の本決算(FY)の行から
+//         （その行の値が空なら空。古い年度には遡らない）
+//     D3: 自己資本比率・1株純資産(PBR)は値がある最新の実績の行から（四半期を含む）
+//
+// J-Quants の四半期の行は EPS・売上・営業利益が期首からの累計で、ROE・年間配当は
+// 空、1株純資産も空のことが多い（2026-10-09の実データ）。
+//
+// Expected Red: 現行 map() は種類を見ずに $statements[0] から計算するため、
+// 最新の行が四半期だと PER が累計EPSで過大、ROE・配当が空になり、下記が
+// assertion 不一致で落ちる。Red でないもの（現行でも通る回帰の固定）は各テストに明記。
+
+describe('ADR-0030: 項目ごとに適切な開示行から計算する', function () {
+    /**
+     * `disclosed_date` 降順。最新の行は翌期の第1四半期決算（累計）。
+     *   index 0 : 1Q fiscal_year_end=2027-03-31 eps=30（3か月の累計）, BPS・ROE・配当は空, EqAR=0.50
+     *   index 1 : FY fiscal_year_end=2026-03-31 eps=120, BPS=800, EqAR=0.45, ROE=0.152, 配当36, 性向0.30
+     *   index 2 : FY fiscal_year_end=2025-03-31 eps=100, BPS=720, EqAR=0.41, ROE=0.135, 配当32, 性向0.26
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    function fimQuarterLatestStatements(): array
+    {
+        return [
+            [
+                'disclosed_date' => '2026-08-07', 'period_type' => '1Q', 'fiscal_year_end' => '2027-03-31',
+                'net_sales' => 300.0, 'operating_profit' => 30.0, 'profit' => 25.0, 'eps' => 30.0,
+                'book_value_per_share' => null, 'equity_to_asset_ratio' => 0.50, 'roe' => null,
+                'dividend_per_share_annual' => null, 'payout_ratio_annual' => null,
+            ],
+            [
+                'disclosed_date' => '2026-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2026-03-31',
+                'net_sales' => 1200.0, 'operating_profit' => 200.0, 'profit' => 150.0, 'eps' => 120.0,
+                'book_value_per_share' => 800.0, 'equity_to_asset_ratio' => 0.45, 'roe' => 0.152,
+                'dividend_per_share_annual' => 36.0, 'payout_ratio_annual' => 0.30,
+            ],
+            [
+                'disclosed_date' => '2025-05-15', 'period_type' => 'FY', 'fiscal_year_end' => '2025-03-31',
+                'net_sales' => 1000.0, 'operating_profit' => 160.0, 'profit' => 110.0, 'eps' => 100.0,
+                'book_value_per_share' => 720.0, 'equity_to_asset_ratio' => 0.41, 'roe' => 0.135,
+                'dividend_per_share_annual' => 32.0, 'payout_ratio_annual' => 0.26,
+            ],
+        ];
+    }
+
+    test('最新の行が四半期決算の場合、PER・ROE・営業利益率・配当利回り・配当性向は最新の本決算の行から計算する', function () {
+        $result = (new FundamentalIndicatorMapper)->map(fimQuarterLatestStatements(), currentPrice: 1800.0);
+
+        // per = 1800 / 最新FYのEPS 120（四半期の累計EPS 30 で割った 60 ではない）
+        expect($result['per'])->toEqualWithDelta(15.0, 0.0001);
+        // roe = 最新FYの 0.152 * 100
+        expect($result['roe'])->toEqualWithDelta(15.2, 0.0001);
+        // operating_margin = 最新FYの 200 / 1200 * 100（四半期累計の 30 / 300 = 10% ではない）
+        expect($result['operating_margin'])->toEqualWithDelta(200 / 1200 * 100, 0.0001);
+        // dividend_yield = 最新FYの年間配当 36 / 1800 * 100
+        expect($result['dividend_yield'])->toEqualWithDelta(2.0, 0.0001);
+        // dividend_payout_ratio = 最新FYの 0.30 * 100
+        expect($result['dividend_payout_ratio'])->toEqualWithDelta(30.0, 0.0001);
+        // peg_ratio = per / eps_growth = 15 / ((120 - 100) / 100 * 100 = 20)
+        expect($result['peg_ratio'])->toEqualWithDelta(0.75, 0.0001);
+    });
+
+    test('自己資本比率・PBRは、値がある最新の実績の行（四半期を含む）から取る', function () {
+        // 回帰の固定（現行でも通る）: 四半期に値があれば、通期より新しいので四半期を使う。
+        $statements = fimQuarterLatestStatements();
+        $statements[0]['book_value_per_share'] = 900.0;
+
+        $result = (new FundamentalIndicatorMapper)->map($statements, currentPrice: 1800.0);
+
+        // equity_ratio = 四半期の 0.50 * 100（通期の 45 ではない）
+        expect($result['equity_ratio'])->toEqualWithDelta(50.0, 0.0001);
+        // pbr = 1800 / 四半期の 900（通期の 800 ではない）
+        expect($result['pbr'])->toEqualWithDelta(2.0, 0.0001);
+    });
+
+    test('四半期の行で1株純資産・自己資本比率が空なら、次に新しい行の値を使う', function () {
+        $statements = fimQuarterLatestStatements();
+        $statements[0]['equity_to_asset_ratio'] = null;
+
+        $result = (new FundamentalIndicatorMapper)->map($statements, currentPrice: 1800.0);
+
+        // pbr = 1800 / 最新FYの 800（四半期の空で null にしない）
+        expect($result['pbr'])->toEqualWithDelta(2.25, 0.0001);
+        // equity_ratio = 最新FYの 0.45 * 100
+        expect($result['equity_ratio'])->toEqualWithDelta(45.0, 0.0001);
+    });
+
+    test('最新の本決算の行でROE・配当が空なら空のままにし、古い年度の本決算には遡らない', function () {
+        // 回帰の固定（現行でも通る）: 古い年度の値で埋める実装を防ぐ。
+        $statements = fimQuarterLatestStatements();
+        $statements[1]['roe'] = null;
+        $statements[1]['dividend_per_share_annual'] = null;
+        $statements[1]['payout_ratio_annual'] = null;
+
+        $result = (new FundamentalIndicatorMapper)->map($statements, currentPrice: 1800.0);
+
+        expect($result['roe'])->toBeNull();
+        expect($result['dividend_yield'])->toBeNull();
+        expect($result['dividend_payout_ratio'])->toBeNull();
+    });
+
+    test('本決算の行が1つもない場合、PER・ROE・営業利益率・配当は空になり、自己資本比率・PBRは四半期の値から計算する', function () {
+        $statements = [fimQuarterLatestStatements()[0]];
+        $statements[0]['book_value_per_share'] = 900.0;
+
+        $result = (new FundamentalIndicatorMapper)->map($statements, currentPrice: 1800.0);
+
+        expect($result['per'])->toBeNull();
+        expect($result['roe'])->toBeNull();
+        expect($result['operating_margin'])->toBeNull();
+        expect($result['dividend_yield'])->toBeNull();
+        expect($result['dividend_payout_ratio'])->toBeNull();
+        expect($result['peg_ratio'])->toBeNull();
+        expect($result['equity_ratio'])->toEqualWithDelta(50.0, 0.0001);
+        expect($result['pbr'])->toEqualWithDelta(2.0, 0.0001);
+    });
+});
