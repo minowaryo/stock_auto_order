@@ -183,7 +183,7 @@ describe('UC-017 売買履歴の取込画面: 入力の検証', function () {
     test('ファイルが未選択のときは、必須のエラーを表示し、プレビューも取込もしない', function () {
         // Act & Assert
         Livewire::actingAs(tiuiUser())->test(Import::class)
-            ->call('preview')
+            ->call('runPreview')
             ->assertHasErrors(['jp_trade_file' => 'required', 'us_trade_file' => 'required'])
             ->assertSee('国内株式・米国株式の売買履歴CSVは両方アップロードしてください');
 
@@ -199,7 +199,7 @@ describe('UC-017 売買履歴の取込画面: 入力の検証', function () {
         Livewire::actingAs(tiuiUser())->test(Import::class)
             ->set('jp_trade_file', $notCsv)
             ->set('us_trade_file', $us)
-            ->call('preview')
+            ->call('runPreview')
             ->assertHasErrors(['jp_trade_file'])
             ->assertSee('CSVファイルのみアップロードできます');
     });
@@ -213,7 +213,7 @@ describe('UC-017 売買履歴の取込画面: 入力の検証', function () {
         Livewire::actingAs(tiuiUser())->test(Import::class)
             ->set('jp_trade_file', $oversized)
             ->set('us_trade_file', $us)
-            ->call('preview')
+            ->call('runPreview')
             ->assertHasErrors(['jp_trade_file' => 'max']);
     });
 });
@@ -222,7 +222,7 @@ describe('UC-017 売買履歴の取込画面: プレビュー', function () {
     test('プレビューは対象期間と、新規・既存・確認待ち・読み飛ばしの件数を表示し、データベースを変えない', function () {
         // Arrange: one trade already stored, then a file with it + a new one + a broken row
         [$jp, $us] = tiuiFiles([tiuiJp()]);
-        Livewire::actingAs(tiuiUser())->test(Import::class)->set('jp_trade_file', $jp)->set('us_trade_file', $us)->call('preview')->call('confirm');
+        Livewire::actingAs(tiuiUser())->test(Import::class)->set('jp_trade_file', $jp)->set('us_trade_file', $us)->call('runPreview')->call('confirm');
         $batchesBefore = TradeImportBatch::count();
         $executionsBefore = TradeExecution::orderBy('id')->get()->toArray();
         [$jp2, $us2] = tiuiFiles([tiuiJp(['銘柄コード' => '5678', '約定日' => '2026/9/10', '受渡日' => '2026/9/12']), tiuiJp(['約定日' => '2026/13/40'])]);
@@ -230,7 +230,7 @@ describe('UC-017 売買履歴の取込画面: プレビュー', function () {
         // Act
         $component = Livewire::actingAs(tiuiUser())->test(Import::class)
             ->set('jp_trade_file', $jp2)->set('us_trade_file', $us2)
-            ->call('preview');
+            ->call('runPreview');
 
         // Assert: counts (new 1, existing 0, missing 1 = the stored 1234 row, skipped 1)
         $component->assertSee('2026-09-10')->assertSee('総行数')->assertSee('取込を確定');
@@ -251,7 +251,7 @@ describe('UC-017 売買履歴の取込画面: プレビュー', function () {
         // Act
         $component = Livewire::actingAs(tiuiUser())->test(Import::class)
             ->set('jp_trade_file', $jp)->set('us_trade_file', $brokenUs)
-            ->call('preview');
+            ->call('runPreview');
 
         // Assert
         $component->assertSee('読み取れませんでした')->assertDontSee('取込を確定');
@@ -262,7 +262,7 @@ describe('UC-017 売買履歴の取込画面: プレビュー', function () {
         // Arrange
         [$jp, $us] = tiuiFiles([tiuiJp()]);
         $component = Livewire::actingAs(tiuiUser())->test(Import::class)
-            ->set('jp_trade_file', $jp)->set('us_trade_file', $us)->call('preview')
+            ->set('jp_trade_file', $jp)->set('us_trade_file', $us)->call('runPreview')
             ->assertSee('取込を確定');
 
         // Act
@@ -311,7 +311,7 @@ describe('UC-017 売買履歴の取込画面: 確定と結果', function () {
         // Act
         $component = Livewire::actingAs(tiuiUser())->test(Import::class)
             ->set('jp_trade_file', $jp)->set('us_trade_file', $us)
-            ->call('preview')->call('confirm');
+            ->call('runPreview')->call('confirm');
 
         // Assert
         expect(TradeImportBatch::sole()->status)->toBe('completed');
@@ -327,7 +327,7 @@ describe('UC-017 売買履歴の取込画面: 確定と結果', function () {
         // Act & Assert
         Livewire::actingAs(tiuiUser())->test(Import::class)
             ->set('jp_trade_file', $jp)->set('us_trade_file', $us)
-            ->call('preview')->call('confirm')
+            ->call('runPreview')->call('confirm')
             ->assertSee('保有CSVがまだ取り込まれていないため、照合は行っていません');
     });
 
@@ -339,7 +339,7 @@ describe('UC-017 売買履歴の取込画面: 確定と結果', function () {
         // Act
         $component = Livewire::actingAs(tiuiUser())->test(Import::class)
             ->set('jp_trade_file', $jp)->set('us_trade_file', $us)
-            ->call('preview')->call('confirm');
+            ->call('runPreview')->call('confirm');
 
         // Assert: which snapshot, the four counts
         $component->assertSee('2026-10-03');
@@ -365,7 +365,7 @@ describe('UC-017 売買履歴の取込画面: 確定と結果', function () {
         // Act
         $component = Livewire::actingAs(tiuiUser())->test(Import::class)
             ->set('jp_trade_file', $jp)->set('us_trade_file', $us)
-            ->call('preview')->call('confirm');
+            ->call('runPreview')->call('confirm');
 
         // Assert: 52 history_only + 1 snapshot_only = 53 → 50 shown, ほか3件
         $component->assertSee('ほか3件');
@@ -375,13 +375,13 @@ describe('UC-017 売買履歴の取込画面: 確定と結果', function () {
         // Arrange: first import leaves a snapshot_only item for 7777; second import has it matched
         tiuiSnapshot('2026-10-03 12:00:00', ['7777' => 100]);
         [$jp1, $us1] = tiuiFiles([tiuiJp(['銘柄コード' => '1111'])]);
-        Livewire::actingAs(tiuiUser())->test(Import::class)->set('jp_trade_file', $jp1)->set('us_trade_file', $us1)->call('preview')->call('confirm');
+        Livewire::actingAs(tiuiUser())->test(Import::class)->set('jp_trade_file', $jp1)->set('us_trade_file', $us1)->call('runPreview')->call('confirm');
         [$jp2, $us2] = tiuiFiles([tiuiJp(['銘柄コード' => '7777'])]);
 
         // Act
         $component = Livewire::actingAs(tiuiUser())->test(Import::class)
             ->set('jp_trade_file', $jp2)->set('us_trade_file', $us2)
-            ->call('preview')->call('confirm');
+            ->call('runPreview')->call('confirm');
 
         // Assert: the second result shows no non-matched detail rows
         $component->assertSee('一致しなかった銘柄はありません')->assertDontSee('1111');
