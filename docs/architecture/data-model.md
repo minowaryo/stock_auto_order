@@ -383,21 +383,43 @@
 | holding_id | bigint | NO | - | `holdings.id` への参照（1:1）。CSV取込時に `Holding::firstOrCreate(['symbol_code','market'], ...)` で解決する（`data-model.md` の holdings「作成経路②」） |
 | folder_name | varchar(255) | YES | null | お気に入りCSVのフォルダ名（本人のテーマ分類。例「訪日インバウンド旅行」「日本株 トレンド国策銘柄」）。`source='manual'` の場合は null |
 | exchange_label | varchar(20) | YES | null | お気に入りCSVの取引所ラベル（例「東Ｐ」「米国」）。表示補助のみ |
-| source | enum('rakuten_favorites_csv','manual') | NO | 'rakuten_favorites_csv' | 登録経路 |
+| source | enum('rakuten_favorites_csv','manual') | NO | 'rakuten_favorites_csv' | 行の作成経路。CSV再取込で上書きされるため、履歴を含む登録経路の表示には使わない |
 | is_starred | boolean | NO | false | 画面上で本人が手動登録した★お気に入りか。楽天証券側のお気に入り（CSV由来）とは独立で、CSVから消えても保持する |
 | last_close | decimal(15,2) | YES | null | 直近の週足終値。未保有銘柄には `holding_snapshots.current_price` が無いため、「現在値」表示・52週レンジ内位置・判定チェックリストの価格乖離チップに使う現在値を `RefreshWatchlistMarketDataAction` が保存する（既に取得済みの週足データで、追加の外部API呼び出しはない。2026-09-08 Gate 4 実装時に追加） |
 | last_refreshed_at | timestamp | YES | null | `last_close` および指標を最後に更新した日時（2026-09-08 Gate 4 実装時に追加） |
-| last_seen_in_csv_at | timestamp | YES | null | 直近でお気に入りCSVに含まれていた日時。取込のたびに更新。これが直近の取込日時より古い＝「楽天側でお気に入りから外された」と判定して `in_rakuten_favorites=false` バッジを出す |
+| last_seen_in_csv_at | timestamp | YES | null | 最後にお気に入りCSVへ含まれていた日時。過去のCSV経路の判定に使う。直近CSVへの在籍は下記の取込IDで判定（ADR-0028） |
+| last_seen_favorite_import_id | bigint unsigned | YES | null | 最後に含まれた成功CSV取込ID。`favorite_csv_import_batches.id`へのFK（ADR-0028） |
 | registered_at | timestamp | NO | now() | 初回登録日時 |
 | created_at | timestamp | NO | now() | 作成日時 |
 | updated_at | timestamp | NO | now() | 更新日時 |
 
-**Index**: `holding_id` unique、`is_starred`
-**FK**: `holding_id` → `holdings(id)`
+**Index**: `holding_id` unique、`is_starred`、`last_seen_favorite_import_id`
+**FK**: `holding_id` → `holdings(id)`、`last_seen_favorite_import_id` → `favorite_csv_import_batches(id)`
 
 > CSV再アップロードは追加のみ（前回あって今回無い銘柄も削除しない、UC-012業務ルール）。棚卸し時も行の物理削除は行わず、本人が画面で `is_starred` を解除して監視終了として扱う（`is_starred` の付け外しは UPDATE）。楽天側でお気に入り解除済みの行も、過去メモとともに保持する。
 > `is_starred` を `watch_records`（UC-006、追記のみ）に寄せない理由: `watch_records` は履歴テーブルで「★を外す」が表現できない（外す＝『様子見』を追記では意味が変わる）。★は独立 boolean とする（ADR-0013 D7）。
 > 一覧に表示するのは「未保有」＝直近スナップショットの `holding_snapshots` に当該 `holding_id` が存在しない銘柄のみ。保有済みになった銘柄は行を残したまま一覧から自動的に外れる。
+
+> **CHG-0031マージ後レビューの追加Gate 3（2026-10-05本人承認）**: `last_seen_in_csv_at`は過去にCSVへ載った事実を保持する。直近CSVへの在籍は[ADR-0028](../adr/ADR-0028-favorite-csv-import-membership.md)の取込IDで判定する。既存の`last_seen_in_csv_at`・`source`・`is_starred`は変更しない。
+
+#### favorite_csv_import_batches（追加Gate 3、2026-10-05承認）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint unsigned | NO | auto | 成功したお気に入りCSV取込の識別子 |
+| imported_at | timestamp | NO | - | 取込時点。UC-016のCSV照合時点にも使用 |
+| registered_count | int unsigned | NO | - | 対象銘柄行数。UC-012に従い1以上 |
+| created_at / updated_at | timestamp | NO | now() | 保存日時 |
+
+#### favorite_csv_import_states（追加Gate 3、2026-10-05承認）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint unsigned | NO | 1 | 単一行の主キー。取込時に`lockForUpdate`する |
+| latest_batch_id | bigint unsigned | YES | null | 最新成功取込の`favorite_csv_import_batches.id`へのFK |
+| created_at / updated_at | timestamp | NO | now() | 保存日時 |
+
+**追加列**: `watchlist_items.last_seen_favorite_import_id`（bigint unsigned、nullable、`favorite_csv_import_batches.id`へのFKと索引）。取込バッチと対象行・状態行の更新は同一トランザクション。最新バッチがある場合は`last_seen_favorite_import_id`が`favorite_csv_import_states.latest_batch_id`と一致する行だけ`in_rakuten_favorites=true`とする。既存データのIDは埋め戻さず、最初の成功取込までは従来の判定を暫定使用する。失敗取込で最新バッチを進めない。新規マイグレーションだけで追加し、既存マイグレーションは編集しない。
 
 ---
 
@@ -653,14 +675,14 @@
 | watchlist_item_id | bigint | YES | null | 作成・関連付けたウォッチリスト行。`already_held` は null |
 | outcome | enum('created','linked_existing','already_held') | NO | - | 結果（ADR-0025 D6） |
 | matched_snapshot_id | bigint | YES | null | 照合に使った保有スナップショット（未取込は null） |
-| favorites_last_imported_at | timestamp | YES | null | 照合時点のお気に入りCSV最終取込時刻（`watchlist_items.last_seen_in_csv_at` の最大値） |
+| favorites_last_imported_at | timestamp | YES | null | 照合時点のお気に入りCSV最終取込時刻。ADR-0028導入後は最新成功バッチの`imported_at`、導入前は`watchlist_items.last_seen_in_csv_at`の最大値を暫定使用 |
 | idempotency_key | char(36) | NO | - | 確認欄表示時に発行するUUID。二重送信防止 |
 | created_at | timestamp | NO | now() | 登録日時 |
 
 **Index**: `(research_candidate_id, idempotency_key)` unique、`watchlist_item_id`、`holding_id`、`research_candidate_revision_id`、`research_entity_listing_id`、`matched_snapshot_id`
 **FK**: `research_candidate_id` → `research_candidates(id)`、`research_candidate_revision_id` → `research_candidate_revisions(id)`、`research_entity_listing_id` → `research_entity_listings(id)`、`holding_id` → `holdings(id)`、`watchlist_item_id` → `watchlist_items(id)`、`matched_snapshot_id` → `snapshots(id)`
 
-> 追記のみ。ウォッチリストの「調査候補」経路はこのテーブルの存在で判定し、`watchlist_items.source` は経路判定に使わない（CSV再取込で上書きされるため。ADR-0025 D5）。調査候補から新規作成する `watchlist_items` 行は `source='manual'`、`is_starred=true`、`folder_name=null`、`last_seen_in_csv_at=null`。`in_rakuten_favorites` は `last_seen_in_csv_at` 基準で判定し、一度もCSVに出ていない行に「楽天側で解除済み」を出さない。
+> 追記のみ。ウォッチリストの「調査候補」経路はこのテーブルの存在で判定し、`watchlist_items.source` は経路判定に使わない（CSV再取込で上書きされるため。ADR-0025 D5）。調査候補から新規作成する `watchlist_items` 行は `source='manual'`、`is_starred=true`、`folder_name=null`、`last_seen_in_csv_at=null`。`in_rakuten_favorites` は最新成功CSVの取込IDで判定し（ADR-0028）、一度もCSVに出ていない行に「楽天側で解除済み」を出さない。
 
 #### 集計の定義（UC-016 出力4）
 
@@ -1093,4 +1115,5 @@
 | 2026-09-30 | CHG-0026の`sox`追加をGate3承認 | ADR-0019 |
 | 2026-10-04 | 調査候補（CHG-0031、UC-016）のGate3叩き台として`research_*`の8テーブル・受け渡し履歴・集計の定義を追記。既存テーブルのスキーマ変更なし（`in_rakuten_favorites`の判定基準を`last_seen_in_csv_at`へ改める表示ロジック変更を含む）。Gate3レビュー待ち | ADR-0025 |
 | 2026-10-04 | 本人の「Ｇａｔｅ３承認でよい」により、CHG-0031の`research_*`8テーブル、受け渡し履歴、集計定義とADR-0025をGate 3承認。Gate 4と情報源固有の自動取得は未承認 | ADR-0025 |
+| 2026-10-05 | CHG-0031のマージ後レビューに対応し、`favorite_csv_import_batches`・`favorite_csv_import_states`・`watchlist_items.last_seen_favorite_import_id`を追加Gate 3設計として本人が承認。過去のCSV経路と直近の成功取込への在籍を分離する。追加Red11件もGate 4承認済み | ADR-0028 |
 | 2026-10-04 | 売買の振り返り（CHG-0033、UC-017／UC-018）のGate3叩き台として`trade_import_batches`／`trade_executions`／`trade_reconciliation_items`／`price_tracking_targets`／`stock_splits`／`indicator_observations`／`trade_switch_allocations`／`trade_context_records`の8テーブルと、`index_weekly_prices.index_name`への`usdjpy`追加を記載。比較結果は保存せず読み取り時に算出。Gate3承認済み | ADR-0027、ADR-0024 |

@@ -65,6 +65,8 @@ UC-016（市場からの調査候補発見・確認）は、本人が公開記�
 - 「CSV経路」は `last_seen_in_csv_at IS NOT NULL`、「調査候補経路」は `research_watchlist_handoffs` の存在で判定する。`source` はCSV再取込で上書きされても、経路の判定には使わない。
 - `in_rakuten_favorites` の判定を `last_seen_in_csv_at` 基準へ改める（data-model.md の `watchlist_items` 注記に既に記載されている判定と一致させる）。一度もCSVに出ていない行には「楽天側で解除済み」を出さない。これは表示ロジックの変更で、UC-012 Gate 2承認済みの出力定義（`in_rakuten_favorites`・`registration_routes`）に基づく。
 
+> 2026-10-05追補: 「直近CSVへの在籍」の判定は[ADR-0028](ADR-0028-favorite-csv-import-membership.md)の成功取込IDへ置き換える。`last_seen_in_csv_at`は過去のCSV経路の判定に引き続き使用する。
+
 ### D6 受け渡しは1トランザクションで、結果を3種類に分けて記録する
 
 確定時に保有スナップショット・ウォッチリストを再照合し、`research_watchlist_handoffs.outcome` を次のいずれかで記録する。

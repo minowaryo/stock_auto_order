@@ -32,6 +32,10 @@ class CandidateResearch extends Component
 
     public ?int $editingVersion = null;
 
+    public ?int $selectedClaimForEditId = null;
+
+    public ?int $selectedListingForEditId = null;
+
     public ?int $archiveCandidateId = null;
 
     public ?int $statusCandidateId = null;
@@ -173,7 +177,111 @@ class CandidateResearch extends Component
         ];
         $this->claimForm = $this->blankClaimForm();
         $this->listingForm = $this->blankListingForm();
+        $this->selectedClaimForEditId = null;
+        $this->selectedListingForEditId = null;
         $this->resetErrorBag();
+    }
+
+    public function selectClaimForEdit(int $claimId): void
+    {
+        $candidate = ResearchCandidate::findOrFail($this->editingCandidateId);
+        Gate::authorize('update', $candidate);
+        $claim = $candidate->claims()->find($claimId);
+        abort_if($claim === null, 404);
+        $this->selectedClaimForEditId = $claim->id;
+        $this->claimForm = [
+            'claim' => $claim->claim,
+            'evidence_url' => $claim->evidence_url,
+            'status' => $claim->status,
+            'is_primary_source' => $claim->is_primary_source,
+            'checked_on' => $claim->checked_on?->format('Y-m-d'),
+        ];
+        $this->resetErrorBag();
+    }
+
+    public function selectListingForEdit(int $listingId): void
+    {
+        $candidate = ResearchCandidate::with('entity')->findOrFail($this->editingCandidateId);
+        Gate::authorize('update', $candidate);
+        $listing = $candidate->entity->listings()->find($listingId);
+        abort_if($listing === null, 404);
+        $this->selectedListingForEditId = $listing->id;
+        $this->listingForm = [
+            'market' => $listing->market,
+            'symbol_code' => $listing->symbol_code,
+            'listed_entity_name' => $listing->listed_entity_name,
+            'source_url' => $listing->source_url,
+            'confirmed_on' => $listing->confirmed_on?->format('Y-m-d'),
+        ];
+        $this->resetErrorBag();
+    }
+
+    public function saveClaimChanges(ResearchCandidateService $service): void
+    {
+        if ($this->editingCandidateId === null || $this->editingVersion === null || $this->selectedClaimForEditId === null) {
+            $this->addError('claimForm', '訂正する主張を選んでください。');
+
+            return;
+        }
+
+        $candidate = ResearchCandidate::findOrFail($this->editingCandidateId);
+        Gate::authorize('update', $candidate);
+        abort_if(! $candidate->claims()->whereKey($this->selectedClaimForEditId)->exists(), 404);
+        $this->validate([
+            'claimForm.claim' => ['required', 'string', 'max:2000'],
+            'claimForm.evidence_url' => ['required', 'url:http,https', 'max:2048'],
+            'claimForm.status' => ['required', 'in:unverified,verified,contradicted,unavailable'],
+            'claimForm.is_primary_source' => ['required', 'boolean'],
+            'claimForm.checked_on' => ['required_if:claimForm.status,verified', 'nullable', 'date_format:Y-m-d'],
+        ]);
+
+        try {
+            $updated = $service->update($candidate->id, $this->editingVersion, [
+                'claims' => [['id' => $this->selectedClaimForEditId, ...$this->claimForm]],
+            ], auth()->user());
+            $this->editingVersion = $updated->lock_version;
+            $this->selectedClaimForEditId = null;
+            $this->claimForm = $this->blankClaimForm();
+            $this->notice = '主張の訂正を新しい版として保存しました。';
+        } catch (RuntimeException $exception) {
+            $this->addError('claimForm', '最新版を確認してから編集し直してください。');
+        } catch (InvalidArgumentException|DomainException $exception) {
+            $this->addError('claimForm', $exception->getMessage());
+        }
+    }
+
+    public function saveListingChanges(ResearchCandidateService $service): void
+    {
+        if ($this->editingCandidateId === null || $this->editingVersion === null || $this->selectedListingForEditId === null) {
+            $this->addError('listingForm', '訂正する上場先を選んでください。');
+
+            return;
+        }
+
+        $candidate = ResearchCandidate::with('entity')->findOrFail($this->editingCandidateId);
+        Gate::authorize('update', $candidate);
+        abort_if(! $candidate->entity->listings()->whereKey($this->selectedListingForEditId)->exists(), 404);
+        $this->validate([
+            'listingForm.market' => ['required', 'in:jp,us'],
+            'listingForm.symbol_code' => ['required', 'string', 'max:20'],
+            'listingForm.listed_entity_name' => ['required', 'string', 'max:255'],
+            'listingForm.source_url' => ['required', 'url:http,https', 'max:2048'],
+            'listingForm.confirmed_on' => ['required', 'date_format:Y-m-d'],
+        ]);
+
+        try {
+            $updated = $service->update($candidate->id, $this->editingVersion, [
+                'listings' => [['id' => $this->selectedListingForEditId, ...$this->listingForm]],
+            ], auth()->user());
+            $this->editingVersion = $updated->lock_version;
+            $this->selectedListingForEditId = null;
+            $this->listingForm = $this->blankListingForm();
+            $this->notice = '上場先の訂正を新しい版として保存しました。';
+        } catch (RuntimeException $exception) {
+            $this->addError('listingForm', '最新版を確認してから編集し直してください。');
+        } catch (InvalidArgumentException|DomainException $exception) {
+            $this->addError('listingForm', $exception->getMessage());
+        }
     }
 
     public function addClaim(ResearchCandidateService $service): void
@@ -462,6 +570,9 @@ class CandidateResearch extends Component
             'stats' => app(ResearchCandidateService::class)->stats(),
             'handoffCandidate' => $this->handoffCandidateId !== null
                 ? ResearchCandidate::query()->with(['event', 'entity.listings', 'claims'])->find($this->handoffCandidateId)
+                : null,
+            'editingCandidate' => $this->editingCandidateId !== null
+                ? ResearchCandidate::query()->with(['entity.listings', 'claims'])->find($this->editingCandidateId)
                 : null,
             'themes' => ResearchCandidate::query()->whereNull('archived_at')->distinct()->orderBy('theme')->pluck('theme'),
             'publishers' => ResearchDiscoveryLink::query()->distinct()->orderBy('publisher')->pluck('publisher'),

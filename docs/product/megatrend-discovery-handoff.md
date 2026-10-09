@@ -10,7 +10,7 @@
 - 紹介記事や動画は「入口」。一次資料（企業開示・NEDO・FDA等）に戻って確認したものだけを確認済みにする。
 - 本人が確認して「監視に追加」を選ぶまで、銘柄マスタ・ウォッチリスト・売買シグナルへは自動登録しない。
 
-## 2. 現在の状態（2026-10-04時点）
+## 2. 現在の状態（2026-10-09時点）
 
 | 段階 | 状態 | 根拠 |
 |---|---|---|
@@ -34,8 +34,7 @@ Gitの反映状況は変動するため、再開時に `git log` と `git status
 
 - 調査記録は既存と分けた専用8テーブル: `research_events`（元発表）、`research_discovery_links`（発見経路）、`research_entities`（法人）、`research_entity_listings`（上場）、`research_candidates`（元発表×法人）、`research_claims`（主張と根拠）、`research_candidate_revisions`（版）、`research_watchlist_handoffs`（受け渡し履歴）。既存テーブルのスキーマ変更なし。
 - 未同定・監視未選択の段階では`holdings`を作らない（一括更新・セクター分類の母集団に混ぜないため）。
-- **既存実装の落とし穴**: `ImportFavoriteCsvAction`はCSV再取込のたびに`watchlist_items.source`を上書きし、`ShowWatchlistAction`は`in_rakuten_favorites`を`source`から求めている。そのため登録経路は`source`ではなく、`last_seen_in_csv_at`と受け渡し履歴から導く設計にした（表示ロジックの変更を伴う。Gate 4で回帰テストを置く）。
-- **直近CSV判定の未解決点**: UC-012本文の`in_rakuten_favorites`は直近CSVへの在籍を意味するが、ADR-0025 D5の`last_seen_in_csv_at IS NOT NULL`は過去の掲載履歴しか示さない。空CSV取込も含む厳密な直近判定は現行スキーマでできない。Gate 4では調査経由のみの行を「楽天側で解除済み」と誤表示しないことと、CSV再取込後も両経路を残すことを確認し、この差は別途仕様・設計を見直す。
+- **CSV再取込の落とし穴と対策**: `ImportFavoriteCsvAction`は再取込時に`watchlist_items.source`を上書きするため、登録経路は`last_seen_in_csv_at`と受け渡し履歴から導く。直近CSVへの在籍はADR-0028で追加した成功取込IDを使って判定する。対象銘柄0件のCSVは現行UC-012どおり取込エラーとし、最新成功取込を更新しない。
 - 編集競合は`lock_version`による楽観ロック、削除はアーカイブ（復元可）、元発表の統合は参照で表す。
 - アーカイブ・復元・統合・監視登録は`audit`チャンネルへ記録する。Green実装で`config/logging.php`にJSONLの`audit`チャンネルを追加した。
 
@@ -43,11 +42,17 @@ Gitの反映状況は変動するため、再開時に `git log` と `git status
 
 Gate 3とGate 4（当初34件と追加3件）は2026-10-04に本人承認済み。GreenとUC-012回帰の計85件が隔離DBで通過した。コンテナへChromiumを一時導入してPlaywrightで未同定候補の記録と照合未実施の表示を確認した。監視登録成功はFeatureテストのみで、ブラウザE2Eは未実施。作業ブランチの2コミットをmainへ統合した。
 
+2026-10-05のマージ後レビューでは、(1)元資料訂正後も確認済みの主張が残る、(2)2件目以降の主張・上場先を画面から訂正できない、(3)直近CSVから消えた銘柄が在籍中と表示される、という3点を確認した。本人が追加対応を指示。追加Red11件は専用MySQL DBで10失敗・回帰1成功。本人が[ADR-0028](../adr/ADR-0028-favorite-csv-import-membership.md)／data-modelの追加Gate 3設計とGate 4テストケースを承認し、Green実装まで進めた。
+
+強化レビューでは、元発表URLを変更したときにイベント自体の「確認済み」と旧確認日が残る境界を見つけた。別URLの確認済み主張がある場合、変更後の元発表URLを確認し直さず監視への受け渡し条件が成立し得る。本人が2026-10-06に追加RedとGate 4を承認。URL変更時の元発表確認状態の無効化、URL不変時の維持、変更後URLを別操作で再確認できることを追加Red3件で定義。専用DBで意図した3失敗・7成功を確認し、GreenでURL変更時に元発表を未確認へ戻した。
+
+追加Red着手前に、UC-016／UC-012関連99件・481アサーション、全Pestスイート1678件・7334アサーション（1件スキップ、23件deprecated）、変更PHP10ファイルのPint `--test`、Vite buildが通過した。2026-10-09の追加Playwright E2Eでは、未確認主張の確認日空欄がMySQL日付エラーになり、画面には版競合と誤表示されることを確認。追記と訂正の追加Red2件は専用DBで意図した失敗となり、本人がGate 4を承認。`syncClaims()`で空欄をNULLに正規化したGreen後、CorrectionTest全12件・61アサーション、追加Playwright E2E1件、全Pestスイート1680件・7342アサーション（1件スキップ、23件deprecated）が通過した。`git diff --check`とDomain Boundaryチェックは通過、review-scoreは84で強化レビュー対象。`fix/chg0031-review-fixes`は未コミット・未マージ。
+
 前セッションでは、CHG-0033を優先する案も提案していたが、今回の本人決定はCHG-0031のRed着手。4週試行の結果で情報源固有の取得条件が変わる可能性は引き続き残る。
 
 ## 6. 今後の作業（実装準備と試行を並行）
 
-1. `feat/chg0031-research-candidates`の37件のRed→Gate 4承認→Greenと、未同定候補の記録・照合未実施を示すPlaywright E2E 1件は完了。監視登録成功はFeatureテストで確認済み。作業ブランチの2コミットをmainへ統合済み。
+1. `feat/chg0031-research-candidates`の37件のRed→Gate 4承認→Greenと、未同定候補の記録・照合未実施を示すPlaywright E2E 1件は完了。監視登録成功はFeatureテストで確認済み。作業ブランチの2コミットをmainへ統合済み。マージ後レビューの追加修正は`fix/chg0031-review-fixes`でGreen実装済み。確認日空欄の追加Red2件もGate 4承認後にGreenとなり、画面E2Eと全体回帰が通過した。コミットとmain統合は未了。
 2. 並行して4週試行の週次記録（10/05〜11、10/12〜18、10/19〜25、10/26〜11/01）を`source-pilot-log.md`へ記入する。源ごとに元URL・発表日・照合結果・所要時間・確認できなかった理由を残す。**本人の手作業で、自動実行は設定していない。**
 3. 2026-11-02以降: 源ごとに一次資料との一致／不一致／確認不能、訂正、誤同定、転載重複、未登録企業数、偏り、確認時間を集計し、継続／補助参照／入替／保留を決める。F-016の各要件を維持／修正／保留で見直し、変更があれば該当Gateを再レビューする。記録が足りなければ不足を明記し、期間の経過だけで検証済みにしない。
 4. 再精査で採用した源の自動取得は、別のGate 2差分 → Gate 3（ADR-0025 D8で後回しにした列）として追加する。
@@ -59,7 +64,7 @@ Gate 3とGate 4（当初34件と追加3件）は2026-10-04に本人承認済み�
 | 要件 | `docs/product/requirements.md`（F-016） |
 | UC | `docs/product/use-cases.md`（UC-016、UC-012の調査候補経由の記述、承認記録） |
 | 発見経路の判断 | `docs/adr/ADR-0022-megatrend-source-radar.md` |
-| 保存設計（Gate 3承認済み） | `docs/adr/ADR-0025-research-candidate-storage.md`、`docs/architecture/data-model.md`（`research_*`節） |
+| 保存設計（Gate 3承認済み） | `docs/adr/ADR-0025-research-candidate-storage.md`、`docs/adr/ADR-0028-favorite-csv-import-membership.md`、`docs/architecture/data-model.md`（`research_*`・`favorite_csv_import_*`節） |
 | 情報源の台帳・試行 | `docs/product/megatrend-source-selection.md`、`docs/investment-research/megatrend/source-pilot-log.md`と事例カード |
 | Gate 1再精査メモ | `docs/product/megatrend-discovery-gate1-requirements-draft.md` |
 | 調査カードの書式 | `docs/product/megatrend-research-card-template.md` |
