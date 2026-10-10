@@ -157,6 +157,15 @@ docker compose exec laravel.test php artisan price:backfill --dry-run
 docker compose exec laravel.test php artisan price:backfill
 ```
 
+```bash
+# 売却後・シグナル発生後の価格の追跡（CHG-0033 / UC-018 / ADR-0024 D6）
+# 通常は scripts/start-app.bat がアプリ起動時に自動で後ろ実行する（手動実行は不要）。
+# 確定後に保存済みの銘柄・指数は取得しないので、何度実行してもよい。price:backfill と同時には走らない（ロック共有）。
+# --include-unavailable は取得不能になった銘柄も取り直す。
+docker compose exec laravel.test php artisan price:track --dry-run
+docker compose exec laravel.test php artisan price:track
+```
+
 ## コード生成（Artisan）
 
 ```bash

@@ -157,3 +157,9 @@
 - 現象: UC-017の売買履歴取込画面で「プレビュー」を押しても何も起きず、ボタンが半透明（disabled）のまま戻らない。サーバーにリクエストが届かずログにも何も出ない。`Livewire::test()->call('preview')` のテストは全件通る（2026-10-09）
 - 原因: Livewire 4はアクション式 `preview` を `$wire.preview` として評価し、`$wire` は公開プロパティを先に返す（`vendor/livewire/livewire/dist/livewire.esm.js` の `generateWireObject`）。`public ?array $preview` と `public function preview()` が共存していたため、プロパティ値（null）が返るだけでメソッドが呼ばれず、`wire:submit` が付けたフォームの無効化も解除されない。`Livewire::test()->call()` はJSを通らずメソッドを直接呼ぶため検出できない
 - 対処: メソッドを `runPreview()` に改名した（`app/Livewire/TradeHistory/Import.php`）。再発防止に、全Livewireコンポーネントで公開プロパティと公開メソッドの名前の衝突を検出するテストを追加した（`tests/Unit/Livewire/ComponentMemberNamesTest.php`）
+
+### Laravel Artisanコマンド — `private function run()` を定義するとテスト全体が致命的エラーで止まる
+
+- 現象: コマンドクラスに `handle()` から呼ぶ補助メソッド `private function run(...)` を足したところ、`php artisan test` が途中の結果を出さずに `Whoops\Run::handleShutdown()` で終了した（2026-10-10、CHG-0033 Cycle 6d）。
+- 原因: `Illuminate\Console\Command` は Symfony の `Command::run(InputInterface, OutputInterface)` を公開メソッドとして持つ。同名で可視性・引数の違うメソッドを定義すると互換性のない上書きになり、クラスを読み込んだ時点でPHPの致命的エラーになる。
+- 対処: 補助メソッドには `run` / `execute` / `handle` 以外の名前を使う（`track()` / `backfill()` に改名）。
