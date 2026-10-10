@@ -52,7 +52,10 @@ class TrackPriceHistoryAction
             try {
                 $this->registrar->register($this->candidates());
 
-                return new PriceTrackingSummary($this->targetsToTrack($includeUnavailable)->count());
+                return new PriceTrackingSummary(
+                    targets: $this->targetsToTrack($includeUnavailable)->count(),
+                    refetchedForSplits: $this->targetsWithNewSplits()->count(),
+                );
             } finally {
                 DB::rollBack();
             }

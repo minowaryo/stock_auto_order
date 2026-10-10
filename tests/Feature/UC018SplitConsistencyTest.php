@@ -410,3 +410,22 @@ function scBindRefreshFakes(string $code): void
     app()->instance(JQuantsClientInterface::class, new FakeJQuantsClient);
     app()->instance(FinnhubClientInterface::class, new FakeFinnhubClient);
 }
+
+describe('UC-018 分割の整合: 確認だけの実行（レビューで追加）', function () {
+    test('確認だけの実行（dry run）は、分割で取り直す予定の銘柄数も数え、取得はしない', function () {
+        // Arrange
+        $holding = scBackfilled('1111');
+        scSplit($holding, '2026-10-12 09:00:00');
+        $client = scTrackClient();
+
+        // Act
+        $summary = app(TrackPriceHistoryAction::class)->execute(dryRun: true);
+
+        // Assert
+        expect($summary->refetchedForSplits)->toBe(1);
+        expect($client->requests)->toBe([]);
+        $this->artisan('price:track', ['--dry-run' => true])
+            ->expectsOutputToContain('分割で取り直す予定 1')
+            ->assertExitCode(0);
+    });
+});

@@ -46,6 +46,8 @@ class PriceTrackCommand extends Command
         $this->info(sprintf('対象 %d銘柄（追跡中）', $summary->targets));
 
         if ($dryRun) {
+            $this->info(sprintf('分割で取り直す予定 %d銘柄（追跡中の銘柄と重なることがある）', $summary->refetchedForSplits));
+
             return self::SUCCESS;
         }
 
