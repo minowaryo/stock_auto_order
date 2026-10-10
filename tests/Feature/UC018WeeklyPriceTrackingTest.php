@@ -15,6 +15,7 @@ use App\Services\MarketData\PriceBackfillClientInterface;
 use App\Services\MarketData\PriceHistory;
 use App\Services\SignalOutcome\WeeklyPriceRecorder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Sleep;
 
@@ -585,5 +586,77 @@ describe('UC-018 毎週の追跡: 二重起動の防止と、何度起動して�
 
         // Assert
         expect($client->requests)->toBe(['index:nikkei225', 'index:sp500', 'index:usdjpy']);
+    });
+});
+
+describe('UC-018 毎週の追跡: 境界と異常時（レビューで追加）', function () {
+    test('シグナルは、終点の週がまだ保存を待っている間は追跡し、終点が確定済みの古いシグナルは追跡しない', function () {
+        // Arrange (2026-10-07; the last confirmed week is 2026-09-28)
+        $pending = tkHolding('1111'); // 2026-04-06 + 26 weeks = 2026-10-05: not confirmed yet
+        $old = tkHolding('2222');     // 2026-03-23 + 26 weeks = 2026-09-21: confirmed long ago
+        SignalOccurrence::create(['holding_id' => $pending->id, 'source' => 'buy', 'signal_type' => 'x', 'observed_week' => '2026-04-06', 'metrics' => []]);
+        SignalOccurrence::create(['holding_id' => $old->id, 'source' => 'buy', 'signal_type' => 'x', 'observed_week' => '2026-03-23', 'metrics' => []]);
+        $client = tkClient(new FakeTrackClient);
+
+        // Act
+        tkRun();
+
+        // Assert
+        expect($client->stockRequests())->toBe(['jp:1111']);
+        expect(PriceTrackingTarget::where('holding_id', $pending->id)->sole()->status)->toBe('active');
+        expect(PriceTrackingTarget::where('holding_id', $old->id)->exists())->toBeFalse();
+    });
+
+    test('週は翌週の月曜0時（UTC）に確定し、日曜の最後の瞬間にはまだ確定していない', function (string $now, string $expected) {
+        // Arrange: deadline 2026-10-05
+        Carbon::setTestNow($now);
+        $holding = tkSold('1111', '2026-04-06');
+        tkClient(new FakeTrackClient(['jp:1111' => tkOk(['2026-09-28', '2026-10-05'])]));
+
+        // Act
+        tkRun();
+
+        // Assert
+        expect(PriceTrackingTarget::where('holding_id', $holding->id)->sole()->status)->toBe($expected);
+    })->with([
+        '日曜 23:59:59' => ['2026-10-11 23:59:59', 'active'],
+        '月曜 00:00:00' => ['2026-10-12 00:00:00', 'completed'],
+    ]);
+
+    test('取得せずに保存済みの行で状態を更新したときも、期限に届いていれば完了にする', function () {
+        // Arrange: deadline 2026-08-31; the refresh saved the week of 2026-09-28 after it was confirmed
+        $holding = tkSold('1111', '2026-03-04');
+        app(WeeklyPriceRecorder::class)->recordHolding($holding, [['date' => '2026-09-28', 'close' => 100.0, 'volume' => 1]]);
+        $client = tkClient(new FakeTrackClient);
+
+        // Act
+        $summary = tkRun();
+
+        // Assert
+        expect($client->stockRequests())->toBe([]);
+        expect(PriceTrackingTarget::where('holding_id', $holding->id)->sole()->status)->toBe('completed');
+        expect([$summary->savedAlready, $summary->completed])->toBe([1, 1]);
+    });
+
+    test('処理が例外で落ちても、ロックは解放され、次の起動で実行できる', function () {
+        // Arrange: the price client blows up mid-run
+        tkSold('1111');
+        app()->instance(PriceBackfillClientInterface::class, new class extends FakeTrackClient
+        {
+            public function fetchIndex(string $indexName): PriceHistory
+            {
+                throw new \RuntimeException('simulated crash');
+            }
+        });
+
+        // Act
+        try {
+            Artisan::call('price:track');
+        } catch (\RuntimeException) {
+            // expected
+        }
+
+        // Assert
+        expect(Cache::lock('price-fetch', 600)->get())->toBeTrue();
     });
 });

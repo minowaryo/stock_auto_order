@@ -137,14 +137,17 @@ class TrackPriceHistoryAction
     }
 
     /**
-     * Holdings that have a sale in the trade history or a signal in the
-     * last 26 weeks.
+     * Holdings that have a sale in the trade history, or a signal whose end
+     * week (+26 weeks) is not older than the last confirmed week: a signal
+     * that just left the 26-week window still needs its end week saved after
+     * it is confirmed (ADR-0024 D1).
      *
      * @return Collection<int, Holding>
      */
     private function candidates(): Collection
     {
-        $since = now()->subWeeks(self::SIGNAL_WEEKS)->toDateString();
+        $lastConfirmed = $this->weeks->weekStart(now()->subDays(7)->toDateString());
+        $since = Carbon::parse($lastConfirmed)->subWeeks(self::SIGNAL_WEEKS)->toDateString();
 
         return Holding::query()
             ->whereIn('id', TradeExecution::query()->where('kind', 'sell')->select('holding_id'))
