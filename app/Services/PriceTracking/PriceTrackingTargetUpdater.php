@@ -85,14 +85,8 @@ class PriceTrackingTargetUpdater
             return $target;
         }
 
-        $target->consecutive_failures = 0;
-        $target->last_error = null;
         if ($splitsFetched) {
             $target->splits_incomplete = $history->splitsIncomplete;
-        }
-
-        if ($confirmed !== []) {
-            $target->latest_saved_week = $this->later($target->latest_saved_week?->toDateString(), max($confirmed));
         }
 
         if ($backfill && $weeks !== []) {
@@ -101,14 +95,59 @@ class PriceTrackingTargetUpdater
             $target->backfilled_from_week = $existing === null || $oldest < $existing ? $oldest : $existing;
         }
 
+        $this->succeed($target, $confirmed === [] ? null : max($confirmed));
+
+        return $target;
+    }
+
+    /**
+     * Brings the state up to date from weekly_prices without a request, when
+     * another path (the holdings / watchlist refresh) already saved the
+     * holding after its last confirmed week ended: the row of that week was
+     * written on or after the Monday that confirmed it, so its close is the
+     * final one (a row written during the week holds a running close).
+     *
+     * Returns null when the saved rows do not prove that: the caller fetches.
+     */
+    public function applySavedPrices(Holding $holding): ?PriceTrackingTarget
+    {
+        $lastConfirmed = $this->weeks->weekStart(now()->subDays(7)->toDateString());
+        $confirmedAt = Carbon::parse($lastConfirmed)->addDays(7)->startOfDay();
+
+        $row = WeeklyPrice::query()
+            ->where('holding_id', $holding->id)
+            ->where('week_date', $lastConfirmed)
+            ->first(['updated_at']);
+
+        if ($row === null || $row->updated_at === null || $row->updated_at->lt($confirmedAt)) {
+            return null;
+        }
+
+        $target = $this->target($holding);
+        $this->succeed($target, $lastConfirmed);
+
+        return $target;
+    }
+
+    /**
+     * The common tail of a success: reset the failures, move the latest
+     * saved week forward, and complete when the deadline is reached.
+     */
+    private function succeed(PriceTrackingTarget $target, ?string $latestConfirmedWeek): void
+    {
+        $target->consecutive_failures = 0;
+        $target->last_error = null;
+
+        if ($latestConfirmedWeek !== null) {
+            $target->latest_saved_week = $this->later($target->latest_saved_week?->toDateString(), $latestConfirmedWeek);
+        }
+
         $target->status = $target->track_until_week === null
             || ($target->latest_saved_week !== null && $target->latest_saved_week->gte($target->track_until_week))
             ? 'completed'
             : 'active';
 
         $target->save();
-
-        return $target;
     }
 
     private function target(Holding $holding): PriceTrackingTarget
