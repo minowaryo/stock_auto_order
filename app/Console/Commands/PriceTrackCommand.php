@@ -50,8 +50,9 @@ class PriceTrackCommand extends Command
         }
 
         $this->info(sprintf(
-            '銘柄: 保存済みで取得不要 %d / 成功 %d / 銘柄なし %d / データなし %d / 失敗 %d（うち今回完了 %d）、指数・ドル円: 成功 %d / 失敗 %d',
+            '銘柄: 保存済みで取得不要 %d / 分割で取り直し %d / 成功 %d / 銘柄なし %d / データなし %d / 失敗 %d（うち今回完了 %d）、指数・ドル円: 成功 %d / 失敗 %d',
             $summary->savedAlready,
+            $summary->refetchedForSplits,
             $summary->ok,
             $summary->notFound,
             $summary->empty,

@@ -93,6 +93,7 @@ class PriceTrackingTargetUpdater
             $oldest = min($weeks);
             $existing = $target->backfilled_from_week?->toDateString();
             $target->backfilled_from_week = $existing === null || $oldest < $existing ? $oldest : $existing;
+            $target->full_history_fetched_at = now();
         }
 
         $this->succeed($target, $confirmed === [] ? null : max($confirmed));

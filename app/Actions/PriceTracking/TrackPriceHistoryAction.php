@@ -7,6 +7,7 @@ use App\Models\Holding;
 use App\Models\IndexWeeklyPrice;
 use App\Models\PriceTrackingTarget;
 use App\Models\SignalOccurrence;
+use App\Models\StockSplit;
 use App\Models\TradeExecution;
 use App\Services\MarketData\PriceHistory;
 use App\Services\MarketData\WeekDateNormalizer;
@@ -59,9 +60,11 @@ class TrackPriceHistoryAction
 
         $this->registrar->register($this->candidates());
         $targets = $this->targetsToTrack($includeUnavailable);
+        $splitRefetch = $this->targetsWithNewSplits();
+        $toVisit = $targets->concat($splitRefetch)->unique('holding_id')->sortBy('holding_id')->values();
         $this->runner->start();
 
-        $counts = ['saved_already' => 0, 'ok' => 0, 'not_found' => 0, 'empty' => 0, 'failed' => 0, 'completed' => 0, 'indices_ok' => 0, 'indices_failed' => 0];
+        $counts = ['saved_already' => 0, 'split_refetch' => 0, 'ok' => 0, 'not_found' => 0, 'empty' => 0, 'failed' => 0, 'completed' => 0, 'indices_ok' => 0, 'indices_failed' => 0];
         $aborted = false;
 
         foreach (self::INDICES as $indexName) {
@@ -79,19 +82,26 @@ class TrackPriceHistoryAction
         }
 
         if (! $aborted) {
-            foreach ($targets as $target) {
-                $saved = $this->targets->applySavedPrices($target->holding);
+            foreach ($toVisit as $target) {
+                $wasCompleted = $target->status === 'completed';
+                $forSplit = $splitRefetch->contains('holding_id', $target->holding_id);
 
-                if ($saved !== null) {
-                    $counts['saved_already']++;
-                    $counts['completed'] += $saved->status === 'completed' ? 1 : 0;
+                // A new split must be refetched even when the refresh already saved the latest week.
+                if (! $forSplit) {
+                    $saved = $this->targets->applySavedPrices($target->holding);
 
-                    continue;
+                    if ($saved !== null) {
+                        $counts['saved_already']++;
+                        $counts['completed'] += ! $wasCompleted && $saved->status === 'completed' ? 1 : 0;
+
+                        continue;
+                    }
                 }
 
                 $status = $this->runner->fetchHolding($target->holding);
                 $counts[$status]++;
-                $counts['completed'] += $target->fresh()->status === 'completed' ? 1 : 0;
+                $counts['split_refetch'] += $forSplit ? 1 : 0;
+                $counts['completed'] += ! $wasCompleted && $target->fresh()->status === 'completed' ? 1 : 0;
 
                 if ($this->runner->shouldAbort($status)) {
                     $aborted = true;
@@ -103,6 +113,7 @@ class TrackPriceHistoryAction
         $summary = new PriceTrackingSummary(
             targets: $targets->count(),
             savedAlready: $counts['saved_already'],
+            refetchedForSplits: $counts['split_refetch'],
             ok: $counts['ok'],
             notFound: $counts['not_found'],
             empty: $counts['empty'],
@@ -116,6 +127,38 @@ class TrackPriceHistoryAction
         Log::info('PriceTracking: finished', (array) $summary);
 
         return $summary;
+    }
+
+    /**
+     * Backfilled holdings (they hold weeks older than the 104-week refresh)
+     * with a stock split recorded after their last 10-year fetch: the refresh
+     * rewrote only the recent 104 weeks with split-adjusted closes, so the
+     * older weeks must be refetched too (ADR-0024 D6). A row from before the
+     * column existed falls back to its created_at.
+     *
+     * @return Collection<int, PriceTrackingTarget>
+     */
+    private function targetsWithNewSplits(): Collection
+    {
+        $candidates = PriceTrackingTarget::query()
+            ->with('holding')
+            ->whereNotNull('backfilled_from_week')
+            ->where('status', '!=', 'unavailable')
+            ->orderBy('holding_id')
+            ->get();
+
+        $lastSplitRecorded = StockSplit::query()
+            ->whereIn('holding_id', $candidates->pluck('holding_id'))
+            ->groupBy('holding_id')
+            ->selectRaw('holding_id, MAX(created_at) AS last_created') // aggregate only, no user input
+            ->pluck('last_created', 'holding_id');
+
+        return $candidates->filter(function (PriceTrackingTarget $target) use ($lastSplitRecorded) {
+            $recorded = $lastSplitRecorded[$target->holding_id] ?? null;
+            $fetchedAt = $target->full_history_fetched_at ?? $target->created_at;
+
+            return $recorded !== null && Carbon::parse($recorded)->gt($fetchedAt);
+        })->values();
     }
 
     /**
