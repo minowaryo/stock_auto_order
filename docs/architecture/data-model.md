@@ -694,6 +694,59 @@
 
 ---
 
+### research_source_* テーブル群（情報源の起動時確認・UC-016追加案、ADR-0031、CHG-0031）— Gate 3本人承認済み（2026-10-10）
+
+> 源の定義（URL・取得方式・有効／無効・最低間隔・サイズ上限・配信範囲日数）はテーブルではなく `config/research_sources.php` に置く（ADR-0031 D2）。源の追加・停止は設定変更だけで行う。既存の `research_*` テーブルは変更しない。
+
+```
+config/research_sources.php（源ID: S03/S09/S10/H01/H02 …）
+       └── [research_source_checks] ──1:N── [research_source_items] ──N:1(nullable)── [research_discovery_links]
+```
+
+#### research_source_checks（取得試行の記録）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| source_key | varchar(20) | NO | - | 源ID（設定のキー） |
+| trigger | enum('startup','manual') | NO | 'startup' | 起動時か、画面の「今すぐ確認」か |
+| started_at | timestamp | NO | - | 開始時刻 |
+| finished_at | timestamp | YES | null | 終了時刻。異常終了で null のまま残る |
+| result | enum('new_items','no_new','baseline','failed') | YES | null | `baseline`＝有効化後の初回取得（ADR-0031 D6）。実行中は null |
+| item_count | smallint unsigned | NO | 0 | 応答に含まれた項目数 |
+| new_item_count | smallint unsigned | NO | 0 | 初めて見た項目数（`baseline` では新着に数えない） |
+| http_status | smallint unsigned | YES | null | 応答ステータス |
+| error_message | varchar(500) | YES | null | 失敗理由（URLの秘匿情報・本文は含めない） |
+| created_at / updated_at | timestamp | NO | now() | |
+
+**Index**: `(source_key, started_at)`（源ごとの最終確認・連続失敗の判定）
+
+最低間隔内でスキップした起動は記録しない（行が起動回数だけ増えるのを防ぐ）。
+
+#### research_source_items（源の項目）
+
+| カラム | 型 | Nullable | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | bigint | NO | auto | 主キー |
+| source_key | varchar(20) | NO | - | 源ID |
+| url | varchar(2048) | NO | - | 項目のURL（HTTP(S)のみ。項目本文は取得しない） |
+| url_hash | char(64) | NO | - | `url` の sha256 |
+| title | varchar(500) | NO | - | 一覧・RSS上の題名 |
+| published_at | timestamp | YES | null | 一覧・RSS上の公開日時。不明なら null（取得日時で補わない） |
+| metadata | json | YES | null | フィード提供の付帯情報（著者・カテゴリ・申請者名・決定番号等）をそのまま保存。1項目4KBまで。どれを使うかは観察後に決める（ADR-0031 D3） |
+| first_check_id | bigint | NO | - | 初めて見た取得試行 |
+| is_baseline | boolean | NO | false | 初回取得で見た項目。新着に数えない |
+| disposition | enum('unreviewed','recorded','ignored') | NO | 'unreviewed' | 本人の処理状態 |
+| research_discovery_link_id | bigint | YES | null | 候補に記録した場合の発見経路 |
+| reviewed_at | timestamp | YES | null | 処理した日時 |
+| created_at / updated_at | timestamp | NO | now() | |
+
+**Index**: `(source_key, url_hash)` unique、`(source_key, disposition)`、`first_check_id`、`research_discovery_link_id`
+**FK**: `first_check_id` → `research_source_checks(id)`、`research_discovery_link_id` → `research_discovery_links(id)`
+
+**CRUD**: 作成は取得処理のみ。本人の操作は `disposition` の変更（候補に記録／対象外／未処理へ戻す）だけで、項目の削除・編集画面は設けない。
+
+
 ### trade_* ほか売買振り返り用テーブル群（UC-017／UC-018、ADR-0027、ADR-0024、CHG-0033）— Gate 3承認済み（2026-10-04）
 
 > 2026-10-04 Gate 3承認済み。UC-017・UC-018はGate 2承認済み、UC-019はGate 2保留（本節では UC-019 専用のテーブルを作らない）。承認後も、マイグレーションはGate 4（テストケース承認）後に作る。**比較結果（年率・対ガチホ差・売却／乗換え／買付の差）は保存せず、読み取り時に算出する**（ADR-0017 D4 と同じ方針。価格は上書き型の時系列で、分割の遡及調整に追随させるため）。保存するのは、元データ（売買履歴）・取得状態・判断の根拠（推定乗換えの割り当て、売買時の状況）だけとする。
