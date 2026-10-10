@@ -279,21 +279,6 @@ Red 8件（3件は回帰ガード）→Gate4承認→Green。フルスイート1
 
 Red 8件（3件は回帰ガード）→Gate4承認→Green。フルスイート1070 passed・pint適用済み。分類ロジックは`SectorClassificationResolver::classify()`に集約（一括更新・`sectors:backfill`が共用）。**未実施**: `/review`、`sectors:backfill`の実データ実行、コミット。worktree: `.claude/worktrees/chg0044`（Vite成果物`public/build`と`vendor`のハードリンクコピーを手で持ち込んで実行。コミット対象外）
 
-## 売買シグナル画面の供給元Action二重実行の解消（CHG-0032）実装完了・mainマージ済み（2026-10-03）
-
-### Decision
-
-- CHG-0027/0028の既知の懸念（描画ごとに`ClassifyHoldingsAction`が利確・買い増し・整理検討の3 Actionを二重実行）を解消。画面表示は変えない（性能のみ・ユーザー向け挙動変更なし）
-- 契約: `ClassifyHoldingsAction::execute(?array $lossReviewRows, ?array $takeProfitRows, ?array $addOnRows)`と`ShowHoldListAction::execute($sort, …同3引数)`に任意引数を追加。`SignalList`が取得済みの行を渡す。null引数は従来どおり自前実行（UC-009/UC-013の既存呼び出しは無変更）。空配列は「該当なし」
-
-### Files touched
-
-`app/Actions/Portfolio/ClassifyHoldingsAction.php`、`app/Actions/Portfolio/ShowHoldListAction.php`、`app/Livewire/Signal/SignalList.php`、`tests/Feature/CHG0032SignalListSingleExecutionTest.php`
-
-### Status
-
-Red 6件（失敗4・回帰ガード2）→Gate4承認（2026-10-03）→Green。フルスイート1062 passed・pint適用済み。SignalListの修正だけを戻すとRed2件が再発することを確認。`run`（`/signals`を実データでmainと比較し本文が完全一致）実施済み・`/review`はスキップ（スコア19・recommended、本人指示）。mainへマージ済み（`--no-ff`、`Tests: 1062 passed`）。同日、CHG-0029の`sectors:backfill`を開発DBで実行済み（最新スナップショットの未分類3件はいずれも米国ETF〔HDV/SPYD/VYM、`instrument_type`は`stock`〕でFinnhubが業種を返さず0件分類。想定どおり）。
-
 ## 今後の対応（未着手）（2026-08-27追記、Phase5の実ブラウザ確認時に発見）
 
 - **数値の未整形表示（Phase3〜5共通）**: `HoldingList`（保有一覧、Phase3）・`SignalList`（利確検討、Phase5）の含み益率・取得単価・現在値・分割指値の価格が、`{{ $value }}`で生の浮動小数点値をそのまま出力しており（例: 含み益率が`89.5793`と%記号なし表示、価格が`3632.676`のような小数点3桁表示）、実際にPlaywrightで画面を目視確認した際に発見した。レイアウト崩れではなく数値の可読性の問題。既存テストは生の数値部分文字列を検証する設計のため、これらのテストを含め画面3つ（Phase3/4/5）をまとめて後日別タスクで整形する（%サフィックス・価格の四捨五入・桁区切り等）方針とし、今回のPhase5サイクルでは対応を見送る
