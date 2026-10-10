@@ -157,3 +157,9 @@
 - 現象: UC-017の売買履歴取込画面で「プレビュー」を押しても何も起きず、ボタンが半透明（disabled）のまま戻らない。サーバーにリクエストが届かずログにも何も出ない。`Livewire::test()->call('preview')` のテストは全件通る（2026-10-09）
 - 原因: Livewire 4はアクション式 `preview` を `$wire.preview` として評価し、`$wire` は公開プロパティを先に返す（`vendor/livewire/livewire/dist/livewire.esm.js` の `generateWireObject`）。`public ?array $preview` と `public function preview()` が共存していたため、プロパティ値（null）が返るだけでメソッドが呼ばれず、`wire:submit` が付けたフォームの無効化も解除されない。`Livewire::test()->call()` はJSを通らずメソッドを直接呼ぶため検出できない
 - 対処: メソッドを `runPreview()` に改名した（`app/Livewire/TradeHistory/Import.php`）。再発防止に、全Livewireコンポーネントで公開プロパティと公開メソッドの名前の衝突を検出するテストを追加した（`tests/Unit/Livewire/ComponentMemberNamesTest.php`）
+
+### Livewire 4.x — `wire:model.blur` だけではサーバーへ送信されず、入力値に応じた画面表示が更新されない
+
+- 現象: UC-016の調査候補画面で、発見経路URLと法人名を入力して欄を離れても「既存記録の候補を確認してください」が出ない。保存ボタンを押した時点で初めて値が送られる。`Livewire::test()->set()` を使うFeatureテストは全件通る（2026-10-10、実ブラウザ検証で発見）
+- 原因: Livewire 4では `.blur` / `.change` はクライアント側の同期タイミングだけを決め、ネットワーク送信はしない（Livewire 3では送信していた）。`Livewire::test()->set()` は毎回サーバーで再描画するため検出できない
+- 対処: 入力値に応じて画面を変える欄だけ `wire:model.live.blur` にする（`resources/views/livewire/candidate/candidate-research.blade.php` の発見経路URL・法人名）。保存時に送るだけの欄は `wire:model.blur` のままでよい（`.claude/rules/15-frontend.md` の高頻度入力の方針と矛盾しない）。再発防止テストは該当属性の出力を確認する（`tests/Feature/UC016ResearchCandidateFollowupTest.php`）

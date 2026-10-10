@@ -28,7 +28,7 @@
                     @error('form.theme') <span class="block text-danger">{{ $message }}</span> @enderror
                 </label>
                 <label class="block">言及された法人 <span class="text-danger">必須</span>
-                    <input wire:model.blur="form.legal_name" class="mt-1 w-full rounded border border-app-border p-2" maxlength="255">
+                    <input wire:model.live.blur="form.legal_name" class="mt-1 w-full rounded border border-app-border p-2" maxlength="255">
                     @error('form.legal_name') <span class="block text-danger">{{ $message }}</span> @enderror
                 </label>
             </div>
@@ -38,7 +38,7 @@
             </label>
             <div class="grid gap-3 md:grid-cols-2">
                 <label class="block">発見経路URL <span class="text-danger">必須</span>
-                    <input wire:model.blur="form.discovery_url" type="url" class="mt-1 w-full rounded border border-app-border p-2" maxlength="2048" placeholder="https://...">
+                    <input wire:model.live.blur="form.discovery_url" type="url" class="mt-1 w-full rounded border border-app-border p-2" maxlength="2048" placeholder="https://...">
                     @error('form.discovery_url') <span class="block text-danger">{{ $message }}</span> @enderror
                 </label>
                 <label class="block">資料名 <span class="text-danger">必須</span>
@@ -76,10 +76,14 @@
                 <div class="rounded border border-amber-200 bg-amber-50 p-3 text-[12px]">
                     <p class="font-semibold">既存記録の候補を確認してください。自動では統合しません。</p>
                     @foreach ($matchingEvents as $matchingEvent)
-                        <p>同じ発見URLの元発表 ID {{ $matchingEvent->id }}・{{ $matchingEvent->title }}</p>
+                        <p>同じ発見URLの元発表 ID {{ $matchingEvent->id }}・{{ $matchingEvent->title }}
+                            @if ($matchingEvent->merged_into_event_id === null)<button type="button" wire:click="useExistingEvent({{ $matchingEvent->id }})" class="ml-2 rounded border border-app-border bg-white px-2 py-0.5">この元発表に関連付ける</button>@else（統合先 ID {{ $matchingEvent->merged_into_event_id }}）@endif
+                        </p>
                     @endforeach
                     @foreach ($matchingEntities as $matchingEntity)
-                        <p>同名法人 ID {{ $matchingEntity->id }}・{{ $matchingEntity->legal_name }}@foreach ($matchingEntity->listings as $knownListing)／{{ strtoupper($knownListing->market) }} {{ $knownListing->symbol_code }}@endforeach</p>
+                        <p>同名法人 ID {{ $matchingEntity->id }}・{{ $matchingEntity->legal_name }}@foreach ($matchingEntity->listings as $knownListing)／{{ strtoupper($knownListing->market) }} {{ $knownListing->symbol_code }}@endforeach
+                            <button type="button" wire:click="useExistingEntity({{ $matchingEntity->id }})" class="ml-2 rounded border border-app-border bg-white px-2 py-0.5">この法人に関連付ける</button>
+                        </p>
                     @endforeach
                 </div>
             @endif
@@ -124,7 +128,7 @@
                 <span>確認日: {{ $link?->checked_on?->format('Y-m-d') ?? '不明' }}</span>
                 <span>証拠段階: {{ $stageLabel }}</span>
                 <span>状態: {{ $statusLabel }}</span>
-                <span>{{ $candidate->handoffs->isEmpty() ? '照合未実施' : '受け渡し履歴あり' }}</span>
+                <span>照合結果: {{ ['unmatched' => '照合未実施', 'held' => '保有中', 'watchlisted' => 'ウォッチリスト登録済み', 'watchlisted_unstarred' => 'ウォッチリスト（★なし）', 'unregistered' => '未登録'][$registrationStates[$candidate->id] ?? 'unmatched'] }}</span>
                 @if ($candidate->needs_recheck)<span class="font-semibold text-amber-700">要再確認</span>@endif
             </div>
             <p class="mt-2 text-[13px]">{{ $candidate->theme_relation }}</p>

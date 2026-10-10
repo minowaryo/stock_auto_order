@@ -5,7 +5,10 @@ namespace App\Livewire\Candidate;
 use App\Models\ResearchCandidate;
 use App\Models\ResearchDiscoveryLink;
 use App\Models\ResearchEntity;
+use App\Models\ResearchEvent;
 use App\Services\Research\ResearchCandidateService;
+use App\Support\DisplayTime;
+use App\Support\ResearchSymbolCode;
 use DomainException;
 use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
@@ -263,7 +266,7 @@ class CandidateResearch extends Component
         abort_if(! $candidate->entity->listings()->whereKey($this->selectedListingForEditId)->exists(), 404);
         $this->validate([
             'listingForm.market' => ['required', 'in:jp,us'],
-            'listingForm.symbol_code' => ['required', 'string', 'max:20'],
+            'listingForm.symbol_code' => ['required', 'string', 'max:20', $this->symbolRule('listingForm.market')],
             'listingForm.listed_entity_name' => ['required', 'string', 'max:255'],
             'listingForm.source_url' => ['required', 'url:http,https', 'max:2048'],
             'listingForm.confirmed_on' => ['required', 'date_format:Y-m-d'],
@@ -324,7 +327,7 @@ class CandidateResearch extends Component
         Gate::authorize('update', ResearchCandidate::findOrFail($this->editingCandidateId));
         $this->validate([
             'listingForm.market' => ['required', 'in:jp,us'],
-            'listingForm.symbol_code' => ['required', 'string', 'max:20'],
+            'listingForm.symbol_code' => ['required', 'string', 'max:20', $this->symbolRule('listingForm.market')],
             'listingForm.listed_entity_name' => ['required', 'string', 'max:255'],
             'listingForm.source_url' => ['required', 'url:http,https', 'max:2048'],
             'listingForm.confirmed_on' => ['required', 'date_format:Y-m-d'],
@@ -559,15 +562,20 @@ class CandidateResearch extends Component
             ->when($this->statusFilter !== '', fn ($query) => $query->where('status', $this->statusFilter))
             ->when($this->marketFilter !== '', fn ($query) => $query->whereHas('entity.listings', fn ($listings) => $listings->where('market', $this->marketFilter)))
             ->when($this->sourceFilter !== '', fn ($query) => $query->whereHas('event.discoveryLinks', fn ($links) => $links->where('publisher', $this->sourceFilter)))
-            ->when($this->unregisteredOnly, fn ($query) => $query->whereDoesntHave('handoffs'))
+            // A handoff that only linked an unstarred row is not monitoring yet (UC-016).
+            ->when($this->unregisteredOnly, fn ($query) => $query->whereDoesntHave('handoffs', fn ($handoffs) => $handoffs
+                ->where('outcome', 'already_held')
+                ->orWhereHas('watchlistItem', fn ($items) => $items->where('is_starred', true))))
             ->orderByDesc('created_at')
             ->orderByDesc('id');
         $candidates = $query->paginate(20);
         $candidates->getCollection()->firstWhere('id', $this->selectedCandidateId)?->load('revisions');
+        $service = app(ResearchCandidateService::class);
 
         return view('livewire.candidate.candidate-research', [
             'candidates' => $candidates,
-            'stats' => app(ResearchCandidateService::class)->stats(),
+            'registrationStates' => $service->registrationStates($candidates->getCollection()),
+            'stats' => $service->stats(),
             'handoffCandidate' => $this->handoffCandidateId !== null
                 ? ResearchCandidate::query()->with(['event', 'entity.listings', 'claims'])->find($this->handoffCandidateId)
                 : null,
@@ -586,12 +594,34 @@ class CandidateResearch extends Component
         ]);
     }
 
+    public function useExistingEvent(int $eventId): void
+    {
+        Gate::authorize('create', ResearchCandidate::class);
+        $this->form['existing_event_id'] = ResearchEvent::query()->whereNull('merged_into_event_id')->findOrFail($eventId)->id;
+    }
+
+    public function useExistingEntity(int $entityId): void
+    {
+        Gate::authorize('create', ResearchCandidate::class);
+        $this->form['existing_entity_id'] = ResearchEntity::findOrFail($entityId)->id;
+    }
+
+    /** Rejects codes the listing would not match against holdings (e.g. "7203.T"). */
+    private function symbolRule(string $marketKey): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail) use ($marketKey) {
+            if (filled($value) && ResearchSymbolCode::normalize(data_get($this, $marketKey), (string) $value) === null) {
+                $fail('銘柄コードは日本株4桁（例: 7203、523A）、米国株はティッカー（例: NVDA）で入力してください。取引所の接尾辞は付けません。');
+            }
+        };
+    }
+
     private function blankForm(): array
     {
         return [
             'theme' => '', 'theme_relation' => '', 'event_title' => '',
             'discovery_url' => '', 'source_title' => '', 'publisher' => '',
-            'checked_on' => now()->toDateString(), 'summary' => '', 'legal_name' => '',
+            'checked_on' => now()->setTimezone(DisplayTime::timezone())->toDateString(), 'summary' => '', 'legal_name' => '',
             'original_url' => null, 'original_publisher' => null, 'announced_on' => null,
             'entity_role' => null, 'existing_event_id' => null, 'existing_entity_id' => null,
         ];
@@ -646,7 +676,7 @@ class CandidateResearch extends Component
             'editForm.legal_name' => ['required', 'string', 'max:255'],
             'editForm.identification_status' => ['required', 'in:unidentified,identified,unlisted,foreign_only,ambiguous'],
             'editForm.market' => ['required_if:editForm.identification_status,identified', 'required_with:editForm.symbol_code', 'nullable', 'in:jp,us'],
-            'editForm.symbol_code' => ['required_with:editForm.market', 'nullable', 'string', 'max:20'],
+            'editForm.symbol_code' => ['required_with:editForm.market', 'nullable', 'string', 'max:20', $this->symbolRule('editForm.market')],
             'editForm.listed_entity_name' => ['required_with:editForm.market,editForm.symbol_code', 'nullable', 'string', 'max:255'],
             'editForm.listing_source_url' => ['required_with:editForm.market,editForm.symbol_code', 'nullable', 'url:http,https', 'max:2048'],
             'editForm.listing_confirmed_on' => ['required_with:editForm.market,editForm.symbol_code', 'nullable', 'date_format:Y-m-d'],

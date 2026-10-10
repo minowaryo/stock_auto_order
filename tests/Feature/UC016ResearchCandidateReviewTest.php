@@ -264,6 +264,9 @@ test('UC-016 市場からの調査候補発見・確認は古い元発表を今�
 
 test('UC-016 市場からの調査候補発見・確認は同一法人の複数上場を確認済み上場企業一社と数える', function () {
     uc016ReviewFixture([
+        'original_url' => 'https://example.org/press/robot',
+        'verification_status' => 'verified',
+        'verified_on' => '2026-10-04',
         'identification_status' => 'identified',
         'listings' => [['jp', '1234'], ['us', 'EXRB']],
     ]);

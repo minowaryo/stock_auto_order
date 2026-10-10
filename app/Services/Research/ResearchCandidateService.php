@@ -15,6 +15,8 @@ use App\Models\ResearchWatchlistHandoff;
 use App\Models\Snapshot;
 use App\Models\User;
 use App\Models\WatchlistItem;
+use App\Support\DisplayTime;
+use App\Support\ResearchSymbolCode;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -41,6 +43,9 @@ class ResearchCandidateService
                     'announced_on' => $this->blankToNull($form['announced_on'] ?? null),
                     'verification_status' => 'unverified',
                 ]);
+            if ($event->merged_into_event_id !== null) {
+                throw new InvalidArgumentException('統合済みの元発表です。統合先の元発表IDを指定してください。');
+            }
 
             $entity = ! empty($form['existing_entity_id'])
                 ? ResearchEntity::findOrFail($form['existing_entity_id'])
@@ -275,7 +280,11 @@ class ResearchCandidateService
             $source->merged_into_event_id = $target->id;
             $source->save();
             foreach ($source->candidates as $candidate) {
-                $candidate->increment('lock_version');
+                if ($candidate->status === 'watchlisted') {
+                    $candidate->needs_recheck = true;
+                }
+                $candidate->lock_version++;
+                $candidate->save();
                 $this->appendRevision($candidate->refresh(), 'merged');
             }
             $this->audit('research_event.merged', $actor, 'research_events', $sourceEventId);
@@ -399,33 +408,124 @@ class ResearchCandidateService
         });
     }
 
-    /** @return array<string,int> */
+    /**
+     * Counts follow UC-016: weeks are cut in the display timezone, a listed
+     * company is counted once per listing (entities sharing a listing are one
+     * company), and only candidates whose original announcement is verified
+     * count as verified listed companies.
+     *
+     * @return array<string,int>
+     */
     public function stats(?User $actor = null): array
     {
         Gate::forUser($actor ?? auth()->user())->authorize('viewAny', ResearchCandidate::class);
         $candidates = ResearchCandidate::with(['event', 'entity.listings'])->whereNull('archived_at')->get();
-        $weekStart = now()->startOfWeek();
+        $weekStart = now()->setTimezone(DisplayTime::timezone())->startOfWeek();
         $weekEnd = $weekStart->copy()->addWeek();
-        $previousEntityIds = ResearchCandidate::query()->where('created_at', '<', $weekStart)
-            ->pluck('research_entity_id')->flip();
-        $newThisWeek = $candidates->filter(function ($candidate) use ($weekStart, $weekEnd, $previousEntityIds) {
-            $announced = $candidate->event->announced_on;
-            if (! $announced || $announced->lt($weekStart) || $announced->gte($weekEnd)) {
+        $weekStartDate = $weekStart->toDateString();
+        $weekEndDate = $weekEnd->toDateString();
+        $companyKeys = $this->companyKeys(ResearchEntity::with('listings')->get());
+        $companyOf = fn (ResearchCandidate $c) => $companyKeys[$c->research_entity_id] ?? 'entity:'.$c->research_entity_id;
+
+        $previousCompanies = ResearchCandidate::query()->where('created_at', '<', $weekStart->copy()->utc())
+            ->pluck('research_entity_id')
+            ->map(fn ($entityId) => $companyKeys[$entityId] ?? 'entity:'.$entityId)
+            ->flip();
+        $newThisWeek = $candidates->filter(function ($candidate) use ($weekStart, $weekEnd, $weekStartDate, $weekEndDate, $previousCompanies, $companyOf) {
+            $announced = $candidate->event->announced_on?->toDateString();
+            if ($announced === null || $announced < $weekStartDate || $announced >= $weekEndDate) {
                 return false;
             }
             if ($candidate->created_at->lt($weekStart) || $candidate->created_at->gte($weekEnd)) {
                 return false;
             }
 
-            return ! $previousEntityIds->has($candidate->research_entity_id);
+            return ! $previousCompanies->has($companyOf($candidate));
         });
+        $originalEvents = $candidates->filter(fn ($c) => $c->event->merged_into_event_id === null);
 
         return [
-            'original_events' => $candidates->filter(fn ($c) => $c->event->merged_into_event_id === null)->pluck('research_event_id')->unique()->count(),
-            'verified_listed_entities' => $candidates->filter(fn ($c) => $c->entity->identification_status === 'identified' && $c->entity->listings->isNotEmpty())->pluck('research_entity_id')->unique()->count(),
-            'this_week_new_discoveries' => $newThisWeek->pluck('research_entity_id')->unique()->count(),
-            'past_announcements' => $candidates->filter(fn ($c) => $c->event->announced_on?->lt($weekStart) ?? false)->count(),
+            'original_events' => $originalEvents->pluck('research_event_id')->unique()->count(),
+            'verified_listed_entities' => $candidates
+                ->filter(fn ($c) => $c->event->verification_status === 'verified'
+                    && $c->entity->identification_status === 'identified' && $c->entity->listings->isNotEmpty())
+                ->map($companyOf)->unique()->count(),
+            'this_week_new_discoveries' => $newThisWeek->map($companyOf)->unique()->count(),
+            'past_announcements' => $originalEvents
+                ->filter(fn ($c) => $c->event->announced_on !== null && $c->event->announced_on->toDateString() < $weekStartDate)
+                ->pluck('research_event_id')->unique()->count(),
         ];
+    }
+
+    /**
+     * Current registration state per candidate, matched live against the
+     * latest holdings snapshot and watchlist (not the handoff history).
+     *
+     * @param  iterable<ResearchCandidate>  $candidates
+     * @return array<int,string> candidate id => unmatched|held|watchlisted|watchlisted_unstarred|unregistered
+     */
+    public function registrationStates(iterable $candidates): array
+    {
+        $baseline = $this->baseline();
+        $states = [];
+        foreach ($candidates as $candidate) {
+            $listings = $candidate->entity->listings;
+            if (! $baseline['snapshot'] || ! $baseline['favorites_last_imported_at']
+                || $candidate->entity->identification_status !== 'identified' || $listings->isEmpty()) {
+                $states[$candidate->id] = 'unmatched';
+
+                continue;
+            }
+            $holdingIds = Holding::query()
+                ->where(function ($query) use ($listings) {
+                    foreach ($listings as $listing) {
+                        $query->orWhere(fn ($q) => $q->where('market', $listing->market)->where('symbol_code', $listing->symbol_code));
+                    }
+                })->pluck('id');
+            if ($holdingIds->isNotEmpty() && $baseline['snapshot']->holdingSnapshots()->whereIn('holding_id', $holdingIds)->exists()) {
+                $states[$candidate->id] = 'held';
+
+                continue;
+            }
+            $items = WatchlistItem::query()->whereIn('holding_id', $holdingIds)->get(['id', 'is_starred']);
+            $states[$candidate->id] = match (true) {
+                $items->contains('is_starred', true) => 'watchlisted',
+                $items->isNotEmpty() => 'watchlisted_unstarred',
+                default => 'unregistered',
+            };
+        }
+
+        return $states;
+    }
+
+    /**
+     * Groups entities that share a listing (market + code) into one company key,
+     * so the same company typed under two names is counted once.
+     *
+     * @return array<int,string> entity id => company key
+     */
+    private function companyKeys($entities): array
+    {
+        $parent = [];
+        $find = function (string $key) use (&$parent, &$find): string {
+            if (! isset($parent[$key]) || $parent[$key] === $key) {
+                return $parent[$key] = $key;
+            }
+
+            return $parent[$key] = $find($parent[$key]);
+        };
+        foreach ($entities as $entity) {
+            $entityKey = $find('entity:'.$entity->id);
+            foreach ($entity->listings as $listing) {
+                $parent[$find('listing:'.$listing->market.':'.$listing->symbol_code)] = $entityKey;
+            }
+        }
+        $keys = [];
+        foreach ($entities as $entity) {
+            $keys[$entity->id] = $find('entity:'.$entity->id);
+        }
+
+        return $keys;
     }
 
     private function baseline(): array
@@ -537,6 +637,7 @@ class ResearchCandidateService
             if (empty($input['market']) || empty($input['symbol_code'])) {
                 continue;
             }
+            $input['symbol_code'] = $this->normalizedSymbol($input['market'], $input['symbol_code']);
             $listing = ! empty($input['id']) ? $entity->listings()->findOrFail($input['id']) : new ResearchEntityListing(['research_entity_id' => $entity->id]);
             $listing->fill(array_intersect_key($input, array_flip(['market', 'symbol_code', 'listed_entity_name', 'source_url', 'confirmed_on'])));
             $listing->save();
@@ -548,6 +649,7 @@ class ResearchCandidateService
         if (empty($form['market']) || empty($form['symbol_code'])) {
             return false;
         }
+        $form['symbol_code'] = $this->normalizedSymbol($form['market'], $form['symbol_code']);
         $listing = $entity->listings()->orderBy('id')->first() ?? new ResearchEntityListing(['research_entity_id' => $entity->id]);
         foreach (['market', 'symbol_code', 'listed_entity_name'] as $field) {
             if (array_key_exists($field, $form)) {
@@ -585,6 +687,12 @@ class ResearchCandidateService
         }
 
         return $changed;
+    }
+
+    private function normalizedSymbol(mixed $market, mixed $code): string
+    {
+        return ResearchSymbolCode::normalize((string) $market, (string) $code)
+            ?? throw new InvalidArgumentException('銘柄コードは日本株4桁（例: 7203、523A）、米国株はティッカー（例: NVDA）で入力してください。取引所の接尾辞は付けません。');
     }
 
     private function appendRevision(ResearchCandidate $candidate, string $type): ResearchCandidateRevision
