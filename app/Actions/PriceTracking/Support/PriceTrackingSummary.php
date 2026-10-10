@@ -10,6 +10,7 @@ final class PriceTrackingSummary
     public function __construct(
         public readonly int $targets,
         public readonly int $savedAlready = 0,
+        public readonly int $refetchedForSplits = 0,
         public readonly int $ok = 0,
         public readonly int $notFound = 0,
         public readonly int $empty = 0,

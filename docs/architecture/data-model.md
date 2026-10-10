@@ -800,6 +800,7 @@
 | splits_incomplete | boolean | NO | false | 分割も取得した直近の成功取得で、分割情報を捨てた（整数でない比・読み取れない）。分割を取得しない取得（週次の追跡など）では変更しない。true の銘柄に分割が必要な結果は「算出不可」（分割情報欠損）。2026-10-06 Gate 4 Cycle 6bで追加 |
 | last_error | varchar(255) | YES | null | 直近の失敗理由（秘密情報を含めない） |
 | last_attempted_at | timestamp | YES | null | 直近の取得試行日時 |
+| full_history_fetched_at | timestamp | YES | null | **（2026-10-10 Gate 3承認・CHG-0033 Cycle 6e）** 10年分＋分割の取得（一括補完・追跡）に成功し、保存を確認できた直近の日時。`stock_splits` にこれより後に作られた分割がある銘柄は、保有・ウォッチリストの更新（104週）では古い週が分割前の値のまま残るため、次の `price:track` で10年分を取り直す。null は列の追加前に取得した銘柄で、`price_tracking_targets.created_at` を代わりに使う（初回だけ、分割のある補完済み銘柄〔現在77銘柄〕を1回ずつ取り直す。既存行は変換しない） |
 | created_at / updated_at | timestamp | NO | now() | 作成・更新日時 |
 
 **Index**: `holding_id` unique、`(status, track_until_week)`
@@ -808,6 +809,8 @@
 > **状態の更新規則（2026-10-06 Gate 4 Cycle 6bで確定、`PriceTrackingTargetUpdater`）**: 週は翌週の月曜になったら確定とみなす。取得に成功しても、確定済みの週がすべて `weekly_prices` に入っていることを確認できなければ失敗として数える（`recordHolding` は例外を握りつぶすため）。成功で `latest_saved_week`（確定した最新週）を更新し、`track_until_week` が null か `latest_saved_week` 以下なら `completed`、そうでなければ `active`。失敗は `consecutive_failures` を増やし、**3回連続で、最後の結果が「銘柄なし」または「データなし」のとき** `unavailable`（レート制限や5xxの失敗だけでは取得不能にしない）。成功すれば `unavailable` からも戻る。新しい売却・シグナルで期限が `latest_saved_week` より先へ延びたら `completed` から `active` に戻る。
 >
 > **状態テーブル（UPSERT）**: 週次の追跡処理の対象抽出と、終点確定後まで保持する条件（ADR-0024 D1・D2）に使う。`completed` は `latest_saved_week >= track_until_week` を確認したときだけ設定する。`unavailable` は連続失敗が閾値（叩き台3回）に達し、かつ取得元が銘柄なしを返した場合に設定し、F-017側で評価額比率による判定保留に使う。
+
+> **分割の整合（2026-10-10 Gate 3承認・CHG-0033 Cycle 6e、ADR-0024 D6の未解決事項への対応）**: 保有・ウォッチリストの更新（`JpStockPriceClient` / `UsStockPriceClient`、`range=2y`）でも `events=splits` を付けて分割を受け取り、`StockSplitRecorder` で `stock_splits` に記録する（リクエスト数は変わらない）。`price:track` は、追跡中の銘柄に加えて、`backfilled_from_week` があり（104週より古い週を持つ）かつ `full_history_fetched_at`（null なら `created_at`）より後に作られた `stock_splits` 行がある銘柄を10年分取り直す（期限・状態は変えない）。カラム追加は nullable で後方互換、既存データの変換なし。
 
 #### stock_splits（株式分割・UC-018）
 
@@ -1071,6 +1074,8 @@
 | 2026-09-30 | minowaryo | 承認（Gate3） | **集中度ダッシュボード（CHG-0026、ADR-0019）**の`index_weekly_prices.index_name`への`sox`追加を同日の提案どおり承認。新規テーブルなし。`^SOX`の出来高がnullで全行が除外されないかはGate4 Cycle1で実データ確認する |
 | 2026-10-04 | minowaryo | 承認（Gate3） | **売買の振り返り（UC-017／UC-018、F-017、ADR-0027、CHG-0033）**。新規テーブル8件（`trade_import_batches`／`trade_executions`／`trade_reconciliation_items`／`price_tracking_targets`／`stock_splits`／`indicator_observations`／`trade_switch_allocations`／`trade_context_records`）と、`index_weekly_prices.index_name`への`usdjpy`追加を承認。比較結果は保存せず根拠データから読み取り時に算出する方針（UC-018本文の「比較結果を保存」を「根拠データを保存し結果は再現する」と読み替え）、`indicator_observations`（後から遡れない指標の週次追記）を最初に実装する方針、価格の取得不能は「3回連続失敗かつ取得元が銘柄なしを返す」場合とする叩き台を承認。UC-019はGate 2保留のため専用テーブルなし。マイグレーションはGate 4後 |
 | 2026-10-06 | minowaryo | 承認（Gate4着手時の変更） | **価格データの保存と追跡状態（UC-018 Cycle 6b、ADR-0024・ADR-0027）**。Gate 3承認済みの `price_tracking_targets` を2点変更: ①`track_until_week` を NOT NULL から nullable に（保有中で補完だけ行う銘柄は期限なし）、②`splits_incomplete`（boolean、既定false）を追加（分割情報欠損の記録）。あわせて状態の更新規則（翌週月曜で週を確定、保存確認、3回連続かつ最後が銘柄なし／データなしで取得不能）、`stock_splits`、`index_weekly_prices.index_name` への `usdjpy` 追加を、Gate 3承認の定義どおり実装 |
+| 2026-10-10 | （Gate3レビュー待ち） | 提案（CHG-0033 Cycle 6e） | **分割の整合（UC-018、ADR-0024 D6）**。`price_tracking_targets` に `full_history_fetched_at`（timestamp、nullable）を1列追加。保有・ウォッチリストの104週更新でも分割を受け取って記録し、列の日時より後に記録された分割がある補完済み銘柄だけを `price:track` が10年分取り直す。nullable の追加のみで後方互換、既存行の変換なし（null は `created_at` で代替し、初回に分割のある補完済み銘柄を1回ずつ取り直す） |
+| 2026-10-10 | minowaryo | 承認（Gate3） | **分割の整合（CHG-0033 Cycle 6e）**を同日の提案どおり承認。初回の `price:track` で分割のある補完済み銘柄（77銘柄）を1回ずつ取り直すことを含む。マイグレーションはGate 4後 |
 
 ## 変更履歴
 
@@ -1124,3 +1129,4 @@
 | 2026-10-05 | CHG-0031のマージ後レビューに対応し、`favorite_csv_import_batches`・`favorite_csv_import_states`・`watchlist_items.last_seen_favorite_import_id`を追加Gate 3設計として本人が承認。過去のCSV経路と直近の成功取込への在籍を分離する。追加Red11件もGate 4承認済み | ADR-0028 |
 | 2026-10-04 | 売買の振り返り（CHG-0033、UC-017／UC-018）のGate3叩き台として`trade_import_batches`／`trade_executions`／`trade_reconciliation_items`／`price_tracking_targets`／`stock_splits`／`indicator_observations`／`trade_switch_allocations`／`trade_context_records`の8テーブルと、`index_weekly_prices.index_name`への`usdjpy`追加を記載。比較結果は保存せず読み取り時に算出。Gate3承認済み | ADR-0027、ADR-0024 |
 | 2026-10-06 | 価格データの保存と追跡状態（CHG-0033 Cycle 6b）を実装。`price_tracking_targets`（`track_until_week` を nullable に、`splits_incomplete` を追加。Gate 4着手時に本人承認）・`stock_splits`のマイグレーション、`index_weekly_prices.index_name` への `usdjpy` 追加。状態の更新規則を明記 | ADR-0027、ADR-0024 |
+| 2026-10-10 | 分割の整合（CHG-0033 Cycle 6e）のGate3叩き台: `price_tracking_targets.full_history_fetched_at` の追加と、既存の104週更新での分割の記録・10年分の取り直しの規則。同日Gate3承認 | ADR-0024 |

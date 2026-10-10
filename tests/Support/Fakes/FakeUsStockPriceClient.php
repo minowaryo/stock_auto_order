@@ -2,6 +2,7 @@
 
 namespace Tests\Support\Fakes;
 
+use App\Services\MarketData\PriceHistory;
 use App\Services\MarketData\UsStockPriceClientInterface;
 use RuntimeException;
 
@@ -16,10 +17,12 @@ class FakeUsStockPriceClient implements UsStockPriceClientInterface
     /**
      * @param  array<string, array<int, array{date: string, close: float, volume: int}>>  $responses  Weekly price history keyed by symbol_code.
      * @param  array<int, string>  $throwsFor  symbol_codes for which fetchWeeklyPriceHistory() should raise an exception instead of returning data (used to test the "1銘柄の失敗が他銘柄を止めない" business rule).
+     * @param  array<string, list<array{date: string, numerator: int, denominator: int}>>  $splits  Stock splits keyed by symbol_code, returned by fetchWeeklyPriceHistoryWithSplits() (CHG-0033 Cycle 6e).
      */
     public function __construct(
         private readonly array $responses = [],
         private readonly array $throwsFor = [],
+        private readonly array $splits = [],
     ) {}
 
     /**
@@ -32,5 +35,17 @@ class FakeUsStockPriceClient implements UsStockPriceClientInterface
         }
 
         return $this->responses[$symbolCode] ?? [];
+    }
+
+    /**
+     * Same canned rows as fetchWeeklyPriceHistory(), wrapped with the splits.
+     */
+    public function fetchWeeklyPriceHistoryWithSplits(string $symbolCode): PriceHistory
+    {
+        $rows = $this->fetchWeeklyPriceHistory($symbolCode);
+
+        return $rows === []
+            ? new PriceHistory(PriceHistory::EMPTY)
+            : new PriceHistory(PriceHistory::OK, $rows, $this->splits[$symbolCode] ?? []);
     }
 }
