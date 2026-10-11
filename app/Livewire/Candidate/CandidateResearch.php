@@ -5,11 +5,16 @@ namespace App\Livewire\Candidate;
 use App\Models\ResearchCandidate;
 use App\Models\ResearchDiscoveryLink;
 use App\Models\ResearchEntity;
+use App\Models\ResearchEvent;
 use App\Services\Research\ResearchCandidateService;
+use App\Services\Research\ResearchSourceItemService;
+use App\Support\DisplayTime;
+use App\Support\ResearchSymbolCode;
 use DomainException;
 use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\WithPagination;
 use RuntimeException;
@@ -21,6 +26,9 @@ class CandidateResearch extends Component
     use WithPagination;
 
     public array $form = [];
+
+    #[Locked]
+    public ?int $selectedSourceItemId = null;
 
     public array $editForm = [];
 
@@ -122,13 +130,62 @@ class CandidateResearch extends Component
         $this->validate($this->creationRules(), [], $this->attributes());
 
         try {
-            $service->create($this->form, auth()->user());
+            if ($this->selectedSourceItemId !== null) {
+                app(ResearchSourceItemService::class)->record($this->selectedSourceItemId, $this->form, auth()->user());
+            } else {
+                $service->create($this->form, auth()->user());
+            }
             $this->form = $this->blankForm();
+            $this->selectedSourceItemId = null;
             $this->notice = '調査候補を記録しました。一次資料と上場主体を確認してください。';
             $this->resetPage();
         } catch (InvalidArgumentException|DomainException|RuntimeException $exception) {
             $this->addError('form', $exception->getMessage());
         }
+    }
+
+    public function checkSources(ResearchSourceItemService $service): void
+    {
+        Gate::authorize('viewAny', ResearchCandidate::class);
+        $result = $service->checkSources(auth()->user());
+        $this->notice = '情報源の確認: '.$result['checked'].'源、失敗: '.$result['failed'].'源、スキップ: '.$result['skipped'].'源。';
+        $this->resetPage('sourceItemsPage');
+    }
+
+    public function useSourceItem(int $itemId, ResearchSourceItemService $service): void
+    {
+        Gate::authorize('create', ResearchCandidate::class);
+        try {
+            $item = $service->itemForRecording($itemId, auth()->user());
+            $this->form = $this->blankForm();
+            $this->form['discovery_url'] = $item->url;
+            $this->form['source_title'] = $item->title;
+            $this->form['publisher'] = config('research_sources.'.$item->source_key.'.name', $item->source_key);
+            $this->form['posted_on'] = DisplayTime::date($item->published_at);
+            $this->selectedSourceItemId = $item->id;
+            $this->resetErrorBag();
+            $this->notice = '資料を記録フォームへ入れました。テーマ・法人・要約を確認して保存してください。';
+        } catch (InvalidArgumentException $exception) {
+            $this->addError('sourceItems', $exception->getMessage());
+        }
+    }
+
+    public function ignoreSourceItem(int $itemId, ResearchSourceItemService $service): void
+    {
+        Gate::authorize('create', ResearchCandidate::class);
+        $service->ignore($itemId, auth()->user());
+        if ($this->selectedSourceItemId === $itemId) {
+            $this->selectedSourceItemId = null;
+            $this->form = $this->blankForm();
+        }
+        $this->notice = '項目を対象外にしました。';
+    }
+
+    public function restoreSourceItem(int $itemId, ResearchSourceItemService $service): void
+    {
+        Gate::authorize('create', ResearchCandidate::class);
+        $service->restore($itemId, auth()->user());
+        $this->notice = '項目を未処理へ戻しました。既存の調査候補は保持されます。';
     }
 
     public function editCandidate(int $candidateId): void
@@ -263,7 +320,7 @@ class CandidateResearch extends Component
         abort_if(! $candidate->entity->listings()->whereKey($this->selectedListingForEditId)->exists(), 404);
         $this->validate([
             'listingForm.market' => ['required', 'in:jp,us'],
-            'listingForm.symbol_code' => ['required', 'string', 'max:20'],
+            'listingForm.symbol_code' => ['required', 'string', 'max:20', $this->symbolRule('listingForm.market')],
             'listingForm.listed_entity_name' => ['required', 'string', 'max:255'],
             'listingForm.source_url' => ['required', 'url:http,https', 'max:2048'],
             'listingForm.confirmed_on' => ['required', 'date_format:Y-m-d'],
@@ -324,7 +381,7 @@ class CandidateResearch extends Component
         Gate::authorize('update', ResearchCandidate::findOrFail($this->editingCandidateId));
         $this->validate([
             'listingForm.market' => ['required', 'in:jp,us'],
-            'listingForm.symbol_code' => ['required', 'string', 'max:20'],
+            'listingForm.symbol_code' => ['required', 'string', 'max:20', $this->symbolRule('listingForm.market')],
             'listingForm.listed_entity_name' => ['required', 'string', 'max:255'],
             'listingForm.source_url' => ['required', 'url:http,https', 'max:2048'],
             'listingForm.confirmed_on' => ['required', 'date_format:Y-m-d'],
@@ -559,15 +616,22 @@ class CandidateResearch extends Component
             ->when($this->statusFilter !== '', fn ($query) => $query->where('status', $this->statusFilter))
             ->when($this->marketFilter !== '', fn ($query) => $query->whereHas('entity.listings', fn ($listings) => $listings->where('market', $this->marketFilter)))
             ->when($this->sourceFilter !== '', fn ($query) => $query->whereHas('event.discoveryLinks', fn ($links) => $links->where('publisher', $this->sourceFilter)))
-            ->when($this->unregisteredOnly, fn ($query) => $query->whereDoesntHave('handoffs'))
+            // A handoff that only linked an unstarred row is not monitoring yet (UC-016).
+            ->when($this->unregisteredOnly, fn ($query) => $query->whereDoesntHave('handoffs', fn ($handoffs) => $handoffs
+                ->where('outcome', 'already_held')
+                ->orWhereHas('watchlistItem', fn ($items) => $items->where('is_starred', true))))
             ->orderByDesc('created_at')
             ->orderByDesc('id');
         $candidates = $query->paginate(20);
         $candidates->getCollection()->firstWhere('id', $this->selectedCandidateId)?->load('revisions');
+        $service = app(ResearchCandidateService::class);
 
         return view('livewire.candidate.candidate-research', [
             'candidates' => $candidates,
-            'stats' => app(ResearchCandidateService::class)->stats(),
+            'registrationStates' => $service->registrationStates($candidates->getCollection()),
+            'stats' => $service->stats(),
+            'sourceStatuses' => app(ResearchSourceItemService::class)->statuses(auth()->user()),
+            'sourceItems' => app(ResearchSourceItemService::class)->items(auth()->user()),
             'handoffCandidate' => $this->handoffCandidateId !== null
                 ? ResearchCandidate::query()->with(['event', 'entity.listings', 'claims'])->find($this->handoffCandidateId)
                 : null,
@@ -586,12 +650,34 @@ class CandidateResearch extends Component
         ]);
     }
 
+    public function useExistingEvent(int $eventId): void
+    {
+        Gate::authorize('create', ResearchCandidate::class);
+        $this->form['existing_event_id'] = ResearchEvent::query()->whereNull('merged_into_event_id')->findOrFail($eventId)->id;
+    }
+
+    public function useExistingEntity(int $entityId): void
+    {
+        Gate::authorize('create', ResearchCandidate::class);
+        $this->form['existing_entity_id'] = ResearchEntity::findOrFail($entityId)->id;
+    }
+
+    /** Rejects codes the listing would not match against holdings (e.g. "7203.T"). */
+    private function symbolRule(string $marketKey): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail) use ($marketKey) {
+            if (filled($value) && ResearchSymbolCode::normalize(data_get($this, $marketKey), (string) $value) === null) {
+                $fail('銘柄コードは日本株4桁（例: 7203、523A）、米国株はティッカー（例: NVDA）で入力してください。取引所の接尾辞は付けません。');
+            }
+        };
+    }
+
     private function blankForm(): array
     {
         return [
             'theme' => '', 'theme_relation' => '', 'event_title' => '',
-            'discovery_url' => '', 'source_title' => '', 'publisher' => '',
-            'checked_on' => now()->toDateString(), 'summary' => '', 'legal_name' => '',
+            'discovery_url' => '', 'source_title' => '', 'publisher' => '', 'posted_on' => null,
+            'checked_on' => now()->setTimezone(DisplayTime::timezone())->toDateString(), 'summary' => '', 'legal_name' => '',
             'original_url' => null, 'original_publisher' => null, 'announced_on' => null,
             'entity_role' => null, 'existing_event_id' => null, 'existing_entity_id' => null,
         ];
@@ -616,6 +702,7 @@ class CandidateResearch extends Component
             'form.discovery_url' => ['required', 'url:http,https', 'max:2048'],
             'form.source_title' => ['required', 'string', 'max:255'],
             'form.publisher' => ['required', 'string', 'max:255'],
+            'form.posted_on' => ['nullable', 'date_format:Y-m-d'],
             'form.checked_on' => ['required', 'date_format:Y-m-d'],
             'form.summary' => ['required', 'string', 'max:2000'],
             'form.legal_name' => ['required', 'string', 'max:255'],
@@ -646,7 +733,7 @@ class CandidateResearch extends Component
             'editForm.legal_name' => ['required', 'string', 'max:255'],
             'editForm.identification_status' => ['required', 'in:unidentified,identified,unlisted,foreign_only,ambiguous'],
             'editForm.market' => ['required_if:editForm.identification_status,identified', 'required_with:editForm.symbol_code', 'nullable', 'in:jp,us'],
-            'editForm.symbol_code' => ['required_with:editForm.market', 'nullable', 'string', 'max:20'],
+            'editForm.symbol_code' => ['required_with:editForm.market', 'nullable', 'string', 'max:20', $this->symbolRule('editForm.market')],
             'editForm.listed_entity_name' => ['required_with:editForm.market,editForm.symbol_code', 'nullable', 'string', 'max:255'],
             'editForm.listing_source_url' => ['required_with:editForm.market,editForm.symbol_code', 'nullable', 'url:http,https', 'max:2048'],
             'editForm.listing_confirmed_on' => ['required_with:editForm.market,editForm.symbol_code', 'nullable', 'date_format:Y-m-d'],
@@ -668,7 +755,7 @@ class CandidateResearch extends Component
         return [
             'form.theme' => 'テーマ', 'form.theme_relation' => 'テーマとの関係',
             'form.discovery_url' => '発見経路URL', 'form.source_title' => '資料名',
-            'form.publisher' => '発行者', 'form.checked_on' => '確認日',
+            'form.publisher' => '発行者', 'form.checked_on' => '確認日', 'form.posted_on' => '紹介元の投稿日',
             'form.summary' => '自分の要約', 'form.legal_name' => '法人名',
         ];
     }

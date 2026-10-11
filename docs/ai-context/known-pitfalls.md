@@ -158,11 +158,23 @@
 - 原因: Livewire 4はアクション式 `preview` を `$wire.preview` として評価し、`$wire` は公開プロパティを先に返す（`vendor/livewire/livewire/dist/livewire.esm.js` の `generateWireObject`）。`public ?array $preview` と `public function preview()` が共存していたため、プロパティ値（null）が返るだけでメソッドが呼ばれず、`wire:submit` が付けたフォームの無効化も解除されない。`Livewire::test()->call()` はJSを通らずメソッドを直接呼ぶため検出できない
 - 対処: メソッドを `runPreview()` に改名した（`app/Livewire/TradeHistory/Import.php`）。再発防止に、全Livewireコンポーネントで公開プロパティと公開メソッドの名前の衝突を検出するテストを追加した（`tests/Unit/Livewire/ComponentMemberNamesTest.php`）
 
+### Livewire 4.x — `wire:model.blur` だけではサーバーへ送信されず、入力値に応じた画面表示が更新されない
+
+- 現象: UC-016の調査候補画面で、発見経路URLと法人名を入力して欄を離れても「既存記録の候補を確認してください」が出ない。保存ボタンを押した時点で初めて値が送られる。`Livewire::test()->set()` を使うFeatureテストは全件通る（2026-10-10、実ブラウザ検証で発見）
+- 原因: Livewire 4では `.blur` / `.change` はクライアント側の同期タイミングだけを決め、ネットワーク送信はしない（Livewire 3では送信していた）。`Livewire::test()->set()` は毎回サーバーで再描画するため検出できない
+- 対処: 入力値に応じて画面を変える欄だけ `wire:model.live.blur` にする（`resources/views/livewire/candidate/candidate-research.blade.php` の発見経路URL・法人名）。保存時に送るだけの欄は `wire:model.blur` のままでよい（`.claude/rules/15-frontend.md` の高頻度入力の方針と矛盾しない）。再発防止テストは該当属性の出力を確認する（`tests/Feature/UC016ResearchCandidateFollowupTest.php`）
+
 ### Laravel Artisanコマンド — `private function run()` を定義するとテスト全体が致命的エラーで止まる
 
 - 現象: コマンドクラスに `handle()` から呼ぶ補助メソッド `private function run(...)` を足したところ、`php artisan test` が途中の結果を出さずに `Whoops\Run::handleShutdown()` で終了した（2026-10-10、CHG-0033 Cycle 6d）。
 - 原因: `Illuminate\Console\Command` は Symfony の `Command::run(InputInterface, OutputInterface)` を公開メソッドとして持つ。同名で可視性・引数の違うメソッドを定義すると互換性のない上書きになり、クラスを読み込んだ時点でPHPの致命的エラーになる。
 - 対処: 補助メソッドには `run` / `execute` / `handle` 以外の名前を使う（`track()` / `backfill()` に改名）。
+
+### Laravel `artisan serve` — 再読込モードで子PHPへテストDB設定が渡らない
+
+- 現象: CLIで専用DBへ作ったテストユーザーの存在とパスワード一致を確認できても、ブラウザのログインが拒否される。`DB_DATABASE`・`APP_CONFIG_CACHE`を外部環境で上書きした隔離サーバーで発生（2026-10-11、UC-016起動時確認E2E）。
+- 原因: `.env`が存在する既定のreload起動では、`ServeCommand::startProcess()`が子PHPプロセスへ渡す環境を`$passthroughVariables`に絞る。`DB_DATABASE`・`APP_CONFIG_CACHE`は対象外で、HTTP処理だけがworktreeの`.env`設定を読み得る。CLI側のDB一致確認だけではHTTP側の隔離を証明しない。
+- 対処: テスト起動に`php artisan serve --no-reload --host=0.0.0.0 --port=<隔離ポート>`を使い、子プロセスへ環境を保持する。テスト用設定/専用DBを確認し、HTTP画面の架空の情報源名が一致することも操作前に検証する。セッション行も書き込み得るため、認証失敗だけでも「実DBへ書き込みなし」と断定しない。本番・日常利用アプリで試さない。
 
 ### 楽天証券の国内株の売買履歴CSV — 株式分割で増えた株が、印のない「入庫」として記録される
 
