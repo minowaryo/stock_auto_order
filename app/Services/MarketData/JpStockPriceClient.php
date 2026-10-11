@@ -18,4 +18,9 @@ final class JpStockPriceClient implements JpStockPriceClientInterface
     {
         return $this->client->fetchWeeklyHistory($symbolCode.'.T', self::DEFAULT_WEEKS);
     }
+
+    public function fetchWeeklyPriceHistoryWithSplits(string $symbolCode): PriceHistory
+    {
+        return $this->client->fetchWeeklyHistoryWithSplits($symbolCode.'.T', self::DEFAULT_WEEKS);
+    }
 }

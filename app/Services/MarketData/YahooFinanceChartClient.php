@@ -51,6 +51,40 @@ final class YahooFinanceChartClient
     }
 
     /**
+     * fetchWeeklyHistory() plus the stock splits of the same request
+     * (events=splits), so the holdings / watchlist refresh can record them
+     * without an extra request (UC-018, ADR-0024 D6). Like fetchWeeklyHistory()
+     * a connection error still throws; a non-2xx answer is FAILED with no rows.
+     */
+    public function fetchWeeklyHistoryWithSplits(string $symbol, int $weeks): PriceHistory
+    {
+        $response = Http::get(self::BASE_URL.$symbol, [
+            'range' => '2y',
+            'interval' => '1wk',
+            'events' => 'splits',
+        ]);
+
+        if (! $response->successful()) {
+            return new PriceHistory(PriceHistory::FAILED, message: 'HTTP '.$response->status());
+        }
+
+        $result = $response->json('chart.result');
+        $rows = $this->rowsFrom($result);
+
+        if ($rows === []) {
+            return new PriceHistory(PriceHistory::EMPTY);
+        }
+
+        if (count($rows) > $weeks) {
+            $rows = array_slice($rows, -$weeks);
+        }
+
+        [$splits, $incomplete] = $this->splitsFrom($result);
+
+        return new PriceHistory(PriceHistory::OK, $rows, $splits, $incomplete);
+    }
+
+    /**
      * Weekly history for a longer range, optionally with stock splits
      * (ADR-0024 D5 backfill). Never throws: the outcome is in the status
      * (404 → not_found; other non-2xx or a connection error → failed; a 200

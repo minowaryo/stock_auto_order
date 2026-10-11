@@ -19,6 +19,7 @@ use App\Services\MarketData\JpStockPriceClientInterface;
 use App\Services\MarketData\JQuantsClientInterface;
 use App\Services\MarketData\MarketIndexClientInterface;
 use App\Services\MarketData\UsStockPriceClientInterface;
+use App\Services\PriceTracking\StockSplitRecorder;
 use App\Services\Sector\SectorClassificationResolver;
 use App\Services\SignalOutcome\IndicatorObservationRecorder;
 use App\Services\SignalOutcome\SignalOccurrenceMetricsBuilder;
@@ -68,6 +69,7 @@ class RefreshWatchlistMarketDataAction
         private readonly UsFundamentalIndicatorMapper $usFundamentalIndicatorMapper,
         private readonly BuySignalDeterminationService $buySignalDeterminationService,
         private readonly WeeklyPriceRecorder $weeklyPriceRecorder,
+        private readonly StockSplitRecorder $stockSplitRecorder,
         private readonly SignalOccurrenceRecorder $signalOccurrenceRecorder,
         private readonly SignalOccurrenceMetricsBuilder $signalOccurrenceMetricsBuilder,
         private readonly IndicatorObservationRecorder $indicatorObservationRecorder,
@@ -192,12 +194,15 @@ class RefreshWatchlistMarketDataAction
         // failure never leaves it with fresh indicators but its
         // watchlist_buy_signals deleted-and-not-recreated (review #4). Mirrors
         // FetchExternalMarketDataAction, which wraps each holding in DB::transaction.
-        $priceHistory = $holding->market === 'jp'
-            ? $this->jpStockPriceClient->fetchWeeklyPriceHistory($holding->symbol_code)
-            : $this->usStockPriceClient->fetchWeeklyPriceHistory($holding->symbol_code);
+        $fetched = $holding->market === 'jp'
+            ? $this->jpStockPriceClient->fetchWeeklyPriceHistoryWithSplits($holding->symbol_code)
+            : $this->usStockPriceClient->fetchWeeklyPriceHistoryWithSplits($holding->symbol_code);
+        $priceHistory = $fetched->rows;
 
         // UC-014 (ADR-0017 D2): outside the transaction below; never throws.
         $this->weeklyPriceRecorder->recordHolding($holding, $priceHistory);
+        // UC-018 (ADR-0024 D6): a new split makes price:track refetch 10 years; never throws.
+        $this->stockSplitRecorder->record($holding, $fetched);
 
         $technical = $this->technicalIndicatorCalculator->calculate($priceHistory, $marketReturn13w, null);
 
