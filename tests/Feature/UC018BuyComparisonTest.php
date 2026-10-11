@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Holding;
+use App\Models\PriceTrackingTarget;
+use App\Models\StockSplit;
 use App\Models\TradeExecution;
 use App\Models\TradeImportBatch;
 use App\Services\SignalOutcome\WeeklyPriceRecorder;
@@ -215,6 +217,43 @@ describe('UC-018 買付: 既存保有の比例買増しとの比較', function (
         '5%ちょうど: Bを外してAだけで1,000 → 1,100' => [50.0, 'ok', 1100.0],
         '6%: 算出不可' => [60.0, 'unavailable', null],
     ]);
+
+    test('前週末に終値がなく外れていた構成銘柄も、外した比率に数える（5%を超えれば算出不可、レビューで追加）', function (float $bShares, string $status) {
+        // Arrange: B has a close only before the week before, so it is left out then with an estimate
+        $a = bcHolding('1111');
+        $b = bcHolding('2222');
+        $c = bcHolding('3333');
+        bcPrices($a, ['2026-08-31' => 1, '2026-09-07' => 1, '2026-10-05' => 1.1]);
+        bcPrices($b, ['2026-08-24' => 1, '2026-09-07' => 1, '2026-10-05' => 1]);
+        bcPrices($c, ['2026-09-07' => 100, '2026-10-05' => 100]);
+        bcTrade($a, 'buy', '2026-08-24', 1000 - $bShares, 1000 - $bShares);
+        bcTrade($b, 'buy', '2026-08-24', $bShares, $bShares);
+        $buy = bcTrade($c, 'buy', '2026-09-08', 10, 1000);
+
+        // Act / Assert
+        expect(bcBuysOf($buy)[4]->status)->toBe($status);
+    })->with([
+        '外れた比率5%: Aだけで配分' => [50.0, 'ok'],
+        '外れた比率10%: 算出不可' => [100.0, 'unavailable'],
+    ]);
+
+    test('分割の取り直し待ちの構成銘柄も外し、その比率が5%を超えれば算出不可にする（レビューで追加）', function () {
+        // Arrange: B (10% of the week before) has a split recorded after its last 10-year fetch
+        $a = bcHolding('1111');
+        $b = bcHolding('2222');
+        $c = bcHolding('3333');
+        bcPrices($a, ['2026-08-31' => 1, '2026-09-07' => 1, '2026-10-05' => 1.1]);
+        bcPrices($b, ['2026-08-31' => 1, '2026-09-07' => 1, '2026-10-05' => 1]);
+        bcPrices($c, ['2026-09-07' => 100, '2026-10-05' => 100]);
+        bcTrade($a, 'buy', '2026-08-24', 900, 900);
+        bcTrade($b, 'buy', '2026-08-24', 100, 100);
+        PriceTrackingTarget::create(['holding_id' => $b->id, 'status' => 'completed', 'full_history_fetched_at' => '2026-12-01 00:00:00']);
+        StockSplit::create(['holding_id' => $b->id, 'effective_date' => '2025-01-06', 'ratio_numerator' => 2, 'ratio_denominator' => 1, 'source' => 'yahoo']);
+        $buy = bcTrade($c, 'buy', '2026-09-08', 10, 1000);
+
+        // Act / Assert
+        expect(bcBuysOf($buy)[4]->status)->toBe('unavailable');
+    });
 
     test('積立の買付と、評価週が未来の買付は、比べない／結果待ちにする', function () {
         // Arrange

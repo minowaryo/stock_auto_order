@@ -223,6 +223,20 @@ describe('UC-018 推定乗換え: 売却代金の割り当て（同じ市場・5
         expect($buyIds)->toBe([$sameDay->id, $fifth->id]);
     });
 
+    test('同じ日の売却と買付は、CSVの登録順（買付が先）に関係なく、売却代金を買付に割り当てる（レビューで発見）', function () {
+        // Arrange: the buy row was imported before the sell row of the same day (the CSV order)
+        $a = tcHolding('1111');
+        $b = tcHolding('2222');
+        tcTrade($a, 'buy', '2026-08-24', 100, 1000);
+        $buy = tcTrade($b, 'buy', '2026-09-07', 3, 300);
+        $sell = tcTrade($a, 'sell', '2026-09-07', 10, 500);
+
+        // Act / Assert
+        expect(app(SwitchAllocator::class)->allocate())->toBe([
+            ['sell_id' => $sell->id, 'buy_id' => $buy->id, 'amount_jpy' => 300.0],
+        ]);
+    });
+
     test('別の市場の買付と、積立には割り当てない', function () {
         // Arrange
         $jp = tcHolding('1111');

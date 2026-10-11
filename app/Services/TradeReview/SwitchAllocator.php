@@ -20,11 +20,14 @@ class SwitchAllocator
      */
     public function allocate(): array
     {
+        // Within a day, sells come first: the CSV row order (often buy rows
+        // before the sell rows of the same day) must not decide the allocation.
         $trades = TradeExecution::query()
             ->whereIn('kind', ['sell', 'buy'])
-            ->orderBy('trade_date')
-            ->orderBy('id')
-            ->get();
+            ->get()
+            ->sort(fn (TradeExecution $x, TradeExecution $y) => [$x->trade_date->toDateString(), $x->kind === 'sell' ? 0 : 1, $x->id]
+                <=> [$y->trade_date->toDateString(), $y->kind === 'sell' ? 0 : 1, $y->id])
+            ->values();
 
         $open = [];
         $allocations = [];

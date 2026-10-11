@@ -123,11 +123,13 @@ class TradeComparisonCalculator
             }
 
             $buyWeek = $this->weeks->weekStart($buy->trade_date->toDateString());
-            $composition = $this->composition($weeks[Carbon::parse($buyWeek)->subWeek()->toDateString()] ?? null, $markets, $buy->market);
+            $weekBefore = $weeks[Carbon::parse($buyWeek)->subWeek()->toDateString()] ?? null;
+            $composition = $this->composition($weekBefore, $markets, $buy->market);
+            $leftOut = $this->leftOut($weekBefore, $markets, $buy->market);
             $shares = (float) $buy->quantity * $splits->factor($buy->holding_id, $buy->trade_date->toDateString());
 
             foreach ($this->evaluations($buy, $weeks) as [$horizon, $week, $status]) {
-                $result[] = $this->buyComparison($buy, $horizon, $week, $status, $newMoney, $cost, $shares, $composition, $weeks[$buyWeek] ?? null, $weeks[$week] ?? null, $indices, $splits);
+                $result[] = $this->buyComparison($buy, $horizon, $week, $status, $newMoney, $cost, $shares, $composition, $leftOut, $weeks[$buyWeek] ?? null, $weeks[$week] ?? null, $indices, $splits);
             }
         }
 
@@ -138,7 +140,7 @@ class TradeComparisonCalculator
      * @param  array<int, float>  $composition  holding_id => value at the end of the week before
      * @param  array<string, array<string, float>>  $indices
      */
-    private function buyComparison(TradeExecution $buy, int $horizon, string $week, string $status, float $newMoney, float $cost, float $shares, array $composition, ?PortfolioWeek $buyWeek, ?PortfolioWeek $evaluation, array $indices, SplitData $splits): TradeComparison
+    private function buyComparison(TradeExecution $buy, int $horizon, string $week, string $status, float $newMoney, float $cost, float $shares, array $composition, float $leftOut, ?PortfolioWeek $buyWeek, ?PortfolioWeek $evaluation, array $indices, SplitData $splits): TradeComparison
     {
         $make = fn (string $status, ?string $reason, ?float $actual = null, ?float $hold = null, ?float $index = null) => new TradeComparison(
             tradeId: $buy->id,
@@ -177,7 +179,7 @@ class TradeComparisonCalculator
             return $make('unavailable', 'no_holdings', $actual, null, $index);
         }
 
-        $hold = $this->proportionalValue($composition, $newMoney, $buyWeek, $evaluation);
+        $hold = $this->proportionalValue($composition, $leftOut, $newMoney, $buyWeek, $evaluation);
 
         return $hold === null
             ? $make('unavailable', 'no_price', $actual, null, $index)
@@ -198,15 +200,34 @@ class TradeComparisonCalculator
     }
 
     /**
+     * The estimated value of the market's holdings that were left out in the
+     * week before (no close, split pending, ...): they belong to the
+     * composition but cannot be bought at a known price.
+     *
+     * @param  array<int, string>  $markets
+     */
+    private function leftOut(?PortfolioWeek $week, array $markets, string $market): float
+    {
+        $sum = 0.0;
+
+        foreach ($week?->excludedEstimatesJpy ?? [] as $id => $estimate) {
+            $sum += ($markets[$id] ?? null) === $market ? $estimate : 0.0;
+        }
+
+        return $sum;
+    }
+
+    /**
      * The new money spread over the composition at the buy week's prices,
-     * valued at the evaluation week. Holdings without either price are
-     * dropped and the rest re-weighted, unless more than 5% would be dropped.
+     * valued at the evaluation week. Holdings without either price, and those
+     * already left out the week before, are dropped and the rest re-weighted,
+     * unless more than 5% of the composition would be dropped.
      *
      * @param  array<int, float>  $composition
      */
-    private function proportionalValue(array $composition, float $newMoney, ?PortfolioWeek $buyWeek, ?PortfolioWeek $evaluation): ?float
+    private function proportionalValue(array $composition, float $leftOut, float $newMoney, ?PortfolioWeek $buyWeek, ?PortfolioWeek $evaluation): ?float
     {
-        $total = array_sum($composition);
+        $total = array_sum($composition) + $leftOut;
         $kept = array_filter(
             $composition,
             fn (int $id) => isset($buyWeek?->pricesJpy[$id], $evaluation?->pricesJpy[$id]),
