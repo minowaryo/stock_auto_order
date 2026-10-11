@@ -107,6 +107,8 @@ evidence() {
   [[ $rel == logs || $rel == logs/* ]]
 }
 
+shopt -s extglob
+
 case $tool_name in
   Write|Edit|MultiEdit|NotebookEdit)
     re_path='"(file_path|notebook_path)"[[:space:]]*:[[:space:]]*"([^"]*)"'
@@ -140,6 +142,11 @@ case $tool_name in
       for pat in '2>&1' '1>&2' '>&2' '2>/dev/null' '2> /dev/null' '>/dev/null' '> /dev/null' '>nul' '> nul'; do
         s=${s//"$pat"/}
       done
+      # PHP arrows inside an inline script are not redirects: `$log->id` (property access) and
+      # `'k' => 1` (array pair). A deliberate `echo x$v->tests/a` would slip past this strip; the
+      # approved-snapshot comparison after Green (tdd-snapshot.sh verify) still catches the change.
+      s=${s//\$+([a-z0-9_])+(->+([a-z0-9_]))/}
+      s=${s//=>/}
       re_write='>|(^|[^a-z_])(tee|cp|mv|rm|rmdir|touch|mkdir|ln|truncate|dd|install|rsync|unlink|chmod)([[:space:]]|$)|sed[[:space:]]+(-[a-z]*i|--in-place)|perl[[:space:]]+-[a-z]*i|file_put_contents|fwrite|fopen|copy\(|rename\(|unlink\(|set-content|add-content|out-file|new-item|remove-item|move-item|copy-item|clear-content'
       if [[ $s =~ $re_write ]]; then
         [[ $lc =~ $re_locked ]] && deny locked_path "$cmd" "$GOAL_MSG"
