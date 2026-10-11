@@ -54,7 +54,7 @@ Claude Code / Codex は「実装を先に書いてからテストを後付けす
 - Redフェーズでテストを書かせた後、**Greenフェーズ（実装）に進む前に必ず人間がテスト内容をレビュー・承認する**（`.claude/rules/00-global.md` の Gate 4）
   - 確認観点: 意図した仕様どおりにテストが失敗しているか、テストケースが `use-cases.md` の正常系/異常系/権限を網羅しているか
   - `/tdd` コマンドはこの承認を得るまでGreenフェーズに自動で進まない
-- 機械的に強制したい場合は `@nizos/probity`（`meta/adr/ADR-0007-tdd-enforcement-probity.md` 参照）の導入を検討する。ただし導入有無に関わらずこのガイドラインは適用する
+- 承認後、テストと `docs/product/` は `tdd-implementer` に対してロックされる——フックがその書き込みをブロックし、`/tdd` がGreen後に承認スナップショットと比較する（`docs/development/tdd-guard.md`、ADR-0017）。正当に変更するには、Redからやり直して再度承認する
 
 ### Greenフェーズ完了後のスキル実行
 
