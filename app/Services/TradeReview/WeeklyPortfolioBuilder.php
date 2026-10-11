@@ -3,7 +3,6 @@
 namespace App\Services\TradeReview;
 
 use App\Models\IndexWeeklyPrice;
-use App\Models\PriceTrackingTarget;
 use App\Models\StockSplit;
 use App\Models\TradeExecution;
 use App\Models\WeeklyPrice;
@@ -55,8 +54,9 @@ class WeeklyPortfolioBuilder
 
         $holdingIds = $trades->pluck('holding_id')->unique()->values()->all();
         $markets = $trades->pluck('holding.market', 'holding_id')->all();
-        $splits = StockSplit::query()->whereIn('holding_id', $holdingIds)->get()->groupBy('holding_id');
-        $alwaysExcluded = $this->alwaysExcluded($holdingIds, $splits);
+        $splitData = SplitData::load($holdingIds);
+        $splits = $splitData->splits;
+        $alwaysExcluded = $splitData->unreliable;
         $closes = $this->closes($holdingIds, $last);
         $usdJpy = IndexWeeklyPrice::query()
             ->where('index_name', 'usdjpy')
@@ -81,7 +81,7 @@ class WeeklyPortfolioBuilder
 
             foreach ($tradesByWeek->get($week, collect()) as $trade) {
                 $id = $trade->holding_id;
-                $shares = (float) $trade->quantity * $this->splitFactor($splits->get($id), $trade->trade_date->toDateString());
+                $shares = (float) $trade->quantity * $splitData->factor($id, $trade->trade_date->toDateString());
                 $sign = in_array($trade->kind, self::ADDS, true) ? 1 : -1;
                 $quantities[$id] = ($quantities[$id] ?? 0.0) + $sign * $shares;
                 $flows[$id] = ($flows[$id] ?? 0.0) + $sign * $this->amount($trade, $shares, $closes[$id][$week] ?? null, $markets[$id] === 'us' ? $fx : 1.0);
@@ -95,6 +95,19 @@ class WeeklyPortfolioBuilder
             $flow = 0.0;
             $excluded = [];
             $estimate = 0.0;
+            $holdingValues = [];
+            $holdingFlows = [];
+            $estimates = [];
+            $prices = [];
+
+            foreach ($holdingIds as $id) {
+                $close = $closes[$id][$week] ?? null;
+                $rate = $markets[$id] === 'us' ? $fx : 1.0;
+
+                if ($close !== null && $rate !== null) {
+                    $prices[$id] = $close * $rate;
+                }
+            }
 
             foreach (array_keys($quantities + $flows) as $id) {
                 $shares = $quantities[$id] ?? 0.0;
@@ -109,16 +122,22 @@ class WeeklyPortfolioBuilder
 
                 if ($reason !== null) {
                     $excluded[$id] = $reason;
-                    $estimate += $shares * $this->estimatePrice($closes[$id] ?? [], $week, $markets[$id] === 'us' ? $this->lastKnown($usdJpy, $week) : 1.0, $lastTradePrice[$id] ?? null);
+                    $estimates[$id] = $shares * $this->estimatePrice($closes[$id] ?? [], $week, $markets[$id] === 'us' ? $this->lastKnown($usdJpy, $week) : 1.0, $lastTradePrice[$id] ?? null);
+                    $estimate += $estimates[$id];
 
                     continue;
                 }
 
-                $value += $shares * $close * $rate;
-                $flow += $flows[$id] ?? 0.0;
+                $holdingValues[$id] = $shares * $close * $rate;
+                $holdingFlows[$id] = $flows[$id] ?? 0.0;
+                $value += $holdingValues[$id];
+                $flow += $holdingFlows[$id];
             }
 
             ksort($excluded);
+            ksort($holdingValues);
+            ksort($holdingFlows);
+            ksort($estimates);
 
             $result[$week] = new PortfolioWeek(
                 week: $week,
@@ -127,6 +146,10 @@ class WeeklyPortfolioBuilder
                 quantities: array_filter($quantities, fn (float $q) => $q > 1e-9),
                 excluded: $excluded,
                 excludedEstimateJpy: $estimate,
+                holdingValuesJpy: $holdingValues,
+                holdingFlowsJpy: array_filter($holdingFlows, fn (float $f) => $f !== 0.0),
+                excludedEstimatesJpy: $estimates,
+                pricesJpy: $prices,
             );
         }
 
@@ -136,7 +159,7 @@ class WeeklyPortfolioBuilder
     /**
      * JP trade CSVs book the shares a split adds as a plain 入庫 a few days
      * before Yahoo's split date. Such a transfer_in is not money in: shares
-     * come from the split, which splitFactor() already applies. It is
+     * come from the split, which SplitData::factor() already applies. It is
      * recognised when a split of the holding falls within 7 days after it and
      * its quantity equals the account's shares before it × (ratio − 1).
      *
@@ -172,32 +195,6 @@ class WeeklyPortfolioBuilder
     }
 
     /**
-     * Holdings that cannot be valued in any week: a split recorded after the
-     * last 10-year fetch (older closes not yet adjusted) or a dropped split.
-     *
-     * @param  list<int>  $holdingIds
-     * @param  Collection<int, Collection<int, StockSplit>>  $splits
-     * @return array<int, string>
-     */
-    private function alwaysExcluded(array $holdingIds, Collection $splits): array
-    {
-        $excluded = [];
-
-        foreach (PriceTrackingTarget::query()->whereIn('holding_id', $holdingIds)->get() as $target) {
-            $fetchedAt = $target->full_history_fetched_at ?? $target->created_at;
-            $lastSplit = $splits->get($target->holding_id)?->max('created_at');
-
-            if ($lastSplit !== null && $fetchedAt !== null && Carbon::parse($lastSplit)->gt($fetchedAt)) {
-                $excluded[$target->holding_id] = 'split_pending';
-            } elseif ($target->splits_incomplete) {
-                $excluded[$target->holding_id] = 'split_incomplete';
-            }
-        }
-
-        return $excluded;
-    }
-
-    /**
      * @param  list<int>  $holdingIds
      * @return array<int, array<string, float>> holding_id => [week => close], ascending
      */
@@ -215,24 +212,6 @@ class WeeklyPortfolioBuilder
             });
 
         return $closes;
-    }
-
-    /**
-     * Shares of a trade expressed after every later split (closes are split-adjusted).
-     *
-     * @param  Collection<int, StockSplit>|null  $splits
-     */
-    private function splitFactor(?Collection $splits, string $tradeDate): float
-    {
-        $factor = 1.0;
-
-        foreach ($splits ?? [] as $split) {
-            if ($split->effective_date->toDateString() > $tradeDate) {
-                $factor *= $split->ratio_numerator / $split->ratio_denominator;
-            }
-        }
-
-        return $factor;
     }
 
     /**
