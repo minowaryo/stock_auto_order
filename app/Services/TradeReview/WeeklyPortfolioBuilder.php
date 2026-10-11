@@ -95,6 +95,19 @@ class WeeklyPortfolioBuilder
             $flow = 0.0;
             $excluded = [];
             $estimate = 0.0;
+            $holdingValues = [];
+            $holdingFlows = [];
+            $estimates = [];
+            $prices = [];
+
+            foreach ($holdingIds as $id) {
+                $close = $closes[$id][$week] ?? null;
+                $rate = $markets[$id] === 'us' ? $fx : 1.0;
+
+                if ($close !== null && $rate !== null) {
+                    $prices[$id] = $close * $rate;
+                }
+            }
 
             foreach (array_keys($quantities + $flows) as $id) {
                 $shares = $quantities[$id] ?? 0.0;
@@ -109,16 +122,22 @@ class WeeklyPortfolioBuilder
 
                 if ($reason !== null) {
                     $excluded[$id] = $reason;
-                    $estimate += $shares * $this->estimatePrice($closes[$id] ?? [], $week, $markets[$id] === 'us' ? $this->lastKnown($usdJpy, $week) : 1.0, $lastTradePrice[$id] ?? null);
+                    $estimates[$id] = $shares * $this->estimatePrice($closes[$id] ?? [], $week, $markets[$id] === 'us' ? $this->lastKnown($usdJpy, $week) : 1.0, $lastTradePrice[$id] ?? null);
+                    $estimate += $estimates[$id];
 
                     continue;
                 }
 
-                $value += $shares * $close * $rate;
-                $flow += $flows[$id] ?? 0.0;
+                $holdingValues[$id] = $shares * $close * $rate;
+                $holdingFlows[$id] = $flows[$id] ?? 0.0;
+                $value += $holdingValues[$id];
+                $flow += $holdingFlows[$id];
             }
 
             ksort($excluded);
+            ksort($holdingValues);
+            ksort($holdingFlows);
+            ksort($estimates);
 
             $result[$week] = new PortfolioWeek(
                 week: $week,
@@ -127,6 +146,10 @@ class WeeklyPortfolioBuilder
                 quantities: array_filter($quantities, fn (float $q) => $q > 1e-9),
                 excluded: $excluded,
                 excludedEstimateJpy: $estimate,
+                holdingValuesJpy: $holdingValues,
+                holdingFlowsJpy: array_filter($holdingFlows, fn (float $f) => $f !== 0.0),
+                excludedEstimatesJpy: $estimates,
+                pricesJpy: $prices,
             );
         }
 
