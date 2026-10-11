@@ -163,3 +163,15 @@
 - 現象: コマンドクラスに `handle()` から呼ぶ補助メソッド `private function run(...)` を足したところ、`php artisan test` が途中の結果を出さずに `Whoops\Run::handleShutdown()` で終了した（2026-10-10、CHG-0033 Cycle 6d）。
 - 原因: `Illuminate\Console\Command` は Symfony の `Command::run(InputInterface, OutputInterface)` を公開メソッドとして持つ。同名で可視性・引数の違うメソッドを定義すると互換性のない上書きになり、クラスを読み込んだ時点でPHPの致命的エラーになる。
 - 対処: 補助メソッドには `run` / `execute` / `handle` 以外の名前を使う（`track()` / `backfill()` に改名）。
+
+### 楽天証券の国内株の売買履歴CSV — 株式分割で増えた株が、印のない「入庫」として記録される
+
+- 現象: 売買履歴から週ごとの株数を復元すると、分割のあった国内株22銘柄だけ保有CSVと合わなかった（2026-10-11、CHG-0033 Cycle 7a）。
+- 原因: 国内株CSVは分割で増えた株を取引区分「入庫」（分割の印なし）でYahooの分割日の1〜3日前に記録する。米国株CSVは「入庫（分割）」と明示する。Yahooの終値は分割調整済みのため、分割前の売買を分割比で揃えたうえにこの入庫を足すと二重計上になり、入庫を時価の資金流入として扱うと架空の入金になる。
+- 対処: 分割の7日以内前で、株数が「同じ口座の分割前の株数×（分割比−1）」と一致する国内株の入庫を分割による入庫として除く（`WeeklyPortfolioBuilder::splitDeliveries()`）。実データの24件すべてがこの条件に一致し、近くに分割のない入庫4件は本当の入庫だった。
+
+### 週の決まり — 「1週間前の日付」に weekStart() をかけると、日曜だけ確定前の週になる
+
+- 現象: 「確定した最新週」を `weekStart(now()->subDays(7))` で求めていたため、日曜だけ、まだ終わっていない今週を確定済みと判定した（2026-10-11、CHG-0033 Cycle 7aで発見。6dの`price:track`にも影響）。
+- 原因: `WeekDateNormalizer::weekStart()` はYahooの週足の都合で日曜を翌週として扱う。
+- 対処: 確定した最新週は `WeekDateNormalizer::lastConfirmedWeek()`（今日を含む週の月曜の1週前）だけで求める。
