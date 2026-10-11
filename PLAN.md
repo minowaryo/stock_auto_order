@@ -249,41 +249,6 @@ Red 16件→Gate4承認→Green。フルスイート1226 passed・pint適用済�
 
 Red 1件→Gate4承認→Green。フルスイート1178 passed・pint適用済み。開発DB（未保有105銘柄）で財務failedの先頭位置が1位→58位に下がることを確認。ブランチ`feat/chg0045-watchlist-sort-fundamental-first`（worktree `.claude/worktrees/chg0045`）、未コミット
 
-## 売買シグナル画面キープ表の列拡充（CHG-0046）実装完了・mainマージ済み（2026-10-04）
-
-### Decision
-
-- 発端: キープ表が6列（ヘルスラインは1行の文字列）のみで、他3テーブルの指標・色分けが見られない。本人要望で他テーブルと同じ指標（PER/PBR・財務含む）を列に分けて色付き表示する
-- ファンダメンタルズは既存データで表示可能（実データ59銘柄中ROE 40・PER 43件。nullはJ-Quantsの本決算のみ開示項目・ETF〔VYM/HDV/SPYDがstock登録〕・未取得6324による。ETF登録の件は別件として報告のみ）
-- 本人判断（推奨案）: テクニカルは利確・買い増しの既存閾値の両方に照らし利確寄り＝黄／押し目寄り＝緑。PER/PBRは値のみ（業種比較色はCHG-0034後）。ヘルスライン列は廃止
-- 設計: `SignalCriteriaEvaluator::evaluateHold()`を追加。行の拡充は`ShowHoldListAction`側（`ClassifyHoldingsAction`の出力・JSON APIは不変）
-
-### Files touched
-
-`docs/product/use-cases.md`（UC-013業務ルール・承認記録）、`docs/product/ui-guidelines.md`、`docs/rcid/traceability-matrix.md`、`app/Services/Analysis/SignalCriteriaEvaluator.php`（`evaluateHold()`）、`app/Actions/Portfolio/ShowHoldListAction.php`、`app/Actions/Portfolio/ClassifyHoldingsAction.php`（`HOLD_WATCH_GAIN_RATE_BUFFER`をpublic化のみ）、`resources/views/livewire/signal/signal-list.blade.php`、`resources/views/components/criteria-chip.blade.php`、`resources/views/components/signal-table-head.blade.php`、`tests/Unit/Services/Analysis/SignalCriteriaEvaluatorHoldTest.php`、`tests/Feature/CHG0046HoldTableRichColumnsTest.php`、`tests/Feature/CHG0028SignalHoldTableTest.php`
-
-### Status
-
-Red 28件→Gate4承認（2026-10-04）→Green。フルスイート1205 passed・pint適用済み。worktreeを8046番で起動し実ブラウザで表示確認済み（キープ59銘柄・黄/緑チップ描画、ヘッダー横スクロール同期OK）。`/review`（強化、スコア58）指摘2件を修正: 含み益率の利確ラインを利確検討と同じ`TakeProfitThresholdEvaluator`に揃える（高水準モード+150%。実データ6098が誤って黄だった）／分類と拡充の間に取り込みが重なり行が見つからない場合に画面が500になる経路を既定行で回避。Red 3件→Gate4承認→Green、フルスイート1209 passed。再`/review`（8ff7357）後にmainへ--no-ffマージ。ブランチ`feat/chg0046-hold-table-rich-columns`（worktree `.claude/worktrees/chg0046`）
-
-## ウォッチリスト銘柄のセクター分類（CHG-0044・ADR-0020追補）Green完了・mainマージ済み（2026-10-03〜10-04）
-
-### Decision
-
-- 発端: 未分類が日本株64・米国株43残る。内訳はウォッチリスト（未保有）日本株64・米国株40と、保有の米国ETF3件。UC-012の一括更新は業種を保存しておらず、`sectors:backfill`も保有のみが対象だった
-- 本人判断: Aのみ進める（ウォッチリスト銘柄を一括更新と`sectors:backfill`の対象に加える）。米国ETF専用カテゴリ（B）は今回対象外
-- 設計: ADR-0020追補D6。`SectorClassificationResolver`を流用
-
-### Files touched
-
-`docs/adr/ADR-0020-*.md`（追補）、`docs/product/use-cases.md`（UC-012フロー・承認記録）、`app/Actions/Watchlist/RefreshWatchlistMarketDataAction.php`、`app/Console/Commands/BackfillSectorsCommand.php`、`app/Services/Sector/SectorClassificationResolver.php`、`tests/Feature/CHG0044WatchlistSectorClassificationTest.php`
-
-### Status
-
-Red 8件（3件は回帰ガード）→Gate4承認→Green。フルスイート1070 passed・pint適用済み。分類ロジックは`SectorClassificationResolver::classify()`に集約（一括更新・`sectors:backfill`が共用）。mainにマージ済み（`9b61d75`）。`sectors:backfill`を実データで実行した（2026-10-04）: 対象は未分類の6件（米国ETF5件〔HDV・SPYD・VYM・QQQ・VTI〕とBRK B）で、分類できたのは0件。日本株は実行前に全件分類済みだった。残り6件は本人判断で当面対応不要（ETFはB案で対象外、BRK Bは銘柄コードの表記〔半角スペース〕が原因の可能性があるが未調査）。**未実施**: `/review`
-
-Red 8件（3件は回帰ガード）→Gate4承認→Green。フルスイート1070 passed・pint適用済み。分類ロジックは`SectorClassificationResolver::classify()`に集約（一括更新・`sectors:backfill`が共用）。**未実施**: `/review`、`sectors:backfill`の実データ実行、コミット。worktree: `.claude/worktrees/chg0044`（Vite成果物`public/build`と`vendor`のハードリンクコピーを手で持ち込んで実行。コミット対象外）
-
 ## 今後の対応（未着手）（2026-08-27追記、Phase5の実ブラウザ確認時に発見）
 
 - **数値の未整形表示（Phase3〜5共通）**: `HoldingList`（保有一覧、Phase3）・`SignalList`（利確検討、Phase5）の含み益率・取得単価・現在値・分割指値の価格が、`{{ $value }}`で生の浮動小数点値をそのまま出力しており（例: 含み益率が`89.5793`と%記号なし表示、価格が`3632.676`のような小数点3桁表示）、実際にPlaywrightで画面を目視確認した際に発見した。レイアウト崩れではなく数値の可読性の問題。既存テストは生の数値部分文字列を検証する設計のため、これらのテストを含め画面3つ（Phase3/4/5）をまとめて後日別タスクで整形する（%サフィックス・価格の四捨五入・桁区切り等）方針とし、今回のPhase5サイクルでは対応を見送る

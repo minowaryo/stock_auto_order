@@ -1,4 +1,6 @@
-# PLAN.md アーカイブ（〜2026-10-10 CHG-0032退避時点）
+# PLAN.md アーカイブ（〜2026-10-11 CHG-0046・CHG-0044退避時点）
+
+CHG-0046（売買シグナル画面キープ表の列拡充、2026-10-04 mainマージ済み）とCHG-0044（ウォッチリスト銘柄のセクター分類、2026-10-04 mainマージ済み）の記録を追加（2026-10-11、CHG-0033 Cycle 7c作業時にPLAN.mdが300行に近づいたため退避）。
 
 CHG-0032（売買シグナル画面の供給元Action二重実行の解消、2026-10-03 mainマージ済み）の記録を追加（2026-10-10、CHG-0033 Cycle 6dのマージでPLAN.mdが307行になったため退避）。
 
@@ -15,6 +17,41 @@ CHG-0028（売買シグナル画面へのキープ表の追加、2026-10-01 main
 CHG-0027（売買シグナル画面の評価額ソート・整理検討の評価額列/列順統一、2026-10-01 mainマージ済み）の記録を追加（2026-10-04、CHG-0046のmainマージでPLAN.mdが300行を超えたため退避）。
 
 売買戦略の深化ロードマップ策定（2026-09-19、Status完了）の記録を追加（2026-10-04、CHG-0034ブランチへのmain取り込みでPLAN.mdが300行を超えたため退避）。売買シグナル画面のPER/PBR表示をUC-004・UC-011に拡張（CHG-0019、2026-09-23）・mainへのマージ・最終`/review`・push（CHG-0016〜0018・F-013第1段階、2026-09-21）・ポートフォリオ分類ダッシュボード（F-013・UC-013・ADR-0014・CHG-0015、2026-09-08〜09-19）の記録を追加（2026-10-03、PLAN.mdが250行を超えたため退避。いずれもmainマージ済みをgit履歴で確認済み）。バリュー/景気敏感銘柄向け判定ロジック分岐（CHG-0017・ADR-0015、2026-09-19）と買い増しシグナル共通前提の緩和・PER単体シグナル（CHG-0018・ADR-0016、2026-09-19〜）の記録を追加（2026-10-01、CHG-0030作業時にPLAN.mdが300行に近づくため退避。いずれも2026-09-21にmainマージ済みを確認）。新規投資候補テーブルの固定ヘッダー化・重複列マージ・判定チェックリスト1項目=1列化（CHG-0016、2026-09-12）実装完了の記録を追加（2026-10-01、CHG-0026のmain取り込み時にPLAN.mdが300行を超えるため退避。mainマージ済み〔`027644d`〕を確認済み）。お気に入り未保有銘柄ウォッチリスト／新規投資候補画面の刷新（F-012・UC-012・ADR-0013・CHG-0014）の記録を追加（2026-10-01、CHG-0028でPLAN.mdが300行を超えるため退避。エントリ自体に「実装完了・mainマージ済み」と記載あり）。成長率算出バグの是正（CHG-0013・ADR-0012）＋押し目買いPEG下限バグ（2026-09-06〜）の記録を追加（2026-10-01、CHG-0027でPLAN.mdが300行を超えるため退避。mainマージ済み〔ADR-0012・`period_type`実装〕を確認済み）。財務健全性フィルタに営業利益率を追加（CHG-0012・ADR-0011、2026-09-06〜07）完了の記録を追加（2026-09-27、エビデンス提言取込・CHG-0020 Phase 0でPLAN.mdが300行を超えるため退避。mainマージ済み〔`6d5a9cb`〕を確認済み）。PLAN.md から退避した完了済みエントリ。整理検討（含み損）候補一覧の新設（F-011・UC-011・ADR-0010・CHG-0010、2026-09-05〜06）完了の記録を追加（2026-09-21、最終`/review`・コミット・push前のPLAN.md整理でCHG-0017/CHG-0018マージ後300行に近づいたため退避。mainマージ済み・`origin/feat/f011-loss-review-list`にpush済みであることを確認済み）。売買シグナル画面「評価額」列追加（CHG-0011）＋米国株ファンダのDB補完（2026-09-05〜09-06）完了・米国株ファンダメンタルズ指標データソースとしてFinnhub採用（CHG-0009、2026-09-05〜）完了の記録を追加（2026-09-21、CHG-0017／CHG-0018マージ時にPLAN.mdが300行を超えたため退避）。売買シグナル画面 判定チェックリスト表示（CHG-0007、2026-08-29〜09-05）完了の記録を追加（2026-09-12、CHG-0016作業でPLAN.mdが300行を超えたため退避。本エントリは末尾の「次: `/review` → コミット」を残したまま退避しているが、その後のCHG-0009〜CHG-0016で`signal-list.blade.php`のヘッダー用/本文用2分割構造が繰り返し前提として参照・拡張されており、`/review`・コミットとも完了済みであることが確認できるため退避対象とした）。取込後サマリーレポートのグローバルナビタブ化（CHG-0008、2026-09-05）完了の記録を追加（2026-09-12、F-012・CHG-0012のステータス記述修正に伴いPLAN.mdが300行を超えたため退避）。利確検討ラインの動的分岐（CHG-0006、2026-08-28〜29）・売買シグナル画面の可読性改善（2026-08-28）の記録を追加（2026-09-06、CHG-0013／ADR-0012作業時に約298行に達したため退避）。数値表示フォーマット修正完了（2026-08-28）・UC-010買い増し候補セクションのフロントエンド統合完了（2026-08-28）の記録を追加（2026-09-06、CHG-0012 Phase 0作業時に300行超過に伴い退避）。フロントエンド実装Phase7（UC-006/UC-008統合「新規投資候補」画面）完了・その`/review`指摘（MEDIUM 3件）修正完了の記録を追加（2026-09-06、CHG-0011コミット時に300行超過に伴い退避）。フロントエンド実装Phase6（UC-005セクター配分ダッシュボード画面）完了の記録を追加（2026-09-05、CHG-0011作業時に300行超過に伴い退避）。フロントエンド実装Phase5（UC-004売買シグナル一覧画面）完了までの記録を追加。UC-010（既存保有株の買い増しタイミングレコメンド）Gate4完了・コミット（`ba239fe`）までの記録を追加。Gate0セットアップ〜Phase1（UC-001/002/003/009）Gate4サイクル完了・ADR-0002 NISA区分CR・投資方針背景整理・ADR-0004（分析エンジンの指標セット拡張、設計確定〜TechnicalIndicatorCalculator〜MarketData層〜JQuantsClient〜SignalDeterminationService〜FundamentalIndicatorMapperの各TDDサイクル、UC-001への配線・UC-004画面実装・UC-003/UC-009への新指標反映を含む）完了、関連する`/review`指摘修正2件・UC-009サンプルレポート生成・per-holding非アトミック性修正、F-010（UC-010）のGate1〜3ドキュメント叩き台整備（ADR-0007新規作成、requirements.md/use-cases.md/data-model.md改訂）、NISA区分（口座区分）内訳の書き込み経路・UC-004消費側の実装完了、Phase2「UC-008→UC-005→UC-006」全完了・UC-007市場全体指標表示実装完了・実装済み全エンドポイントのIntegrationテスト網羅性監査、フロントエンド実装Phase0（基盤整備）完了、フロントエンド実装Phase3（UC-002保有銘柄一覧画面＋UC-007ウィジェット、共通レイアウトのcsrf-tokenバグ修正含む）完了、Phase3の`/review`拡張レベル実施（コミット汚染・ビュー内クエリ修正）、およびフロントエンド実装Phase4（UC-003銘柄詳細画面）完了までの記録。現在進行中のタスクとは直接関係しないため参照頻度は低いが、経緯確認が必要な場合はここを見る。
+
+## 売買シグナル画面キープ表の列拡充（CHG-0046）実装完了・mainマージ済み（2026-10-04）
+
+### Decision
+
+- 発端: キープ表が6列（ヘルスラインは1行の文字列）のみで、他3テーブルの指標・色分けが見られない。本人要望で他テーブルと同じ指標（PER/PBR・財務含む）を列に分けて色付き表示する
+- ファンダメンタルズは既存データで表示可能（実データ59銘柄中ROE 40・PER 43件。nullはJ-Quantsの本決算のみ開示項目・ETF〔VYM/HDV/SPYDがstock登録〕・未取得6324による。ETF登録の件は別件として報告のみ）
+- 本人判断（推奨案）: テクニカルは利確・買い増しの既存閾値の両方に照らし利確寄り＝黄／押し目寄り＝緑。PER/PBRは値のみ（業種比較色はCHG-0034後）。ヘルスライン列は廃止
+- 設計: `SignalCriteriaEvaluator::evaluateHold()`を追加。行の拡充は`ShowHoldListAction`側（`ClassifyHoldingsAction`の出力・JSON APIは不変）
+
+### Files touched
+
+`docs/product/use-cases.md`（UC-013業務ルール・承認記録）、`docs/product/ui-guidelines.md`、`docs/rcid/traceability-matrix.md`、`app/Services/Analysis/SignalCriteriaEvaluator.php`（`evaluateHold()`）、`app/Actions/Portfolio/ShowHoldListAction.php`、`app/Actions/Portfolio/ClassifyHoldingsAction.php`（`HOLD_WATCH_GAIN_RATE_BUFFER`をpublic化のみ）、`resources/views/livewire/signal/signal-list.blade.php`、`resources/views/components/criteria-chip.blade.php`、`resources/views/components/signal-table-head.blade.php`、`tests/Unit/Services/Analysis/SignalCriteriaEvaluatorHoldTest.php`、`tests/Feature/CHG0046HoldTableRichColumnsTest.php`、`tests/Feature/CHG0028SignalHoldTableTest.php`
+
+### Status
+
+Red 28件→Gate4承認（2026-10-04）→Green。フルスイート1205 passed・pint適用済み。worktreeを8046番で起動し実ブラウザで表示確認済み（キープ59銘柄・黄/緑チップ描画、ヘッダー横スクロール同期OK）。`/review`（強化、スコア58）指摘2件を修正: 含み益率の利確ラインを利確検討と同じ`TakeProfitThresholdEvaluator`に揃える（高水準モード+150%。実データ6098が誤って黄だった）／分類と拡充の間に取り込みが重なり行が見つからない場合に画面が500になる経路を既定行で回避。Red 3件→Gate4承認→Green、フルスイート1209 passed。再`/review`（8ff7357）後にmainへ--no-ffマージ。ブランチ`feat/chg0046-hold-table-rich-columns`（worktree `.claude/worktrees/chg0046`）
+
+## ウォッチリスト銘柄のセクター分類（CHG-0044・ADR-0020追補）Green完了・mainマージ済み（2026-10-03〜10-04）
+
+### Decision
+
+- 発端: 未分類が日本株64・米国株43残る。内訳はウォッチリスト（未保有）日本株64・米国株40と、保有の米国ETF3件。UC-012の一括更新は業種を保存しておらず、`sectors:backfill`も保有のみが対象だった
+- 本人判断: Aのみ進める（ウォッチリスト銘柄を一括更新と`sectors:backfill`の対象に加える）。米国ETF専用カテゴリ（B）は今回対象外
+- 設計: ADR-0020追補D6。`SectorClassificationResolver`を流用
+
+### Files touched
+
+`docs/adr/ADR-0020-*.md`（追補）、`docs/product/use-cases.md`（UC-012フロー・承認記録）、`app/Actions/Watchlist/RefreshWatchlistMarketDataAction.php`、`app/Console/Commands/BackfillSectorsCommand.php`、`app/Services/Sector/SectorClassificationResolver.php`、`tests/Feature/CHG0044WatchlistSectorClassificationTest.php`
+
+### Status
+
+Red 8件（3件は回帰ガード）→Gate4承認→Green。フルスイート1070 passed・pint適用済み。分類ロジックは`SectorClassificationResolver::classify()`に集約（一括更新・`sectors:backfill`が共用）。mainにマージ済み（`9b61d75`）。`sectors:backfill`を実データで実行した（2026-10-04）: 対象は未分類の6件（米国ETF5件〔HDV・SPYD・VYM・QQQ・VTI〕とBRK B）で、分類できたのは0件。日本株は実行前に全件分類済みだった。残り6件は本人判断で当面対応不要（ETFはB案で対象外、BRK Bは銘柄コードの表記〔半角スペース〕が原因の可能性があるが未調査）。**未実施**: `/review`
+
+Red 8件（3件は回帰ガード）→Gate4承認→Green。フルスイート1070 passed・pint適用済み。分類ロジックは`SectorClassificationResolver::classify()`に集約（一括更新・`sectors:backfill`が共用）。**未実施**: `/review`、`sectors:backfill`の実データ実行、コミット。worktree: `.claude/worktrees/chg0044`（Vite成果物`public/build`と`vendor`のハードリンクコピーを手で持ち込んで実行。コミット対象外）
 
 ## 売買シグナル画面の供給元Action二重実行の解消（CHG-0032）実装完了・mainマージ済み（2026-10-03）
 
