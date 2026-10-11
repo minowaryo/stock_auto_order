@@ -85,7 +85,7 @@ Gate 0〜4とは独立して: **アプリのユーザー向けの挙動を実質
 - Gate 2 通過前のコード生成
 - Gate 4 通過前の実装（Greenフェーズ）着手（テストケース承認前の実装コード生成）
 - コード先行（ドキュメント未確認での実装）
-- `.claude/rules/70-git.md` に反するGit操作（自律的なcommit/push、force push、一括コミット）
+- `.claude/rules/70-git.md` / `docs/development/git-workflow.md` に反するGit操作（自律的なcommit/push、force push、一括コミット）
 - テストなし実装（バグ修正には再発防止テストを必ず追加）
 - スコープ外ファイルの編集
 - secrets・本番資格情報をプロンプトに含める
