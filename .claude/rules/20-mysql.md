@@ -25,7 +25,7 @@ Step 3: カラム削除マイグレーション実行
 
 ### LaravelのMigrationでの注意
 ```php
-// OK: utf8mb4 を明示
+// OK: utf8mb4 / utf8mb4_unicode_ci は config/database.php から適用される（「文字コード」参照）
 Schema::create('users', function (Blueprint $table) {
     $table->id();
     $table->string('name');
@@ -53,8 +53,9 @@ Schema::create('users', function (Blueprint $table) {
 
 ## クエリ方針
 
-- Eloquent Builderを優先する
-- 生SQLが必要な場合はコメントで理由を記載
+- Eloquent / Query Builder を優先する。生SQLに関するルールはここに一本化する（`10-laravel.md` と `40-security.md` はここを参照する）:
+  - 生の式（`DB::select`、`selectRaw`、`whereRaw`、`orderByRaw`、`DB::raw` など）は、パラメータバインディング（`?` または名前付き）を使う場合に限り許可する——入力をSQLに連結・埋め込みしてはならない——また、Builderでは足りなかった理由をコメントで記載する
+  - `DB::statement()` / `DB::unprepared()` はADR必須
 - `EXPLAIN` で実行計画を確認してからリリース
 - N+1クエリは必ず解消する（`with()` でEager Loading）
 - `SELECT *` を避ける（必要なカラムのみ取得）

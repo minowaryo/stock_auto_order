@@ -15,11 +15,11 @@
 | 項目 | 規則 |
 |---|---|
 | 配置場所 | `tests/e2e/` |
-| ファイル名 | `{UC番号}-{フロー概要}.spec.ts`（例: `uc01-user-registration.spec.ts`） |
+| ファイル名 | `uc{UC番号}-{フロー概要}.spec.ts`（例: `uc001-user-registration.spec.ts`） |
 | テスト名 | `use-cases.md` のUCタイトルを基に日本語で記述 |
 
 ```ts
-// tests/e2e/uc01-user-registration.spec.ts
+// tests/e2e/uc001-user-registration.spec.ts
 import { test, expect } from '@playwright/test';
 
 test('ユーザーは会員登録フォームからアカウントを作成できる', async ({ page }) => {
@@ -56,7 +56,7 @@ npx playwright install
 npx playwright test
 
 # 特定ファイルのみ
-npx playwright test tests/e2e/uc01-user-registration.spec.ts
+npx playwright test tests/e2e/uc001-user-registration.spec.ts
 
 # 直近の実行結果レポート表示（成功/失敗一覧・スクリーンショット・動画）
 npx playwright show-report

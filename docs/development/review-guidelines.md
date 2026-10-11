@@ -27,7 +27,9 @@
 - [ ] `php artisan test` が通るか
 - [ ] クリティカルフローに変更がある場合、Playwright E2Eテストを追加し `npx playwright test` が通るか
 - [ ] `./vendor/bin/pint` でコードスタイルを整えたか
+- [ ] `./vendor/bin/phpstan analyse` が通るか（Larastan 導入済みの場合——`docs/development/ai-workflow.md` の「品質ゲート」参照）
 - [ ] マイグレーションに危険な操作がないか
+- [ ] DB変更の場合、`docs/architecture/data-model.md` を更新したか。設計判断の場合、ADRがあるか
 - [ ] secrets・PII がコードに含まれていないか
 - [ ] 関係ないファイルを編集していないか
 - [ ] Vue コンポーネントが `<script setup>` + Composition API になっているか（Vue+Inertia選定時かつフロントエンド変更がある場合。他スタック選定時は該当ルールファイルの規約に従っているか）
@@ -49,6 +51,7 @@
 ### セキュリティ
 - [ ] バリデーションが適切か
 - [ ] 認可チェックがあるか
+- [ ] 新しいエンドポイントが認証ミドルウェアの内側にあるか
 - [ ] secrets が含まれていないか
 - [ ] ログに PII が出ていないか
 - [ ] 特権操作・破壊的操作が固定最小スキーマで `audit` チャンネルに記録されているか（`.claude/rules/40-security.md`）

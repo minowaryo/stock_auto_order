@@ -5,8 +5,8 @@
 ## 基本方針
 
 - PSR-12 準拠
-- Laravel Pint でフォーマット（CI必須）
-- PHPStan Level 6 以上をクリア
+- Laravel Pint でフォーマット（マージ前に `./vendor/bin/pint --test` がパスすること）
+- PHPStan（Larastan）レベル6以上をクリア（導入済みの場合）——`docs/development/ai-workflow.md` の「品質ゲート」参照
 
 ## PHP
 

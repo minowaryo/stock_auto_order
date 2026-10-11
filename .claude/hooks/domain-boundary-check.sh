@@ -133,6 +133,47 @@ REPORT=$(printf '%s\n' "${FILES[@]}" | awk \
   -v check_persistence="$CHECK_PERSISTENCE" \
   -v check_role="$CHECK_ROLE" \
   -v check_density="$CHECK_DENSITY" '
+  BEGIN {
+    # Arguments are matched one nesting level at a time: each pass collapses the
+    # innermost "(...)" to "<>", so a chain is recognised however deep its arguments go.
+    NAME   = "[A-Za-z_][A-Za-z0-9_]*"
+    ARGS   = "(\\([^()]*\\)|<>)?"
+    CHAIN  = "(->" NAME ARGS ")*"
+    CALL   = WRITES "[[:space:]]*(\\(|<>)"
+    WRITE_VAR    = "\\$" NAME ARGS CHAIN "->" CALL
+    WRITE_STATIC = "[A-Z][A-Za-z0-9_]*::(" CALL "|" NAME ARGS CHAIN "->" CALL ")"
+    SELF_RE   = "\\$this->" NAME ARGS
+    FACADE_RE = "(Storage|Cache|Session|Cookie|Log|Config|Redis|Mail|Queue|Bus|Event|Http|File|Artisan)::" NAME ARGS CHAIN
+    ROLE_CHAIN = "[$A-Za-z_][A-Za-z0-9_>()$-]*->role([^A-Za-z0-9_]|$)"
+  }
+  function is_code(s) {
+    if (s ~ /^[[:space:]]*$/) return 0
+    if (s ~ /^[[:space:]]*(\/\/|#|\*|\/\*)/) return 0
+    if (s ~ /^[[:space:]]*use[[:space:]]/) return 0
+    return 1
+  }
+  function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+  # Replace $v (but not $vFoo) with a marker, so calls on an injected collaborator are not writes.
+  function blank_var(s, v,    out, pat, p, after) {
+    out = ""; pat = "$" v
+    while ((p = index(s, pat)) > 0) {
+      after = substr(s, p + length(pat), 1)
+      if (after ~ /[A-Za-z0-9_]/) out = out substr(s, 1, p + length(pat) - 1)
+      else                        out = out substr(s, 1, p - 1) "@INJECTED@"
+      s = substr(s, p + length(pat))
+    }
+    return out s
+  }
+  function has_write(s,    prev) {
+    while (1) {
+      gsub(SELF_RE, "@SELF@", s)
+      gsub(FACADE_RE, "@FACADE@", s)
+      if (s ~ WRITE_VAR || s ~ WRITE_STATIC) return 1
+      prev = s
+      gsub(/\([^()]*\)/, "<>", s)
+      if (s == prev) return 0
+    }
+  }
   function flush_method() {
     if (cur_method != "" && cur_branches > peak_branches) {
       peak_branches = cur_branches
@@ -157,46 +198,74 @@ REPORT=$(printf '%s\n' "${FILES[@]}" | awk \
     lineno = 0
     cur_method = ""; cur_branches = 0; peak_branches = 0; peak_method = ""
     n_authz = 0; n_role = 0; n_write = 0
+    split("", injected)
 
+    n = 0
     while ((rc = (getline line < filename)) > 0) {
-      lineno++
       sub(/\r$/, "", line)
+      src[++n] = line
+    }
+    close(filename)
 
-      # Comments and imports are not executable code.
-      if (line ~ /^[[:space:]]*(\/\/|#|\*|\/\*)/) continue
-      if (line ~ /^[[:space:]]*use[[:space:]]/)   continue
+    i = 1
+    while (i <= n) {
+      # Comments, blank lines, and imports are not executable code.
+      if (!is_code(src[i])) { i++; continue }
+
+      # A line starting with "->" continues the previous statement; join them so a
+      # chain split over lines is judged whole. Findings report the first line.
+      lineno = i
+      line = trim(src[i])
+      i++
+      for (j = i; j <= n; j++) {
+        if (!is_code(src[j])) continue
+        if (src[j] !~ /^[[:space:]]*\??->/) break
+        line = line trim(src[j])
+        i = j + 1
+      }
+
+      # Named methods reset the per-method state; closures (function without a name) do not.
+      if (line ~ /(^|[^[:alnum:]_])function[[:space:]]+[A-Za-z_]/) {
+        flush_method()
+        cur_method = line
+        cur_branches = 0
+        split("", injected)
+      }
+      # Parameters type-hinted as a Service / Action are sanctioned collaborators.
+      t = line
+      while (match(t, /[A-Za-z0-9_\\]*(Service|Action)[[:space:]]+\$[A-Za-z_][A-Za-z0-9_]*/)) {
+        v = substr(t, RSTART, RLENGTH)
+        sub(/^.*\$/, "", v)
+        injected[v] = 1
+        t = substr(t, RSTART + RLENGTH)
+      }
 
       if (check_density == 1) {
-        # Named methods reset the counter; closures (function without a name) do not.
-        if (line ~ /(^|[^[:alnum:]_])function[[:space:]]+[A-Za-z_]/) {
-          flush_method()
-          cur_method = line
-          sub(/^[[:space:]]+/, "", cur_method)
-          cur_branches = 0
-        }
         t = line
         cur_branches += gsub(/(^|[^[:alnum:]_])(if|elseif|foreach|for|while|switch|match)[[:space:]]*\(/, "", t)
         t = line
         cur_branches += gsub(/&&|\|\|/, "", t)
       }
 
-      # Blank out the two sanctioned shapes before testing, so that a write call
-      # merely *sharing a line* with them is still caught. (A line-wide "contains
-      # $this->" exclusion would let `$order->update([... $this->foo])` through.)
+      # Blank out the sanctioned shapes before testing, so that a write call merely
+      # *sharing a line* with them is still caught. (A line-wide "contains $this->"
+      # exclusion would let `$order->update([... $this->foo])` through.)
       probe = line
-      gsub(/\$this->[A-Za-z_][A-Za-z0-9_]*(\([^)]*\))?/, "@SELF@", probe)
-      gsub(/(Storage|Cache|Session|Cookie|Log|Config|Redis|Mail|Queue|Bus|Event|Http|File|Artisan)::[A-Za-z_][A-Za-z0-9_]*(\([^)]*\))?(->[A-Za-z_][A-Za-z0-9_]*(\([^)]*\))?)*/, "@FACADE@", probe)
+      gsub(/\?->/, "->", probe)
+      for (v in injected) probe = blank_var(probe, v)
+      gsub(SELF_RE, "@SELF@", probe)
+      gsub(FACADE_RE, "@FACADE@", probe)
 
       is_db    = (probe ~ /(^|[^[:alnum:]_>$])DB::/ || probe ~ /app\([[:space:]]*['"'"'"]db['"'"'"]/)
-      is_write = (probe ~ ("\\$[A-Za-z_][A-Za-z0-9_]*(\\([^)]*\\))?(->[A-Za-z_][A-Za-z0-9_]*(\\([^)]*\\))?)*->" WRITES "[[:space:]]*\\(") || \
-                  probe ~ ("[A-Z][A-Za-z0-9_]*::" WRITES "[[:space:]]*\\("))
-      is_role  = (line ~ /->role[[:space:]]*(===|!==|==|!=)/ || \
+      is_write = has_write(probe)
+      is_role  = (line ~ /->role(->value)?[[:space:]]*(===|!==|==|!=)/ || \
+                  line ~ ("(===|!==|==|!=)[[:space:]]*" ROLE_CHAIN) || \
                   line ~ /->(is_admin|isAdmin|hasRole|hasAnyRole|hasPermission)/ || \
-                  line ~ /in_array\([[:space:]]*\$[A-Za-z_][A-Za-z0-9_]*->role/)
+                  line ~ ("in_array\\([[:space:]]*" ROLE_CHAIN))
 
       # Per-file tallies for the priority signal below. Counted independently of the
       # rule-group toggles and of which category wins for this line.
-      if (line ~ /\$this->authorize\(|Gate::|authorizeResource\(/) n_authz++
+      if (line ~ /\$this->authorize\(|Gate::|authorizeResource\(|->(can|cannot|cant)\(/) n_authz++
       if (is_db || is_write) n_write++
       if (is_role) n_role++
 
@@ -208,7 +277,7 @@ REPORT=$(printf '%s\n' "${FILES[@]}" | awk \
       if (hit == "" && check_role == 1 && is_role) hit = "role-check"
       if (hit != "") report(hit, line)
     }
-    close(filename)
+    split("", src)
 
     # getline returns -1 when the file cannot be read; report it instead of counting
     # an unreadable file as clean.
@@ -221,7 +290,7 @@ REPORT=$(printf '%s\n' "${FILES[@]}" | awk \
     # this was tested against (see ADR-0011).
     if (n_write > 0 && n_role > 0 && n_authz == 0) {
       priority++
-      priority_report = priority_report sprintf("    %s\n      %d write(s) + %d inline role check(s), and no authorize()/Gate call anywhere in the file\n", \
+      priority_report = priority_report sprintf("    %s\n      %d write(s) + %d inline role check(s), and no authorize()/Gate/can() call anywhere in the file\n", \
                         filename, n_write, n_role)
     }
 
