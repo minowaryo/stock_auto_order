@@ -2,6 +2,8 @@
 
 namespace App\Services\TradeReview;
 
+use App\Models\Holding;
+use App\Models\IndexWeeklyPrice;
 use App\Models\TradeExecution;
 use App\Services\MarketData\WeekDateNormalizer;
 use App\Services\TradeReview\Support\PortfolioWeek;
@@ -18,6 +20,11 @@ use Illuminate\Support\Collection;
 class TradeComparisonCalculator
 {
     private const HORIZONS = [4, 13, 26];
+
+    /** A composition holding without a price is dropped only while its weight stays at or under this. */
+    private const MAX_DROPPED_WEIGHT = 0.05;
+
+    private const INDEX_FOR_MARKET = ['jp' => 'nikkei225', 'us' => 'sp500'];
 
     public function __construct(
         private readonly SwitchAllocator $allocator,
@@ -81,6 +88,178 @@ class TradeComparisonCalculator
         }
 
         return $result;
+    }
+
+    /**
+     * Each buy's new money (what the estimated switches did not cover)
+     * against buying more of the same market's holdings in proportion to
+     * their value at the end of the week before (the bought holding
+     * included), and against the market index (reference). Routine buys are
+     * never compared.
+     *
+     * @param  array<string, PortfolioWeek>  $weeks
+     * @return list<TradeComparison>
+     */
+    public function buys(array $weeks): array
+    {
+        $buys = TradeExecution::query()->where('kind', 'buy')->orderBy('trade_date')->orderBy('id')->get();
+        $allocated = [];
+
+        foreach ($this->allocator->allocate() as $part) {
+            $allocated[$part['buy_id']] = ($allocated[$part['buy_id']] ?? 0.0) + $part['amount_jpy'];
+        }
+
+        $splits = SplitData::load($buys->pluck('holding_id')->unique()->values()->all());
+        $markets = Holding::query()->pluck('market', 'id')->all();
+        $indices = $this->indexSeries();
+        $result = [];
+
+        foreach ($buys as $buy) {
+            $cost = SwitchAllocator::amountJpy($buy);
+            $newMoney = $cost - ($allocated[$buy->id] ?? 0.0);
+
+            if ($newMoney <= 1e-9) {
+                continue;
+            }
+
+            $buyWeek = $this->weeks->weekStart($buy->trade_date->toDateString());
+            $composition = $this->composition($weeks[Carbon::parse($buyWeek)->subWeek()->toDateString()] ?? null, $markets, $buy->market);
+            $shares = (float) $buy->quantity * $splits->factor($buy->holding_id, $buy->trade_date->toDateString());
+
+            foreach ($this->evaluations($buy, $weeks) as [$horizon, $week, $status]) {
+                $result[] = $this->buyComparison($buy, $horizon, $week, $status, $newMoney, $cost, $shares, $composition, $weeks[$buyWeek] ?? null, $weeks[$week] ?? null, $indices, $splits);
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param  array<int, float>  $composition  holding_id => value at the end of the week before
+     * @param  array<string, array<string, float>>  $indices
+     */
+    private function buyComparison(TradeExecution $buy, int $horizon, string $week, string $status, float $newMoney, float $cost, float $shares, array $composition, ?PortfolioWeek $buyWeek, ?PortfolioWeek $evaluation, array $indices, SplitData $splits): TradeComparison
+    {
+        $make = fn (string $status, ?string $reason, ?float $actual = null, ?float $hold = null, ?float $index = null) => new TradeComparison(
+            tradeId: $buy->id,
+            type: 'buy',
+            horizon: $horizon,
+            evaluationWeek: $week,
+            status: $status,
+            reason: $reason,
+            baseJpy: $newMoney,
+            actualJpy: $actual,
+            holdJpy: $hold,
+            diffJpy: $actual !== null && $hold !== null ? $actual - $hold : null,
+            diffRate: $actual !== null && $hold !== null ? ($actual - $hold) / $newMoney : null,
+            indexJpy: $index,
+            diffIndexJpy: $actual !== null && $index !== null ? $actual - $index : null,
+        );
+
+        if ($status === 'pending') {
+            return $make('pending', null);
+        }
+
+        if (isset($splits->unreliable[$buy->holding_id])) {
+            return $make('unavailable', $splits->unreliable[$buy->holding_id]);
+        }
+
+        $price = $evaluation?->pricesJpy[$buy->holding_id] ?? null;
+
+        if ($price === null) {
+            return $make('unavailable', 'no_price');
+        }
+
+        $actual = $newMoney * $shares * $price / $cost;
+        $index = $this->indexValue($indices, $buy->market, $buyWeek?->week, $week, $newMoney);
+
+        if ($composition === []) {
+            return $make('unavailable', 'no_holdings', $actual, null, $index);
+        }
+
+        $hold = $this->proportionalValue($composition, $newMoney, $buyWeek, $evaluation);
+
+        return $hold === null
+            ? $make('unavailable', 'no_price', $actual, null, $index)
+            : $make('ok', null, $actual, $hold, $index);
+    }
+
+    /**
+     * @param  array<int, string>  $markets
+     * @return array<int, float>
+     */
+    private function composition(?PortfolioWeek $week, array $markets, string $market): array
+    {
+        return array_filter(
+            $week?->holdingValuesJpy ?? [],
+            fn (float $value, int $id) => $value > 0 && ($markets[$id] ?? null) === $market,
+            ARRAY_FILTER_USE_BOTH,
+        );
+    }
+
+    /**
+     * The new money spread over the composition at the buy week's prices,
+     * valued at the evaluation week. Holdings without either price are
+     * dropped and the rest re-weighted, unless more than 5% would be dropped.
+     *
+     * @param  array<int, float>  $composition
+     */
+    private function proportionalValue(array $composition, float $newMoney, ?PortfolioWeek $buyWeek, ?PortfolioWeek $evaluation): ?float
+    {
+        $total = array_sum($composition);
+        $kept = array_filter(
+            $composition,
+            fn (int $id) => isset($buyWeek?->pricesJpy[$id], $evaluation?->pricesJpy[$id]),
+            ARRAY_FILTER_USE_KEY,
+        );
+        $keptTotal = array_sum($kept);
+
+        if ($keptTotal <= 0 || ($total - $keptTotal) / $total > self::MAX_DROPPED_WEIGHT + 1e-12) {
+            return null;
+        }
+
+        $value = 0.0;
+
+        foreach ($kept as $id => $weightValue) {
+            $value += $newMoney * $weightValue * $evaluation->pricesJpy[$id] / ($keptTotal * $buyWeek->pricesJpy[$id]);
+        }
+
+        return $value;
+    }
+
+    /**
+     * @param  array<string, array<string, float>>  $indices
+     */
+    private function indexValue(array $indices, string $market, ?string $buyWeek, string $week, float $newMoney): ?float
+    {
+        $name = self::INDEX_FOR_MARKET[$market] ?? null;
+        $base = $buyWeek === null || $name === null ? null : ($indices[$name][$buyWeek] ?? null);
+        $end = $name === null ? null : ($indices[$name][$week] ?? null);
+
+        if ($market === 'us' && $base !== null && $end !== null) {
+            $baseFx = $indices['usdjpy'][$buyWeek] ?? null;
+            $endFx = $indices['usdjpy'][$week] ?? null;
+            [$base, $end] = $baseFx === null || $endFx === null ? [null, null] : [$base * $baseFx, $end * $endFx];
+        }
+
+        return $base === null || $end === null || $base <= 0 ? null : $newMoney * $end / $base;
+    }
+
+    /**
+     * @return array<string, array<string, float>> index_name => [week => close]
+     */
+    private function indexSeries(): array
+    {
+        $series = [];
+
+        IndexWeeklyPrice::query()
+            ->whereIn('index_name', ['nikkei225', 'sp500', 'usdjpy'])
+            ->get(['index_name', 'week_date', 'close'])
+            ->each(function (IndexWeeklyPrice $row) use (&$series) {
+                $series[$row->index_name][$row->week_date->toDateString()] = (float) $row->close;
+            });
+
+        return $series;
     }
 
     /**
