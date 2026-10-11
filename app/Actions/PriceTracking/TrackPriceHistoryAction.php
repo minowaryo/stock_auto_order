@@ -171,7 +171,7 @@ class TrackPriceHistoryAction
      */
     private function indexIsCurrent(string $indexName): bool
     {
-        $lastConfirmed = $this->weeks->weekStart(now()->subDays(7)->toDateString());
+        $lastConfirmed = $this->weeks->lastConfirmedWeek();
 
         $row = IndexWeeklyPrice::query()
             ->where('index_name', $indexName)
@@ -192,7 +192,7 @@ class TrackPriceHistoryAction
      */
     private function candidates(): Collection
     {
-        $lastConfirmed = $this->weeks->weekStart(now()->subDays(7)->toDateString());
+        $lastConfirmed = $this->weeks->lastConfirmedWeek();
         $since = Carbon::parse($lastConfirmed)->subWeeks(self::SIGNAL_WEEKS)->toDateString();
 
         return Holding::query()
