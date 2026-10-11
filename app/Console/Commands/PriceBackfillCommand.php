@@ -3,7 +3,9 @@
 namespace App\Console\Commands;
 
 use App\Actions\PriceTracking\BackfillPriceHistoryAction;
+use App\Services\PriceTracking\PriceFetchRunner;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * UC-018 (F-017 / ADR-0024 D5) の初回の価格一括補完を手動で実行する。
@@ -17,6 +19,23 @@ class PriceBackfillCommand extends Command
     protected $description = '売買履歴の銘柄と指数・ドル円の過去10年の週足を一括取得する（UC-018 / F-017）';
 
     public function handle(BackfillPriceHistoryAction $action): int
+    {
+        $lock = Cache::lock(PriceFetchRunner::LOCK, PriceFetchRunner::LOCK_SECONDS);
+
+        if (! $lock->get()) {
+            $this->info('ほかの価格の取得が実行中のため、何もせずに終了します。');
+
+            return self::SUCCESS;
+        }
+
+        try {
+            return $this->backfill($action);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function backfill(BackfillPriceHistoryAction $action): int
     {
         $dryRun = (bool) $this->option('dry-run');
         $summary = $action->execute($dryRun);

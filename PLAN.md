@@ -161,7 +161,11 @@ Red 16件→Gate4承認→Green。フルスイート1226 passed・pint適用済�
 - [x] Gate 4 Cycle 6b（価格の保存と追跡状態）: テスト27件を本人承認→Green（`price_tracking_targets`〔`track_until_week`をnullable・`splits_incomplete`追加を承認〕・`stock_splits`・`usdjpy`、`PriceTrackingTargetUpdater`・`StockSplitRecorder`）。`/review`で、分割を取得しない取得が分割情報欠損の記録を消す潜在バグを発見し、再発防止テストを先に書いて修正（`applyFetch`の`splitsFetched`）。main マージ・push済み（2026-10-09、`2b38918`）、開発DBにマイグレーション3本を適用済み。
 - [x] Yahooの実データ検証: 全銘柄404の障害は約15分で復旧（2026-10-05 18:29〜18:43 UTC。直前の連続アクセスによる一時遮断の可能性）。復旧後、英字を含む国内コード（`285A.T`）は取得できた（上場が新しく96週）。米国のクラス株は売買履歴になく、6cでは変換しない（現れても「銘柄なし」として記録される）。保有20銘柄の10年分を1.5秒間隔で連続取得して全件成功（平均0.40秒）。
 - [x] Gate 4 Cycle 6c（初回の一括補完）: テスト14件を本人承認→Green、`/review`で保存を確認できなかった経路のテスト1件を追加（計15件）（`BackfillPriceHistoryAction`・`php artisan price:backfill {--dry-run}`）。対象は売買履歴に現れた銘柄＋日経225・S&P500・ドル円。追跡期限を最後の売却・シグナル発生から登録し、取得ごとに1.5秒空け、取得失敗が5回続いたら中断（Yahooの応答を挟めば継続）。補完済み・取得不能は再実行で飛ばす。失敗は銘柄ID・指数名と結果だけを警告ログに残す。ブランチ `feat/chg0033-price-backfill`。**実行には先に売買履歴CSVの取込が必要**（開発DBの売買履歴は0件）。
-- [ ] 次: 6d: 毎週の追跡→UC-018の算出（年率・売却/推定乗換え/買付比較）。UC-019はGate 2保留。
+- [x] 初回の一括補完を開発DBで実行（2026-10-09、`286c9c7`でmainマージ・push済み）: 1回目は成功138・銘柄なし1・失敗5で中断（失敗5件はこちらのネットワークの一時不調による接続タイムアウト・接続不可・名前解決失敗で、約30秒間に集中。Yahooの遮断ではなく、5回連続での中断は設計どおりに働いた）。通信の回復を確認して再実行し、未完了の8銘柄を取得（成功6・銘柄なし2）。結果: 146銘柄中144銘柄の週足を取得（最古2016-10、分割110件〔77銘柄〕、`splits_incomplete`は0件）、日経225・S&P500・ドル円は約520週。**銘柄なしは2銘柄**（米国1・国内1。いずれも上場廃止・非上場化とみられるが、未確認）で、3回連続になった時点で取得不能になる。
+- [x] Gate 4 Cycle 6d（毎週の追跡）: テスト19件を本人承認→Green。定期実行の登録テストは、本人の使い方（週末中心・不定期、cronなし）に合わせて「起動スクリプトが応答確認後に`price:track`を後ろで実行する」へ置換（本人承認）。追加要望の二重起動防止・同日再起動の軽量化のテスト5件を本人承認→Green（計24件）。`TrackPriceHistoryAction`・`php artisan price:track {--dry-run} {--include-unavailable}`。追跡中の銘柄は10年分＋分割で取り直す（分割で過去の終値が遡って変わるため。ADR-0024 D6に追記）。確定後に保存済みの銘柄・指数は取得しない。`price:track`と`price:backfill`は同じロックを共有。6cの取得処理を`PriceFetchRunner`・`PriceTrackingRegistrar`に切り出し。開発DBでのdry run: 対象136銘柄。ブランチ `docs/chg0033-backfill-run`（6cの実行記録の上）。
+- [x] Gate 3（2026-10-10 本人承認）→Gate 4 Cycle 6e（分割の整合）: テスト12件を本人承認→Green。6dのレビューで見つけた、保有・ウォッチリストの104週更新が分割後に古い週とずれる問題〔HIGH〕への対応。保有・ウォッチリストの更新が同じ1リクエストで分割を受け取り記録し、`price:track`が`price_tracking_targets.full_history_fetched_at`より後に記録された分割のある補完済み銘柄を10年分取り直す（マイグレーション1本）。実際のYahooで、2年分の取得に分割（5706の2026-09-29、10:1）が入ることを確認。初回の`price:track`で、分割のある補完済み銘柄（77銘柄）を1回ずつ取り直す。ブランチ `docs/chg0033-6e-and-plan-archive`。
+- [x] Cycle 6eのマージ・初回の`price:track`実行（2026-10-11）: `6039fd4`でmainマージ・push済み、開発DBにマイグレーション1本を適用、共有のチェックアウトを`6039fd4`へ更新しキューを再起動（以後、アプリ起動時に`price:track`が自動で後ろ実行される）。初回の実行は約3分半・終了コード0: 追跡136銘柄（シグナル由来22銘柄を新規登録）、分割で10年分を取り直し77銘柄、保存済みで取得不要50、成功99、銘柄なし2（米国`CYBR`は3回連続で取得不能に、国内`9613`は2回目）、失敗0。記録済みの分割は127件（90銘柄）。実行後の確認だけの実行で、分割による取り直しは0件。
+- [ ] 次: UC-018の算出。**設計に入れる点（6eのレビューで判明）**: CSV取込の直後から次の`price:track`までは、保有銘柄の直近104週だけが分割後の値で古い週は分割前のまま残る。`full_history_fetched_at`より後に記録された分割がある銘柄は「取り直し待ち」として扱い、その銘柄の結果は算出不可にする。→UC-018の算出（年率・売却/推定乗換え/買付比較）。UC-019はGate 2保留。
 - [ ] Gate 4でUC名から導くテストケース（26週境界、取得失敗、価格補完後のUC-014再集計、二重集計防止の計算例、年率20％／25％境界）を承認してから実装する。
 
 ## メガトレンド候補発見（CHG-0031・ADR-0022／ADR-0025・F-016／UC-016）main統合済み・情報源試行中（2026-10-09）
@@ -276,21 +280,6 @@ Red 28件→Gate4承認（2026-10-04）→Green。フルスイート1205 passed�
 Red 8件（3件は回帰ガード）→Gate4承認→Green。フルスイート1070 passed・pint適用済み。分類ロジックは`SectorClassificationResolver::classify()`に集約（一括更新・`sectors:backfill`が共用）。mainにマージ済み（`9b61d75`）。`sectors:backfill`を実データで実行した（2026-10-04）: 対象は未分類の6件（米国ETF5件〔HDV・SPYD・VYM・QQQ・VTI〕とBRK B）で、分類できたのは0件。日本株は実行前に全件分類済みだった。残り6件は本人判断で当面対応不要（ETFはB案で対象外、BRK Bは銘柄コードの表記〔半角スペース〕が原因の可能性があるが未調査）。**未実施**: `/review`
 
 Red 8件（3件は回帰ガード）→Gate4承認→Green。フルスイート1070 passed・pint適用済み。分類ロジックは`SectorClassificationResolver::classify()`に集約（一括更新・`sectors:backfill`が共用）。**未実施**: `/review`、`sectors:backfill`の実データ実行、コミット。worktree: `.claude/worktrees/chg0044`（Vite成果物`public/build`と`vendor`のハードリンクコピーを手で持ち込んで実行。コミット対象外）
-
-## 売買シグナル画面の供給元Action二重実行の解消（CHG-0032）実装完了・mainマージ済み（2026-10-03）
-
-### Decision
-
-- CHG-0027/0028の既知の懸念（描画ごとに`ClassifyHoldingsAction`が利確・買い増し・整理検討の3 Actionを二重実行）を解消。画面表示は変えない（性能のみ・ユーザー向け挙動変更なし）
-- 契約: `ClassifyHoldingsAction::execute(?array $lossReviewRows, ?array $takeProfitRows, ?array $addOnRows)`と`ShowHoldListAction::execute($sort, …同3引数)`に任意引数を追加。`SignalList`が取得済みの行を渡す。null引数は従来どおり自前実行（UC-009/UC-013の既存呼び出しは無変更）。空配列は「該当なし」
-
-### Files touched
-
-`app/Actions/Portfolio/ClassifyHoldingsAction.php`、`app/Actions/Portfolio/ShowHoldListAction.php`、`app/Livewire/Signal/SignalList.php`、`tests/Feature/CHG0032SignalListSingleExecutionTest.php`
-
-### Status
-
-Red 6件（失敗4・回帰ガード2）→Gate4承認（2026-10-03）→Green。フルスイート1062 passed・pint適用済み。SignalListの修正だけを戻すとRed2件が再発することを確認。`run`（`/signals`を実データでmainと比較し本文が完全一致）実施済み・`/review`はスキップ（スコア19・recommended、本人指示）。mainへマージ済み（`--no-ff`、`Tests: 1062 passed`）。同日、CHG-0029の`sectors:backfill`を開発DBで実行済み（最新スナップショットの未分類3件はいずれも米国ETF〔HDV/SPYD/VYM、`instrument_type`は`stock`〕でFinnhubが業種を返さず0件分類。想定どおり）。
 
 ## 今後の対応（未着手）（2026-08-27追記、Phase5の実ブラウザ確認時に発見）
 

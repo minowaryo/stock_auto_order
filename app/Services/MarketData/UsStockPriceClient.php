@@ -18,4 +18,9 @@ final class UsStockPriceClient implements UsStockPriceClientInterface
     {
         return $this->client->fetchWeeklyHistory($symbolCode, self::DEFAULT_WEEKS);
     }
+
+    public function fetchWeeklyPriceHistoryWithSplits(string $symbolCode): PriceHistory
+    {
+        return $this->client->fetchWeeklyHistoryWithSplits($symbolCode, self::DEFAULT_WEEKS);
+    }
 }

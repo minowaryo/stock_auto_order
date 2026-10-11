@@ -116,6 +116,13 @@ goto wait_app
 :app_ok
 echo   App responded OK
 
+rem Weekly price tracking for the trade review (UC-018). The app is used
+rem irregularly, so it runs on every start instead of on a clock. Detached
+rem (-d): startup does not wait; the result goes to storage/logs/laravel.log.
+rem Rerunning is cheap: holdings already saved are not requested again.
+echo [4/4] Starting price tracking in the background...
+wsl -d %WSL_DISTRO% -- bash -lc "cd %WSL_PROJECT_DIR% && docker compose exec -d laravel.test php artisan price:track" >nul 2>&1
+
 :open
 start "" "%APP_URL%"
 echo.
