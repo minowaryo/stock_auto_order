@@ -2,6 +2,7 @@
 
 namespace App\Services\MarketData;
 
+use Carbon\CarbonInterface;
 use DateTimeImmutable;
 use InvalidArgumentException;
 
@@ -18,6 +19,17 @@ use InvalidArgumentException;
  */
 class WeekDateNormalizer
 {
+    /**
+     * The Monday of the last week that is over: a week is confirmed once the
+     * next Monday has started (UC-018 state rules). Not weekStart() of a date
+     * a week ago — that maps a Sunday to the next week, so on a Sunday it
+     * would return the week still running (found in CHG-0033 Cycle 7a).
+     */
+    public function lastConfirmedWeek(?CarbonInterface $now = null): string
+    {
+        return ($now ?? now())->copy()->startOfWeek(CarbonInterface::MONDAY)->subWeek()->toDateString();
+    }
+
     public function weekStart(string $ymd): string
     {
         $date = DateTimeImmutable::createFromFormat('!Y-m-d', $ymd);

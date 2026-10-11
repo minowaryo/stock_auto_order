@@ -112,7 +112,7 @@ class PriceTrackingTargetUpdater
      */
     public function applySavedPrices(Holding $holding): ?PriceTrackingTarget
     {
-        $lastConfirmed = $this->weeks->weekStart(now()->subDays(7)->toDateString());
+        $lastConfirmed = $this->weeks->lastConfirmedWeek();
         $confirmedAt = Carbon::parse($lastConfirmed)->addDays(7)->startOfDay();
 
         $row = WeeklyPrice::query()
