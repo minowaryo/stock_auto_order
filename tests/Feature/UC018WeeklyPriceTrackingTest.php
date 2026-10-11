@@ -479,14 +479,15 @@ describe('UC-018 毎週の追跡: 確認だけの実行・コマンド・定期�
             ->assertExitCode(1);
     });
 
-    test('起動スクリプトは、アプリの応答を確認したあとに price:track を後ろで（起動を待たせずに）実行する', function () {
+    test('起動スクリプトは、アプリの応答を確認したあとに実行役経由で価格追跡を後ろで実行する', function () {
         // Arrange: the app is used irregularly (mostly on weekends), so the run is tied to app start, not a clock
         $script = file_get_contents(base_path('scripts/start-app.bat'));
 
         // Act
         $appOk = strpos($script, ':app_ok');
         $open = strpos($script, ':open');
-        $track = strpos($script, 'docker compose exec -d laravel.test php artisan price:track');
+        // ADR-0031: UC-016 tests verify app:on-start calls price:track first.
+        $track = strpos($script, 'docker compose exec -d laravel.test php artisan app:on-start');
 
         // Assert: detached (-d), and only on the path where the app answered
         expect($track)->not->toBeFalse();

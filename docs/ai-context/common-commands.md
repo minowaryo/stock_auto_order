@@ -166,6 +166,19 @@ docker compose exec laravel.test php artisan price:track --dry-run
 docker compose exec laravel.test php artisan price:track
 ```
 
+## 起動時の情報源確認（UC-016 / ADR-0031）
+
+```bash
+# 通常は scripts/start-app.bat が背景で起動し、価格追跡→情報源確認を直列実行。
+# 子処理が失敗しても次へ進む。手動で情報源だけを確認する場合は後者を使う。
+docker compose exec laravel.test php artisan app:on-start
+docker compose exec laravel.test php artisan research:check-sources
+# 最低間隔を無視（無効な情報源は取得しない）。画面「今すぐ確認」と同じ。
+docker compose exec laravel.test php artisan research:check-sources --force
+```
+
+源別設定は`config/research_sources.php`、有効化の根拠は[台帳](../product/megatrend-source-selection.md#起動時確認の登録状態2026-10-11)。設定変更後、設定キャッシュを使っている環境では`php artisan config:clear`を行う。起動スクリプトを使わず直接Dockerを起動した場合は、自動で`app:on-start`を実行しない。
+
 ## コード生成（Artisan）
 
 ```bash

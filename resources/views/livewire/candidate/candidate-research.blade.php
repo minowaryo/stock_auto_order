@@ -10,6 +10,70 @@
         <p role="status" class="rounded border border-green-200 bg-green-50 p-3 text-[13px] text-green-800">{{ $notice }}</p>
     @endif
 
+    <x-card>
+        <div class="mb-3 flex items-center justify-between gap-3">
+            <h2 id="source-status-heading" class="text-base font-semibold">情報源の確認状況</h2>
+            <x-btn type="button" wire:click="checkSources" wire:loading.attr="disabled" wire:target="checkSources">今すぐ確認</x-btn>
+        </div>
+        <p class="mb-3 text-[12px] text-text-secondary">一覧・RSSの入口情報です。初回取得は基準線として扱い、候補は本人が確認して記録します。</p>
+        <div class="grid gap-3 text-[13px] md:grid-cols-2" aria-labelledby="source-status-heading">
+            @forelse ($sourceStatuses as $sourceStatus)
+                @php
+                    $check = $sourceStatus['last_check'];
+                @endphp
+                <section wire:key="source-status-{{ $sourceStatus['key'] }}" class="rounded border border-app-border p-3">
+                    <h3 class="font-semibold">{{ $sourceStatus['name'] }}</h3>
+                    <p class="text-text-secondary">{{ $sourceStatus['enabled'] ? '確認対象' : '自動確認は無効' }}</p>
+                    <p>最終確認: {{ \App\Support\DisplayTime::dateTime($check?->started_at) ?? '未確認' }}</p>
+                    <p>結果: {{ match ($check?->result) { 'baseline' => '初回取得（基準線）', 'new_items' => '新着あり', 'no_new' => '新着なし', 'failed' => '失敗', default => $check ? '確認中' : '未確認' } }}</p>
+                    <p>未処理の新着: {{ $sourceStatus['unread_count'] }}</p>
+                    @if ($check?->result === 'failed')
+                        <p class="text-danger">{{ $check->error_message ?? '取得に失敗しました。' }}</p>
+                    @endif
+                    @if ($sourceStatus['failure_warning'])
+                        <p class="text-warning">取得停止中の可能性: 3回連続で失敗しています。取得経路を確認してください。</p>
+                    @endif
+                    @if ($sourceStatus['coverage_warning'])
+                        <p class="text-warning">取りこぼしの可能性: 最後の成功確認から配信範囲の目安を超えています。</p>
+                    @endif
+                </section>
+            @empty
+                <p class="text-text-secondary">情報源はまだ設定されていません。</p>
+            @endforelse
+        </div>
+        <h3 id="source-items-heading" class="mt-4 mb-2 font-semibold">取得した項目</h3>
+        @error('sourceItems') <p role="alert" class="mb-2 text-danger">{{ $message }}</p> @enderror
+        <div aria-labelledby="source-items-heading" class="space-y-2 text-[13px]">
+            @forelse ($sourceItems as $sourceItem)
+                <article wire:key="source-item-{{ $sourceItem->id }}" class="rounded border border-app-border p-3">
+                    <div class="flex flex-wrap justify-between gap-2">
+                        <div class="min-w-0">
+                            <a href="{{ $sourceItem->url }}" target="_blank" rel="noopener noreferrer" class="break-words font-medium text-primary">{{ $sourceItem->title }}</a>
+                            <p class="text-[12px] text-text-secondary">{{ config('research_sources.'.$sourceItem->source_key.'.name', $sourceItem->source_key) }}・公開 {{ \App\Support\DisplayTime::dateTime($sourceItem->published_at) ?? '不明' }}</p>
+                            <p class="text-[12px]">{{ $sourceItem->is_baseline ? '初回取得（基準線）・' : '' }}{{ match ($sourceItem->disposition) { 'recorded' => '候補に記録済み', 'ignored' => '対象外', default => '未処理' } }}</p>
+                            @if ($sourceItem->research_discovery_link_id !== null)
+                                <p class="text-[12px] text-text-secondary">既存の調査候補への関連を保持しています。</p>
+                            @endif
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            @if ($sourceItem->research_discovery_link_id === null && $sourceItem->disposition === 'unreviewed')
+                                <x-btn type="button" wire:click="useSourceItem({{ $sourceItem->id }})" wire:loading.attr="disabled">候補に記録</x-btn>
+                            @endif
+                            @if ($sourceItem->disposition === 'unreviewed')
+                                <button type="button" wire:click="ignoreSourceItem({{ $sourceItem->id }})" wire:loading.attr="disabled" class="rounded border border-app-border px-3 py-1.5">対象外</button>
+                            @else
+                                <button type="button" wire:click="restoreSourceItem({{ $sourceItem->id }})" wire:loading.attr="disabled" class="rounded border border-app-border px-3 py-1.5">未処理へ戻す</button>
+                            @endif
+                        </div>
+                    </div>
+                </article>
+            @empty
+                <p class="text-text-secondary">取得した項目はありません。</p>
+            @endforelse
+        </div>
+        <div class="mt-3">{{ $sourceItems->links() }}</div>
+    </x-card>
+
     <div class="grid gap-3 text-[13px] sm:grid-cols-4">
         <x-card><div class="text-text-secondary">元発表の件数</div><div class="mt-1 text-xl font-semibold">{{ $stats['original_events'] ?? 0 }}</div></x-card>
         <x-card><div class="text-text-secondary">確認済み上場企業</div><div class="mt-1 text-xl font-semibold">{{ $stats['verified_listed_entities'] ?? 0 }}</div></x-card>
@@ -20,6 +84,9 @@
 
     <x-card>
         <h2 class="mb-3 text-base font-semibold">公開資料から候補を記録</h2>
+        @if ($selectedSourceItemId !== null)
+            <p class="mb-3 text-[12px] text-text-secondary">選択した項目のURLを発見経路として記録します。一次資料や上場主体の確認は別途必要です。</p>
+        @endif
         <form wire:submit="saveCandidate" class="space-y-3 text-[13px]">
             <div class="grid gap-3 md:grid-cols-2">
                 <label class="block">テーマ <span class="text-danger">必須</span>
@@ -52,6 +119,10 @@
                 <label class="block">本人の確認日 <span class="text-danger">必須</span>
                     <input wire:model.blur="form.checked_on" type="date" class="mt-1 w-full rounded border border-app-border p-2">
                     @error('form.checked_on') <span class="block text-danger">{{ $message }}</span> @enderror
+                </label>
+                <label class="block">紹介元の投稿日（不明なら空欄）
+                    <input wire:model.blur="form.posted_on" type="date" class="mt-1 w-full rounded border border-app-border p-2">
+                    @error('form.posted_on') <span class="block text-danger">{{ $message }}</span> @enderror
                 </label>
             </div>
             <label class="block">自分の要約 <span class="text-danger">必須</span>
