@@ -3,12 +3,14 @@
 namespace Tests\Feature;
 
 use App\Actions\Import\ImportTradeHistoryAction;
+use App\Jobs\WarmTradeReviewCache;
 use App\Models\Holding;
 use App\Models\TradeExecution;
 use App\Models\TradeImportBatch;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use RuntimeException;
 
 /*
@@ -357,5 +359,20 @@ describe('UC-017 売買履歴の取込: 異常時とプレビュー', function (
         expect(TradeImportBatch::count())->toBe(1);
         expect(TradeExecution::orderBy('id')->get()->toArray())->toBe($executionsBefore);
         expect(Holding::count())->toBe($holdingsBefore);
+    });
+});
+
+describe('UC-017 取込の確定後、売買の振り返りの計算を作り直しておく（CHG-0033 7e、2026-10-11 本人承認）', function () {
+    test('取込を確定したら、売買の振り返りの計算の作り直しジョブを積み、プレビューでは積まない', function () {
+        // Arrange
+        Queue::fake();
+
+        // Act: a preview, then a confirmed import
+        app(ImportTradeHistoryAction::class)->preview(...tisFiles([tisJp()], []));
+        Queue::assertNotPushed(WarmTradeReviewCache::class);
+        tisImport([tisJp()], []);
+
+        // Assert
+        Queue::assertPushed(WarmTradeReviewCache::class, 1);
     });
 });

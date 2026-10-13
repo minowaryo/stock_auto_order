@@ -64,7 +64,7 @@ use Livewire\Livewire;
 | containing 「同じ週の発生は1件として判定」.
 |   Sub-tabs (UC-014「画面の行き来」, mirrors x-sector-concentration-tabs):
 |   both /signals and /signal-outcomes render, under the page title,
-|   <nav aria-label="売買シグナルとシグナル検証の切替"> (Blade component
+|   <nav aria-label="売買シグナル・シグナル検証・売買の振り返りの切替"> (Blade component
 |   x-signal-outcome-tabs, prop current = 'signals' | 'outcomes') with links
 |   「売買シグナル」(href …/signals) and 「シグナル検証」(href …/signal-outcomes);
 |   only the current one has aria-current="page".
@@ -222,7 +222,7 @@ function ssopGlobalTabs(string $html): array
  */
 function ssopSubTabs(string $html): ?array
 {
-    if (preg_match('#<nav[^>]*aria-label="売買シグナルとシグナル検証の切替"[^>]*>(.*?)</nav>#su', $html, $nav) !== 1) {
+    if (preg_match('#<nav[^>]*aria-label="売買シグナル・シグナル検証・売買の振り返りの切替"[^>]*>(.*?)</nav>#su', $html, $nav) !== 1) {
         return null;
     }
     preg_match_all('#<a([^>]*)>\s*([^<]*?)\s*</a>#u', $nav[1], $links, PREG_SET_ORDER);
@@ -570,7 +570,7 @@ describe('UC-014: シグナル検証画面（Livewire）', function () {
             $response->assertOk();
             $tabs = ssopSubTabs($response->getContent());
             expect($tabs)->not->toBeNull();
-            expect(array_keys($tabs))->toBe(['売買シグナル', 'シグナル検証']);
+            expect(array_keys($tabs))->toBe(['売買シグナル', 'シグナル検証', '売買の振り返り']); // 3rd tab: CHG-0033 7e (2026-10-11)
             expect($tabs['売買シグナル'])->toContain('aria-current="page"')->toMatch('#href="[^"]*/signals"#');
             expect($tabs['シグナル検証'])->not->toContain('aria-current')->toMatch('#href="[^"]*/signal-outcomes"#');
         });
@@ -587,11 +587,11 @@ describe('UC-014: シグナル検証画面（Livewire）', function () {
             $html = $response->getContent();
             $tabs = ssopSubTabs($html);
             expect($tabs)->not->toBeNull();
-            expect(array_keys($tabs))->toBe(['売買シグナル', 'シグナル検証']);
+            expect(array_keys($tabs))->toBe(['売買シグナル', 'シグナル検証', '売買の振り返り']); // 3rd tab: CHG-0033 7e (2026-10-11)
             expect($tabs['シグナル検証'])->toContain('aria-current="page"')->toMatch('#href="[^"]*/signal-outcomes"#');
             expect($tabs['売買シグナル'])->not->toContain('aria-current')->toMatch('#href="[^"]*/signals"#');
             // Placed under the page title
-            expect(strpos($html, '<h1'))->toBeLessThan(strpos($html, 'aria-label="売買シグナルとシグナル検証の切替"'));
+            expect(strpos($html, '<h1'))->toBeLessThan(strpos($html, 'aria-label="売買シグナル・シグナル検証・売買の振り返りの切替"'));
         });
 
         test('UC-014: グローバルナビは6タブのままで、シグナル検証画面では「売買シグナル」タブだけが選択中になる', function () {

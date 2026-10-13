@@ -2,6 +2,7 @@
 
 namespace App\Actions\Analysis;
 
+use App\Jobs\WarmTradeReviewCache;
 use App\Models\BuySignal;
 use App\Models\FinancialStatement;
 use App\Models\FundamentalIndicator;
@@ -451,6 +452,9 @@ class FetchExternalMarketDataAction
             $this->recordSignalOccurrences($holding, $snapshot, $priceHistory, $occurrences);
             $this->recordIndicatorObservation($holding, $priceHistory, $occurrences);
         }
+
+        // UC-018: prices and records changed; rebuild the trade review in the background.
+        WarmTradeReviewCache::dispatch()->afterCommit();
     }
 
     /**

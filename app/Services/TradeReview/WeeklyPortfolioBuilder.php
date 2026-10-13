@@ -202,13 +202,18 @@ class WeeklyPortfolioBuilder
     {
         $closes = [];
 
+        // ~80k rows: read them as plain rows in chunks, not as models, to keep memory low.
         WeeklyPrice::query()
+            ->toBase()
+            ->select(['id', 'holding_id', 'week_date', 'close'])
             ->whereIn('holding_id', $holdingIds)
             ->where('week_date', '<=', $last)
             ->orderBy('week_date')
-            ->get(['holding_id', 'week_date', 'close'])
-            ->each(function (WeeklyPrice $row) use (&$closes) {
-                $closes[$row->holding_id][$row->week_date->toDateString()] = (float) $row->close;
+            ->orderBy('id')
+            ->chunk(5000, function ($rows) use (&$closes) {
+                foreach ($rows as $row) {
+                    $closes[(int) $row->holding_id][substr((string) $row->week_date, 0, 10)] = (float) $row->close;
+                }
             });
 
         return $closes;
