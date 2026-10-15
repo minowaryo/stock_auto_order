@@ -698,6 +698,8 @@
 
 > 源の定義（URL・取得方式・有効／無効・最低間隔・サイズ上限・配信範囲日数）はテーブルではなく `config/research_sources.php` に置く（ADR-0031 D2）。源の追加・停止は設定変更だけで行う。既存の `research_*` テーブルは変更しない。
 
+> 2026-10-11本人承認の[ADR-0032](../adr/ADR-0032-research-source-adapters-and-access-intervals.md)で任意設定`min_request_interval_seconds`を補足（既定0、FDA30）。開始/完了時刻の遅い方に秒精度の最大1秒分の余裕を加えて次のアクセスを待ち、待機後の取得試行開始を`started_at`に記録する。FDAの6フィールドはmetadataへ保存し、決定日は`date_of_final_decision`（YYYY-MM-DD）、公開日不明の`published_at`はNULL。項目の作成時刻は取得時刻。テーブル/カラム変更なし。
+
 ```
 config/research_sources.php（源ID: S03/S09/S10/H01/H02 …）
        └── [research_source_checks] ──1:N── [research_source_items] ──N:1(nullable)── [research_discovery_links]

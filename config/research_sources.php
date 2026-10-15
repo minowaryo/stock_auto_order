@@ -33,9 +33,10 @@ return [
     'S10' => [
         'name' => 'FDA AI医療機器一覧',
         'method' => 'file',
-        'url' => 'https://www.fda.gov/medical-devices/artificial-intelligence-enabled-medical-devices/list-artificial-intelligence-enabled-medical-devices',
-        'enabled' => false,
+        'url' => 'https://www.fda.gov/media/178541/download?attachment=',
+        'enabled' => true,
         'min_interval_hours' => 168,
+        'min_request_interval_seconds' => 30,
         'max_response_bytes' => 5242880,
         'coverage_days' => 365,
     ],

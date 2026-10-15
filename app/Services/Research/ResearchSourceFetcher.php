@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Http;
 use Psr\Http\Message\ResponseInterface;
 use RuntimeException;
 
-/** Requests one feed, streams at most the configured limit and never follows links. */
+/** Requests one source, streams at most the configured limit and never follows links. */
 class ResearchSourceFetcher
 {
     public function fetch(array $source, float $timeout): Response
@@ -19,9 +19,14 @@ class ResearchSourceFetcher
             throw new RuntimeException('情報源URLの設定を確認してください。');
         }
         $limit = (int) ($source['max_response_bytes'] ?? 1048576);
+        $accept = match ($source['method'] ?? '') {
+            'file' => 'text/csv, application/csv, application/octet-stream',
+            'html_list' => 'text/html, application/xhtml+xml',
+            default => 'application/rss+xml, application/atom+xml, application/xml, text/xml',
+        };
 
         return Http::timeout($timeout)->connectTimeout($timeout)->withoutRedirecting()
-            ->withHeaders(['User-Agent' => 'StockAutoOrder-ResearchSourceCheck/1.0', 'Accept' => 'application/rss+xml, application/atom+xml, application/xml, text/xml'])
+            ->withHeaders(['User-Agent' => 'StockAutoOrder-ResearchSourceCheck/1.0', 'Accept' => $accept])
             ->withOptions([
                 'stream' => true,
                 'read_timeout' => $timeout,
