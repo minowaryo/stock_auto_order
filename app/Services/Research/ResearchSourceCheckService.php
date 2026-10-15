@@ -13,7 +13,11 @@ use Throwable;
 
 class ResearchSourceCheckService
 {
-    public function __construct(private ResearchSourceFetcher $fetcher, private ResearchSourceFeedParser $parser) {}
+    public function __construct(
+        private ResearchSourceFetcher $fetcher,
+        private ResearchSourceFeedParser $parser,
+        private ResearchSourceFdaParser $fdaParser,
+    ) {}
 
     /** @return array{checked: int, failed: int, skipped: int} */
     public function check(bool $force = false): array
@@ -48,6 +52,28 @@ class ResearchSourceCheckService
                     Sleep::for(1500)->milliseconds();
                 }
                 $remaining = $this->remaining($startedAt, $monotonicStart);
+                $requestInterval = max(0, (float) ($source['min_request_interval_seconds'] ?? 0));
+                $requestAnchor = $last?->started_at;
+                if ($last?->finished_at && $last->finished_at->gt($requestAnchor)) {
+                    $requestAnchor = $last->finished_at;
+                }
+                // Completion also covers the delay between recording the start
+                // and sending HTTP. Add one second for stored timestamp precision.
+                $requestWait = $last && $requestInterval > 0
+                    ? max(0, $requestInterval + 1 - $requestAnchor->diffInSeconds(now(), false))
+                    : 0;
+                // A manual check bypasses the startup interval, but not a source's
+                // request gap. The shared lock remains held throughout this wait.
+                if ($requestWait > 0) {
+                    $waitMilliseconds = (int) ceil($requestWait * 1000);
+                    if ($waitMilliseconds / 1000 >= $remaining) {
+                        $summary['skipped']++;
+
+                        continue;
+                    }
+                    Sleep::for($waitMilliseconds)->milliseconds();
+                    $remaining = $this->remaining($startedAt, $monotonicStart);
+                }
                 if ($remaining <= 0) {
                     $summary['skipped']++;
 
@@ -85,10 +111,11 @@ class ResearchSourceCheckService
                 throw new RuntimeException('HTTPエラーで取得に失敗しました。');
             }
             $body = $this->fetcher->read($response, (int) ($source['max_response_bytes'] ?? 1048576), $deadline);
-            if (($source['method'] ?? '') !== 'rss') {
-                throw new RuntimeException('この取得方式の応答構造は未確認です。');
-            }
-            $items = $this->parser->parse($body, $deadline);
+            $items = match (true) {
+                ($source['method'] ?? '') === 'rss' => $this->parser->parse($body, $deadline),
+                $key === 'S10' && ($source['method'] ?? '') === 'file' => $this->fdaParser->parse($body, $deadline),
+                default => throw new RuntimeException('この取得方式の応答構造は未確認です。'),
+            };
             $baseline = ! ResearchSourceCheck::where('source_key', $key)->whereIn('result', ['new_items', 'no_new', 'baseline'])->exists();
             DB::transaction(function () use ($check, $items, $baseline, $deadline): void {
                 $created = 0;
@@ -129,6 +156,7 @@ class ResearchSourceCheckService
             '未対応のフィード形式です。', '応答の読み取りに失敗しました。',
             'HTTPエラーで取得に失敗しました。', 'この取得方式の応答構造は未確認です。',
             '接続または応答がタイムアウトしました。',
+            'FDA CSVの応答形式を確認できません。', 'FDAの付帯情報が保存上限を超えました。',
         ];
         // Guzzle wraps exceptions raised by on_headers in a RequestException.
         for ($cause = $exception; $cause; $cause = $cause->getPrevious()) {

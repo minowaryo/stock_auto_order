@@ -23,7 +23,7 @@
 | S07 | 日本のロボット: [JARA四半期統計](https://www.jara.jp/data/quarterly.html) | 公開PDF/Excel、四半期 | 受注・生産・出荷の方向。会員調査の集計値であり、個社の受注ではない。 |
 | S08 | 北米のロボット: [A3受注統計の公開概要](https://www.automate.org/robotics/industry-statistics/robot-orders-increase-in-q2-as-automation-demand-broadens-across-industries) | 無料記事、四半期 | 北米の需要先産業と受注の方向。詳細データは別条件、個社別受注ではない。 |
 | S09 | 産業技術: [NEDO公募・採択結果](https://www.nedo.go.jp/koubo/2026_list_05_03.html) | 公開ページを採択時に手動確認 | 研究・実証を担う企業名を発見。採択は商用受注ではない。 |
-| S10 | 米国医療AI: [FDA AI医療機器一覧](https://www.fda.gov/medical-devices/artificial-intelligence-enabled-medical-devices/list-artificial-intelligence-enabled-medical-devices) | 公式CSV/Excel/XML、更新時 | 製品と企業名を発見。FDA自身が非網羅と明記。認可は臨床効果・導入・売上を保証しない。 |
+| S10 | 米国医療AI: [FDA AI医療機器一覧](https://www.fda.gov/medical-devices/artificial-intelligence-enabled-medical-devices/list-artificial-intelligence-enabled-medical-devices) | 公式CSV（2026-10-11取得確認）、一覧更新時 | 製品と企業名を発見。FDA自身が非網羅と明記。認可は臨床効果・導入・売上を保証しない。 |
 | S11 | 日本医療AI: [PMDA医療機器承認品目一覧](https://www.pmda.go.jp/review-services/drug-reviews/review-information/devices/0018.html) | 公開表・PDF、掲載時に手動確認 | 製品と承認取得者を発見。AIの包括タグはなく審査資料を個別に読む。 |
 | S12 | 医療AIの臨床: [ClinicalTrials.gov](https://clinicaltrials.gov/data-api/api) | 公式API v2/CSV、週次 | 試験設計、主要評価項目、結果登録。登録・試験終了だけでは有効性を証明しない。 |
 
@@ -68,17 +68,19 @@ S04・S05・S08・S09は年度・四半期でURLが変わる資料の**現行例
 
 ## 起動時確認の登録状態（2026-10-11）
 
-[ADR-0031](../adr/ADR-0031-research-source-startup-check.md)のGate 2/3は2026-10-10、追加Red49ケースのGate 4は2026-10-11に本人承認済み。設定と履歴保存・本人選択の共通処理はGreen実装・全件回帰検証済み。以下の初期設定は2026-10-11に本人が反映を承認し、mainとローカルアプリへ適用済み（マージ`da70f49`）。RSS/Atom解析を実装し、HTML一覧・配布ファイルのパーサは未実装。設定だけで未知の形式を追加できる状態ではない。
+[ADR-0031](../adr/ADR-0031-research-source-startup-check.md)のGate 2/3は2026-10-10、追加Red49ケースのGate 4は2026-10-11に本人承認済み。設定と履歴保存・本人選択の共通処理はGreen実装・全件回帰検証済み。初期設定は2026-10-11に本人が反映を承認し、mainとローカルアプリへ適用済み（マージ`da70f49`）。実アプリはRSS/Atom解析のみ。**2026-10-16本人承認でFDA CSV解析と精度補足（機能`56b73e0`）を本マージでローカルmainへ統合。全2,032件は失敗/エラー0・skip1。mainのS10は有効設定済みだが、実アプリへの反映とpushは未実施**。NEDOのHTML解析は未実装。設定だけで未知の形式を追加できる状態ではない。
 
 | ID | 自動確認の初期状態 | 経路・判断根拠 | 取得する範囲・残課題 |
 |---|---|---|---|
 | H02 | 有効（最低24時間、上限1MiB） | [note公式ヘルプ](https://www.help-note.com/hc/ja/articles/4402395202841-iframe-RSS%E3%81%A7-%E8%87%AA%E5%88%86%E3%81%AE%E3%82%B5%E3%82%A4%E3%83%88%E3%81%ABnote%E3%82%92%E8%A1%A8%E7%A4%BA%E3%81%99%E3%82%8B)はRSSのサーバ取得と自サイトでの更新表示を案内。[中島聡さんの公式プロフィール](https://note.com/lifeisbeautiful)と同じ発行元を確認。2026-10-11に公式RSSを1回取得: 42,533bytes、RSS2形式、25項目、25公開日時を解析できた | URL・題名・公開日時・小さな著者/カテゴリ情報のみ保存。descriptionや本文は保存しない。RSSは最新25件で全件ではない。14日の配信範囲設定は欠測警告の暫定目安で、25件の期間保証ではない。情報の正確さ・候補発見への有効性は未評価 |
 | H01 | 無効 | [YouTube利用規約](https://www.youtube.com/t/terms)に自動アクセス制限があり、公開RSSの存在だけでは今回の自動取得の許可を確定できなかった | 手動閲覧を継続。許可された正規経路（公式APIを含む）を確認してから追加する。RSS/Atom解析があることと、この源の有効化判断は別 |
-| S09 | 無効 | NEDO公募・採択結果のHTML一覧。利用条件と実一覧の構造・項目識別を確認していない | 源専用のHTML抽出と正常サンプルのRed/Gate 4が必要。現在有効にしても「応答構造は未確認」と失敗を記録する |
-| S10 | 無効（将来の最低間隔168時間） | FDAのAI医療機器一覧。配布ファイルの直URL・列・サイズは未検証 | 源専用のファイル解析と正常サンプルのRed/Gate 4が必要。現在のURLは紹介ページで、配布ファイルとして使えるとは判断していない |
+| S09 | 無効 | 2026-10-11に[2026年度AI一覧](https://www.nedo.go.jp/koubo/2026_list_05_03.html)の結果列と[利用条件](https://www.nedo.go.jp/qinf/copyright.html)を確認。企業名は別ページ/PDFでの確認が必要 | 源専用のHTML抽出と追加Red/Gate 4が必要。FDAの次に着手。現在の実装では「応答構造は未確認」と失敗を記録する |
+| S10 | 実アプリでは無効。mainは有効（最低168時間） | 2026-10-11に[公式CSV直URL](https://www.fda.gov/media/178541/download?attachment=)を確認。141,468bytes・6列・1,614件。企業名と申請番号が取れるが、決定日は公開日ではない | ADR-0032・元31件と精度補足4件/既存3件期待補正は本人承認。FDA35+既存49件成功、全体1,977件失敗0。開始/完了の遅い方+31秒で実間隔を守る。CSV直URLへ置換済み。機能`56b73e0`は本人承認で本マージへ統合。実アプリ反映/push待ち |
 | S03 | 設定未登録・手動 | OCPの一覧・PDFは今回の自動確認の対象外 | 台帳・試行ログで手動観察を続ける |
 
 有効化は取得経路の確認であり、情報源の品質合格ではない。4週試行と11月2日以降の再精査は継続する。移行後約3週間の起動記録から負荷・欠測・有効な源/項目を改めて選ぶ。導入日は2026-10-11、約3週間後の見直しは2026-11-01が目安（[試行ログ](../investment-research/megatrend/source-pilot-log.md)）。
+
+本人の2026-10-11指示で未対応源は**FDA → NEDO → YouTube**の順に着手する。[実装計画](megatrend-source-implementation-plan.md)に実資料・取得条件・完了条件を記録し、[PLAN](../../PLAN.md)からリンクする。源の実装順は候補銘柄の評価順ではない。
 
 ## 今回は採用しないものと制約
 
