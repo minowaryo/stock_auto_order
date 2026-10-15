@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Actions\PriceTracking\TrackPriceHistoryAction;
+use App\Jobs\WarmTradeReviewCache;
 use App\Services\PriceTracking\PriceFetchRunner;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
@@ -63,6 +64,9 @@ class PriceTrackCommand extends Command
             $summary->indicesOk,
             $summary->indicesFailed,
         ));
+
+        // UC-018: prices may have changed; rebuild the trade review in the background.
+        WarmTradeReviewCache::dispatch()->afterCommit();
 
         if ($summary->aborted) {
             $this->error('取得失敗が続いたため中断しました。時間を置いて再実行すると、続きから取得します。');

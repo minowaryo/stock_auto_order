@@ -700,8 +700,8 @@
 
 ```
 [trade_import_batches] ──1:N── [trade_executions] ──N:1── [holdings]
-          |                          |  └──1:N── [trade_context_records]
-          |                          └──(sell)1:N── [trade_switch_allocations] ──N:1(buy)── [trade_executions]
+          |                          |  └──1:N── [trade_context_records（作らない）]
+          |                          └──(sell)1:N── [trade_switch_allocations（作らない）] ──N:1(buy)── [trade_executions]
           └──1:N── [trade_reconciliation_items] ──N:1── [holdings] / N:1── [snapshots]
 [holdings] ──1:1── [price_tracking_targets]（追跡期限・取得状態、ADR-0024）
 [holdings] ──1:N── [stock_splits]
@@ -846,6 +846,8 @@
 
 #### trade_switch_allocations（推定乗換えの割り当て・UC-018）
 
+> **2026-10-11 本人承認により作らない（読み取り時に算出、ADR-0027 D3改訂）。** 割り当ては売買履歴から毎回同じ結果を求められる（`SwitchAllocator`）。以下は当初の定義で、実装しない。
+
 | カラム | 型 | Nullable | デフォルト | 説明 |
 |---|---|---|---|---|
 | id | bigint | NO | auto | 主キー |
@@ -861,6 +863,8 @@
 > **派生データ（版単位で再生成）**: 取込確定のたびに、同じ `rule_version` の行を作り直す（元の売買履歴から決定的に再現できるため）。ルールを変える場合は新しい版で追加し、旧版の行は消さない。1つの売却の割り当て合計は売却受渡金額を超えず、1つの買付の割り当て合計は買付受渡金額を超えない（二重割り当ての防止。超過分は「新規資金」）。
 
 #### trade_context_records（売買時の状況記録・UC-018／UC-019）
+
+> **2026-10-11 本人承認により作らない（読み取り時に算出、ADR-0027 D4改訂）。** 売買直前の状況は `signal_occurrences`／`indicator_observations` から「約定日の開始より前・8日以内」の記録を読み取り時に紐付ける（`TradeContextFinder`）。以下は当初の定義で、実装しない。
 
 | カラム | 型 | Nullable | デフォルト | 説明 |
 |---|---|---|---|---|
@@ -963,7 +967,7 @@
 - テーブルは「現在値キャッシュ（UPSERT、履歴を持たない）」と「履歴ログ（追記のみ、UPDATE/DELETEしない）」の2種類に分けて設計する
   - 現在値キャッシュ: `technical_indicators`/`fundamental_indicators`（`holding_id`単位で1行、値が変わってもINSERTせずUPDATEする。J-Quantsの更新頻度〔最大12週遅延〕に対して毎週INSERTすると同一内容の行が積み上がるため）
   - 履歴ログ: `holding_snapshots`（`ma20`/`ma75`含む）/`financial_statements`（決算期単位）/`signals`/`market_indicator_snapshots`は、時点ごとに値そのものが変わりうる真の時系列データのため追記のみとする（UC-001業務ルール「既存スナップショットは上書きせず、履歴として蓄積する」）。`signal_occurrences`（ADR-0017）もこちら
-  - 派生データ（2026-10-04追加、ADR-0027）: `trade_switch_allocations` は元の売買履歴から決定的に再現できるため、同じ版の行を取込ごとに作り直す。ルール変更は新しい版で追加する
+  - 派生データ（2026-10-04追加、ADR-0027）: `trade_switch_allocations` は元の売買履歴から決定的に再現できるため、同じ版の行を取込ごとに作り直す。ルール変更は新しい版で追加する → 2026-10-11 本人承認により表自体を作らず、読み取り時に算出する
   - 上書き型の時系列（2026-09-27追加、ADR-0017）: `weekly_prices`/`index_weekly_prices`は日付ごとに行を持つ時系列だが、外部ソース側の分割遡及調整に追随するため、同じ`(対象, week_date)`の行は取得のたびに上書きする
 
 ## 保留・確定が必要な初期パラメータ値（Gate 3承認時点の状態）
@@ -1076,6 +1080,7 @@
 | 2026-10-06 | minowaryo | 承認（Gate4着手時の変更） | **価格データの保存と追跡状態（UC-018 Cycle 6b、ADR-0024・ADR-0027）**。Gate 3承認済みの `price_tracking_targets` を2点変更: ①`track_until_week` を NOT NULL から nullable に（保有中で補完だけ行う銘柄は期限なし）、②`splits_incomplete`（boolean、既定false）を追加（分割情報欠損の記録）。あわせて状態の更新規則（翌週月曜で週を確定、保存確認、3回連続かつ最後が銘柄なし／データなしで取得不能）、`stock_splits`、`index_weekly_prices.index_name` への `usdjpy` 追加を、Gate 3承認の定義どおり実装 |
 | 2026-10-10 | （Gate3レビュー待ち） | 提案（CHG-0033 Cycle 6e） | **分割の整合（UC-018、ADR-0024 D6）**。`price_tracking_targets` に `full_history_fetched_at`（timestamp、nullable）を1列追加。保有・ウォッチリストの104週更新でも分割を受け取って記録し、列の日時より後に記録された分割がある補完済み銘柄だけを `price:track` が10年分取り直す。nullable の追加のみで後方互換、既存行の変換なし（null は `created_at` で代替し、初回に分割のある補完済み銘柄を1回ずつ取り直す） |
 | 2026-10-10 | minowaryo | 承認（Gate3） | **分割の整合（CHG-0033 Cycle 6e）**を同日の提案どおり承認。初回の `price:track` で分割のある補完済み銘柄（77銘柄）を1回ずつ取り直すことを含む。マイグレーションはGate 4後 |
+| 2026-10-11 | minowaryo | 承認（Gate3の変更） | **売買の振り返り（CHG-0033 Cycle 7d）**: Gate 3承認済みの `trade_switch_allocations`／`trade_context_records` を作らない。推定乗換えの割り当てと売買直前の状況は、保存済みの記録から読み取り時に求める（ADR-0027 D2〜D4改訂）。本人方針（データ・画面を増やさない、ロジックの版を持たない）による。マイグレーションなし |
 
 ## 変更履歴
 
@@ -1130,3 +1135,4 @@
 | 2026-10-04 | 売買の振り返り（CHG-0033、UC-017／UC-018）のGate3叩き台として`trade_import_batches`／`trade_executions`／`trade_reconciliation_items`／`price_tracking_targets`／`stock_splits`／`indicator_observations`／`trade_switch_allocations`／`trade_context_records`の8テーブルと、`index_weekly_prices.index_name`への`usdjpy`追加を記載。比較結果は保存せず読み取り時に算出。Gate3承認済み | ADR-0027、ADR-0024 |
 | 2026-10-06 | 価格データの保存と追跡状態（CHG-0033 Cycle 6b）を実装。`price_tracking_targets`（`track_until_week` を nullable に、`splits_incomplete` を追加。Gate 4着手時に本人承認）・`stock_splits`のマイグレーション、`index_weekly_prices.index_name` への `usdjpy` 追加。状態の更新規則を明記 | ADR-0027、ADR-0024 |
 | 2026-10-10 | 分割の整合（CHG-0033 Cycle 6e）のGate3叩き台: `price_tracking_targets.full_history_fetched_at` の追加と、既存の104週更新での分割の記録・10年分の取り直しの規則。同日Gate3承認 | ADR-0024 |
+| 2026-10-11 | `trade_switch_allocations`／`trade_context_records` を作らないことに変更（読み取り時に算出）。CHG-0033 Cycle 7d、本人承認 | ADR-0027 |

@@ -5,6 +5,7 @@ namespace App\Actions\Import;
 use App\Actions\Import\Support\TradeHistoryImportSummary;
 use App\Actions\Import\Support\TradeReconciliationSummary;
 use App\Exceptions\Import\CsvStructureException;
+use App\Jobs\WarmTradeReviewCache;
 use App\Models\Holding;
 use App\Models\TradeExecution;
 use App\Models\TradeImportBatch;
@@ -67,7 +68,7 @@ class ImportTradeHistoryAction
         }
 
         try {
-            return $this->save($batch, $rows, $errorCount);
+            $summary = $this->save($batch, $rows, $errorCount);
         } catch (Throwable $e) {
             // The transaction rolled back; record the failure so the batch is
             // never left looking 'pending', then let the caller see the error.
@@ -75,6 +76,11 @@ class ImportTradeHistoryAction
 
             throw $e;
         }
+
+        // UC-018: the trade history changed; rebuild the trade review in the background.
+        WarmTradeReviewCache::dispatch()->afterCommit();
+
+        return $summary;
     }
 
     /**

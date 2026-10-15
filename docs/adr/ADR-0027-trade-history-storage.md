@@ -33,15 +33,18 @@ F-017（売買判断の対ガチホ効果検証）では、楽天証券の国内
 
 年率・対ガチホ差・売却／乗換え／買付の差は、`trade_executions`・`stock_splits`・`weekly_prices`・`index_weekly_prices` から画面表示のたびに計算する。ADR-0017 D4（シグナル結果を保存しない）と同じ方針。
 
-UC-018本文の「比較結果と状況記録を保存」のうち、**比較結果は「根拠データを保存し、結果はそこから再現する」と読み替える**ことを本ADRで明確にする。保存するのは、元データ（売買履歴）、取得状態（`price_tracking_targets`）、判断の根拠（`trade_switch_allocations`・`trade_context_records`）だけとする。
+UC-018本文の「比較結果と状況記録を保存」のうち、**比較結果は「根拠データを保存し、結果はそこから再現する」と読み替える**ことを本ADRで明確にする。保存するのは、元データ（売買履歴）、取得状態（`price_tracking_targets`）、判断の根拠（`trade_switch_allocations`・`trade_context_records`）だけとする。→ **2026-10-11 改訂（本人承認、CHG-0033 Cycle 7d）**: 判断の根拠の2表も作らない。どちらも保存済みの記録（売買履歴・週足・`signal_occurrences`・`indicator_observations`）から毎回同じ結果を求められるため、読み取り時に算出する（D3・D4の改訂を参照）。
 
 ### D3 推定乗換えの割り当ては、版付きの派生データとして保存する
+
+> **2026-10-11 改訂（本人承認）: 保存しない。** 割り当ては売買履歴から決定的に再現でき（`SwitchAllocator`、全件で一瞬）、取込のたびに作り直すだけの表になるため。本人方針（ロジックの版を記録・表示しない、データを増やさない）にも合わせ、`rule_version` も持たない。以下は当初案。
 
 `trade_switch_allocations` に `rule_version` 付きで保存する。取込確定のたびに同じ版の行を作り直し、ルールを変えるときは新しい版で追加して旧版を残す。1つの売却・1つの買付それぞれの割り当て合計は受渡金額を超えない（二重割り当ての防止）。
 
 ### D4 売買時の状況は追記のみで残し、当時記録と事後再計算を区別する
 
 - `indicator_observations` に、既存の週次処理（保有CSV取込・ウォッチリスト一括更新）が得た指標を毎回追記する。**後から遡って作れないため、UC-018の他の実装より先に保存を始める**。
+- **2026-10-11 改訂（本人承認）: `trade_context_records` は作らない。** 当時の記録は `signal_occurrences`／`indicator_observations` がすでに追記のみで残しているため、売買ごとに「約定日の開始より前・8日以内」の記録を読み取り時に紐付ける（`TradeContextFinder`）。価格系の事後再計算（`recomputed`）は保存済みの週足から毎回同じ値になるため、UC-019で必要になった時点で読み取り時に計算する。以下は当初案。
 - `trade_context_records` は `origin`（`recorded`／`recomputed`）と `rule_version` を持ち、過去の状況を最新値で上書きしない。`recorded` は約定日の開始より前・8日以内の記録だけを使う。`recomputed` は売買週の前週までの週足だけで価格系7項目を計算する。
 
 ### D5 ドル円の週足は `index_weekly_prices` に `usdjpy` として保存する

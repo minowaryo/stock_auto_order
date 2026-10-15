@@ -1,12 +1,13 @@
 {{--
     UC-014 (ADR-0017 D8, CHG-0020 Cycle5): 売買シグナル <-> シグナル検証 の切替タブ。
+    UC-018 (CHG-0033 7e, 2026-10-11 本人承認): 3つ目に「売買の振り返り」を置く。
     グローバルナビ（6タブ）は変えず、両画面のヘッダー直下に置く。
 --}}
 @props(['current'])
 @php
-    $tabs = ['signals' => ['売買シグナル', '/signals'], 'outcomes' => ['シグナル検証', '/signal-outcomes']];
+    $tabs = ['signals' => ['売買シグナル', '/signals'], 'outcomes' => ['シグナル検証', '/signal-outcomes'], 'review' => ['売買の振り返り', '/trade-review']];
 @endphp
-<nav aria-label="売買シグナルとシグナル検証の切替" class="flex gap-1 mb-4 border-b border-app-border">
+<nav aria-label="売買シグナル・シグナル検証・売買の振り返りの切替" class="flex gap-1 mb-4 border-b border-app-border">
     @foreach ($tabs as $key => [$label, $href])
         <a href="{{ $href }}" wire:navigate
            @if ($current === $key) aria-current="page" @endif
