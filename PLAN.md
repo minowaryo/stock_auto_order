@@ -166,7 +166,13 @@ Red 16件→Gate4承認→Green。フルスイート1226 passed・pint適用済�
 - [x] Gate 3（2026-10-10 本人承認）→Gate 4 Cycle 6e（分割の整合）: テスト12件を本人承認→Green。6dのレビューで見つけた、保有・ウォッチリストの104週更新が分割後に古い週とずれる問題〔HIGH〕への対応。保有・ウォッチリストの更新が同じ1リクエストで分割を受け取り記録し、`price:track`が`price_tracking_targets.full_history_fetched_at`より後に記録された分割のある補完済み銘柄を10年分取り直す（マイグレーション1本）。実際のYahooで、2年分の取得に分割（5706の2026-09-29、10:1）が入ることを確認。初回の`price:track`で、分割のある補完済み銘柄（77銘柄）を1回ずつ取り直す。ブランチ `docs/chg0033-6e-and-plan-archive`。
 - [x] Cycle 6eのマージ・初回の`price:track`実行（2026-10-11）: `6039fd4`でmainマージ・push済み、開発DBにマイグレーション1本を適用、共有のチェックアウトを`6039fd4`へ更新しキューを再起動（以後、アプリ起動時に`price:track`が自動で後ろ実行される）。初回の実行は約3分半・終了コード0: 追跡136銘柄（シグナル由来22銘柄を新規登録）、分割で10年分を取り直し77銘柄、保存済みで取得不要50、成功99、銘柄なし2（米国`CYBR`は3回連続で取得不能に、国内`9613`は2回目）、失敗0。記録済みの分割は127件（90銘柄）。実行後の確認だけの実行で、分割による取り直しは0件。
 - [x] Gate 4 Cycle 7a（UC-018 週ごとの株式部分の復元）: テスト11件を本人承認→Green（`WeeklyPortfolioBuilder`・`PortfolioWeek`。分割調整後の株数、評価額 V_t、資金の出入り F_t〔入出庫は時価〕、算出できない銘柄の除外と見積額）。日曜の例は、実データの約定が月〜金だけで、共通の週の決まり（日曜は翌週）と逆だったため金曜に変更（本人承認）。**その過程で、「確定した最新週」が日曜だけ1週先にずれる不具合（6dから）を発見**し、再発防止テスト2件を先に書いて`WeekDateNormalizer::lastConfirmedWeek()`に一本化。**実データ検証で、国内株のCSVが分割で増えた株を印のない「入庫」として記録していると判明**（分割の1〜3日前、24件すべてが「分割前の株数×〔分割比−1〕」と一致）。二重計上と架空の入金になるため、これを分割による入庫として除くルールを本人承認→テスト3件→Green（計16件）。結果: 最新の保有CSV（10/10取込）と117銘柄すべて一致、220週、除外は終値欠損の42件（銘柄×週）だけで評価額比最大1.71%（5%超の週なし）。ブランチ `feat/chg0033-weekly-portfolio`。
-- [ ] 次: Cycle 7b（年率・20%/25%判定・対ガチホ）→7c（売却・推定乗換え・買付の比較）→7d（状況記録、Gate 3）→7e（画面3タブ）。UC-018の算出。**設計に入れる点（6eのレビューで判明）**: CSV取込の直後から次の`price:track`までは、保有銘柄の直近104週だけが分割後の値で古い週は分割前のまま残る。`full_history_fetched_at`より後に記録された分割がある銘柄は「取り直し待ち」として扱い、その銘柄の結果は算出不可にする。→UC-018の算出（年率・売却/推定乗換え/買付比較）。UC-019はGate 2保留。
+- [x] Gate 4 Cycle 7b（UC-018 年率・20%/25%判定・対ガチホ）: テスト13件を本人承認→Green（`StockPerformanceCalculator`・`PeriodPerformance`。修正ディーツ法の週次リターンの連結、分母0以下の週の除外と件数、終値のない銘柄は前後週の比較から外す、欠けが評価額の5%超の週があれば判定保留、判定週数未満は期間目標との参考比較、起点週の株数による対ガチホ、市場別）。`PortfolioWeek`に銘柄ごとの評価額・資金の出入り・見積額・1株あたり円価格を追加し、1回の復元から市場別に出す（実データで3市場分約2.2秒）。実データの直近52週（2025-09-29〜2026-09-28）は全52週を使用・欠け0%で判定まで出た。手計算との突合せは7f。ブランチ `feat/chg0033-stock-performance`。
+- [x] Gate 4 Cycle 7c-1（UC-018 売却単独と推定乗換え）: テスト8件を本人承認→Green（`SwitchAllocator`〔同じ市場・売却から5営業日〔平日〕以内・約定日順・二重割り当てなし、積立は対象外〕、`TradeComparisonCalculator::sells()`／`switches()`〔+4/+13/+26週、結果待ち・理由つき算出不可〕、`TradeComparison`）。分割の調整と取り直し待ちの判定を`SplitData`に切り出し7aと共用。割り当ての保存（`trade_switch_allocations`）は7d。実データ: 売却274件・割り当て443件、約2.8秒。手計算との突合せは7f。本人方針（2026-10-11）: 過去の売買は今のロジックで良し悪しがわかれば十分で、ロジックの版の記録・表示はしない（データ・画面を増やさない）。ブランチ `feat/chg0033-trade-comparison`（7bの上）。
+- [x] Gate 4 Cycle 7c-2（UC-018 買付の比例買増し・指数比較）: テスト7件を本人承認→Green（`TradeComparisonCalculator::buys()`。推定乗換えに割り当てなかった新規資金だけを、買付前週末の同じ市場の保有構成〔買った銘柄を含む〕どおりに買付週の終値で買い増した場合と+4/+13/+26週で比較。価格のない構成銘柄は5%以下なら外して配分し直し、超えれば算出不可。前週末に同じ市場の保有がなければ算出不可〔no_holdings〕で指数比較だけ。指数は国内=日経225、米国=S&P500×ドル円で参考併記。積立は比べない）。実データ: 買付728件、約2.6秒。手計算との突合せは7f。
+- [x] 7b〜7cの`/review`（2026-10-11）: **HIGH** 同じ日の売却と買付で、CSVの並び（買付の行が先）により売却代金が割り当てられていなかった（実データで同日買付282件中211件）→同じ日の中は売却を先に処理（再発防止テスト付き。割り当て443→471件）。**LOW 2件** 比例買増しの構成で、前週末に外れていた銘柄（終値なし・分割の取り直し待ち）を外した比率に数えていなかった→数えて5%超なら算出不可（テスト2件）。その結果、上場廃止でYahooにデータのない**9613が2025-01〜09に国内株の最大9.2%**を占めていたため、この期間の国内株の買付比較104件が算出不可になった（ルールどおり。年率も国内株だけで見ると同期間は判定保留。直近52週は影響なし）。廃止銘柄の価格を別の出典で補うかは未定。
+- [x] Gate 3の変更（2026-10-11 本人承認）→Gate 4 Cycle 7d（UC-018 売買直前の状況の紐付け）: `trade_switch_allocations`／`trade_context_records`は作らず、読み取り時に求める（ADR-0027 D2〜D4改訂、UC-018の文言を明確化、マイグレーションなし。本人方針: データ・画面を増やさない、ロジックの版を持たない）。テスト6件を本人承認→Green（`TradeContextFinder`・`TradeContext`。約定日の開始〔国内=日本時間、米国=NY時間〕より前・8日以内に記録されたシグナルと指標を紐付け、指標の記録がなければ最新シグナルの値、何もなければ状況不明。前週末の保有と同じ市場での割合）。JSONで保存した指標は45.0が45で戻るため、承認済みテストの比較を値の一致に変更。実データ: 売買1,291件中77件に状況あり（記録開始の8/25以降は237件中77件）。
+- [x] Gate 4 Cycle 7e（UC-018 画面「売買の振り返り」）: 画面構成を本人承認（`/trade-review`、「売買シグナル｜シグナル検証｜売買の振り返り」の3つ目のタブ、画面内は「成績」「売買一覧」の2タブ。「状況別」はUC-019のGate 2まで出さない）。テスト10件を本人承認→Green（`ShowTradeReviewAction`・`App\Livewire\TradeReview\TradeReview`）。UC-014の切替タブのテスト2件を3タブ前提に更新。本人の「重くならない・UXが下がらない担保」の要望で、計算結果をキャッシュ1行だけに保持（データが変わると上書き）、週足の読み込みを軽量化（実データで作り直し4.2秒→2.5秒、メモリ201MB→77MB、表示は約0.02〜0.04秒）、データが変わる4か所（`price:track`・保有CSV取込・ウォッチリスト一括更新・売買履歴の取込確定）の最後に作り直しジョブ`WarmTradeReviewCache`をキューで積む（テスト5件、失敗しても呼び出し側を止めない）。実データの表示確認で見つけた2点（売却代金で賄われた買付の比較欄が「—」、保有0%表示）を本人承認で修正（テスト2件）。user-guideに画面の見方を追加。Playwrightが接続できず、ブラウザでの見た目は未確認（HTMLの内容は実データで確認）。
+- [ ] 次: 7f（実データ検証。手計算との突合せ）。共有のチェックアウトの更新（7eをアプリに反映）（売却・推定乗換え・買付の比較）→7d（状況記録、Gate 3）→7e（画面3タブ）。UC-018の算出。**設計に入れる点（6eのレビューで判明）**: CSV取込の直後から次の`price:track`までは、保有銘柄の直近104週だけが分割後の値で古い週は分割前のまま残る。`full_history_fetched_at`より後に記録された分割がある銘柄は「取り直し待ち」として扱い、その銘柄の結果は算出不可にする。→UC-018の算出（年率・売却/推定乗換え/買付比較）。UC-019はGate 2保留。
 - [ ] Gate 4でUC名から導くテストケース（26週境界、取得失敗、価格補完後のUC-014再集計、二重集計防止の計算例、年率20％／25％境界）を承認してから実装する。
 
 ## メガトレンド候補発見（CHG-0031・ADR-0022／ADR-0025・F-016／UC-016）main統合済み・情報源試行中（2026-10-09）
@@ -251,42 +257,9 @@ Red 16件→Gate4承認→Green。フルスイート1226 passed・pint適用済�
 
 Red 1件→Gate4承認→Green。フルスイート1178 passed・pint適用済み。開発DB（未保有105銘柄）で財務failedの先頭位置が1位→58位に下がることを確認。ブランチ`feat/chg0045-watchlist-sort-fundamental-first`（worktree `.claude/worktrees/chg0045`）、未コミット
 
-## 売買シグナル画面キープ表の列拡充（CHG-0046）実装完了・mainマージ済み（2026-10-04）
-
-### Decision
-
-- 発端: キープ表が6列（ヘルスラインは1行の文字列）のみで、他3テーブルの指標・色分けが見られない。本人要望で他テーブルと同じ指標（PER/PBR・財務含む）を列に分けて色付き表示する
-- ファンダメンタルズは既存データで表示可能（実データ59銘柄中ROE 40・PER 43件。nullはJ-Quantsの本決算のみ開示項目・ETF〔VYM/HDV/SPYDがstock登録〕・未取得6324による。ETF登録の件は別件として報告のみ）
-- 本人判断（推奨案）: テクニカルは利確・買い増しの既存閾値の両方に照らし利確寄り＝黄／押し目寄り＝緑。PER/PBRは値のみ（業種比較色はCHG-0034後）。ヘルスライン列は廃止
-- 設計: `SignalCriteriaEvaluator::evaluateHold()`を追加。行の拡充は`ShowHoldListAction`側（`ClassifyHoldingsAction`の出力・JSON APIは不変）
-
-### Files touched
-
-`docs/product/use-cases.md`（UC-013業務ルール・承認記録）、`docs/product/ui-guidelines.md`、`docs/rcid/traceability-matrix.md`、`app/Services/Analysis/SignalCriteriaEvaluator.php`（`evaluateHold()`）、`app/Actions/Portfolio/ShowHoldListAction.php`、`app/Actions/Portfolio/ClassifyHoldingsAction.php`（`HOLD_WATCH_GAIN_RATE_BUFFER`をpublic化のみ）、`resources/views/livewire/signal/signal-list.blade.php`、`resources/views/components/criteria-chip.blade.php`、`resources/views/components/signal-table-head.blade.php`、`tests/Unit/Services/Analysis/SignalCriteriaEvaluatorHoldTest.php`、`tests/Feature/CHG0046HoldTableRichColumnsTest.php`、`tests/Feature/CHG0028SignalHoldTableTest.php`
-
-### Status
-
-Red 28件→Gate4承認（2026-10-04）→Green。フルスイート1205 passed・pint適用済み。worktreeを8046番で起動し実ブラウザで表示確認済み（キープ59銘柄・黄/緑チップ描画、ヘッダー横スクロール同期OK）。`/review`（強化、スコア58）指摘2件を修正: 含み益率の利確ラインを利確検討と同じ`TakeProfitThresholdEvaluator`に揃える（高水準モード+150%。実データ6098が誤って黄だった）／分類と拡充の間に取り込みが重なり行が見つからない場合に画面が500になる経路を既定行で回避。Red 3件→Gate4承認→Green、フルスイート1209 passed。再`/review`（8ff7357）後にmainへ--no-ffマージ。ブランチ`feat/chg0046-hold-table-rich-columns`（worktree `.claude/worktrees/chg0046`）
-
-## ウォッチリスト銘柄のセクター分類（CHG-0044・ADR-0020追補）Green完了・mainマージ済み（2026-10-03〜10-04）
-
-### Decision
-
-- 発端: 未分類が日本株64・米国株43残る。内訳はウォッチリスト（未保有）日本株64・米国株40と、保有の米国ETF3件。UC-012の一括更新は業種を保存しておらず、`sectors:backfill`も保有のみが対象だった
-- 本人判断: Aのみ進める（ウォッチリスト銘柄を一括更新と`sectors:backfill`の対象に加える）。米国ETF専用カテゴリ（B）は今回対象外
-- 設計: ADR-0020追補D6。`SectorClassificationResolver`を流用
-
-### Files touched
-
-`docs/adr/ADR-0020-*.md`（追補）、`docs/product/use-cases.md`（UC-012フロー・承認記録）、`app/Actions/Watchlist/RefreshWatchlistMarketDataAction.php`、`app/Console/Commands/BackfillSectorsCommand.php`、`app/Services/Sector/SectorClassificationResolver.php`、`tests/Feature/CHG0044WatchlistSectorClassificationTest.php`
-
-### Status
-
-Red 8件（3件は回帰ガード）→Gate4承認→Green。フルスイート1070 passed・pint適用済み。分類ロジックは`SectorClassificationResolver::classify()`に集約（一括更新・`sectors:backfill`が共用）。mainにマージ済み（`9b61d75`）。`sectors:backfill`を実データで実行した（2026-10-04）: 対象は未分類の6件（米国ETF5件〔HDV・SPYD・VYM・QQQ・VTI〕とBRK B）で、分類できたのは0件。日本株は実行前に全件分類済みだった。残り6件は本人判断で当面対応不要（ETFはB案で対象外、BRK Bは銘柄コードの表記〔半角スペース〕が原因の可能性があるが未調査）。**未実施**: `/review`
-
-Red 8件（3件は回帰ガード）→Gate4承認→Green。フルスイート1070 passed・pint適用済み。分類ロジックは`SectorClassificationResolver::classify()`に集約（一括更新・`sectors:backfill`が共用）。**未実施**: `/review`、`sectors:backfill`の実データ実行、コミット。worktree: `.claude/worktrees/chg0044`（Vite成果物`public/build`と`vendor`のハードリンクコピーを手で持ち込んで実行。コミット対象外）
-
 ## 今後の対応（未着手）（2026-08-27追記、Phase5の実ブラウザ確認時に発見）
+
+- [ ] （2026-10-11 本人指摘）「シグナル検証」画面（UC-014、`/signal-outcomes`）は情報がやや多く見づらいので今後改善する。あわせて、シグナルの種類を英語のコードのまま表示している箇所（売買シグナル・シグナル検証・売買の振り返り）の日本語名化を検討する。売買の振り返り（CHG-0033 7e）は当面「売買シグナル｜シグナル検証｜売買の振り返り」の3つ目のタブとして分けて置く（本人承認）。
 
 - **数値の未整形表示（Phase3〜5共通）**: `HoldingList`（保有一覧、Phase3）・`SignalList`（利確検討、Phase5）の含み益率・取得単価・現在値・分割指値の価格が、`{{ $value }}`で生の浮動小数点値をそのまま出力しており（例: 含み益率が`89.5793`と%記号なし表示、価格が`3632.676`のような小数点3桁表示）、実際にPlaywrightで画面を目視確認した際に発見した。レイアウト崩れではなく数値の可読性の問題。既存テストは生の数値部分文字列を検証する設計のため、これらのテストを含め画面3つ（Phase3/4/5）をまとめて後日別タスクで整形する（%サフィックス・価格の四捨五入・桁区切り等）方針とし、今回のPhase5サイクルでは対応を見送る
 - **UC-004のE2Eテスト**: 一覧→詳細遷移のみの標準的な閲覧フローであり、`.claude/rules/31-e2e-testing.md`が対象とする「クリティカルフロー」に該当しないと判断し追加しない（Phase3/UC-002・Phase4/UC-003の同種の遷移もE2E化していないこととの一貫性を優先）

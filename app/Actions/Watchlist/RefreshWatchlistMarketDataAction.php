@@ -2,6 +2,7 @@
 
 namespace App\Actions\Watchlist;
 
+use App\Jobs\WarmTradeReviewCache;
 use App\Models\FundamentalIndicator;
 use App\Models\Holding;
 use App\Models\HoldingSnapshot;
@@ -135,6 +136,9 @@ class RefreshWatchlistMarketDataAction
 
             throw $e;
         }
+
+        // UC-018: prices and records changed; rebuild the trade review in the background.
+        WarmTradeReviewCache::dispatch()->afterCommit();
 
         return $run->refresh();
     }
