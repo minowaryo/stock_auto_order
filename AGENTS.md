@@ -19,7 +19,7 @@ Codex は `.claude/rules/` を自動読込しないため、以下の表に従�
 
 | Task | Read |
 |---|---|
-| Creating / updating requirements.md or use-cases.md | `docs/original-docs/` (source materials) + `docs/product/requirements.md` |
+| Creating / updating requirements.md or use-cases.md | `docs/original-docs/` (source materials) + `docs/product/requirements.md`. Before asking for approval, run `bash .claude/hooks/spec-lint.sh` (`--requirements` before Gate 1; `meta/adr/ADR-0018-spec-lint.md`) |
 | Running commands (tests, migrations, build, etc.) | `docs/ai-context/common-commands.md` |
 | Requirements / UC reference | `docs/product/requirements.md` + `docs/product/use-cases.md` |
 | Code implementation | `docs/product/use-cases.md` + `docs/architecture/data-model.md` + `docs/product/mockups/` |
@@ -58,7 +58,7 @@ Codex用の入口は `.agents/skills/` に置く。`$tdd`、`$review`、`$verify
 
 Claude の slash command と `.claude/agents/` は、Codexのコマンドや登録済みエージェントではない。実行時の読み替えは `docs/development/codex-adapter.md` に従う。読み替えはツール呼出しだけを適応し、品質ゲートを緩和しない。
 
-Playwright MCP は `.codex/config.toml` に設定する。Claude hook はCodexでは自動発火しないため、レビュー用スクリプトはワークフローから明示的に実行する。
+Playwright MCP は `.codex/config.toml` に設定する。Claude hook はCodexでは自動発火しないため、レビュー用スクリプトはワークフローから明示的に実行する。特に `agent-guard.sh` によるtdd-implementerの書き込みブロックはCodexでは働かず、防御は `tdd-snapshot.sh verify` の事後チェックのみになる（`docs/development/tdd-guard.md`）。そのため `/tdd` 手順4が提示する `logs/audit.jsonl` のブロック記録は、Codexでは「ブロックなし」でも実態を反映しない。
 
 ## Rules
 
