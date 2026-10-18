@@ -17,6 +17,7 @@ class ResearchSourceCheckService
         private ResearchSourceFetcher $fetcher,
         private ResearchSourceFeedParser $parser,
         private ResearchSourceFdaParser $fdaParser,
+        private ResearchSourceNedoParser $nedoParser,
     ) {}
 
     /** @return array{checked: int, failed: int, skipped: int} */
@@ -114,6 +115,7 @@ class ResearchSourceCheckService
             $items = match (true) {
                 ($source['method'] ?? '') === 'rss' => $this->parser->parse($body, $deadline),
                 $key === 'S10' && ($source['method'] ?? '') === 'file' => $this->fdaParser->parse($body, $deadline),
+                $key === 'S09' && ($source['method'] ?? '') === 'html_list' => $this->nedoParser->parse($body, $deadline),
                 default => throw new RuntimeException('この取得方式の応答構造は未確認です。'),
             };
             $baseline = ! ResearchSourceCheck::where('source_key', $key)->whereIn('result', ['new_items', 'no_new', 'baseline'])->exists();
@@ -157,6 +159,7 @@ class ResearchSourceCheckService
             'HTTPエラーで取得に失敗しました。', 'この取得方式の応答構造は未確認です。',
             '接続または応答がタイムアウトしました。',
             'FDA CSVの応答形式を確認できません。', 'FDAの付帯情報が保存上限を超えました。',
+            'NEDO一覧の応答形式を確認できません。', 'NEDOの付帯情報が保存上限を超えました。',
         ];
         // Guzzle wraps exceptions raised by on_headers in a RequestException.
         for ($cause = $exception; $cause; $cause = $cause->getPrevious()) {
