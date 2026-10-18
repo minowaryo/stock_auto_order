@@ -93,6 +93,7 @@ Tests: php artisan test (128 passed)
 ```
 
 - `Review:` は `normal` / `enhanced` / `skipped`。`standard` では、`skipped` は `light` / `recommended` の場合のみ。`light` の場合、「なぜ」の行は任意
+- Domain Boundary チェック（§6）が違反をN件報告した場合、`Merge-Check:` の末尾に `; boundary N` を付ける。例: `Merge-Check: light (score 6; boundary 2)`
 
 ## §6 マージ前チェック
 
@@ -106,6 +107,15 @@ Tests: php artisan test (128 passed)
 
 スコア10 ≈ 変更100〜150行、30 ≈ 350〜450行。閾値はTrial（ADR-0016）。
 **ユーザーへの伝え方**: スコアや区分の名前（`light` / `recommended` / `required`）はユーザーに見せない。ユーザーが判断すべきことだけを平易な言葉で伝える——例：「DBマイグレーション／認可まわりに触れているので、先に `/review` しますか？」。`standard` では、マージが `/review` を待つ理由（変更が大きい、または注意が必要な領域）を伝える。変更が大きいことは、せいぜい1行の注記にとどめる。スコアと区分は、マージコミットの `Merge-Check:` トレーラーにだけ記録する。
+
+**Domain Boundary チェック**（両プロファイル、マージのたびに）: `prepare-merge` は
+`.claude/hooks/domain-boundary-check.sh` もブランチのControllerに対して実行する（`meta/adr/ADR-0011`）。
+検出結果はパターン一致であって判定ではないため、区分を変えることも `/review` を必須にすることもない。
+違反または優先ファイルが報告され、ブランチの最後のコミット以降に `/review` が実行されていない場合、AIは
+平易な言葉で1回だけ尋ねる——先に直す、`/review` する、このままマージする（例：「OrderController が DB に
+直接書き込んでいる箇所が2件あります。直す／レビューする／マージする、どれにしますか？」）。レビューを
+選んだ場合、AIは止まり、人間が `/review` を実行する（ADR-0009）。それ以外の場合、検出結果は計画に列挙する
+だけにする。スクリプトのエラーやスキップは提示し、マージは止めない。
 
 ## §7 並行セッションとworktree
 

@@ -5,8 +5,8 @@
 ## 基本方針
 
 - PSR-12 準拠
-- Laravel Pint でフォーマット（CI必須）
-- PHPStan Level 6 以上をクリア
+- Laravel Pint でフォーマット（マージ前に `./vendor/bin/pint --test` がパスすること）
+- PHPStan（Larastan）レベル6以上をクリア（導入済みの場合）——`docs/development/ai-workflow.md` の「品質ゲート」参照
 
 ## PHP
 
@@ -89,7 +89,7 @@ $user = User::find($id);
 
 | 種別 | 例 | HTTPステータス | ログレベル |
 |---|---|---|---|
-| バリデーションエラー | FormRequestの検証失敗 | 422 | ログ出力しない（想定内の入力ミス） |
+| バリデーションエラー | FormRequestの検証失敗 | 422（JSON）。Web / Inertia のフォームは 302 でセッションエラーとともに戻す | ログ出力しない（想定内の入力ミス） |
 | 認証・認可エラー | 未ログイン・権限不足 | 401 / 403 | `info`（試行は記録するが異常ではない） |
 | 業務エラー | 在庫不足・状態不整合等 | 400 / 409 | `warning` |
 | システムエラー | DB接続断・外部API障害等 | 500 | `error`（スタックトレース含む。ただし本番ではPIIをログに出さない。`.claude/rules/40-security.md` 参照） |

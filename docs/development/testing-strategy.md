@@ -45,6 +45,7 @@
 
 ## テストデータ管理
 
+- **データベース**: Laravelデフォルトのインメモリ SQLite ではなく、専用の MySQL テストデータベース（`SETUP.md` Step 4）
 - **Factory**: テストデータ生成の標準手段
 - **DatabaseTransactions**: テスト間のデータ分離
 - **RefreshDatabase**: DBを初期化が必要な場合

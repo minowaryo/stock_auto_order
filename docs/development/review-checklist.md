@@ -5,37 +5,8 @@
 
 ## 作成者セルフチェック（マージ前）
 
-### 要件・設計
-- [ ] `docs/product/use-cases.md` の対応ユースケースに紐づいているか
-- [ ] 設計変更がある場合、ADRを作成したか
-
-### コード品質
-- [ ] `./vendor/bin/pint` を実行してフォーマットを整えたか
-- [ ] `./vendor/bin/phpstan analyse` でエラーがないか
-- [ ] Fat Controllerになっていないか
-- [ ] N+1クエリがないか（Telescope / Debugbar で確認）
-
-### 認証・認可
-- [ ] `$this->authorize()` を適切なControllerで呼んでいるか
-- [ ] 新しいエンドポイントに認証ミドルウェアを設定したか
-
-### セキュリティ
-- [ ] secrets・APIキーがコードに含まれていないか
-- [ ] ログにPIIが出力されていないか
-- [ ] 特権操作・破壊的操作（削除・権限変更等）が `audit` チャンネルに記録されているか
-- [ ] バリデーションが適切か（FormRequestを使っているか）
-
-### テスト
-- [ ] `php artisan test` が通るか
-- [ ] 正常系のFeature Testがあるか
-- [ ] 認可（未認証/権限なし）のテストがあるか
-- [ ] バリデーションエラーのテストがあるか
-- [ ] TDD（Red→Green→Refactor）で進めたか（テストが実装より先に存在していたか）
-- [ ] クリティカルフローに変更がある場合、Playwright E2Eテストを追加し `npx playwright test` が通るか
-
-### ドキュメント
-- [ ] DB変更 → `docs/architecture/data-model.md` を更新したか
-- [ ] 設計変更 → 関連docs を更新したか
+作成者セルフチェックは `docs/development/review-guidelines.md` の「レビュー前確認（作成者）」に
+一本化している——`prepare-merge` はマージのたびにそのリストを実行する。
 
 ---
 

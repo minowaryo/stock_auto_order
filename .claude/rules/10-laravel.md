@@ -34,7 +34,7 @@ Controllerは**以下を行ってはならない**:
 
 **これは下記の「Modelにビジネスロジックを書かない」と矛盾しない。** 実施（enforcement）はService/Actionレイヤーが担い、Modelはスキーマとリレーションのみを保持する。ここで意図的に「Model層」という語を避けているのは、フレームワークによって意味が異なるためである。
 
-`.claude/hooks/domain-boundary-check.sh` は、`/review` 実行時にこの契約のうち機械的に検出可能な部分を検知する。4つ目のルール——プレーンなPHPで書かれたクロスエンティティな判断には識別可能なトークンが存在しない——はこのスクリプトには見えないため、レビューに委ねる。
+`.claude/hooks/domain-boundary-check.sh` は、`/review` 実行時とマージのたび（`prepare-merge`）に、この契約のうち機械的に検出可能な部分を検知する。4つ目のルール——プレーンなPHPで書かれたクロスエンティティな判断には識別可能なトークンが存在しない——はこのスクリプトには見えないため、レビューに委ねる。
 
 ### Service / Action
 - 1クラス1責務を守る
@@ -42,7 +42,8 @@ Controllerは**以下を行ってはならない**:
 - トランザクションはServiceレイヤーで管理
 
 ### Model
-- `$fillable` を明示する（`$guarded = []` 禁止）
+- 一括代入できる属性を明示する — `$fillable`、または Laravel 13 では `#[Fillable([...])]`（`$guarded = []` と `#[Unguarded]` は禁止）
+- 本番以外ではEloquentを厳格モードにする：`AppServiceProvider::boot()` に `Model::shouldBeStrict(! $this->app->isProduction())` を書くと、遅延ロード（N+1）、`$fillable` にない属性、未ロード属性の読み取りが例外になり、テストで検出できる（`isLocal()` は使わない——`APP_ENV=testing` では false になる）
 - スコープはModelに定義する
 - リレーションは積極的に定義する
 - ビジネスロジックをModelに書かない
@@ -80,7 +81,7 @@ Controllerは**以下を行ってはならない**:
 
 ## 禁止事項
 
-- `DB::statement()` での生SQL（必要な場合はADRを書く）
-- `$guarded = []`
+- `.claude/rules/20-mysql.md`（クエリ方針）のルールに反する生SQL
+- `$guarded = []` / `#[Unguarded]`
 - Controllerでのビジネスロジック
-- N+1クエリ（`with()` で積極的にEager Loading）
+- N+1クエリ（`with()` で積極的にEager Loading。上記の厳格モードによりテストで失敗する）

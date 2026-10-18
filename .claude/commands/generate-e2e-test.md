@@ -1,3 +1,7 @@
+---
+disable-model-invocation: true
+---
+
 # /generate-e2e-test — Playwright E2Eテスト生成コマンド
 
 引数で指定したUC番号のクリティカルフローに対するPlaywright E2Eテストの叩き台を生成してください。

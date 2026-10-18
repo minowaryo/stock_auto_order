@@ -1,3 +1,7 @@
+---
+disable-model-invocation: true
+---
+
 # /review — コードレビューコマンド
 
 以下の観点でコードレビューを実施してください。
