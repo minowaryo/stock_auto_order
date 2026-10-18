@@ -15,6 +15,7 @@ final class PortfolioWeek
      * @param  array<int, float>  $holdingValuesJpy  holding_id => value JPY (valued holdings only)
      * @param  array<int, float>  $holdingFlowsJpy  holding_id => money flow JPY (valued holdings only)
      * @param  array<int, float>  $excludedEstimatesJpy  holding_id => estimated value JPY (excluded holdings)
+     * @param  array<int, float>  $holdingWeightedFlowsJpy  holding_id => flow × the share of the week it was invested (modified Dietz weight)
      * @param  array<int, float>  $pricesJpy  holding_id => JPY per split-adjusted share, for every traded holding with a close (and USD/JPY) that week
      */
     public function __construct(
@@ -28,5 +29,6 @@ final class PortfolioWeek
         public readonly array $holdingFlowsJpy = [],
         public readonly array $excludedEstimatesJpy = [],
         public readonly array $pricesJpy = [],
+        public readonly array $holdingWeightedFlowsJpy = [],
     ) {}
 }

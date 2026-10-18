@@ -82,7 +82,8 @@ class StockPerformanceCalculator
 
     /**
      * Modified Dietz over the holdings valued in both weeks:
-     * (V_t − V_{t−1} − F_t) / (V_{t−1} + 0.5 F_t); null when the denominator is <= 0.
+     * (V_t − V_{t−1} − F_t) / (V_{t−1} + Σ w·F) with w the share of the week each
+     * flow was invested (by trade weekday); null when the denominator is <= 0.
      *
      * @param  callable(int): bool  $inMarket
      */
@@ -92,6 +93,9 @@ class StockPerformanceCalculator
         $before = 0.0;
         $after = 0.0;
         $flow = 0.0;
+        $weighted = 0.0;
+        // Hand-made weeks carry no weights: then the flow counts half (the mid-week convention).
+        $hasWeights = $current->holdingWeightedFlowsJpy !== [] || $current->holdingFlowsJpy === [];
 
         foreach ($ids as $id) {
             if (! $inMarket($id) || isset($previous->excluded[$id]) || isset($current->excluded[$id])) {
@@ -101,9 +105,10 @@ class StockPerformanceCalculator
             $before += $previous->holdingValuesJpy[$id] ?? 0.0;
             $after += $current->holdingValuesJpy[$id] ?? 0.0;
             $flow += $current->holdingFlowsJpy[$id] ?? 0.0;
+            $weighted += $hasWeights ? ($current->holdingWeightedFlowsJpy[$id] ?? 0.0) : 0.5 * ($current->holdingFlowsJpy[$id] ?? 0.0);
         }
 
-        $denominator = $before + 0.5 * $flow;
+        $denominator = $before + $weighted;
 
         return $denominator > 0 ? ($after - $before - $flow) / $denominator : null;
     }
