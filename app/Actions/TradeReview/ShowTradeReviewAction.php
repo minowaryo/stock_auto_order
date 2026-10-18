@@ -13,6 +13,7 @@ use App\Models\WeeklyPrice;
 use App\Services\MarketData\WeekDateNormalizer;
 use App\Services\TradeReview\StockPerformanceCalculator;
 use App\Services\TradeReview\Support\PeriodPerformance;
+use App\Services\TradeReview\Support\PortfolioWeek;
 use App\Services\TradeReview\Support\TradeComparison;
 use App\Services\TradeReview\Support\TradeContext;
 use App\Services\TradeReview\SwitchAllocator;
@@ -54,14 +55,15 @@ class ShowTradeReviewAction
     public function execute(): array
     {
         $signature = $this->signature();
+        $code = $this->codeFingerprint();
         $cached = Cache::get(self::CACHE_KEY);
 
-        if (is_array($cached) && ($cached['signature'] ?? null) === $signature) {
+        if (is_array($cached) && ($cached['signature'] ?? null) === $signature && ($cached['code'] ?? null) === $code) {
             return $cached['report'];
         }
 
         $report = $this->build();
-        Cache::forever(self::CACHE_KEY, ['signature' => $signature, 'report' => $report]);
+        Cache::forever(self::CACHE_KEY, ['signature' => $signature, 'code' => $code, 'report' => $report]);
 
         return $report;
     }
@@ -94,9 +96,8 @@ class ShowTradeReviewAction
     private function latest(array $weeks, array $markets): array
     {
         $end = array_key_last($weeks);
-        $base = max(Carbon::parse($end)->subWeeks(self::JUDGE_WEEKS)->toDateString(), array_key_first($weeks));
 
-        return $this->byMarket($weeks, $markets, $base, $end);
+        return $this->byMarket($weeks, $markets, Carbon::parse($end)->subWeeks(self::JUDGE_WEEKS)->toDateString(), $end);
     }
 
     /**
@@ -115,8 +116,7 @@ class ShowTradeReviewAction
         $result = [];
 
         foreach ($byYear as $year => $yearWeeks) {
-            $base = max(Carbon::parse($yearWeeks[0])->subWeek()->toDateString(), array_key_first($weeks));
-            $result[$year] = $this->byMarket($weeks, $markets, $base, end($yearWeeks));
+            $result[$year] = $this->byMarket($weeks, $markets, Carbon::parse($yearWeeks[0])->subWeek()->toDateString(), end($yearWeeks));
         }
 
         return $result;
@@ -130,12 +130,54 @@ class ShowTradeReviewAction
     private function byMarket(array $weeks, array $markets, string $base, string $end): array
     {
         $rows = [];
+        $starts = $this->marketStarts($weeks, $markets);
 
         foreach (self::MARKETS as $key => $market) {
-            $rows[$key] = $this->periodRow($this->performance->calculate($weeks, $markets, $market, $base, $end, self::JUDGE_WEEKS));
+            // A period starts no earlier than the week this market's holdings begin,
+            // so a market that started within it is 「参考」, not judged (2026-10-18).
+            $from = isset($starts[$key]) ? max($base, $starts[$key]) : $base;
+            $rows[$key] = $this->periodRow($this->performance->calculate($weeks, $markets, $market, $from, $end, self::JUDGE_WEEKS));
         }
 
         return $rows;
+    }
+
+    /**
+     * The first week in which each market (and all together) holds or trades anything.
+     *
+     * @param  array<string, PortfolioWeek>  $weeks
+     * @param  array<int, string>  $markets
+     * @return array<string, string>
+     */
+    private function marketStarts(array $weeks, array $markets): array
+    {
+        $starts = [];
+
+        foreach ($weeks as $week => $portfolio) {
+            foreach (array_keys($portfolio->quantities + $portfolio->holdingFlowsJpy) as $id) {
+                $starts['all'] ??= $week;
+                $market = $markets[$id] ?? null;
+
+                if ($market !== null) {
+                    $starts[$market] ??= $week;
+                }
+            }
+        }
+
+        return $starts;
+    }
+
+    /**
+     * A fingerprint of the code that builds the report, so a deploy that
+     * changes the calculation or the labels rebuilds the cached report even
+     * when the data did not change (found 2026-10-18).
+     */
+    private function codeFingerprint(): string
+    {
+        $files = [...glob(app_path('Services/TradeReview/*.php')), ...glob(app_path('Services/TradeReview/Support/*.php')), ...glob(app_path('Actions/TradeReview/*.php'))];
+        sort($files);
+
+        return md5(implode('|', array_map(fn (string $file) => md5_file($file), $files)));
     }
 
     /**

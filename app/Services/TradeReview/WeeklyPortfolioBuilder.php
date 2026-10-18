@@ -78,13 +78,16 @@ class WeeklyPortfolioBuilder
         for ($week = $first; $week <= $last; $week = Carbon::parse($week)->addWeek()->toDateString()) {
             $fx = $usdJpy[$week] ?? null;
             $flows = [];
+            $weightedFlows = [];
 
             foreach ($tradesByWeek->get($week, collect()) as $trade) {
                 $id = $trade->holding_id;
                 $shares = (float) $trade->quantity * $splitData->factor($id, $trade->trade_date->toDateString());
                 $sign = in_array($trade->kind, self::ADDS, true) ? 1 : -1;
                 $quantities[$id] = ($quantities[$id] ?? 0.0) + $sign * $shares;
-                $flows[$id] = ($flows[$id] ?? 0.0) + $sign * $this->amount($trade, $shares, $closes[$id][$week] ?? null, $markets[$id] === 'us' ? $fx : 1.0);
+                $amount = $sign * $this->amount($trade, $shares, $closes[$id][$week] ?? null, $markets[$id] === 'us' ? $fx : 1.0);
+                $flows[$id] = ($flows[$id] ?? 0.0) + $amount;
+                $weightedFlows[$id] = ($weightedFlows[$id] ?? 0.0) + $amount * $this->investedShare($trade);
 
                 if ($trade->unit_price !== null) {
                     $lastTradePrice[$id] = (float) $trade->unit_price * ($markets[$id] === 'us' ? (float) ($trade->fx_rate ?? $fx ?? 0) : 1.0);
@@ -97,6 +100,7 @@ class WeeklyPortfolioBuilder
             $estimate = 0.0;
             $holdingValues = [];
             $holdingFlows = [];
+            $holdingWeightedFlows = [];
             $estimates = [];
             $prices = [];
 
@@ -130,6 +134,7 @@ class WeeklyPortfolioBuilder
 
                 $holdingValues[$id] = $shares * $close * $rate;
                 $holdingFlows[$id] = $flows[$id] ?? 0.0;
+                $holdingWeightedFlows[$id] = $weightedFlows[$id] ?? 0.0;
                 $value += $holdingValues[$id];
                 $flow += $holdingFlows[$id];
             }
@@ -148,6 +153,7 @@ class WeeklyPortfolioBuilder
                 excludedEstimateJpy: $estimate,
                 holdingValuesJpy: $holdingValues,
                 holdingFlowsJpy: array_filter($holdingFlows, fn (float $f) => $f !== 0.0),
+                holdingWeightedFlowsJpy: array_filter($holdingWeightedFlows, fn (float $f) => $f !== 0.0),
                 excludedEstimatesJpy: $estimates,
                 pricesJpy: $prices,
             );
@@ -217,6 +223,16 @@ class WeeklyPortfolioBuilder
             });
 
         return $closes;
+    }
+
+    /**
+     * The share of its week a trade's money was invested (modified Dietz
+     * weight, 2026-10-18 本人承認): Monday 1.0, Tuesday 0.8, ... Friday 0.2,
+     * by trading days left including the trade day.
+     */
+    private function investedShare(TradeExecution $trade): float
+    {
+        return max(0.0, min(1.0, (6 - $trade->trade_date->dayOfWeekIso) / 5));
     }
 
     /**
