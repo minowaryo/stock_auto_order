@@ -35,7 +35,13 @@ disable-model-invocation: true
    何もコミットしない。
 7. **コミット** — グループごとに順番に: `git add <files>` の後、承認されたメッセージと
    `Co-Authored-By:` トレーラーを付けて `git commit` する。push・amend・rebaseは行わない（§4 権限）。
-8. **報告** — 短縮SHAと件名を報告する。ブランチの作業が完了していそうなら `prepare-merge` を提案する。
+8. **報告** — 最後は必ずこの表で終える（フェーズ報告、`.claude/rules/30-testing.md`）。コミットが失敗した
+   場合も同じ（どこで止まったかを書く）。ブランチの作業が完了していそうなら `prepare-merge` を提案する。
+
+   | # | SHA | Subject | Files | このツリーでのテスト |
+   |---|---|---|---|---|
+
+   「このツリーでのテスト」はステップ5の実行結果（例: `466 passed`）、または「未実行——docsのみ」。
 
 ## 制約
 

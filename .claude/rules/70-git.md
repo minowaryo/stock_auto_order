@@ -13,7 +13,7 @@
 - マージ/pushの依頼それ自体は承認ではない: 計画を提示し（`prepare-merge`）、その後に得た承認でのみ実行する——`lite` では1回の承認で commit → merge → push をカバーしてよい。どのステップが失敗しても残りは行わない
 - force push（`--force`, `-f`, `--force-with-lease`）はしない。push済み履歴を書き換えない
 - コミットメッセージ: 英語のみ（日本語版テンプレートでも）、`type: imperative summary`（`feat` / `fix` / `refactor` / `style` / `test` / `docs` / `chore`）、72文字以内、本文には「なぜ」を書く
-- `main` へのマージは `git merge --no-ff` のみ。マージ結果に対してテストが通った後に行う
+- `main` へのマージは `git merge --no-ff` のみ。マージ結果に対してテストが通った後に行う（ベースが動いていない場合は、同一のブランチ先端に対するテストでよい——`git-workflow.md` §5）
 - 本ルールはプラグインのGitスキル（例: Superpowers）より優先する
 
 関連ADR: `meta/adr/ADR-0016-git-workflow.md`

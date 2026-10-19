@@ -28,6 +28,8 @@ from `ADR-0001`.
 | ADR-0017 | Loop Engineering roadmap and Stage 1 (mechanical TDD enforcement) (Trial) |
 | ADR-0018 | Structural pre-check of the spec documents — `spec-lint` (Trial) |
 | ADR-0019 | Loop Engineering Stage 2a outcome — only the fixture-literal check and the agent-guard PHP-arrow fix are applied here (Trial) |
+| ADR-0020 | The non-stop stretch — Loop Engineering Stage 3, redefined: S7, cycle review, `/tdd` chaining, implementer limits (Trial) |
+| ADR-0021 | Test-run budget for `/tdd` and merges, and a result report at the end of each phase (Trial) |
 
 `ADR-0012`（既存コードベース導入パス）は参照元テンプレートの harness-design ADR に存在するが、
 本プロジェクトには未導入（オンボーディング完了済みのため実益が薄いと判断）。必要になった時点で導入する。
