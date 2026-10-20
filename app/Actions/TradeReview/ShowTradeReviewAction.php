@@ -14,19 +14,27 @@ use App\Services\MarketData\WeekDateNormalizer;
 use App\Services\TradeReview\StockPerformanceCalculator;
 use App\Services\TradeReview\Support\PeriodPerformance;
 use App\Services\TradeReview\Support\PortfolioWeek;
+use App\Services\TradeReview\Support\SituationCell;
 use App\Services\TradeReview\Support\TradeComparison;
 use App\Services\TradeReview\Support\TradeContext;
+use App\Services\TradeReview\Support\TradeSituation;
 use App\Services\TradeReview\SwitchAllocator;
+use App\Services\TradeReview\TradeClusterAggregator;
 use App\Services\TradeReview\TradeComparisonCalculator;
 use App\Services\TradeReview\TradeContextFinder;
+use App\Services\TradeReview\TradeSituationClassifier;
 use App\Services\TradeReview\WeeklyPortfolioBuilder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
 /**
  * The data of the 売買の振り返り screen (UC-018): the stock-part return and
  * its judgement for the latest 52 weeks and each calendar year, and every
- * sell / buy with its comparisons and the situation recorded before it.
+ * sell / buy with its comparisons and the situation recorded before it; and
+ * the 状況別 aggregation (UC-019), built from the same weeks, comparisons and
+ * contexts. The report holds plain arrays and scalars only (the database
+ * cache store unserializes with allowed_classes = false).
  *
  * The whole calculation takes a few seconds, so the result is cached in ONE
  * cache entry together with a signature of every table it reads; any new
@@ -41,16 +49,27 @@ class ShowTradeReviewAction
 
     private const MARKETS = ['all' => null, 'jp' => 'jp', 'us' => 'us'];
 
+    private const SITUATION_MARKETS = ['jp' => '国内株', 'us' => '米国株'];
+
+    /** The bands of each 状況別 axis, in display order, with their labels. */
+    private const SITUATION_BANDS = [
+        'high_ratio' => ['near_high' => '高値圏（52週高値の85%以上）', 'pullback' => '押し目圏（85%未満）', 'unknown' => '不明'],
+        'relative_strength' => ['strong' => '強い（対市場−5pt以上）', 'weak' => '弱い（−5pt未満）', 'unknown' => '不明'],
+        'holding' => ['none' => '未保有', 'lt1' => '保有1%未満', '1to5' => '保有1〜5%', 'gt5' => '保有5%超'],
+    ];
+
     public function __construct(
         private readonly WeeklyPortfolioBuilder $builder,
         private readonly StockPerformanceCalculator $performance,
         private readonly TradeComparisonCalculator $comparisons,
         private readonly TradeContextFinder $contexts,
         private readonly WeekDateNormalizer $weeks,
+        private readonly TradeSituationClassifier $classifier,
+        private readonly TradeClusterAggregator $aggregator,
     ) {}
 
     /**
-     * @return array{latest: array<string, array<string, mixed>>|null, years: array<int, array<string, array<string, mixed>>>, trades: list<array<string, mixed>>}
+     * @return array{latest: array<string, array<string, mixed>>|null, years: array<int, array<string, array<string, mixed>>>, trades: list<array<string, mixed>>, situations: array<string, mixed>}
      */
     public function execute(): array
     {
@@ -69,22 +88,33 @@ class ShowTradeReviewAction
     }
 
     /**
-     * @return array{latest: array<string, array<string, mixed>>|null, years: array<int, array<string, array<string, mixed>>>, trades: list<array<string, mixed>>}
+     * @return array{latest: array<string, array<string, mixed>>|null, years: array<int, array<string, array<string, mixed>>>, trades: list<array<string, mixed>>, situations: array<string, mixed>}
      */
     private function build(): array
     {
         $weeks = $this->builder->build();
 
         if ($weeks === []) {
-            return ['latest' => null, 'years' => [], 'trades' => []];
+            return ['latest' => null, 'years' => [], 'trades' => [], 'situations' => $this->emptySituations()];
         }
 
         $markets = Holding::query()->pluck('market', 'id')->all();
 
+        // Shared by 売買一覧 and 状況別: each is calculated once per rebuild.
+        $comparisons = [...$this->comparisons->sells($weeks), ...$this->comparisons->switches($weeks), ...$this->comparisons->buys($weeks)];
+        $contexts = $this->contexts->find($weeks);
+        $trades = TradeExecution::query()
+            ->with('holding:id,symbol_code,symbol_name')
+            ->whereIn('kind', ['sell', 'buy', 'tsumitate'])
+            ->orderByDesc('trade_date')
+            ->orderByDesc('id')
+            ->get();
+
         return [
             'latest' => $this->latest($weeks, $markets),
             'years' => $this->years($weeks, $markets),
-            'trades' => $this->trades($weeks),
+            'trades' => $this->trades($trades, $comparisons, $contexts),
+            'situations' => $this->situations($weeks, $trades, $comparisons, $contexts),
         ];
     }
 
@@ -199,25 +229,17 @@ class ShowTradeReviewAction
     /**
      * Sells and buys (routine buys excluded), newest first.
      *
-     * @param  array<string, mixed>  $weeks
+     * @param  Collection<int, TradeExecution>  $trades  newest first
+     * @param  list<TradeComparison>  $list
+     * @param  array<int, TradeContext>  $contexts
      * @return list<array<string, mixed>>
      */
-    private function trades(array $weeks): array
+    private function trades(Collection $trades, array $list, array $contexts): array
     {
-        $comparisons = [];
+        $comparisons = $this->comparisonsByTrade($list);
 
-        foreach ([...$this->comparisons->sells($weeks), ...$this->comparisons->switches($weeks), ...$this->comparisons->buys($weeks)] as $c) {
-            $comparisons[$c->tradeId][$c->type][$c->horizon] = $c;
-        }
-
-        $contexts = $this->contexts->find($weeks);
-
-        return TradeExecution::query()
-            ->with('holding:id,symbol_code,symbol_name')
-            ->whereIn('kind', ['sell', 'buy'])
-            ->orderByDesc('trade_date')
-            ->orderByDesc('id')
-            ->get()
+        return $trades
+            ->filter(fn (TradeExecution $trade) => in_array($trade->kind, ['sell', 'buy'], true))
             ->map(fn (TradeExecution $trade) => [
                 'id' => $trade->id,
                 'date' => $trade->trade_date->toDateString(),
@@ -233,7 +255,119 @@ class ShowTradeReviewAction
                     : $this->comparisonRows($comparisons[$trade->id] ?? []),
                 'context' => $this->contextRow($contexts[$trade->id] ?? null),
             ])
+            ->values()
             ->all();
+    }
+
+    /**
+     * @param  list<TradeComparison>  $list
+     * @return array<int, array<string, array<int, TradeComparison>>>
+     */
+    private function comparisonsByTrade(array $list): array
+    {
+        $comparisons = [];
+
+        foreach ($list as $c) {
+            $comparisons[$c->tradeId][$c->type][$c->horizon] = $c;
+        }
+
+        return $comparisons;
+    }
+
+    /**
+     * The 状況別 tab (UC-019): the counts behind it, the rows per axis / type /
+     * horizon (jp before us, bands in display order) and, for every
+     * classified trade, its diff per type and horizon for the drill-down.
+     *
+     * @param  array<string, PortfolioWeek>  $weeks
+     * @param  Collection<int, TradeExecution>  $trades  incl. routine ones (counted as excluded)
+     * @param  list<TradeComparison>  $comparisons
+     * @param  array<int, TradeContext>  $contexts
+     * @return array{summary: array{trades: int, excluded_routine: int, recorded: int, recomputed: int}, rows: array<string, array<string, array<int, list<array<string, mixed>>>>>, trades: array<int, array<string, mixed>>}
+     */
+    private function situations(array $weeks, Collection $trades, array $comparisons, array $contexts): array
+    {
+        $situations = $this->classifier->classify($weeks, $contexts);
+        $aggregation = $this->aggregator->aggregate($trades, $situations, $comparisons);
+        $sources = array_count_values(array_map(fn (TradeSituation $s) => $s->source, $situations));
+
+        $cells = $aggregation->cells;
+        usort($cells, fn (SituationCell $x, SituationCell $y) => $this->situationOrder($x) <=> $this->situationOrder($y));
+        $rows = [];
+
+        foreach ($cells as $cell) {
+            $rows[$cell->axis][$cell->type][$cell->horizon][] = [
+                'key' => $cell->market.'-'.$cell->band,
+                'market' => self::SITUATION_MARKETS[$cell->market] ?? $cell->market,
+                'band' => self::SITUATION_BANDS[$cell->axis][$cell->band] ?? '不明',
+                'clusters' => $cell->clusters,
+                'ok' => $cell->okClusters,
+                'pending' => $cell->pendingClusters,
+                'unavailable' => $cell->unavailableClusters,
+                'median' => $cell->median === null ? '—' : $this->rate($cell->median),
+                'range' => $cell->p25 === null || $cell->p75 === null ? '—' : $this->rate($cell->p25).'〜'.$this->rate($cell->p75),
+                'better' => $cell->betterClusters,
+                'recorded' => $cell->recordedTrades,
+                'trade_ids' => $cell->tradeIds,
+            ];
+        }
+
+        $byTrade = $this->comparisonsByTrade($comparisons);
+        $listed = [];
+
+        foreach ($trades as $trade) {
+            if (! isset($situations[$trade->id])) {
+                continue;
+            }
+
+            $listed[$trade->id] = [
+                'date' => $trade->trade_date->toDateString(),
+                'code' => $trade->holding->symbol_code,
+                'name' => $trade->holding->symbol_name,
+                'diffs' => array_map(
+                    fn (array $byHorizon) => array_map(fn (TradeComparison $c) => $this->cell($c->status, $c->diffRate), $byHorizon),
+                    $byTrade[$trade->id] ?? [],
+                ),
+            ];
+        }
+
+        return [
+            'summary' => [
+                'trades' => count($situations),
+                'excluded_routine' => $aggregation->excludedRoutine,
+                'recorded' => $sources['recorded'] ?? 0,
+                'recomputed' => $sources['recomputed'] ?? 0,
+            ],
+            'rows' => $rows,
+            'trades' => $listed,
+        ];
+    }
+
+    /**
+     * @return array{summary: array{trades: int, excluded_routine: int, recorded: int, recomputed: int}, rows: array{}, trades: array{}}
+     */
+    private function emptySituations(): array
+    {
+        return ['summary' => ['trades' => 0, 'excluded_routine' => 0, 'recorded' => 0, 'recomputed' => 0], 'rows' => [], 'trades' => []];
+    }
+
+    /**
+     * @return array{int, int}
+     */
+    private function situationOrder(SituationCell $cell): array
+    {
+        $bands = array_keys(self::SITUATION_BANDS[$cell->axis] ?? []);
+        $band = array_search($cell->band, $bands, true);
+
+        return [
+            (int) array_search($cell->market, array_keys(self::SITUATION_MARKETS), true),
+            $band === false ? count($bands) : $band,
+        ];
+    }
+
+    private function rate(float $rate): string
+    {
+        return sprintf('%+.1f%%', $rate * 100);
     }
 
     /**
