@@ -2,9 +2,10 @@
 # agent-guard.sh — PreToolUse hook: tdd-implementer cannot move the goal it is asked to reach.
 # ADR-0017 Stage 1, item 3 (meta/adr/ADR-0017-loop-engineering-stage1.md).
 #
-# Registered in .claude/settings.json for Write|Edit|MultiEdit|NotebookEdit|Bash. Only calls
-# made by the tdd-implementer subagent (payload field agent_type) are checked; the main
-# session, test-writer and every other agent pass through untouched. For the implementer it
+# Registered in .claude/settings.json for Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell|Agent|Task.
+# Only calls made by the tdd-implementer subagent (payload field agent_type) are checked; the
+# main session, test-writer and every other agent pass through untouched — except that starting
+# the implementer (Agent / Task with subagent_type tdd-implementer) is counted. For the implementer it
 # denies:
 #   - writing under tests/ or docs/product/ (the tests and spec approved at Gate 4), through
 #     the file tools or through Bash commands that write (redirects, cp/mv/rm, sed -i, tee,
@@ -14,6 +15,10 @@
 #   - writing the record of the cycle: logs/ (this denial log) and the approved snapshot
 #     (any path with a claude-tdd segment) — the checked party must not edit the evidence
 #     about itself (ADR-0017 item 3, amended 2026-10-07).
+# Limits per Gate 4 approval (ADR-0020, meta/design/stretch-chaining-limits.md), counted only
+# while an approved snapshot exists; tdd-snapshot.sh record starts them again from zero:
+#   - S5: the implementer is started at most twice; the third start is denied;
+#   - S9: the implementer makes at most 60 Write / Edit / Bash / PowerShell calls.
 # Each denial is appended to logs/audit.jsonl (event "agent_guard_denial"; never file contents).
 #
 # Bash builtins only on the allow path: the hook runs on every tool call, and a hook that
@@ -36,8 +41,8 @@ deny() { # deny RULE TARGET MESSAGE
   ts; local now=$REPLY
   json_esc "$2"; local target=$REPLY
   [ -d "$base/logs" ] || mkdir -p "$base/logs" 2>/dev/null
-  printf '{"ts":"%s","event":"agent_guard_denial","session_id":"%s","agent_type":"tdd-implementer","tool":"%s","rule":"%s","target":"%s"}\n' \
-    "$now" "$sid" "$tool" "$1" "$target" >> "$base/logs/audit.jsonl" 2>/dev/null
+  printf '{"ts":"%s","event":"agent_guard_denial","session_id":"%s","agent_type":"%s","tool":"%s","rule":"%s","target":"%s"}\n' \
+    "$now" "$sid" "${caller:-tdd-implementer}" "$tool" "$1" "$target" >> "$base/logs/audit.jsonl" 2>/dev/null
   printf 'agent-guard: %s\n' "$3" >&2
   exit 2
 }
@@ -52,16 +57,65 @@ if [ "$head" = "$input" ]; then
   # Names the implementer but has no tool_input: unparsable. Fail closed.
   deny unparsable "" "could not parse the hook input; refusing by default."
 fi
-re_agent='"agent_type"[[:space:]]*:[[:space:]]*"([^"]*)"'
-[[ $head =~ $re_agent ]] || exit 0
-[ "${BASH_REMATCH[1]}" = "tdd-implementer" ] || exit 0
-
 re_str='"%s"[[:space:]]*:[[:space:]]*"([^"]*)"'
 field() { local re; printf -v re "$re_str" "$1"; [[ $2 =~ $re ]] && REPLY=${BASH_REMATCH[1]} || REPLY=''; }
+field agent_type "$head"; caller=${REPLY:-main}
 field tool_name "$head"; tool_name=$REPLY
 field session_id "$head"; session_id=$REPLY
 field cwd "$head"; cwd=$REPLY
 tin=${input#*\"tool_input\"}
+
+RUN_LIMIT=2
+CALL_LIMIT=60
+RUNS_MSG="tdd-implementer has already run $RUN_LIMIT times since the Gate 4 approval (limit $RUN_LIMIT, ADR-0020). Do not start it again: show its reports to the user and wait for their decision. A new Gate 4 approval (tdd-snapshot.sh record) allows $RUN_LIMIT more runs."
+BUDGET_MSG="The budget for this TDD cycle is used up: $CALL_LIMIT file writes and commands since the Gate 4 approval (ADR-0020). Stop now and report what is done, what is left, and the last test result."
+
+# snapshot_dir -> REPLY: the approved-snapshot directory of the repository around cwd, or ''
+# outside a /tdd cycle. Builtins only; a worktree's .git file is followed to its git dir.
+snapshot_dir() {
+  local d=$cwd bs='\' g=''
+  d=${d//"$bs$bs"/\/}; d=${d//"$bs"/\/}
+  [ -n "$d" ] || d=${CLAUDE_PROJECT_DIR:-$PWD}
+  REPLY=''
+  while [ -n "$d" ]; do
+    if [ -d "$d/.git" ]; then g=$d/.git; break; fi
+    if [ -f "$d/.git" ]; then
+      IFS= read -r g < "$d/.git"; g=${g#gitdir: }; g=${g%$'\r'}
+      [[ $g == /* || $g == [A-Za-z]:* ]] || g=$d/$g
+      break
+    fi
+    [[ $d == */* ]] || return 0
+    d=${d%/*}
+  done
+  [ -n "$g" ] && [ -f "$g/claude-tdd/approved/.recorded-at" ] && REPLY=$g/claude-tdd/approved
+  return 0
+}
+
+# count FILE LIMIT -> 1 when the limit is already reached; otherwise counts one more, returns 0.
+count() {
+  snapshot_dir; [ -n "$REPLY" ] || return 0
+  local f=$REPLY/$1 n=0
+  if [ -f "$f" ]; then read -r n < "$f"; [[ $n =~ ^[0-9]+$ ]] || n=0; fi
+  [ "$n" -ge "$2" ] && return 1
+  printf '%s\n' $((n + 1)) 2>/dev/null > "$f"
+  return 0
+}
+
+# S5: starting the implementer is counted, whoever starts it (normally the main session).
+if [[ $tool_name == Agent || $tool_name == Task ]]; then
+  re_sub='"subagent_type"[[:space:]]*:[[:space:]]*"tdd-implementer"'
+  [[ $tin =~ $re_sub ]] || exit 0
+  count .implementer-runs "$RUN_LIMIT" || deny implementer_runs "tdd-implementer" "$RUNS_MSG"
+  exit 0
+fi
+
+[ "$caller" = "tdd-implementer" ] || exit 0
+
+# S9: the implementer's own writes and commands.
+case $tool_name in
+  Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell)
+    count .implementer-calls "$CALL_LIMIT" || deny budget "" "$BUDGET_MSG" ;;
+esac
 
 # norm PATH -> REPLY: JSON-unescaped, "/" separators, lower case, c:/ -> /c/, . and .. resolved.
 norm() {

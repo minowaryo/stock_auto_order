@@ -31,6 +31,15 @@ docker compose exec laravel.test php artisan test
 # 特定ファイル
 docker compose exec laravel.test php artisan test tests/Feature/UserTest.php
 
+# 簡潔な出力（サマリー + 失敗のみ）——AIによる実行で使う
+docker compose exec laravel.test php artisan test --compact tests/Feature/UserTest.php
+
+# 遅い実データ系テスト以外すべて（反復中のみ。正式な実行には含める）
+docker compose exec laravel.test php artisan test --compact --exclude-group slow
+
+# 遅いテスト上位10件
+docker compose exec laravel.test php artisan test --profile
+
 # カバレッジ付き
 docker compose exec laravel.test php artisan test --coverage
 
@@ -58,6 +67,9 @@ npx playwright test --ui
 
 # 直近の失敗レポート表示
 npx playwright show-report
+
+# 新規・変更画面のスクリーンショット（新規画面は prepare-merge が撮る。e2e-testing.md 参照）
+rm -rf tests/e2e/.screenshots && CAPTURE_SCREENS="Schedules/Index" npx playwright test tests/e2e/screen-capture.spec.ts --reporter=line
 ```
 
 ## Playwright MCP（ブラウザ操作ツール・任意導入）

@@ -43,7 +43,8 @@ AI向け要約層        → docs/ai-context/
 │   │   └── 60-docs.md                 # ドキュメント更新ルール
 │   ├── agents/
 │   │   ├── test-writer.md             # TDD Redフェーズ専用サブエージェント
-│   │   └── tdd-implementer.md         # TDD Greenフェーズ専用サブエージェント
+│   │   ├── tdd-implementer.md         # TDD Greenフェーズ専用サブエージェント
+│   │   └── cycle-reviewer.md          # Green後に /tdd が呼ぶ、指摘だけを返すレビュアー（ADR-0020）
 │   └── commands/
 │       ├── review.md                  # /review コマンド
 │       ├── adr.md                     # /adr コマンド

@@ -1,6 +1,6 @@
 ---
 name: prepare-merge
-description: 完了したフィーチャーブランチの main へのマージを準備し、明示的な指示があった場合のみ実行する——マージ前チェックを実行し、その区分に応じた /review の要否を守らせ、マージコミットのメッセージを起草し、マージ結果に対してテストを実行したうえで --no-ff でマージする。ブランチの作業が完了したとき、またはユーザーがブランチのマージ・完了・取り込みを依頼したときに使う（例: 「マージして」「ブランチを取り込む」「作業完了したのでmainに入れて」「merge this」「finish this branch」）。このプロジェクトでは Superpowers の finishing-a-development-branch を置き換える。Status: Trial（`meta/adr/ADR-0016` 参照）。
+description: 完了したフィーチャーブランチの main へのマージを準備し、明示的な指示があった場合のみ実行する——マージ前チェックを実行し、その区分に応じた /review の要否を守らせ、マージコミットのメッセージを起草し、マージ結果に対してテストを実行したうえで（テスト済みのブランチ先端と同じ場合を除く）--no-ff でマージし、結果報告で終える。ブランチの作業が完了したとき、またはユーザーがブランチのマージ・完了・取り込みを依頼したときに使う（例: 「マージして」「ブランチを取り込む」「作業完了したのでmainに入れて」「merge this」「finish this branch」）。このプロジェクトでは Superpowers の finishing-a-development-branch を置き換える。Status: Trial（`meta/adr/ADR-0016` 参照）。
 ---
 
 # マージ準備
@@ -37,6 +37,21 @@ description: 完了したフィーチャーブランチの main へのマージ�
    `>> N violation(s), H heuristic warning(s), P priority file(s).` の行を読む（「No Domain Boundary
    violations」または「nothing to check」の行は、すべて0を意味する）。それ以外の終了コードや
    「skipping」の行が出ても止まらない: ステップ5の計画に書き留めて続行する。
+
+   続いて、変わった画面を挙げる（git だけで判定する。コマンドは `docs/development/e2e-testing.md` の
+   「変わった画面とスクリーンショット」にある。その節を読むのは、新しいページがあり
+   `playwright.config.ts` があるときだけ）:
+
+   ```bash
+   base=$(git merge-base HEAD "${REVIEW_SCORE_BASE_BRANCH:-main}")
+   git diff --name-status "$base" -- resources/js/Pages resources/js/pages resources/js/Components resources/js/components resources/js/Layouts resources/js/layouts resources/views
+   git ls-files --others --exclude-standard -- resources/js/Pages resources/js/pages resources/views
+   ```
+
+   新しいページ（`A` または未追跡）があり Playwright が使える場合は、その節に従って撮影する。撮影で
+   書き込まれたファイル（カタログの行。初回は撮影用スペックとヘルパーも）は、ブランチのコミットの後に
+   `test:` コミット1つとしてコミットする。ステップ5の計画では、コミットの表ではなく画面の行の下に示す。
+   撮影が失敗しても止まらない。
 3. **区分によるゲート**（§6）— `/review` を「実行済み」とみなすのは、このセッションでブランチの
    最後のコミットより後に実行された場合か、ユーザーが実行済みと確認した場合だけ——推測で判断しない。
    - `standard`:
@@ -72,17 +87,28 @@ description: 完了したフィーチャーブランチの main へのマージ�
    その1回の承認で一連の操作全体をカバーする。
    Domain Boundary チェックで何か見つかった場合、または失敗・スキップした場合は、計画の中で平易な言葉で
    伝える（ファイルと何をしているか、またはエラー内容）。
+   画面が変わった場合は、平易な言葉で**1行**加える——名前はフォルダより下のパスから拡張子を除いたもの、
+   最大5件で残りは「ほか N 件」。画像ごとの行は、ユーザーがスクリーンショットを求めたときだけ出す。
+   Playwright がなければ名前だけにする:
+   `画面: 新規 Schedules/Index（スクショ2枚 → tests/e2e/.screenshots/）、変更 Schedules/Edit ほか3件 — 変更分は「撮って」と言えば撮ります`
+   撮影でファイルが書き込まれた場合は、その下に加える: `└ 新規画面の撮影用に tests/e2e/screens.ts へ1行追加 → "test: add screen catalog entry" としてコミット`
 
    ```bash
    git checkout <base>
    git fetch && git merge --ff-only origin/<base>   # skip if there is no remote
    git merge --no-ff --no-commit <branch>
-   <test command>                                   # e.g. php artisan test
+   <test command>                                   # e.g. php artisan test --compact; see below
    git commit -F - <<'EOF'                          # only if the tests passed
    <merge message>
    EOF
    git branch -d <branch>
    ```
+
+   計画には `<test command>` を実行するかどうかを書く（`docs/development/git-workflow.md` §5、
+   `meta/adr/ADR-0021`）。省略するのは、`--ff-only` での更新の**後に**
+   `git merge-base --is-ancestor <base> <branch>` が成功し（ベースが動いていないので、マージ結果のツリーは
+   ブランチ先端と同じ）、**かつ**このセッションで、コミット済みのツリーそのものに対して全件が通っている
+   場合だけである。それがどの実行かを書き、`Tests:` トレーラーに記録する。それ以外、または迷ったら実行する。
 
 6. **指示を受けてマージする** — 上記の手順を実行する。以下の場合は自分で解消しようとせず、止まって
    報告する: `--ff-only` での更新が失敗した場合（ローカルの `<base>` がリモートと分岐している——
@@ -94,3 +120,15 @@ description: 完了したフィーチャーブランチの main へのマージ�
 7. **マージ後** — ローカルブランチは計画どおり削除される。`<base>` のpushとリモートブランチの削除は、
    明示的な指示があった場合のみ行う（§4 権限）。`lite` の一括実行の承認は、計画に含めたpushについては
    その指示とみなす。
+8. **フェーズ報告** — 最後は必ずこの表で終える（`.claude/rules/30-testing.md`「フェーズ報告」）。
+   どこかのステップが失敗した場合も同じで、どのステップで止まり、何を実行しなかったかを書く:
+
+   | 項目 | 結果 |
+   |---|---|
+   | コミット | この実行で作成した短縮SHAと件名、または「—」 |
+   | マージ | `<base>` へのマージコミットのSHA、またはどこで止まったか |
+   | マージ結果のテスト | 例: `466 passed`、または「省略——ベース不変。ブランチ先端 <sha> で 466 passed」 |
+   | レビュー | 通常 / 強化 / スキップ |
+   | Domain Boundary | 指摘、または「なし」 |
+   | ブランチ | ローカルブランチを削除 / 残した |
+   | Push | `origin/<base>` にpush済み / 未push |

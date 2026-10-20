@@ -28,6 +28,7 @@
 - `wire:model` は必要な入力要素にのみ絞る（`wire:model.live` は入力のたびにサーバーへリクエストが飛ぶため、メモ欄など高頻度入力には `wire:model.blur` または `wire:model.live.debounce.500ms` を使う）
 - バリデーションはコンポーネントクラスの `rules()` に定義する（Laravel標準のFormRequestと同様、ルールをコンポーネント外に切り出すことも可）
 - 認可チェックは `authorize()` を明示的に呼ぶ（Controller同様、Policy/Gate必須。`.claude/rules/10-laravel.md` に従う）
+- 内部URLはサーバーのルート名から `route()` で組み立てる。`'/holdings/'.$id` のようにアプリのパスを手書きしない
 
 ---
 

@@ -62,6 +62,104 @@ npx playwright test tests/e2e/uc001-user-registration.spec.ts
 npx playwright show-report
 ```
 
+## 変わった画面とスクリーンショット（マージ計画）
+
+`prepare-merge` は、ブランチで追加・変更された画面を挙げ、新しい画面を撮影する。人がアプリを起動せずに、
+役割ごとの見た目を確認できるようにするためである。この節を読むのは、撮影を始めるときだけにする。
+画像は自分では開かない——保存してパスを示し、見るのは人である。
+
+**どの画面か** — git だけで判定し、書かれたとおりに実行する（`prepare-merge` ステップ2）:
+
+```bash
+base=$(git merge-base HEAD "${REVIEW_SCORE_BASE_BRANCH:-main}")
+git diff --name-status "$base" -- resources/js/Pages resources/js/pages resources/js/Components resources/js/components resources/js/Layouts resources/js/layouts resources/views
+git ls-files --others --exclude-standard -- resources/js/Pages resources/js/pages resources/views
+```
+
+ページが `A` または未追跡なら**新規**、`D` 以外のそれ以外は**変更**とし、ファイル名そのままで挙げる
+（コンポーネントはコンポーネント名で挙げる）。存在しないパスは何にも一致しないので、スタックごとに
+書き換える必要はない。
+
+**撮影** — `playwright.config.ts` と `tests/e2e/` があるときだけ行う。新規画面は自動で撮り、変更された
+画面はユーザーが求めたとき（「撮って」/ "take screenshots"）に撮る。変更されたコンポーネントについては、
+それを使っていると分かっているページを選ぶ。
+
+1. 撮る画面には、それぞれ `tests/e2e/screens.ts`（コミットする）に1行が必要である。足りない行を足す——
+   URL と役割だけで、画面を開く手順のコードは書かない。`roles` には見え方が違う役割だけを挙げる
+   （例: ある役割にはボタンがあり、別の役割にはない）。最低1つ。操作が必要な状態（開いたモーダルなど）は、
+   最初に表示された状態で撮る。
+
+   ```ts
+   // tests/e2e/screens.ts — one line per screen, read by screen-capture.spec.ts
+   export type Screen = { page: string; uc: string; name: string; url: string; roles: string[] };
+
+   export const screens: Screen[] = [
+     { page: 'Schedules/Edit', uc: 'UC-042', name: 'schedule-edit', url: '/schedules/1/edit', roles: ['section-head', 'staff'] },
+   ];
+   ```
+
+2. 初回だけ、撮影用スペックとログイン用ヘルパーを作る（ヘルパーは、E2E のシードデータにあるその役割の
+   ユーザーでログインする）:
+
+   ```ts
+   // tests/e2e/screen-capture.spec.ts — runs only when CAPTURE_SCREENS is set
+   import { test } from '@playwright/test';
+   import { screens } from './screens';
+   import { loginAs } from './support/login';
+
+   const wanted = (process.env.CAPTURE_SCREENS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+
+   for (const screen of screens.filter((s) => wanted.includes(s.page))) {
+     for (const role of screen.roles) {
+       const file = `${screen.uc.replace('-', '').toLowerCase()}_${screen.name}_${role}.png`;
+       test(`capture ${file}`, async ({ page }) => {
+         await loginAs(page, role);
+         await page.goto(screen.url);
+         await page.waitForLoadState('networkidle');
+         await page.screenshot({ path: `tests/e2e/.screenshots/${file}`, fullPage: true });
+       });
+     }
+   }
+   ```
+
+   ```ts
+   // tests/e2e/support/login.ts — map each role to a user the E2E seed creates
+   import type { Page } from '@playwright/test';
+
+   const users: Record<string, { login: string; password: string }> = {
+     // 'section-head': { login: '...', password: '...' },  (seed data only — never real accounts)
+   };
+
+   export async function loginAs(page: Page, role: string) {
+     const user = users[role];
+     if (!user) throw new Error(`no E2E user for role "${role}"`);
+     await page.goto('/login');
+     // fill the project's login form with user.login / user.password, submit, wait for the next page
+   }
+   ```
+
+3. 実行する（先にフォルダを空にする。`--reporter=line` は出力を短くし、HTML レポートが開いてコマンドが
+   止まるのを防ぐ）:
+
+   ```bash
+   rm -rf tests/e2e/.screenshots && CAPTURE_SCREENS="Schedules/Index,Schedules/Edit" npx playwright test tests/e2e/screen-capture.spec.ts --reporter=line
+   ```
+
+画像は `tests/e2e/.screenshots/`（git の管理外）に `{uc}_{screen}_{role}.png` の名前で保存される
+（例: `uc042_schedule-edit_section-head.png`）。撮れない画面（シードのレコードや役割のユーザーがない、
+ページのエラー、サーバーが起動しない）があっても何も止めない。失敗の出力から最初の理由を拾い、通すために
+シーダーを変えることはしない。
+
+**マージ計画には1行** — 応答の言語で、名前はフォルダより下のパスから拡張子を除いたもの、最大5件で
+残りは「ほか N 件」:
+
+```
+画面: 新規 Schedules/Index（スクショ2枚 → tests/e2e/.screenshots/）、変更 Schedules/Edit・DatePicker ほか3件 — 変更分は「撮って」と言えば撮ります
+```
+
+画面の変更がなければ行を出さない。Playwright がなければ名前だけにする。ユーザーがスクリーンショットを
+求めたときは、その応答で画像ごとに1行（画面 × 役割 → パス）を並べる。
+
 ## 実行結果の可視化（任意・デバッグ時のみ）
 
 **通常の実行（CI・日常確認）は常に上記のheadless `npx playwright test` を使う**（最速・画面表示なし）。

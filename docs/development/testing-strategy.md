@@ -13,6 +13,26 @@
     /----------------\
 ```
 
+## テスト実行バジェットと遅いテスト
+
+`/tdd` とマージでテストをどれだけ実行するかは、`.claude/rules/30-testing.md`（「テスト実行バジェット」）と `meta/adr/ADR-0021` で定める。要点: サブエージェントは対象ファイルだけを実行し、メインセッションは1サイクルにつき全件を1回実行する（その後はコードが変わったときだけ再実行）。マージ結果の再テストは、テスト済みのブランチ先端と異なる場合だけ行う。
+
+実データ相当の準備に数秒かかるテスト（例: 実際のソースファイルの取り込み）には `slow` グループを付ける:
+
+```php
+use PHPUnit\Framework\Attributes\Group;
+
+#[Group('slow')]
+public function test_real_file_import_creates_expected_records(): void { ... }
+
+// Pest
+test('real file import creates expected records', function () { ... })->group('slow');
+```
+
+まず速くし、それでも遅いものにタグを付ける:
+- 重い取り込みはテストごとに1回だけ実行し、その1回の結果からすべてを検証する。テストのたびに繰り返さない。
+- MySQLでは `setUp` でDDL（`Schema::create`）を実行しない——`RefreshDatabase` のトランザクションがコミットされ、次のテストの前に全件の再マイグレーションが走る。fixture用テーブルには `$table->temporary()` を使う（削除は `DROP TEMPORARY TABLE IF EXISTS`。通常の `DROP TABLE` もコミットを起こす）。
+
 ## テストフレームワーク
 
 - **PestPHP**（推奨）または PHPUnit

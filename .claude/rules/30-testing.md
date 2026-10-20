@@ -65,6 +65,32 @@ Claude Code / Codex は「実装を先に書いてからテストを後付けす
 3. Refactor完了後、マージ前チェックで求められた場合はマージ前に **`/review`** を実行する（`docs/development/git-workflow.md` §6 マージ前チェック）
    - `/review` 実行時にStep 0として自動計算される review-score の結果（`meta/adr/ADR-0009-review-escalation-mechanism.md` 参照）に従って通常レベル/強化レベルが自動選択される
 
+### テスト実行バジェット——正本
+
+> テストをどれだけの頻度で実行するかの唯一の正本（`meta/adr/ADR-0021`）。`.claude/commands/tdd.md`、TDDの両サブエージェント、`docs/development/git-workflow.md` §5、`prepare-merge` はここを参照する。
+
+| フェーズ | 実行者 | 実行するもの |
+|---|---|---|
+| Red | `test-writer` | 自分が作成・編集したテストファイルだけ |
+| Gate 4の根拠 | メインセッション | 同じファイルを1回 |
+| Green（反復中） | `tdd-implementer` | 対象テストファイルだけ——全件は実行しない |
+| Green確認（`/tdd` ステップ4） | メインセッション | 全件を1回——サイクルの正式な実行 |
+| Green後（サイクルレビューの修正、Refactor） | メインセッション | 編集中は対象ファイル。変更後に全件を1回——コードが変わった場合だけ |
+| マージ | `prepare-merge` | マージ結果。すでにテスト済みのツリーと異なる場合だけ（`git-workflow.md` §5） |
+
+- このセッションで結果が分かっているツリーを再実行しない。再実行は何かが変わった後だけにする。
+- AIによる実行は簡潔な出力（`php artisan test --compact …`）を使い、サマリー行と失敗ブロックだけを読む。通ったテストの行を会話に貼らない。
+- 実データ相当の準備に数秒かかるテストには `slow` グループを付ける（PHPUnitは `#[Group('slow')]`、Pestは `->group('slow')`）。まず速くする（重い準備はテストごとに1回。MySQLでは `setUp` でDDLを実行しない——`$table->temporary()` を使う）。反復中の広めの確認では `--exclude-group slow` を使ってよいが、正式な実行には必ず含める。
+- 各フェーズの報告には、実行したテスト（回数とおおよその時間）を載せる。
+
+### フェーズ報告——正本
+
+`/tdd`・`/commit`・`prepare-merge` は、必ず会話の中で結果報告を出して終える——バグが見つかったかどうかに関係なく、途中で止まった場合（Gate 4の差し戻し、`SPEC_CONFLICT`、試行回数の上限、チェックやサイクルレビューによる停止、マージの失敗）も同じ。ファイルには何も保存しない（`meta/adr/ADR-0021`）。
+
+- `/tdd`: `.claude/commands/tdd.md` のステップ8の完了報告（ADR-0020）。その「チェック」項目に、実行したテスト（回数とおおよその時間）を含める
+- `/commit`: ステップ8の表
+- `prepare-merge`: ステップ8の表
+
 ## テストの質に関するヒューリスティクス（Trial — `meta/adr/ADR-0014-third-party-skill-adoption-trial.md` 参照）
 
 Red → Green → Refactor のサイクル自体に加えて、「通ってはいるが実質何も検証していない」
@@ -127,6 +153,12 @@ php artisan test
 
 # 特定ファイルのみ
 php artisan test tests/Feature/UserTest.php
+
+# AIによる実行: 簡潔な出力（サマリー + 失敗）
+php artisan test --compact tests/Feature/UserTest.php
+
+# slowグループ以外すべて（反復中のみ）
+php artisan test --compact --exclude-group slow
 
 # カバレッジ確認
 php artisan test --coverage

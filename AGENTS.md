@@ -58,7 +58,7 @@ Codex用の入口は `.agents/skills/` に置く。`$tdd`、`$review`、`$verify
 
 Claude の slash command と `.claude/agents/` は、Codexのコマンドや登録済みエージェントではない。実行時の読み替えは `docs/development/codex-adapter.md` に従う。読み替えはツール呼出しだけを適応し、品質ゲートを緩和しない。
 
-Playwright MCP は `.codex/config.toml` に設定する。Claude hook はCodexでは自動発火しないため、レビュー用スクリプトはワークフローから明示的に実行する。特に `agent-guard.sh` によるtdd-implementerの書き込みブロックはCodexでは働かず、防御は `tdd-snapshot.sh verify` の事後チェックのみになる（`docs/development/tdd-guard.md`）。そのため `/tdd` 手順4が提示する `logs/audit.jsonl` のブロック記録は、Codexでは「ブロックなし」でも実態を反映しない。
+Playwright MCP は `.codex/config.toml` に設定する。Claude hook はCodexでは自動発火しないため、レビュー用スクリプトはワークフローから明示的に実行する。特に `agent-guard.sh` によるtdd-implementerの書き込みブロックと、実装者の起動回数・呼び出し回数の上限はCodexでは働かず、防御は `tdd-snapshot.sh verify` の事後チェックのみになる（`docs/development/tdd-guard.md`）。そのため `/tdd` 手順4が提示する `logs/audit.jsonl` のブロック記録は、Codexでは「ブロックなし」でも実態を反映しない。
 
 ## Rules
 
@@ -72,6 +72,7 @@ Playwright MCP は `.codex/config.toml` に設定する。Claude hook はCodex�
 - Do not introduce schema-breaking migration without a migration plan
 - Do not bypass authorization layer (Policy / Gate)
 - Do not edit unrelated files
+- Do not ask before local work inside an agreed task (reading, builds, tests, checks against mocks, the task's doc updates) — run it and report; ask before user-facing behavior changes, shared environments, and commits / merges / pushes (`.claude/rules/00-global.md`「承認が不要な作業」)
 - `docs/original-docs/` is read-only — never edit, delete, or create files in it
 - Test case names must be derived from use-cases.md UC titles
 - Follow Red → Gate 4 approval → Green → Refactor for new features, not just bug fixes (`.claude/rules/30-testing.md`)

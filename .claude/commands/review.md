@@ -76,3 +76,5 @@ bash .claude/hooks/domain-boundary-check.sh
 2. **問題点**（重大度: HIGH / MEDIUM / LOW）
 3. **推奨する修正**
 4. **追加すべきテスト**
+
+同じ `/tdd` サイクルの中で後から修正を適用した場合は、完了と報告する前に `bash .claude/hooks/tdd-snapshot.sh verify-green` を実行し、`STOP` の行があれば止まる（`/tdd` ステップ7）。

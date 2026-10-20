@@ -54,3 +54,5 @@ Thumbs.db
 # --- AI-driven development harness (appended from template; see APPLY_TEMPLATE.md) ---
 /logs/
 .claude/worktrees/
+# Screenshots of new / changed screens taken for the merge plan (docs/development/e2e-testing.md)
+tests/e2e/.screenshots/
