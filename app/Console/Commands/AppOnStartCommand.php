@@ -16,8 +16,12 @@ class AppOnStartCommand extends Command
     public function handle(): int
     {
         $failed = false;
-        foreach (['price:track', 'research:check-sources'] as $command) {
+        foreach (['price:track', 'research:check-sources', 'research:discover-candidates'] as $command) {
+            $previousTrigger = config('research_automation.trigger');
             try {
+                if ($command === 'research:discover-candidates') {
+                    config(['research_automation.trigger' => 'startup']);
+                }
                 $arguments = $command === 'research:check-sources' && $this->option('force')
                     ? ['--force' => true] : [];
                 if ($this->call($command, $arguments) !== self::SUCCESS) {
@@ -28,6 +32,8 @@ class AppOnStartCommand extends Command
                 $failed = true;
                 Log::warning('Startup task failed', ['command' => $command, 'exception_type' => $exception::class]);
                 $this->warn($command.' を完了できませんでした。次の処理へ進みます。');
+            } finally {
+                config(['research_automation.trigger' => $previousTrigger]);
             }
         }
 

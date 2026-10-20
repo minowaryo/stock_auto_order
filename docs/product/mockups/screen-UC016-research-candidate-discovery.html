@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ja">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>調査候補・自動抽出一覧 | 画面案</title><link rel="stylesheet" href="assets/research-candidate.css"></head>
+<body>
+<aside class="mock-notice">画面レビュー用モック・架空データです。情報取得・絞り込み・保存は実行しません。
+  <nav class="mock-links" aria-label="画面案の切替"><a href="screen-UC016-research-candidate-discovery.html" aria-current="page">候補一覧</a><a href="screen-UC016-research-candidate-review.html">候補の確認</a><a href="screen-UC016-research-candidate-states.html">0件・失敗などの表示</a></nav>
+</aside>
+<header class="app-header"><div class="logo">ポートフォリオ管理</div><nav class="app-nav" aria-label="主な画面"><a href="screen-UC002-holding-list.html">保有一覧</a><a href="screen-UC004-signal-list.html">売買シグナル</a><a href="screen-UC005-sector-dashboard.html">セクター配分</a><a class="active" href="screen-UC016-research-candidate-discovery.html">新規投資候補</a><a href="screen-UC001-csv-import.html">CSV取込</a><a href="screen-UC009-summary-report.html">サマリーレポート</a></nav></header>
+<main class="app-main">
+  <div class="page-top"><div><h1>調査候補</h1><p class="page-caption">Webの公開情報から見つけた企業を、出典とともに確認できます。</p></div><a class="btn btn-secondary" href="screen-UC016-research-candidate-states.html#updating">今すぐ更新（表示例）</a></div>
+  <nav class="subnav" aria-label="新規投資候補の切替"><a href="screen-UC006-candidate-check.html">ウォッチリスト</a><a class="active" aria-current="page" href="screen-UC016-research-candidate-discovery.html">調査候補</a></nav>
+  <div class="status-strip"><span><span class="status-dot"></span><strong>起動時に情報源を更新</strong></span><span class="text-secondary">最終取得 2026-10-16 09:10（サンプル）</span><a href="#sources">情報源ごとの状況</a><span class="fine">資料の更新間隔に合わせて取得します。</span></div>
+  <div class="stat-row" aria-label="表示範囲の集計">
+    <div class="stat-box"><div class="label">抽出された企業候補</div><div class="value">5</div><small>参照資料6件から整理</small></div>
+    <div class="stat-box"><div class="label">未登録・未保有</div><div class="value">2</div><small>照合できた候補</small></div>
+    <div class="stat-box"><div class="label">上場主体の確認待ち</div><div class="value">1</div><small>未登録かは未確定</small></div>
+    <div class="stat-box"><div class="label">参照した資料</div><div class="value">6</div><small>同じ企業の別資料を含む</small></div>
+  </div>
+  <section class="card" aria-labelledby="candidate-list">
+    <div class="section-top"><div><h2 id="candidate-list">Webから見つかった企業</h2><p class="fine">検出日が新しい順。掲載は投資の推奨順位ではありません。</p></div><span class="badge badge-info">自動抽出・本人未確認</span></div>
+    <div class="filters" aria-label="絞り込みの配置例">
+      <label>テーマ<select disabled><option>すべて</option><option>医療AI</option><option>AI基盤</option><option>フィジカルAI</option></select></label>
+      <label>市場<select disabled><option>すべて（未同定を含む）</option><option>日本株</option><option>米国株</option></select></label>
+      <label>登録状況<select disabled><option>すべて</option><option>未登録・未保有</option><option>要確認</option></select></label>
+      <label>検出区分<select disabled><option>新着・初回取得</option><option>前回取得以降の新着</option><option>初回取得・過去資料</option></select></label>
+    </div>
+    <div class="table-scroll"><table class="candidate-table"><caption class="fine">架空の企業・製品・資料を使った5社の表示例。照合時点：保有 2026-10-15／お気に入りCSV 2026-10-15。</caption><thead><tr><th scope="col">企業・上場先候補</th><th scope="col">テーマとの関係・抽出理由</th><th scope="col">役割・証拠段階</th><th scope="col">登録状況</th><th scope="col">元資料・検出区分</th><th scope="col">次の操作</th></tr></thead><tbody>
+      <tr><td><span class="candidate-name">青葉メディカル株式会社</span><span class="badge badge-neutral">日本株・上場先候補あり</span><small>架空企業A／本人の上場確認は未了</small></td><td><span class="badge badge-info">医療AI</span><small>画像診断支援製品がAI医療機器一覧に掲載。掲載企業の欄から抽出。</small></td><td>一覧掲載企業<small>規制情報<br>導入・売上は未確認</small></td><td><span class="badge badge-neutral">未登録・未保有</span><small>市場・コード対応による照合</small></td><td><a href="screen-UC016-research-candidate-review.html#evidence">FDA・診断支援製品の資料</a><small>ほか1件／計2資料<br>決定 2026-06-12<br>初回検出 2026-10-16</small><span class="badge badge-neutral">初回取得・過去資料</span></td><td><a class="btn btn-secondary" href="screen-UC016-research-candidate-review.html">候補を確認</a></td></tr>
+      <tr><td><span class="candidate-name">Northlight Compute Inc.</span><span class="badge badge-neutral">米国株・上場先候補あり</span><small>架空企業B／別名対応に根拠あり</small></td><td><span class="badge badge-info">AI基盤</span><small>分散処理の実証事業に参加。事業名と実施予定先の節から抽出。</small></td><td>実施予定先<small>研究・実証<br>商用受注は未確認</small></td><td><span class="badge badge-neutral">未登録・未保有</span></td><td>公的機関の実証結果資料<small>発表 2026-10-14<br>初回検出 2026-10-16</small><span class="badge badge-info">前回取得以降の新着</span></td><td><a href="screen-UC016-research-candidate-states.html#verification">確認内容の例</a></td></tr>
+      <tr><td><span class="candidate-name">青空ロボティクス合同会社</span><span class="badge badge-warning">上場主体の確認待ち</span><small>架空企業C／親会社との対応不明</small></td><td><span class="badge badge-info">フィジカルAI</span><small>ロボット基盤モデル事業の再委託先に記載。親会社は推定していません。</small></td><td>再委託先<small>調査・研究段階</small></td><td><span class="badge badge-warning">未照合</span><small>未登録と断定できません</small></td><td>NEDO・実施予定先の資料<small>発表 2026-10-13<br>初回検出 2026-10-16</small><span class="badge badge-info">前回取得以降の新着</span></td><td><a href="screen-UC016-research-candidate-states.html#unidentified">上場主体を確認</a></td></tr>
+      <tr><td><span class="candidate-name">東雲ビジョン株式会社</span><span class="badge badge-neutral">日本株・上場先候補あり</span><small>架空企業D</small></td><td><span class="badge badge-info">医療AI</span><small>画像解析製品の一覧掲載。新しい資料を既存の企業に関連付け。</small></td><td>一覧掲載企業<small>規制情報</small></td><td><span class="badge badge-neutral">監視登録済み</span><small>新規企業数には加算しません</small></td><td>FDA・画像解析製品の資料<small>決定 2026-05-20</small><span class="badge badge-neutral">初回取得・過去資料</span></td><td><a href="screen-UC006-candidate-check.html">ウォッチリストへ</a></td></tr>
+      <tr><td><span class="candidate-name">Evergreen Devices Inc.</span><span class="badge badge-neutral">米国株・上場先候補あり</span><small>架空企業E</small></td><td><span class="badge badge-info">医療AI</span><small>診断支援ソフトが一覧に掲載。保有銘柄の追加資料として表示。</small></td><td>一覧掲載企業<small>規制情報</small></td><td><span class="badge badge-neutral">保有済み</span><small>新規企業数には加算しません</small></td><td>FDA・診断ソフトの資料<small>決定 2026-04-10</small><span class="badge badge-neutral">初回取得・過去資料</span></td><td><a href="screen-UC002-holding-list.html">保有一覧へ</a></td></tr>
+    </tbody></table></div>
+    <p class="fine">表示中 5社／5社。上場先候補の対応は本人の確認済みを意味しません。資料の掲載・採択だけでは売上を確認できません。</p>
+  </section>
+  <details id="sources"><summary>情報源の取得状況・未解析の資料</summary><div class="source-list"><div><strong>FDA</strong><p><span class="badge badge-info">取得・企業抽出済み</span></p><span class="fine">週1回以上の間隔／前回 09:10<br>この画面のサンプルでは4資料・3社</span></div><div><strong>NEDO</strong><p><span class="badge badge-info">取得・企業抽出済み</span></p><span class="fine">一覧と結果本文を区別して確認<br>この画面のサンプルでは2資料・2社</span></div><div><strong>公開note</strong><p><span class="badge badge-neutral">資料のみ 1件</span></p><span class="fine">企業名を抽出できなかった資料があります</span></div><div><strong>YouTube</strong><p><span class="badge badge-neutral">自動取得は未対応</span></p><span class="fine">取得経路と保存条件を確認中</span></div><div><strong>OCP</strong><p><span class="badge badge-neutral">手動確認</span></p><span class="fine">自動取得済みの源には含みません</span></div></div></details>
+  <section class="card"><h2>企業を抽出できなかった資料</h2><p>公開note「AIの使われ方の変化」（架空の題名）</p><p class="fine">題名から企業を特定できませんでした。企業候補には数えていません。</p><a href="screen-UC016-research-candidate-states.html#no-entity">資料のみの確認方法を見る</a></section>
+  <details><summary>補助操作：手動で記録する</summary><p class="fine">自分で見つけた資料だけを追加する場合に使います。Webから取得済みの企業・資料は、上の「候補を確認」から進めます。</p><p>手動記録フォームはこの中に配置します。自動候補の確認では入力を求めません。</p></details>
+</main></body></html>

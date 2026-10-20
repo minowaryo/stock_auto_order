@@ -121,20 +121,40 @@ class ResearchSourceCheckService
             $baseline = ! ResearchSourceCheck::where('source_key', $key)->whereIn('result', ['new_items', 'no_new', 'baseline'])->exists();
             DB::transaction(function () use ($check, $items, $baseline, $deadline): void {
                 $created = 0;
+                $capture = $check->source_key === 'S10' && config('research_automation.enabled', false)
+                    && config('research_automation.sources.S10.enabled', false);
+                $input = [];
+                if ($capture && count($items) > 50000) {
+                    throw new RuntimeException('automation_input_limit');
+                }
                 foreach ($items as $item) {
                     if (hrtime(true) / 1_000_000_000 >= $deadline) {
                         throw new RuntimeException('接続または応答がタイムアウトしました。');
                     }
-                    if (! ResearchSourceItem::where('source_key', $check->source_key)->where('url_hash', $item['url_hash'])->exists()) {
-                        ResearchSourceItem::create($item + [
+                    $record = ResearchSourceItem::where('source_key', $check->source_key)->where('url_hash', $item['url_hash'])->first();
+                    if (! $record) {
+                        $record = ResearchSourceItem::create($item + [
                             'source_key' => $check->source_key, 'first_check_id' => $check->id, 'is_baseline' => $baseline,
                         ]);
                         $created++;
                     }
+                    if ($capture) {
+                        $input[] = [
+                            'source_item_id' => $record->id, 'url' => $item['url'], 'title' => $item['title'],
+                            'metadata' => $item['metadata'],
+                            'discovery_kind' => $record->first_check_id === $check->id
+                                ? ($baseline ? 'baseline' : 'new') : 'backfill',
+                        ];
+                    }
+                }
+                $payload = $capture ? ['schema_version' => 1, 'is_baseline' => $baseline, 'items' => $input] : null;
+                if ($payload && strlen(json_encode($payload, JSON_THROW_ON_ERROR)) > 8 * 1024 * 1024) {
+                    throw new RuntimeException('automation_input_limit');
                 }
                 $check->fill([
                     'result' => $baseline ? 'baseline' : ($created > 0 ? 'new_items' : 'no_new'),
                     'item_count' => count($items), 'new_item_count' => $baseline ? 0 : $created, 'finished_at' => now(),
+                    'automation_payload' => $payload, 'automation_cursor' => $capture ? 0 : null,
                 ])->save();
             });
 

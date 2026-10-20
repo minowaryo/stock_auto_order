@@ -169,15 +169,20 @@ docker compose exec laravel.test php artisan price:track
 ## 起動時の情報源確認（UC-016 / ADR-0031）
 
 ```bash
-# 通常は scripts/start-app.bat が背景で起動し、価格追跡→情報源確認を直列実行。
+# 通常は scripts/start-app.bat が背景で起動し、価格追跡→情報源確認→企業下書き生成を直列実行。
 # 子処理が失敗しても次へ進む。手動で情報源だけを確認する場合は後者を使う。
 docker compose exec laravel.test php artisan app:on-start
 docker compose exec laravel.test php artisan research:check-sources
 # 最低間隔を無視（無効な情報源は取得しない）。画面「今すぐ確認」と同じ。
 docker compose exec laravel.test php artisan research:check-sources --force
+# 取得済みFDA項目から未確認の企業下書きを最大200資料/全体120秒で生成する。
+# 公式上場候補の照合も行うが、調査記録・保有・監視には自動登録しない。
+docker compose exec laravel.test php artisan research:discover-candidates
 ```
 
 源別設定は`config/research_sources.php`、有効化の根拠は[台帳](../product/megatrend-source-selection.md#起動時確認の登録状態2026-10-11)。設定変更後、設定キャッシュを使っている環境では`php artisan config:clear`を行う。起動スクリプトを使わず直接Dockerを起動した場合は、自動で`app:on-start`を実行しない。
+
+企業抽出と公式照合の設定は`config/research_automation.php`（ADR-0033）。SECはローカルの`RESEARCH_SEC_USER_AGENT`が未設定なら外部取得せず欠測表示にする。全体/源別の抽出停止後も保存済みの下書きと手動経路は保持する。
 
 ## コード生成（Artisan）
 

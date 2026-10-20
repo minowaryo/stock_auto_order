@@ -1,4 +1,4 @@
-# UC-016 NEDO追加Red / 設計補足・Gate 4審議材料
+# UC-016 NEDO追加Red / 設計補足・Green検証記録
 
 作成: 2026-10-16。CHG-0031、[UC-016](../product/use-cases.md#情報源の起動時確認chg-0031追加gate-2本人承認済み-2026-10-10)、[ADR-0031](../adr/ADR-0031-research-source-startup-check.md)、[ADR-0032 Decision 7](../adr/ADR-0032-research-source-adapters-and-access-intervals.md)。**2026-10-16本人の後続作業指示により、提示済みNEDO固有補足と追加Red24ケースを承認しGreenへ進む。** FDAは`3f12941`でmain統合済み、資料同期`a15db72`をorigin/mainへpushしmainのcheckoutも解除済み。実アプリ反映は未実施。
 
@@ -58,3 +58,29 @@ FDA → NEDO → YouTubeの[実装順](../product/megatrend-source-implementatio
 24ケースと設計補足を提示してGate 4承認を求めた後、本人が「じゃ、専用わーく釣りののぶｒあんちで後続作業つづけて、メインは汚さないで」と続行を指示。本指示を提示済みの追加24ケース/補足からGreenへ進む承認として受領した。
 
 実装・検証・記録は`.claude/worktrees/chg0031-sources`の`feat/chg0031-nedo-source`で行う。mainのcheckout/編集/マージ/pushは今回実行しない。S09の有効化は本ブランチ内のGreen・実資料確認・独立レビューの成功後に判断する。実アプリの変更は行わない。
+
+## Green検証（2026-10-19）
+
+中断時の作業を退避コミット`9e4bc14`から同名の専用worktree/ブランチへ復元した。`ResearchSourceNedoParser`と既存確認サービスへの接続はこのコミットに含まれる。今回の実装差分は、以下の確認後に本ブランチの`config/research_sources.php`でS09を有効にした変更である。main/実アプリへは反映していない。
+
+| 確認 | 結果 |
+|---|---|
+| 追加NEDO24ケース + 既存84ケース | **108件成功、613アサーション、失敗/エラー0、12.36秒**。専用DBは`testing_chg0031_source_adapters`。Red時に未到達だった保存内容のassertも成功 |
+| Pint `--test` | パーサ/確認サービス/設定/テスト/fixtureの5ファイル成功。自動修正なし |
+| 独立した別エージェントのGreenレビュー | 確定HIGH/MEDIUMなし。レビュー強度37（強化）、Domain Boundary違反0。テスト冒頭のRed時点のコメントが残るLOW指摘は、承認済みテストを凍結して維持 |
+| 公式HTMLとの照合 | 10/19に公式一覧を1回再取得し、17,519bytes・上記SHA256と一致。独立したPython HTML解析で作った期待値に対し、保存9件のURLと3つのmetadataがすべて一致。`published_at=NULL`、基準線/再確認の新着0も確認 |
+| 実HTMLによるコマンド処理時間 | 初回0.0621秒、48時間後相当の再確認0.0087秒。保存metadata最大202bytes。実HTMLをHTTP模擬応答として使用し2リクエスト、詳細/PDF追取得なし。専用DBの外側トランザクションをロールバックし検証データを残さない |
+
+実HTML、独立期待値、計測スクリプトは本worktreeの`storage/app/testing/nedo-green/`、関連JUnitは`storage/logs/nedo-source-green-20261019.xml`（いずれもGit対象外）。ライブのアプリDBや保有/ウォッチリストには書き込んでいない。再開前のSHA256と照合し、テストと`docs/product/`の全189ファイルに変更がないことを確認した。ファイルの追加/削除もない。
+
+### 全体回帰の環境補正
+
+最初の全体実行は2,056件・8,527アサーション・33失敗・エラー0・skip1。復元worktreeに`public/build/manifest.json`がなく、画面応答が500になる失敗と、その応答内容を検査する派生失敗が発生した。テスト実行は完了したが巨大な失敗表示の整形が続いたため、そのプロセスを停止した。既存ローカルのビルド成果物を本worktreeの無視対象`public/build/`へコピーし、コード/テストを変えず全体を再実行した。
+
+再実行は**全2,056件、失敗/エラー0、8,684アサーション、147.47秒、終了コード0**。内訳は成功2,032件・既存の非推奨警告23件・skip1件。JUnitは`storage/logs/nedo-full-green-20261019-retry.xml`（Git対象外）。実行環境はDocker内の本worktree、`APP_ENV=testing`・`DB_DATABASE=testing_chg0031_source_adapters`・空の`DB_URL`・`QUEUE_CONNECTION=sync`を明示したPest全体実行。今回はUI変更がないため、新規ビルド/画面E2Eは実施せず、既存の画面Featureテストを含む全体回帰で確認した。
+
+`git diff --check`と変更Markdownのローカル参照先確認も成功。mainの作業ツリーはクリーン。他セッションの`docs/chg0033-status-sync`統合によりmainは再開時の`4472503`から`affcbac`へ進んでいるが、本作業からmainのcheckout/編集/マージ/pushは実行していない。
+
+### 残る評価
+
+Green成功は情報源の品質合格を意味しない。未登録上場企業の発見件数、一次資料による裏付け、重複率、有用性は4週試行後の**2026-11-02以降**に再精査する。次の実装対象はH01 YouTubeで、API/キー/保持条件の設計と新たなRed/Gate 4が必要。mainへの統合、実アプリ反映、コミット/pushは今回行わない。

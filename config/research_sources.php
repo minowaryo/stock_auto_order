@@ -25,7 +25,7 @@ return [
         'name' => 'NEDO公募・採択結果',
         'method' => 'html_list',
         'url' => 'https://www.nedo.go.jp/koubo/2026_list_05_03.html',
-        'enabled' => false,
+        'enabled' => true,
         'min_interval_hours' => 24,
         'max_response_bytes' => 1048576,
         'coverage_days' => 365,

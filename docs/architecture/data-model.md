@@ -700,6 +700,8 @@
 
 > 2026-10-11本人承認の[ADR-0032](../adr/ADR-0032-research-source-adapters-and-access-intervals.md)で任意設定`min_request_interval_seconds`を補足（既定0、FDA30）。開始/完了時刻の遅い方に秒精度の最大1秒分の余裕を加えて次のアクセスを待ち、待機後の取得試行開始を`started_at`に記録する。FDAの6フィールドはmetadataへ保存し、決定日は`date_of_final_decision`（YYYY-MM-DD）、公開日不明の`published_at`はNULL。項目の作成時刻は取得時刻。テーブル/カラム変更なし。
 
+> 2026-10-16承認のNEDO補足（ADR-0032 Decision 7、[検証記録](../development/uc016-source-nedo-red-review.md)）では、S09のmetadataを`project_code`・`project_name`・`result_date`（YYYY-MM-DD）の3キーとする。結果日を公開日時に代入せず`published_at=NULL`。必須metadataの4KB超過は源全体の失敗とし、既存項目の原情報/処理状態を上書きしない。既存テーブル/カラムを使い、マイグレーションなし。
+
 ```
 config/research_sources.php（源ID: S03/S09/S10/H01/H02 …）
        └── [research_source_checks] ──1:N── [research_source_items] ──N:1(nullable)── [research_discovery_links]
@@ -748,6 +750,10 @@ config/research_sources.php（源ID: S03/S09/S10/H01/H02 …）
 
 **CRUD**: 作成は取得処理のみ。本人の操作は `disposition` の変更（候補に記録／対象外／未処理へ戻す）だけで、項目の削除・編集画面は設けない。
 
+
+### research_* 自動候補下書きの追加設計（UC-016、ADR-0033）— 追加Gate 3本人承認済み（2026-10-19）
+
+2026-10-19、[企業候補自動抽出・画面差分](../product/megatrend-candidate-automation-spec.md)と静的3画面は追加Gate 2本人承認済み。[ADR-0033](../adr/ADR-0033-research-candidate-automation.md)と[追加保存定義](research-automation-data-model.md)を本人が「Gate 3を承認し、Redテスト作成へ進む」で承認。新規10テーブルで、実行/資料/試行/資料版/下書き/下書き履歴/公式上場マスタの取込・行/本人確認別名/上場候補を分離し、既存`research_discovery_links`へ入力由来・自動生成の要点・資料版の3列、`research_source_checks`へ一時的な抽出入力/カーソルの2列を追加する案。既存の手動記録・取得原情報・本人の確認状態を保持する。マイグレーション/実装は追加Gate 4承認後。
 
 ### trade_* ほか売買振り返り用テーブル群（UC-017／UC-018、ADR-0027、ADR-0024、CHG-0033）— Gate 3承認済み（2026-10-04）
 

@@ -18,6 +18,7 @@ use App\Models\WatchlistItem;
 use App\Support\DisplayTime;
 use App\Support\ResearchSymbolCode;
 use DomainException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
@@ -331,7 +332,7 @@ class ResearchCandidateService
             'listings' => $listings->map(fn ($row) => $row->only(['id', 'market', 'symbol_code', 'listed_entity_name']))->values()->all(),
             'matched_snapshot_at' => $baseline['snapshot']?->snapshotted_at?->toDateTimeString(),
             'favorites_last_imported_at' => $baseline['favorites_last_imported_at'],
-            'error' => $this->handoffError($candidate, $baseline),
+            'error' => $this->handoffError($candidate, $baseline, $listing),
         ];
     }
 
@@ -342,6 +343,7 @@ class ResearchCandidateService
         }
 
         return DB::transaction(function () use ($candidateId, $expectedVersion, $idempotencyKey, $reason, $actor, $selectedListingId) {
+            $drafts = app(ResearchDraftReviewService::class)->lockHandoffSources($candidateId);
             $candidate = ResearchCandidate::query()->lockForUpdate()->with(['event', 'entity.listings', 'claims'])->findOrFail($candidateId);
             Gate::forUser($actor)->authorize('update', $candidate);
             $existing = ResearchWatchlistHandoff::where('research_candidate_id', $candidateId)
@@ -351,13 +353,12 @@ class ResearchCandidateService
             }
             $this->assertVersion($candidate, $expectedVersion);
             $baseline = $this->baseline();
-            if ($error = $this->handoffError($candidate, $baseline)) {
-                throw new DomainException($error);
-            }
-
             $listing = $selectedListingId !== null
                 ? $candidate->entity->listings->firstWhere('id', $selectedListingId)
                 : $candidate->entity->listings->first();
+            if ($error = $this->handoffError($candidate, $baseline, $listing, $drafts)) {
+                throw new DomainException($error);
+            }
             if ($listing === null) {
                 throw new DomainException('上場主体の選択を確認してください。');
             }
@@ -405,7 +406,7 @@ class ResearchCandidateService
             $this->audit('research_candidate.handed_off', $actor, 'research_candidates', $candidateId);
 
             return $handoff;
-        });
+        }, 3);
     }
 
     /**
@@ -539,8 +540,11 @@ class ResearchCandidateService
         ];
     }
 
-    private function handoffError(ResearchCandidate $candidate, array $baseline): ?string
+    private function handoffError(ResearchCandidate $candidate, array $baseline, ?ResearchEntityListing $listing, ?Collection $lockedDrafts = null): ?string
     {
+        if ($error = app(ResearchDraftReviewService::class)->handoffError($candidate, $listing, $lockedDrafts)) {
+            return $error;
+        }
         if ($candidate->archived_at !== null || $candidate->status === 'rejected') {
             return 'アーカイブまたは見送り済みの候補は監視登録できません。';
         }
