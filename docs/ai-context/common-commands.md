@@ -181,7 +181,7 @@ docker compose exec laravel.test php artisan price:track
 ## 起動時の情報源確認（UC-016 / ADR-0031）
 
 ```bash
-# 通常は scripts/start-app.bat が背景で起動し、価格追跡→情報源確認を直列実行。
+# 通常は scripts/start-app.bat が背景で起動し、価格追跡→ウォッチリスト一括更新の投入（前回成功から72時間以上のときだけ、キューで実行。UC-019）→情報源確認を直列実行。
 # 子処理が失敗しても次へ進む。手動で情報源だけを確認する場合は後者を使う。
 docker compose exec laravel.test php artisan app:on-start
 docker compose exec laravel.test php artisan research:check-sources

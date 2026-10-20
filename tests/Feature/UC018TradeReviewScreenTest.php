@@ -19,7 +19,7 @@ use Illuminate\Support\Carbon;
 |   - docs/product/use-cases.md UC-018 基本フロー1〜7・異常時
 |   - 2026-10-11 本人承認の画面構成: /trade-review、「売買シグナル｜シグナル検証｜
 |     売買の振り返り」の3つ目のタブ、画面内は「成績」「売買一覧」の2タブ
-|     （「状況別」はUC-019のGate 2承認まで出さない）。ロジックの版・事後再計算・
+|     （「状況別」はUC-019のGate 2承認まで出さない → 2026-10-19承認、Cycle B3で追加）。ロジックの版・事後再計算・
 |     割り当ての内訳は載せない。計算結果はデータが変わるまでキャッシュする。
 |
 | Contract assumed here (flag at Gate 4 if a different shape is preferred):
@@ -114,7 +114,8 @@ describe('UC-018 売買の振り返り: 入口', function () {
             ->assertSee('<title>売買の振り返り | ポートフォリオ管理</title>', false)
             ->assertSeeText('成績')
             ->assertSeeText('売買一覧')
-            ->assertDontSeeText('状況別');
+            // UC-019 Gate 2 approved 2026-10-19: the 状況別 tab is shown (CHG-0033 Cycle B3)
+            ->assertSeeText('状況別');
     });
 
     test('売買シグナル・シグナル検証・売買の振り返りの切替タブに、3つ目として「売買の振り返り」が出る', function () {

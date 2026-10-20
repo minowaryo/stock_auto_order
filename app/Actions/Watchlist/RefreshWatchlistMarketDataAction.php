@@ -26,6 +26,7 @@ use App\Services\SignalOutcome\IndicatorObservationRecorder;
 use App\Services\SignalOutcome\SignalOccurrenceMetricsBuilder;
 use App\Services\SignalOutcome\SignalOccurrenceRecorder;
 use App\Services\SignalOutcome\WeeklyPriceRecorder;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Client\HttpClientException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Collection;
@@ -171,6 +172,15 @@ class RefreshWatchlistMarketDataAction
      */
     private function unheldWatchlistItems()
     {
+        return self::unheldWatchlistQuery()->with('holding')->get();
+    }
+
+    /**
+     * Watchlist items not held in the latest snapshot. Shared with the
+     * startup auto-refresh so the "target" definition lives in one place.
+     */
+    public static function unheldWatchlistQuery(): Builder
+    {
         $latestSnapshot = Snapshot::query()
             ->orderByDesc('snapshotted_at')
             ->orderByDesc('id')
@@ -180,10 +190,7 @@ class RefreshWatchlistMarketDataAction
             ? HoldingSnapshot::query()->where('snapshot_id', $latestSnapshot->id)->pluck('holding_id')->all()
             : [];
 
-        return WatchlistItem::query()
-            ->whereNotIn('holding_id', $heldHoldingIds)
-            ->with('holding')
-            ->get();
+        return WatchlistItem::query()->whereNotIn('holding_id', $heldHoldingIds);
     }
 
     /**

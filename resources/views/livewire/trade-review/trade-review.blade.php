@@ -17,7 +17,7 @@
     <x-signal-outcome-tabs current="review" />
 
     <nav aria-label="売買の振り返りの表示切替" class="flex gap-1 mb-4">
-        @foreach (['performance' => '成績', 'trades' => '売買一覧'] as $key => $label)
+        @foreach (['performance' => '成績', 'trades' => '売買一覧', 'situations' => '状況別'] as $key => $label)
             <a href="/trade-review?tab={{ $key }}" wire:navigate
                @if ($tab === $key) aria-current="page" @endif
                class="px-3 py-1.5 rounded-md text-[13px] font-medium {{ $tab === $key ? 'text-primary bg-blue-50' : 'text-text-secondary hover:bg-app-bg' }}">{{ $label }}</a>
@@ -63,6 +63,92 @@
                 </tbody>
             </table>
         @endforeach
+    @elseif ($tab === 'situations')
+        <p class="text-[13px] text-text-secondary mb-3">
+            探索的結果です。成功法則・売買ルールを示すものではありません。事後再計算の区分は売買週の前週末までの株価から計算し、業績指標は使いません。
+        </p>
+        <p class="text-[13px] mb-3">
+            対象の売買 {{ $situationSummary['trades'] }}件（定型の除外 {{ $situationSummary['excluded_routine'] }}件）／
+            出所: 当時記録 {{ $situationSummary['recorded'] }}件・事後再計算 {{ $situationSummary['recomputed'] }}件
+        </p>
+
+        <div class="flex gap-2 mb-3 text-[13px]">
+            <select wire:model.live="axis" aria-label="軸" class="border border-app-border rounded px-2 py-1">
+                <option value="high_ratio">52週高値比</option>
+                <option value="relative_strength">相対強度</option>
+                <option value="holding">保有状況</option>
+            </select>
+            <select wire:model.live="type" aria-label="比較の種類" class="border border-app-border rounded px-2 py-1">
+                <option value="sell">売却単独</option>
+                <option value="switch">推定乗換え（参考）</option>
+                <option value="buy">買付</option>
+            </select>
+            <select wire:model.live="horizon" aria-label="評価期間" class="border border-app-border rounded px-2 py-1">
+                <option value="4">+4週</option>
+                <option value="13">+13週</option>
+                <option value="26">+26週</option>
+            </select>
+        </div>
+
+        <table class="w-full text-[13px] mb-4">
+            <thead>
+                <tr class="text-left text-text-secondary border-b border-app-border">
+                    <th class="py-1.5 px-1.5">市場</th>
+                    <th class="py-1.5 px-1.5">区分</th>
+                    <th class="py-1.5 px-1.5 text-right">クラスタ数</th>
+                    <th class="py-1.5 px-1.5 text-right">結果あり</th>
+                    <th class="py-1.5 px-1.5 text-right">結果待ち</th>
+                    <th class="py-1.5 px-1.5 text-right">算出不可</th>
+                    <th class="py-1.5 px-1.5 text-right">対ガチホ差の中央値</th>
+                    <th class="py-1.5 px-1.5 text-right">25%〜75%点</th>
+                    <th class="py-1.5 px-1.5 text-right">上回ったクラスタ数</th>
+                    <th class="py-1.5 px-1.5 text-right">当時記録の件数</th>
+                    <th class="py-1.5 px-1.5"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach ($situationRows as $row)
+                    <tr class="border-b border-app-border">
+                        <td class="py-1.5 px-1.5">{{ $row['market'] }}</td>
+                        <td class="py-1.5 px-1.5">{{ $row['band'] }}</td>
+                        <td class="py-1.5 px-1.5 text-right">{{ $row['clusters'] }}</td>
+                        <td class="py-1.5 px-1.5 text-right">{{ $row['ok'] }}</td>
+                        <td class="py-1.5 px-1.5 text-right">{{ $row['pending'] }}</td>
+                        <td class="py-1.5 px-1.5 text-right">{{ $row['unavailable'] }}</td>
+                        <td class="py-1.5 px-1.5 text-right">{{ $row['median'] }}</td>
+                        <td class="py-1.5 px-1.5 text-right">{{ $row['range'] }}</td>
+                        <td class="py-1.5 px-1.5 text-right">{{ $row['better'] }}</td>
+                        <td class="py-1.5 px-1.5 text-right">{{ $row['recorded'] }}</td>
+                        <td class="py-1.5 px-1.5">
+                            <button type="button" wire:click="$set('cell', '{{ $row['key'] }}')" class="text-primary hover:underline">売買を見る</button>
+                        </td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+
+        @if ($situationTrades !== [])
+            <table class="w-full text-[13px]">
+                <thead>
+                    <tr class="text-left text-text-secondary border-b border-app-border">
+                        <th class="py-1.5 px-1.5">約定日</th>
+                        <th class="py-1.5 px-1.5">銘柄コード</th>
+                        <th class="py-1.5 px-1.5">銘柄名</th>
+                        <th class="py-1.5 px-1.5 text-right">対ガチホ差</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($situationTrades as $situationTrade)
+                        <tr class="border-b border-app-border">
+                            <td class="py-1.5 px-1.5">{{ $situationTrade['date'] }}</td>
+                            <td class="py-1.5 px-1.5">{{ $situationTrade['code'] }}</td>
+                            <td class="py-1.5 px-1.5">{{ $situationTrade['name'] }}</td>
+                            <td class="py-1.5 px-1.5 text-right">{{ $situationTrade['diff'] }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        @endif
     @else
         <div class="flex gap-2 mb-3 text-[13px]">
             <select wire:model.live="market" aria-label="市場" class="border border-app-border rounded px-2 py-1">

@@ -32,7 +32,13 @@ final class BuySignalDeterminationService
      */
     private const RECENT_STRENGTH_WINDOW_WEEKS = 13;
 
-    private const RECENT_STRENGTH_THRESHOLD_RATE = 0.85;
+    /**
+     * Promoted to `public` (2026-10-19, CHG-0033 UC-019) so
+     * App\Services\TradeReview\TradeSituationClassifier (52週高値比の区分)
+     * can reference the same 0.85 source of truth instead of re-declaring
+     * it. Value unchanged.
+     */
+    public const RECENT_STRENGTH_THRESHOLD_RATE = 0.85;
 
     /**
      * All-signals-common precondition B: the preferred relative strength

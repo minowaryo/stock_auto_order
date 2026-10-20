@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Actions\Watchlist\QueueStartupWatchlistRefreshAction;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -15,22 +16,45 @@ class AppOnStartCommand extends Command
 
     public function handle(): int
     {
-        $failed = false;
-        foreach (['price:track', 'research:check-sources'] as $command) {
-            try {
-                $arguments = $command === 'research:check-sources' && $this->option('force')
-                    ? ['--force' => true] : [];
-                if ($this->call($command, $arguments) !== self::SUCCESS) {
-                    $failed = true;
-                    $this->warn($command.' が失敗しました。次の処理へ進みます。');
-                }
-            } catch (Throwable $exception) {
-                $failed = true;
-                Log::warning('Startup task failed', ['command' => $command, 'exception_type' => $exception::class]);
-                $this->warn($command.' を完了できませんでした。次の処理へ進みます。');
-            }
-        }
+        $failed = ! $this->runStartupCommand('price:track');
+        // UC-019: keep recording watchlist indicators/signals on startup (at most every 3 days).
+        $failed = ! $this->queueWatchlistRefresh() || $failed;
+        $failed = ! $this->runStartupCommand('research:check-sources') || $failed;
 
         return $failed ? self::FAILURE : self::SUCCESS;
+    }
+
+    private function queueWatchlistRefresh(): bool
+    {
+        try {
+            app(QueueStartupWatchlistRefreshAction::class)->execute();
+
+            return true;
+        } catch (Throwable $exception) {
+            Log::warning('Startup task failed', ['command' => 'watchlist-refresh', 'exception_type' => $exception::class]);
+            $this->warn('ウォッチリスト更新を積めませんでした。次の処理へ進みます。');
+
+            return false;
+        }
+    }
+
+    private function runStartupCommand(string $command): bool
+    {
+        try {
+            $arguments = $command === 'research:check-sources' && $this->option('force')
+                ? ['--force' => true] : [];
+            if ($this->call($command, $arguments) !== self::SUCCESS) {
+                $this->warn($command.' が失敗しました。次の処理へ進みます。');
+
+                return false;
+            }
+
+            return true;
+        } catch (Throwable $exception) {
+            Log::warning('Startup task failed', ['command' => $command, 'exception_type' => $exception::class]);
+            $this->warn($command.' を完了できませんでした。次の処理へ進みます。');
+
+            return false;
+        }
     }
 }
