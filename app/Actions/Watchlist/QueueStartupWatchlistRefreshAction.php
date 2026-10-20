@@ -21,9 +21,7 @@ class QueueStartupWatchlistRefreshAction
         $lastFinishedAt = WatchlistRefreshRun::query()
             ->where('status', WatchlistRefreshRun::STATUS_COMPLETED)
             ->max('finished_at');
-        if ($lastFinishedAt !== null
-            && now()->diffInHours(Carbon::parse($lastFinishedAt), true) < self::INTERVAL_HOURS
-            && now()->lt(Carbon::parse($lastFinishedAt)->addHours(self::INTERVAL_HOURS))) {
+        if ($lastFinishedAt !== null && now()->lt(Carbon::parse($lastFinishedAt)->addHours(self::INTERVAL_HOURS))) {
             return null;
         }
 

@@ -10,6 +10,7 @@ use App\Models\SignalOccurrence;
 use App\Models\StockSplit;
 use App\Models\TradeExecution;
 use App\Models\WeeklyPrice;
+use App\Services\Analysis\BuySignalDeterminationService;
 use App\Services\MarketData\WeekDateNormalizer;
 use App\Services\TradeReview\StockPerformanceCalculator;
 use App\Services\TradeReview\Support\PeriodPerformance;
@@ -50,13 +51,6 @@ class ShowTradeReviewAction
     private const MARKETS = ['all' => null, 'jp' => 'jp', 'us' => 'us'];
 
     private const SITUATION_MARKETS = ['jp' => '国内株', 'us' => '米国株'];
-
-    /** The bands of each 状況別 axis, in display order, with their labels. */
-    private const SITUATION_BANDS = [
-        'high_ratio' => ['near_high' => '高値圏（52週高値の85%以上）', 'pullback' => '押し目圏（85%未満）', 'unknown' => '不明'],
-        'relative_strength' => ['strong' => '強い（対市場−5pt以上）', 'weak' => '弱い（−5pt未満）', 'unknown' => '不明'],
-        'holding' => ['none' => '未保有', 'lt1' => '保有1%未満', '1to5' => '保有1〜5%', 'gt5' => '保有5%超'],
-    ];
 
     public function __construct(
         private readonly WeeklyPortfolioBuilder $builder,
@@ -299,7 +293,7 @@ class ShowTradeReviewAction
             $rows[$cell->axis][$cell->type][$cell->horizon][] = [
                 'key' => $cell->market.'-'.$cell->band,
                 'market' => self::SITUATION_MARKETS[$cell->market] ?? $cell->market,
-                'band' => self::SITUATION_BANDS[$cell->axis][$cell->band] ?? '不明',
+                'band' => self::situationBands()[$cell->axis][$cell->band] ?? '不明',
                 'clusters' => $cell->clusters,
                 'ok' => $cell->okClusters,
                 'pending' => $cell->pendingClusters,
@@ -352,11 +346,30 @@ class ShowTradeReviewAction
     }
 
     /**
+     * The bands of each 状況別 axis, in display order, with their labels. The
+     * thresholds in the labels come from the classifier's constants so the
+     * text cannot drift from the classification.
+     *
+     * @return array<string, array<string, string>>
+     */
+    private static function situationBands(): array
+    {
+        $high = (int) round(BuySignalDeterminationService::RECENT_STRENGTH_THRESHOLD_RATE * 100);
+        $strength = str_replace('-', '−', (string) BuySignalDeterminationService::MIN_RELATIVE_STRENGTH);
+
+        return [
+            'high_ratio' => ['near_high' => "高値圏（52週高値の{$high}%以上）", 'pullback' => "押し目圏（{$high}%未満）", 'unknown' => '不明'],
+            'relative_strength' => ['strong' => "強い（対市場{$strength}pt以上）", 'weak' => "弱い（{$strength}pt未満）", 'unknown' => '不明'],
+            'holding' => ['none' => '未保有', 'lt1' => '保有1%未満', '1to5' => '保有1〜5%', 'gt5' => '保有5%超'],
+        ];
+    }
+
+    /**
      * @return array{int, int}
      */
     private function situationOrder(SituationCell $cell): array
     {
-        $bands = array_keys(self::SITUATION_BANDS[$cell->axis] ?? []);
+        $bands = array_keys(self::situationBands()[$cell->axis] ?? []);
         $band = array_search($cell->band, $bands, true);
 
         return [
