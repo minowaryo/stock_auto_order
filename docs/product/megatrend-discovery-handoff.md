@@ -24,7 +24,7 @@
 
 Gitの反映状況は変動するため、再開時に `git log` と `git status` で main・origin/main・作業ブランチを確認する。
 
-**未対応源の次の実装（2026-10-11）:** 本人の効果順の着手指示を受け、[実装計画](megatrend-source-implementation-plan.md)にFDA → NEDO → YouTubeの根拠と完了条件を記録。`feat/chg0031-source-adapters`でFDAの追加Redと[ADR-0032](../adr/ADR-0032-research-source-adapters-and-access-intervals.md)に着手した。本人がADR-0032と追加Red31件、さらに秒精度補足4件/既存3件期待補正を別途承認。FDA35+既存49件は84件Green成功。2026-10-13全体1,977件は失敗/エラー0・skip1・8,420assert、独立強化レビューHIGH/MEDIUMなし。公開CSV1,614件も専用DBで全フィールド/性能を確認。2026-10-16本人承認で`56b73e0`へコミットし、履歴統合`4ce6c5d`後、本マージでローカルmainへ統合。統合結果は全2,032件失敗/エラー0・skip1・8,540assert。S10はmainで有効設定済みだが実アプリ未反映・push未実施。次はNEDOの追加Red。実アプリの有効源はH02のまま。
+**未対応源の次の実装（2026-10-11）:** 本人の効果順の着手指示を受け、[実装計画](megatrend-source-implementation-plan.md)にFDA → NEDO → YouTubeの根拠と完了条件を記録。`feat/chg0031-source-adapters`でFDAの追加Redと[ADR-0032](../adr/ADR-0032-research-source-adapters-and-access-intervals.md)に着手した。本人がADR-0032と追加Red31件、さらに秒精度補足4件/既存3件期待補正を別途承認。FDA35+既存49件は84件Green成功。2026-10-13全体1,977件は失敗/エラー0・skip1・8,420assert、独立強化レビューHIGH/MEDIUMなし。公開CSV1,614件も専用DBで全フィールド/性能を確認。2026-10-16本人承認で`56b73e0`へコミットし、履歴統合`4ce6c5d`後、本マージでローカルmainへ統合。統合結果は全2,032件失敗/エラー0・skip1・8,540assert。S10はmainで有効設定済みだが実アプリ未反映・push未実施。NEDO追加Red24ケースは11未実装失敗/13成功、既存84件成功。[NEDO設計補足/Gate 4審議材料](../development/uc016-source-nedo-red-review.md)を提示後、2026-10-16本人の専用worktreeでの続行指示を承認としてGreen着手。進捗・検証結果は同資料へ記録する。mainは`a15db72`までpush済み・checkout解除済みで、NEDOの作業中はmainへ触れない。実アプリの有効源はH02のまま。
 
 ## 3. 決まっている方針
 

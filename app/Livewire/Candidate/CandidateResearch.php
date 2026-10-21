@@ -6,7 +6,9 @@ use App\Models\ResearchCandidate;
 use App\Models\ResearchDiscoveryLink;
 use App\Models\ResearchEntity;
 use App\Models\ResearchEvent;
+use App\Services\Research\ResearchCandidateAutomationService;
 use App\Services\Research\ResearchCandidateService;
+use App\Services\Research\ResearchDraftReviewService;
 use App\Services\Research\ResearchSourceItemService;
 use App\Support\DisplayTime;
 use App\Support\ResearchSymbolCode;
@@ -17,6 +19,7 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\WithPagination;
+use PDOException;
 use RuntimeException;
 
 /** UC-016: 本人が公開資料を読んで記録する調査候補画面。 */
@@ -26,6 +29,132 @@ class CandidateResearch extends Component
     use WithPagination;
 
     public array $form = [];
+
+    #[Locked]
+    public array $draftReview = [];
+
+    public bool $draftConfirmed = false;
+
+    public string $draftNote = '';
+
+    public ?int $draftExistingEventId = null;
+
+    public ?int $draftExistingEntityId = null;
+
+    public string $draftDispositionFilter = '';
+
+    public string $draftDispositionReason = '';
+
+    public string $draftRoleCorrection = '';
+
+    public function showDraft(int $draftId, ResearchDraftReviewService $service): void
+    {
+        Gate::authorize('viewAny', ResearchCandidate::class);
+        $this->draftReview = $service->review($draftId, auth()->user());
+        $this->draftConfirmed = false;
+        $this->draftNote = '';
+        $this->draftExistingEventId = null;
+        $this->draftExistingEntityId = null;
+        $this->draftRoleCorrection = implode('、', $this->draftReview['overrides']['roles'] ?? $this->draftReview['fields']['roles'] ?? []);
+        $this->draftDispositionReason = '';
+        $this->resetErrorBag('draft');
+        $this->resetErrorBag('draftConfirmed');
+    }
+
+    public function closeDraft(): void
+    {
+        Gate::authorize('viewAny', ResearchCandidate::class);
+        $this->draftReview = [];
+        $this->draftConfirmed = false;
+    }
+
+    public function importDraft(ResearchDraftReviewService $service): void
+    {
+        Gate::authorize('create', ResearchCandidate::class);
+        $this->validate(['draftConfirmed' => ['accepted'], 'draftNote' => ['string', 'max:2000']]);
+        try {
+            $candidate = $service->import($this->draftReview, $this->draftConfirmed, $this->draftNote,
+                $this->draftExistingEventId, $this->draftExistingEntityId, auth()->user());
+            $this->selectedCandidateId = $candidate->id;
+            $this->notice = '調査記録へ取り込みました。元発表・上場主体・主張・反証の確認を続けてください。';
+            $this->resetErrorBag('draft');
+        } catch (PDOException) {
+            $this->addError('draft', '保存できませんでした。時間をおいて再試行してください。');
+        } catch (InvalidArgumentException|DomainException|RuntimeException $exception) {
+            $this->addError('draft', $exception->getMessage());
+        }
+    }
+
+    public function reconfirmDraft(ResearchDraftReviewService $service): void
+    {
+        Gate::authorize('create', ResearchCandidate::class);
+        $this->validate(['draftConfirmed' => ['accepted']]);
+        try {
+            $service->reconfirm($this->draftReview, $this->draftConfirmed, auth()->user());
+            $this->draftReview = $service->review($this->draftReview['id'], auth()->user());
+            $this->draftConfirmed = false;
+            $this->notice = '最新資料の本人確認を記録しました。主張や上場主体の確認状態は変更していません。';
+            $this->resetErrorBag('draft');
+        } catch (PDOException) {
+            $this->addError('draft', '保存できませんでした。時間をおいて再試行してください。');
+        } catch (InvalidArgumentException|DomainException|RuntimeException $exception) {
+            $this->addError('draft', $exception->getMessage());
+        }
+    }
+
+    public function correctDraft(int $draftId, int $expectedVersion, array $overrides, ResearchDraftReviewService $service): void
+    {
+        Gate::authorize('create', ResearchCandidate::class);
+        try {
+            $service->correct($draftId, $expectedVersion, $overrides, auth()->user());
+            $this->showDraft($draftId, $service);
+            $this->notice = '本人の訂正を保存しました。抽出元の情報は保持しています。';
+        } catch (PDOException) {
+            $this->addError('draft', '保存できませんでした。時間をおいて再試行してください。');
+        } catch (InvalidArgumentException|DomainException|RuntimeException $exception) {
+            $this->addError('draft', $exception->getMessage());
+        }
+    }
+
+    public function saveDraftCorrection(ResearchDraftReviewService $service): void
+    {
+        $this->correctDraft((int) ($this->draftReview['id'] ?? 0), (int) ($this->draftReview['lock_version'] ?? 0),
+            ['roles' => [$this->draftRoleCorrection]], $service);
+    }
+
+    public function changeDraftDisposition(int $draftId, int $expectedVersion, string $disposition, string $reason, ResearchDraftReviewService $service): void
+    {
+        Gate::authorize('create', ResearchCandidate::class);
+        try {
+            $service->disposition($draftId, $expectedVersion, $disposition, $reason, auth()->user());
+            $this->showDraft($draftId, $service);
+            $this->notice = '判断理由と状態を保存しました。';
+        } catch (PDOException) {
+            $this->addError('draft', '保存できませんでした。時間をおいて再試行してください。');
+        } catch (InvalidArgumentException|DomainException|RuntimeException $exception) {
+            $this->addError('draft', $exception->getMessage());
+        }
+    }
+
+    public function saveDraftDisposition(string $disposition, ResearchDraftReviewService $service): void
+    {
+        $this->changeDraftDisposition((int) ($this->draftReview['id'] ?? 0), (int) ($this->draftReview['lock_version'] ?? 0),
+            $disposition, $this->draftDispositionReason, $service);
+    }
+
+    public function restoreDraft(int $draftId, int $expectedVersion, ResearchDraftReviewService $service): void
+    {
+        Gate::authorize('create', ResearchCandidate::class);
+        try {
+            $service->restore($draftId, $expectedVersion, auth()->user());
+            $this->showDraft($draftId, $service);
+            $this->notice = '未確認へ戻しました。資料と判断履歴は保持しています。';
+        } catch (PDOException) {
+            $this->addError('draft', '保存できませんでした。時間をおいて再試行してください。');
+        } catch (InvalidArgumentException|DomainException|RuntimeException $exception) {
+            $this->addError('draft', $exception->getMessage());
+        }
+    }
 
     #[Locked]
     public ?int $selectedSourceItemId = null;
@@ -148,6 +277,7 @@ class CandidateResearch extends Component
     {
         Gate::authorize('viewAny', ResearchCandidate::class);
         $result = $service->checkSources(auth()->user());
+        app(ResearchCandidateAutomationService::class)->run('manual', auth()->user());
         $this->notice = '情報源の確認: '.$result['checked'].'源、失敗: '.$result['failed'].'源、スキップ: '.$result['skipped'].'源。';
         $this->resetPage('sourceItemsPage');
     }
@@ -627,6 +757,7 @@ class CandidateResearch extends Component
         $service = app(ResearchCandidateService::class);
 
         return view('livewire.candidate.candidate-research', [
+            'automation' => app(ResearchDraftReviewService::class)->listing(auth()->user(), $this->draftDispositionFilter),
             'candidates' => $candidates,
             'registrationStates' => $service->registrationStates($candidates->getCollection()),
             'stats' => $service->stats(),

@@ -1,5 +1,32 @@
 # PLAN.md
 
+> CHG-0045の完了記録を[アーカイブ](docs/history/plan-archive.md)へ原文のまま退避（2026-10-20）。300行上限は`.claude/rules/60-docs.md`参照。
+
+## Web情報から企業候補を自動抽出する（CHG-0031・F-016／UC-016・UC-012）FDA/JPX初期版・NEDO一覧をローカルmain統合・後続作業あり（2026-10-21）
+
+### Decision
+
+- [引継ぎ](docs/development/chg0031-automation-session-handoff.md)を受領し、`3fbc3fb`から本件の計画/仕様/モックだけを選択して統合。別件の`.claude`差分は取り込まない。既存NEDO Green（`9e4bc14`と未コミット検証記録）は保持する。
+- [詳細計画](docs/product/megatrend-candidate-automation-plan.md)・[追加仕様](docs/product/megatrend-candidate-automation-spec.md)。取得済みの企業・出典を再入力せず、企業候補の確認→調査記録→本人確認後の監視登録へ進む。FDAで一連の流れを通した後、NEDO/公開noteで日米・3テーマへ拡張。YouTubeは取得条件の別サイクルとする。
+
+### Files touched
+
+計画/仕様/承認/追跡、ADR-0033と保存定義、新規migration/10モデル、取得/抽出/公式照合/本人取り込みのService・Command・Livewire/Blade、設定/Composer、Redと架空Xlsx/E2E。既存テストの補正は保存済み値比較のfixture2行のみ。
+
+### Status
+
+- [x] 本件差分を復元し、NEDO一覧取得の既承認範囲と企業候補生成の未承認範囲を整理。
+- [x] 3画面×PC/狭い幅の6表示、導線/参照、lint差分を検証（新規指摘0、既存21件残存）。[検証記録](docs/development/chg0031-automation-review-preparation.md)。2026-10-19「追加Gate 2を承認し、Gate 3設計へ進む」で本人承認済み。
+- [x] 追加Gate 3草案: [ADR-0033](docs/adr/ADR-0033-research-candidate-automation.md)・[保存定義](docs/architecture/research-automation-data-model.md)・[審議/テスト観点](docs/development/chg0031-automation-gate3-review.md)。資料版と本人判断を分離し、上場候補照合・NEDO後続実行・取り込み整合性を具体化。
+- [x] 2026-10-19本人が「Gate 3を承認し、Redテスト作成へ進む」でADR-0033/追加保存定義/ライブラリ採用案を承認。
+- [x] FDA追加Red79件（76失敗・既存動作3成功、エラー0）、既存関連120件全成功。独立レビュー3指摘を6ケースで補強。[審議/実行記録](docs/development/chg0031-automation-fda-red-review.md)。
+- [x] 本人が「承認してFDAのGreen実装へ進む」で追加79件のGate 4承認（2026-10-19）。
+- [x] FDA/JPX初期Green: 関連304件/2,038assertionsと画面E2E1件成功、実JPX4,447行解析成功、専用DBのmigration往復/build成功。[Green記録](docs/development/chg0031-automation-fda-green-review.md)。当時は専用ブランチのみ、10/21の本マージでローカルmain統合。通常アプリ/本人DB/pushは未実施。
+- [x] 実JPX正式5桁の[補足/追加3件](docs/development/chg0031-automation-jpx-code-red-review.md)を別途本人承認→Green。原コード保持/自動照合4桁限定、実ファイル4桁4,440＋5桁7行を解析成功。
+- [x] 本人指示で[RUN実画面確認](docs/development/chg0031-run-verification.md)。隔離DBのプレビュー18875を起動継続、E2E1件成功（main/通常アプリ未反映）。
+- [x] 2026-10-20[マージ前レビュー](docs/development/chg0031-automation-merge-review.md)4点を追加Red10件→本人Gate 4承認→Greenで解消。関連313件/競合1件（計2,222assertions）、画面E2E1件、Pint36ファイル成功。本人がGit計画/UC-019追加解消案を承認。2コミット作成後、本マージでローカルmain統合。[統合結果検証](docs/development/chg0031-automation-main-merge-verification.md)は全Pest失敗/エラー0（非推奨23/skip1）、競合/E2E/Pint/build成功。
+- [ ] 企業集約/追加絞り込み、NEDO本文/H02、YouTube、既存依存監査6件は後続サイクル。情報源品質は4週試行の結果を記録し11/02以降に再精査。ローカルmain統合と通常アプリ導入を分け、後者と本人DBのmigration/pushは未実施。非推奨警告23件の精査も残す。
+
 ## 日本株の財務指標の計算元の修正（CHG-0050・ADR-0030）実装完了・mainマージ済み・実データで確認済み（2026-10-10）
 
 ### Decision
@@ -222,7 +249,10 @@ Red 16件→Gate4承認→Green。フルスイート1226 passed・pint適用済�
 - [x] 2026-10-09の追加Playwright E2Eで、UC-016の未確認主張に空の確認日を送るとMySQL日付エラーとなり、画面には誤って版競合と表示される不具合を確認。主張追記・訂正の追加Red2件は専用DBで意図した失敗となり、本人が追加Gate 4を承認。`syncClaims()`で空欄をNULLに正規化するGreen後、CorrectionTest全12件・61アサーションと追加Playwright E2E1件が通過。全Pestスイート1680件通過・1件スキップ・23件deprecated（7342アサーション）。`fix/chg0031-review-fixes`の2コミット（`61f3d99`、`2478d11`）をmainへ統合。統合結果では全Pestスイート1745件通過・1件スキップ・23件deprecated（7612アサーション）、UC-016のPlaywright E2E 2件、Vite buildが通過。pushは未実施。
 - [x] 2026-10-09の再レビュー指摘のうち、スキーマ変更なしで直せる項目（週の区切りと確認日の既定値を表示用タイムゾーンへ、銘柄コードの形式検証と正規化、確認済み上場企業を元発表確認済みかつ上場先単位で数える、過去の発表から統合済み転載を除く、一覧に最新の登録・保有照合結果を表示、★なし関連付けを監視未登録に残す、統合時の要再確認、統合済み元発表IDの拒否、既存記録の一操作選択）。本人が修正を許可（2026-10-10）。`fix/chg0031-research-review-2`で追加Red12件（`tests/Feature/UC016ResearchCandidateFollowupTest.php`）が専用DBで12失敗、既存`UC016ResearchCandidateReviewTest`16件は通過（1件は元発表を確認済みにする前提修正）。2026-10-10 本人がGate 4承認（「すすめてよい」）。Green後、追加12件と全Pestスイート1810件通過・1件スキップ・23件deprecated（7797アサーション）、Pint・Domain Boundaryチェック通過。実ブラウザ検証（worktreeを別ポートで起動したPlaywright）で、`wire:model.blur`だけでは既存記録の照合が画面に出ない既存不具合を発見し`wire:model.live.blur`へ修正（再発防止テスト1件追加、全1811件通過）。重複警告と一操作選択、`7203.T`の拒否、` 7203 `の正規化保存を確認し、検証データは開発DBから削除済み。
 - [x] 情報源の起動時確認（初期RSSと共通処理。[検証/導入記録](docs/development/uc016-source-startup-red-review.md)）。UC-016追加節・[ADR-0031](docs/adr/ADR-0031-research-source-startup-check.md)・data-modelは2026-10-10本人がGate 2/3承認、独立レビュー後の49ケースを2026-10-11本人がGate 4承認。Green49件+Followup13件は62件224アサーション成功、独立強化レビューの確定HIGH/MEDIUMは解消。機能`24784ef`・追加マイグレーション`3692172`、最新mainとの統合後は1,942件・失敗/エラー0・skip1・8,142アサーション（Pest表示1,918 passed・23 deprecated）、Pint17ファイル/実アプリVite build成功。Playwright E2E1件成功。本人がコミット/main/ローカル反映を明示承認し、`da70f49`でmain統合、2026-10-11にDBバックアップ→新規2テーブル追加→共有アプリのコード更新・キュー再起動を実施。H02初回25項目を基準線（新着0）として記録し、画面描画と最低間隔内の全源省略を確認。保有237・ウォッチリスト221・調査候補0件は維持。push未実施。
-- [ ] 情報源の導入後約3週間の見直し（導入2026-10-11、目安2026-11-01）。起動記録から負荷/欠測・有効な源/項目を選び直す。[台帳](docs/product/megatrend-source-selection.md#起動時確認の登録状態2026-10-11)のH01取得条件とS09専用パーサ（未実装）の追加は別途Red/Gate 4を経る。S03は手動。4週品質再精査は予定どおり11/02以降に継続。 **実装順（2026-10-11本人が効果順の着手を指示）: S10 FDA → S09 NEDO → H01 YouTube**。[順序/実資料/完了条件](docs/product/megatrend-source-implementation-plan.md)に根拠を記録。FDA追加Red31件は19未実装失敗/12成功、既存26件成功、独立レビュー済み。[審議材料](docs/development/uc016-source-fda-red-review.md)とADR-0032を本人が追加承認し、元31件+既存49件の80件Green成功。秒精度の追加Red4件/既存3件期待補正も本人承認後Green。FDA35+既存49件は84件成功。2026-10-13全体1,977件失敗/エラー0・skip1・8,420assert、独立強化レビューHIGH/MEDIUMなし。公開CSV1,614件初回3.25秒/再確認0.95秒。2026-10-16本人承認で機能を`56b73e0`へコミット。リモートとの履歴は`4ce6c5d`で両立し、FDAを本マージでローカルmainへ統合。統合結果は全2,032件失敗/エラー0・skip1・8,540assert。実アプリ反映とpushは未実施。次はNEDOの追加Red。
+- [ ] 情報源の導入後約3週間の見直し（導入2026-10-11、目安2026-11-01）。起動記録から負荷/欠測・有効な源/項目を選び直す。[台帳](docs/product/megatrend-source-selection.md#起動時確認の登録状態2026-10-11)。**実装順: S10 FDA → S09 NEDO → H01 YouTube**（2026-10-11本人指示、[根拠/完了条件](docs/product/megatrend-source-implementation-plan.md)）。S03は手動。4週品質再精査は11/02以降に継続。
+  - FDA: [Red/Green記録](docs/development/uc016-source-fda-red-review.md)。機能`56b73e0`をmainへ統合し、統合回帰2,032件失敗/エラー0・skip1・8,540assert。本人承認で資料同期`a15db72`までpush済み（10/16時点）。実アプリ反映は本作業の対象外。
+  - NEDO: 追加24ケース/設計補足の承認後、`feat/chg0031-nedo-source`専用worktreeでGreen。10/19に退避`9e4bc14`から復元。関連108件成功・613assert、独立強化レビューHIGH/MEDIUMなし、Pint5ファイル成功。公式HTMLの9結果を独立期待値で照合し初回0.0621秒/再確認0.0087秒。条件達成により本ブランチのS09有効化。全体回帰は復元環境のビルド成果物を補い全2,056件・失敗/エラー0・skip1・8,684assert（既存の非推奨警告23件）。[最新の検証/残作業](docs/development/uc016-source-nedo-red-review.md#green検証2026-10-19)。**10/21の本マージでNEDO一覧もローカルmain統合。push・実アプリ反映は未実施。**
+  - 企業候補生成は冒頭のFDA→NEDO本文/H02→YouTubeの順。H01 YouTube: API/キー/保持条件を整理し、設計補足と新たなRed/Gate 4承認を経て実装する。情報源の精度・未登録企業の実発見は別途11/02以降に評価する。
 - [ ] 発見時点の登録・保有照合結果の保存と、源ごとの評価項目（所要時間・誤同定・確認不能理由）の入れ物。スキーマ変更のためGate 3で扱う（2026-10-09再レビュー指摘）。
 - [ ] 4週の新着確認を試行ログへ記録する（10/05〜11、10/12〜18、10/19〜25、10/26〜11/01）。源ごとに元URL・発表日・照合結果・所要時間・確認できなかった理由を残す。
 - [ ] 11/02以降、主張と一次資料の一致／不一致／確認不能、訂正、誤同定、転載重複、欠測、未登録企業数、テーマ・市場の偏り、確認時間を源ごとに集計する。情報源の誤りと調査時の読み違いを区別する。
@@ -254,21 +284,6 @@ Red 16件→Gate4承認→Green。フルスイート1226 passed・pint適用済�
 ### Status
 
 実装完了（2026-10-04）。CHG-0048と一緒に実装した（同エントリのStatus参照）。電気・ガスのPBRの丸め誤差の修正、基準値の公式資料との照合（2026-10-04）も実施
-
-## 新規投資候補の並び順で財務健全性を先頭キーに（CHG-0045・ADR-0013 D4追補）Green完了（2026-10-04）
-
-### Decision
-
-- 本人要望「新規投資候補もおすすめ順で」。調査の結果、UC-012は既に透明マルチキーで並んでいたが、先頭キーが押し目シグナル件数のため財務基準割れ（シグナル2件）が財務健全（シグナル1件）より上に来ていた
-- 本人判断（AskUserQuestion）: 財務を先頭キーにする（①財務 passed→unavailable→failed ②シグナル件数 ③④は不変）。UC-013の`new_entry`参考リストも同じActionのため同じ並び
-
-### Files touched
-
-`app/Actions/Watchlist/ShowWatchlistAction.php`、`tests/Feature/UC012WatchlistScreenTest.php`（新規1件・既存テスト名更新・ヘルパーの`range(1, 0)`バグ修正）、`docs/product/use-cases.md`、`docs/adr/ADR-0013-*.md`（D4追補）、`docs/adr/ADR-0014-*.md`、`docs/architecture/data-model.md`、`docs/rcid/traceability-matrix.md`
-
-### Status
-
-Red 1件→Gate4承認→Green。フルスイート1178 passed・pint適用済み。開発DB（未保有105銘柄）で財務failedの先頭位置が1位→58位に下がることを確認。ブランチ`feat/chg0045-watchlist-sort-fundamental-first`（worktree `.claude/worktrees/chg0045`）、未コミット
 
 ## 今後の対応（未着手）（2026-08-27追記、Phase5の実ブラウザ確認時に発見）
 

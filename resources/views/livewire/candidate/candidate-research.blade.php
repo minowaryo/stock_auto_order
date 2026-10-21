@@ -10,6 +10,9 @@
         <p role="status" class="rounded border border-green-200 bg-green-50 p-3 text-[13px] text-green-800">{{ $notice }}</p>
     @endif
 
+    @include('livewire.candidate.research-drafts')
+
+    <details class="rounded border border-app-border p-3"><summary class="cursor-pointer font-semibold">情報源の確認状況・取得した項目</summary>
     <x-card>
         <div class="mb-3 flex items-center justify-between gap-3">
             <h2 id="source-status-heading" class="text-base font-semibold">情報源の確認状況</h2>
@@ -74,6 +77,8 @@
         <div class="mt-3">{{ $sourceItems->links() }}</div>
     </x-card>
 
+    </details>
+
     <div class="grid gap-3 text-[13px] sm:grid-cols-4">
         <x-card><div class="text-text-secondary">元発表の件数</div><div class="mt-1 text-xl font-semibold">{{ $stats['original_events'] ?? 0 }}</div></x-card>
         <x-card><div class="text-text-secondary">確認済み上場企業</div><div class="mt-1 text-xl font-semibold">{{ $stats['verified_listed_entities'] ?? 0 }}</div></x-card>
@@ -82,6 +87,7 @@
     </div>
     <p class="text-[12px] text-text-secondary">記録経路: 手動記録。情報源の定期確認・全市場の網羅を示す数値ではありません。元発表の転載は同じ出来事として数えます。</p>
 
+    <details class="rounded border border-app-border p-3"><summary class="cursor-pointer font-semibold">手動で記録（補助操作）</summary>
     <x-card>
         <h2 class="mb-3 text-base font-semibold">公開資料から候補を記録</h2>
         @if ($selectedSourceItemId !== null)
@@ -163,6 +169,8 @@
         </form>
     </x-card>
 
+    </details>
+
     <x-card>
         <h2 class="mb-3 text-base font-semibold">調査候補一覧</h2>
         <div class="flex flex-wrap items-end gap-3 text-[13px]">
@@ -219,7 +227,7 @@
             @if ($selectedCandidateId === $candidate->id)
                 <div class="mt-4 space-y-3 border-t border-app-border pt-3 text-[12px]">
                     <div>出来事: {{ $event->title }}（元発表ID {{ $event->id }}）／元資料: {{ $event->original_url ?: '未確認' }}／発行主体: {{ $event->original_publisher ?: '未確認' }}</div>
-                    <div>発見経路:@foreach ($event->discoveryLinks as $discoveryLink) <span class="block">{{ $discoveryLink->source_title }}・{{ $discoveryLink->publisher }}・{{ $discoveryLink->url }}・確認 {{ $discoveryLink->checked_on?->format('Y-m-d') ?? '不明' }}</span><span class="block text-text-secondary">{{ $discoveryLink->summary }}</span>@endforeach</div>
+                    <div>発見経路:@foreach ($event->discoveryLinks as $discoveryLink) <span class="block">{{ $discoveryLink->source_title }}・{{ $discoveryLink->publisher }}・{{ $discoveryLink->url }}・確認 {{ $discoveryLink->checked_on?->format('Y-m-d') ?? '不明' }}</span>@if($discoveryLink->input_origin === 'automatic')<span class="block text-text-secondary">資料からの要点: {{ $discoveryLink->generated_summary }}</span><span class="block text-text-secondary">本人の追記: {{ $discoveryLink->summary ?: 'なし' }}</span>@else<span class="block text-text-secondary">{{ $discoveryLink->summary }}</span>@endif@endforeach</div>
                     <div>上場主体の確認: {{ $entity->identification_note ?: '未確認' }}@foreach ($entity->listings as $entityListing)<span class="block">{{ $entityListing->market }} {{ $entityListing->symbol_code }}／{{ $entityListing->source_url }}／確認 {{ $entityListing->confirmed_on?->format('Y-m-d') }}</span>@endforeach</div>
                     <div>主張と根拠:@forelse ($candidate->claims as $claim)<span class="block">{{ $claim->status }}・{{ $claim->is_primary_source ? '一次資料' : '紹介資料' }}・{{ $claim->claim }}／{{ $claim->evidence_url ?: 'URLなし' }}</span>@empty <span>未記録</span>@endforelse</div>
                     <div>反証・未確認事項: {{ $candidate->counter_evidence ?: '未記録' }}／確認日 {{ $candidate->counter_evidence_checked_on?->format('Y-m-d') ?? '不明' }}</div>

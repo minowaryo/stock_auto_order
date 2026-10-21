@@ -20,6 +20,7 @@ class AppOnStartCommand extends Command
         // UC-019: keep recording watchlist indicators/signals on startup (at most every 3 days).
         $failed = ! $this->queueWatchlistRefresh() || $failed;
         $failed = ! $this->runStartupCommand('research:check-sources') || $failed;
+        $failed = ! $this->runStartupCommand('research:discover-candidates') || $failed;
 
         return $failed ? self::FAILURE : self::SUCCESS;
     }
@@ -40,7 +41,11 @@ class AppOnStartCommand extends Command
 
     private function runStartupCommand(string $command): bool
     {
+        $previousTrigger = config('research_automation.trigger');
         try {
+            if ($command === 'research:discover-candidates') {
+                config(['research_automation.trigger' => 'startup']);
+            }
             $arguments = $command === 'research:check-sources' && $this->option('force')
                 ? ['--force' => true] : [];
             if ($this->call($command, $arguments) !== self::SUCCESS) {
@@ -55,6 +60,8 @@ class AppOnStartCommand extends Command
             $this->warn($command.' を完了できませんでした。次の処理へ進みます。');
 
             return false;
+        } finally {
+            config(['research_automation.trigger' => $previousTrigger]);
         }
     }
 }
