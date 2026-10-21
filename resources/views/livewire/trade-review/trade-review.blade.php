@@ -9,6 +9,18 @@
         'reference' => ['参考', 'neutral'],
         'unavailable' => ['算出不可', 'neutral'],
     ];
+    // Green for a positive number, red for a negative one (zero and non-numbers stay neutral).
+    $tone = function (float|string|null $value): string {
+        if (is_string($value)) {
+            $value = preg_match('/^[+-]\d+(?:\.\d+)?/', $value, $m) ? (float) $m[0] : null;
+        }
+
+        return match (true) {
+            $value === null, round($value, 1) == 0 => '',
+            $value > 0 => 'text-green-700',
+            default => 'text-red-700',
+        };
+    };
     $marketLabels = ['all' => '合計', 'jp' => '国内株', 'us' => '米国株'];
 @endphp
 <div>
@@ -48,9 +60,9 @@
                             <tr class="border-b border-app-border">
                                 @if ($heading === '暦年')<td class="py-1.5 px-1.5">{{ $loop->first ? $periodKey.'年' : '' }}</td>@endif
                                 <td class="py-1.5 px-1.5">{{ $marketLabels[$marketKey] }}</td>
-                                <td class="py-1.5 px-1.5 text-right">{{ $pct($row['return_rate']) }}</td>
-                                <td class="py-1.5 px-1.5 text-right">{{ $pct($row['buy_hold_rate']) }}</td>
-                                <td class="py-1.5 px-1.5 text-right">{{ $pt($row['diff_points']) }}</td>
+                                <td class="py-1.5 px-1.5 text-right {{ $tone($row['return_rate'] === null ? null : $row['return_rate'] * 100) }}">{{ $pct($row['return_rate']) }}</td>
+                                <td class="py-1.5 px-1.5 text-right {{ $tone($row['buy_hold_rate'] === null ? null : $row['buy_hold_rate'] * 100) }}">{{ $pct($row['buy_hold_rate']) }}</td>
+                                <td class="py-1.5 px-1.5 text-right font-medium {{ $tone($row['diff_points']) }}">{{ $pt($row['diff_points']) }}</td>
                                 <td class="py-1.5 px-1.5">
                                     <x-badge :variant="$verdicts[$row['verdict']][1]">{{ $verdicts[$row['verdict']][0] }}</x-badge>
                                     @if ($row['verdict'] === 'reference')
@@ -115,7 +127,7 @@
                         <td class="py-1.5 px-1.5 text-right">{{ $row['ok'] }}</td>
                         <td class="py-1.5 px-1.5 text-right">{{ $row['pending'] }}</td>
                         <td class="py-1.5 px-1.5 text-right">{{ $row['unavailable'] }}</td>
-                        <td class="py-1.5 px-1.5 text-right">{{ $row['median'] }}</td>
+                        <td class="py-1.5 px-1.5 text-right font-medium {{ $tone($row['median']) }}">{{ $row['median'] }}</td>
                         <td class="py-1.5 px-1.5 text-right">{{ $row['range'] }}</td>
                         <td class="py-1.5 px-1.5 text-right">{{ $row['better'] }}</td>
                         <td class="py-1.5 px-1.5 text-right">{{ $row['recorded'] }}</td>
@@ -143,7 +155,7 @@
                             <td class="py-1.5 px-1.5">{{ $situationTrade['date'] }}</td>
                             <td class="py-1.5 px-1.5">{{ $situationTrade['code'] }}</td>
                             <td class="py-1.5 px-1.5">{{ $situationTrade['name'] }}</td>
-                            <td class="py-1.5 px-1.5 text-right">{{ $situationTrade['diff'] }}</td>
+                            <td class="py-1.5 px-1.5 text-right {{ $tone($situationTrade['diff']) }}">{{ $situationTrade['diff'] }}</td>
                         </tr>
                     @endforeach
                 </tbody>
@@ -196,7 +208,7 @@
                             @endif
                             <td class="py-1.5 px-1.5">{{ $comparison['label'] }}</td>
                             @foreach ([4, 13, 26] as $horizon)
-                                <td class="py-1.5 px-1.5 text-right">{{ $comparison['cells'][$horizon] ?? '' }}</td>
+                                <td class="py-1.5 px-1.5 text-right {{ $tone($comparison['cells'][$horizon] ?? null) }}">{{ $comparison['cells'][$horizon] ?? '' }}</td>
                             @endforeach
                             @if ($loop->first)
                                 <td class="py-1.5 px-1.5" rowspan="{{ count($rows) }}">
