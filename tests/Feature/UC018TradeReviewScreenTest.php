@@ -189,6 +189,34 @@ describe('UC-018 売買の振り返り: 売買一覧', function () {
         trGet('?tab=trades')->assertSeeTextInOrder(['2026-07-28', '3333', '買付', '比例買増し', '+20.0%', '指数（参考）', '+10.0%']);
     });
 
+    test('ガチホとの差がマイナスの数値は赤で出す', function () {
+        // Arrange: sold, then the price rose 100 → 115 (−15.0% vs holding at +4)
+        $a = trHolding('1111');
+        trPrices($a, ['2026-07-27' => 100, '2026-08-24' => 115]);
+        trTrade($a, 'buy', '2026-07-20', 10, 1000);
+        trTrade($a, 'sell', '2026-07-28', 10, 1000);
+
+        // Act / Assert
+        expect(trGet('?tab=trades')->getContent())->toMatch('/text-red-700[^>]*>\s*-15\.0%/');
+    });
+
+    test('ガチホとの差がプラスの数値は緑で出し、算出できない欄は色を付けない', function () {
+        // Arrange: same as the proportional-buy case above (+20.0% at +4)
+        $a = trHolding('1111');
+        $c = trHolding('3333');
+        trPrices($a, ['2026-07-20' => 100, '2026-07-27' => 100, '2026-08-24' => 100]);
+        trPrices($c, ['2026-07-27' => 100, '2026-08-24' => 120]);
+        trTrade($a, 'buy', '2026-07-14', 10, 1000);
+        trTrade($c, 'buy', '2026-07-28', 10, 1000);
+
+        // Act
+        $html = trGet('?tab=trades')->getContent();
+
+        // Assert
+        expect($html)->toMatch('/text-green-700[^>]*>\s*\+20\.0%/');
+        expect($html)->not->toMatch('/text-(green|red)-700[^>]*>\s*(結果待ち|算出不可)/');
+    });
+
     test('直前の状況として、紐付いたシグナルと前週末の保有割合を出し、記録がなければ「状況不明」と出す', function () {
         // Arrange
         $a = trHolding('1111');
